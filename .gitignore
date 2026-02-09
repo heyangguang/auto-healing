@@ -1,0 +1,40 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# AI tools
+.agent/
+.gemini/
+.cursor/
+.copilot/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+*.test
+*.out
+
+# Config (local)
+configs/*.local.*
+
+# Temp
+tmp/
+*.tmp
+*.swp
+*.swo
+*~

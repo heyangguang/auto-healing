@@ -1,0 +1,2 @@
+# Mock ITSM 依赖
+flask>=2.0.0

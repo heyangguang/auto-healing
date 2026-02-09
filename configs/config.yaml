@@ -1,0 +1,60 @@
+# 运维自愈系统配置文件
+
+app:
+  name: Auto-Healing
+  version: 1.0.0
+  url: http://localhost:8080
+  env: production  # production, staging, development
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  mode: debug  # debug, release, test
+
+database:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: postgres
+  dbname: auto_healing
+  ssl_mode: disable
+  max_open_conns: 25
+  max_idle_conns: 5
+  max_lifetime_minutes: 5
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+
+jwt:
+  secret: your-super-secret-key-change-in-production
+  access_token_ttl_minutes: 60
+  refresh_token_ttl_hours: 168
+  issuer: auto-healing
+
+log:
+  # 应用日志级别: debug, info, warn, error
+  level: info
+  
+  # 控制台配置
+  console:
+    enabled: true
+    format: text    # text=人类可读, json=JSON格式
+    color: true     # 是否启用颜色
+  
+  # 文件配置
+  file:
+    enabled: true
+    path: ./logs              # 日志目录
+    filename: app.log         # 日志文件名
+    format: json              # text/json (文件建议用 json)
+    max_size: 100             # 单个文件最大大小 (MB)
+    max_backups: 10           # 保留旧文件数量
+    max_age: 30               # 保留天数
+    compress: true            # 是否压缩旧文件
+  
+  # 数据库日志级别
+  # info=显示所有SQL, warn=只慢查询(默认), error=只错误, off=关闭
+  db_level: warn

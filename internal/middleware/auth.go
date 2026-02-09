@@ -1,0 +1,115 @@
+package middleware
+
+import (
+	"net/http"
+	"strings"
+
+	"github.com/company/auto-healing/internal/pkg/jwt"
+	"github.com/gin-gonic/gin"
+)
+
+const (
+	AuthorizationHeader = "Authorization"
+	BearerPrefix        = "Bearer "
+	UserIDKey           = "user_id"
+	UsernameKey         = "username"
+	RolesKey            = "roles"
+	PermissionsKey      = "permissions"
+)
+
+// JWTAuth JWT认证中间件
+func JWTAuth(jwtService *jwt.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader(AuthorizationHeader)
+
+		// 如果 Header 中没有 token，尝试从 URL query 参数获取（支持 SSE/EventSource）
+		if authHeader == "" {
+			if token := c.Query("token"); token != "" {
+				authHeader = BearerPrefix + token
+			}
+		}
+
+		if authHeader == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": gin.H{
+					"code":    "UNAUTHORIZED",
+					"message": "Missing authorization header",
+				},
+			})
+			return
+		}
+
+		if !strings.HasPrefix(authHeader, BearerPrefix) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": gin.H{
+					"code":    "UNAUTHORIZED",
+					"message": "Invalid authorization header format",
+				},
+			})
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, BearerPrefix)
+		claims, err := jwtService.ValidateToken(tokenString)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": gin.H{
+					"code":    "UNAUTHORIZED",
+					"message": "Invalid or expired token",
+				},
+			})
+			return
+		}
+
+		// 检查 Token 是否在黑名单中
+		if jwtService.IsBlacklisted(claims.ID) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": gin.H{
+					"code":    "UNAUTHORIZED",
+					"message": "Token has been revoked",
+				},
+			})
+			return
+		}
+
+		// 将用户信息存入上下文
+		c.Set(UserIDKey, claims.Subject)
+		c.Set(UsernameKey, claims.Username)
+		c.Set(RolesKey, claims.Roles)
+		c.Set(PermissionsKey, claims.Permissions)
+
+		c.Next()
+	}
+}
+
+// GetUserID 从上下文获取用户ID
+func GetUserID(c *gin.Context) string {
+	if id, exists := c.Get(UserIDKey); exists {
+		return id.(string)
+	}
+	return ""
+}
+
+// GetUsername 从上下文获取用户名
+func GetUsername(c *gin.Context) string {
+	if username, exists := c.Get(UsernameKey); exists {
+		return username.(string)
+	}
+	return ""
+}
+
+// GetRoles 从上下文获取角色
+func GetRoles(c *gin.Context) []string {
+	if roles, exists := c.Get(RolesKey); exists {
+		return roles.([]string)
+	}
+	return nil
+}
+
+// GetPermissions 从上下文获取权限
+func GetPermissions(c *gin.Context) []string {
+	if permissions, exists := c.Get(PermissionsKey); exists {
+		return permissions.([]string)
+	}
+	return nil
+}
