@@ -80,9 +80,20 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*model.Playbook, error
 	return s.repo.GetByID(ctx, id)
 }
 
-// List 列出 Playbooks
+// List 列出 Playbooks（向后兼容）
 func (s *Service) List(ctx context.Context, repositoryID *uuid.UUID, status string, page, pageSize int) ([]model.Playbook, int64, error) {
 	return s.repo.List(ctx, repositoryID, status, page, pageSize)
+}
+
+// ListWithOptions 列出 Playbooks（支持完整查询参数）
+func (s *Service) ListWithOptions(ctx context.Context, opts *repository.PlaybookListOptions) ([]model.Playbook, int64, error) {
+	if opts.Page < 1 {
+		opts.Page = 1
+	}
+	if opts.PageSize < 1 || opts.PageSize > 500 {
+		opts.PageSize = 20
+	}
+	return s.repo.ListWithOptions(ctx, opts)
 }
 
 // Update 更新 Playbook

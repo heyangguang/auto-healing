@@ -141,6 +141,9 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req *model.Execution
 	schedule.SecretsSourceIDs = req.SecretsSourceIDs
 	schedule.SkipNotification = req.SkipNotification
 
+	// 更新 max_failures
+	schedule.MaxFailures = req.MaxFailures
+
 	if err := s.repo.Update(ctx, schedule); err != nil {
 		return nil, err
 	}
@@ -201,6 +204,8 @@ func (s *Service) Enable(ctx context.Context, id uuid.UUID) error {
 	}
 
 	schedule.Enabled = true
+	schedule.ConsecutiveFailures = 0
+	schedule.PauseReason = ""
 	schedule.Status = schedule.CalculateStatus()
 
 	if err := s.repo.Update(ctx, schedule); err != nil {

@@ -20,10 +20,16 @@ type Plugin struct {
 	SyncIntervalMinutes int        `json:"sync_interval_minutes" gorm:"default:5"`
 	LastSyncAt          *time.Time `json:"last_sync_at,omitempty"`
 	NextSyncAt          *time.Time `json:"next_sync_at,omitempty"`
-	Status              string     `json:"status" gorm:"type:varchar(20);default:'inactive'"` // active, inactive, error
-	ErrorMessage        string     `json:"error_message,omitempty" gorm:"type:text"`
-	CreatedAt           time.Time  `json:"created_at" gorm:"default:now()"`
-	UpdatedAt           time.Time  `json:"updated_at" gorm:"default:now()"`
+
+	// 连续失败自动暂停
+	MaxFailures         int    `json:"max_failures" gorm:"default:5"`                   // 最大连续失败次数，0=不启用自动暂停
+	ConsecutiveFailures int    `json:"consecutive_failures" gorm:"default:0"`           // 当前连续失败次数
+	PauseReason         string `json:"pause_reason,omitempty" gorm:"type:varchar(500)"` // 自动暂停原因
+
+	Status       string    `json:"status" gorm:"type:varchar(20);default:'inactive'"` // active, inactive, error
+	ErrorMessage string    `json:"error_message,omitempty" gorm:"type:text"`
+	CreatedAt    time.Time `json:"created_at" gorm:"default:now()"`
+	UpdatedAt    time.Time `json:"updated_at" gorm:"default:now()"`
 }
 
 // TableName 表名

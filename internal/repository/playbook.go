@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -36,30 +38,139 @@ func (r *PlaybookRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.
 	return &playbook, nil
 }
 
-// List 列出 Playbooks
+// PlaybookListOptions Playbook 列表查询选项
+type PlaybookListOptions struct {
+	// 分页
+	Page     int
+	PageSize int
+
+	// 搜索
+	Search   string // 全文搜索（匹配 name + description + file_path）
+	Name     string // 按名称模糊搜索
+	FilePath string // 按入口文件路径模糊搜索
+
+	// 过滤
+	RepositoryID    *uuid.UUID // 按仓库 ID
+	Status          string     // ready / pending / error / outdated
+	ConfigMode      string     // auto / enhanced
+	HasVariables    *bool      // 是否包含变量
+	MinVariables    *int       // 最小变量数量
+	MaxVariables    *int       // 最大变量数量
+	HasRequiredVars *bool      // 是否包含必填变量
+
+	// 排序
+	SortField string // name / status / config_mode / file_path / created_at / updated_at / last_scanned_at
+	SortOrder string // asc / desc
+
+	// 时间范围
+	CreatedFrom *time.Time
+	CreatedTo   *time.Time
+}
+
+// List 列出 Playbooks（向后兼容）
 func (r *PlaybookRepository) List(ctx context.Context, repositoryID *uuid.UUID, status string, page, pageSize int) ([]model.Playbook, int64, error) {
+	return r.ListWithOptions(ctx, &PlaybookListOptions{
+		RepositoryID: repositoryID,
+		Status:       status,
+		Page:         page,
+		PageSize:     pageSize,
+	})
+}
+
+// ListWithOptions 列出 Playbooks（支持完整查询参数）
+func (r *PlaybookRepository) ListWithOptions(ctx context.Context, opts *PlaybookListOptions) ([]model.Playbook, int64, error) {
 	var playbooks []model.Playbook
 	var total int64
 
 	query := database.DB.WithContext(ctx).Model(&model.Playbook{})
 
-	if repositoryID != nil {
-		query = query.Where("repository_id = ?", *repositoryID)
-	}
-	if status != "" {
-		query = query.Where("status = ?", status)
+	// 全文搜索（name + description + file_path）
+	if opts.Search != "" {
+		search := "%" + strings.ToLower(opts.Search) + "%"
+		query = query.Where("LOWER(name) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ? OR LOWER(file_path) LIKE ?", search, search, search)
 	}
 
+	// 按名称模糊搜索
+	if opts.Name != "" {
+		query = query.Where("LOWER(name) LIKE ?", "%"+strings.ToLower(opts.Name)+"%")
+	}
+
+	// 按入口文件路径模糊搜索
+	if opts.FilePath != "" {
+		query = query.Where("LOWER(file_path) LIKE ?", "%"+strings.ToLower(opts.FilePath)+"%")
+	}
+
+	// 仓库 ID 过滤
+	if opts.RepositoryID != nil {
+		query = query.Where("repository_id = ?", *opts.RepositoryID)
+	}
+
+	// 状态过滤
+	if opts.Status != "" {
+		query = query.Where("status = ?", opts.Status)
+	}
+
+	// 配置模式过滤
+	if opts.ConfigMode != "" {
+		query = query.Where("config_mode = ?", opts.ConfigMode)
+	}
+
+	// 变量数量过滤
+	if opts.HasVariables != nil {
+		if *opts.HasVariables {
+			query = query.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) > 0")
+		} else {
+			query = query.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) = 0")
+		}
+	}
+	if opts.MinVariables != nil {
+		query = query.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) >= ?", *opts.MinVariables)
+	}
+	if opts.MaxVariables != nil {
+		query = query.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) <= ?", *opts.MaxVariables)
+	}
+
+	// 必填变量过滤
+	if opts.HasRequiredVars != nil {
+		if *opts.HasRequiredVars {
+			query = query.Where("EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(variables, '[]'::jsonb)) AS v WHERE (v->>'required')::boolean = true)")
+		} else {
+			query = query.Where("NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(variables, '[]'::jsonb)) AS v WHERE (v->>'required')::boolean = true)")
+		}
+	}
+
+	// 时间范围
+	if opts.CreatedFrom != nil {
+		query = query.Where("created_at >= ?", *opts.CreatedFrom)
+	}
+	if opts.CreatedTo != nil {
+		query = query.Where("created_at <= ?", *opts.CreatedTo)
+	}
+
+	// 计数
 	query.Count(&total)
 
-	offset := (page - 1) * pageSize
-	err := query.
-		Preload("Repository").
-		Order("created_at DESC").
-		Offset(offset).
-		Limit(pageSize).
-		Find(&playbooks).Error
+	// 排序
+	allowedSortFields := map[string]bool{
+		"name": true, "status": true, "config_mode": true, "file_path": true,
+		"created_at": true, "updated_at": true, "last_scanned_at": true,
+	}
+	if opts.SortField != "" && allowedSortFields[opts.SortField] {
+		order := "ASC"
+		if strings.ToLower(opts.SortOrder) == "desc" {
+			order = "DESC"
+		}
+		query = query.Order(fmt.Sprintf("%s %s", opts.SortField, order))
+	} else {
+		query = query.Order("created_at DESC")
+	}
 
+	// 分页
+	if opts.Page > 0 && opts.PageSize > 0 {
+		query = query.Offset((opts.Page - 1) * opts.PageSize).Limit(opts.PageSize)
+	}
+
+	err := query.Preload("Repository").Find(&playbooks).Error
 	return playbooks, total, err
 }
 

@@ -22,6 +22,8 @@ type Handlers struct {
 	Notification *NotificationHandler
 	Healing      *HealingHandler
 	Dashboard    *DashboardHandler
+	Preference   *PreferenceHandler
+	Audit        *AuditHandler
 }
 
 // NewHandlers 创建所有处理器
@@ -43,6 +45,8 @@ func NewHandlers(cfg *config.Config) *Handlers {
 		Notification: NewNotificationHandler(),
 		Healing:      NewHealingHandler(),
 		Dashboard:    NewDashboardHandler(),
+		Preference:   NewPreferenceHandler(),
+		Audit:        NewAuditHandler(),
 	}
 }
 
@@ -63,6 +67,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 	// ==================== 需要认证的路由 ====================
 	protected := api.Group("")
 	protected.Use(middleware.JWTAuth(h.Auth.GetJWTService()))
+	protected.Use(middleware.AuditMiddleware())
 	{
 		// 用户认证相关
 		protected.GET("/auth/me", h.Auth.GetCurrentUser)
@@ -81,6 +86,14 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			users.DELETE("/:id", middleware.RequirePermission("user:delete"), h.User.DeleteUser)
 			users.POST("/:id/reset-password", middleware.RequirePermission("user:reset_password"), h.User.ResetPassword)
 			users.PUT("/:id/roles", middleware.RequirePermission("role:assign"), h.User.AssignUserRoles)
+		}
+
+		// -------------------- 用户偏好设置 --------------------
+		userPrefs := protected.Group("/user/preferences")
+		{
+			userPrefs.GET("", h.Preference.GetPreferences)
+			userPrefs.PUT("", h.Preference.UpdatePreferences)
+			userPrefs.PATCH("", h.Preference.PatchPreferences)
 		}
 
 		// -------------------- 角色管理 --------------------
@@ -185,6 +198,13 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		execRuns := protected.Group("/execution-runs")
 		{
 			execRuns.GET("", middleware.RequirePermission("task:list"), h.Execution.ListAllRuns)
+			// 统计接口（必须在 /:id 之前注册，避免路径冲突）
+			execRuns.GET("/stats", middleware.RequirePermission("task:list"), h.Execution.GetRunStats)
+			execRuns.GET("/trend", middleware.RequirePermission("task:list"), h.Execution.GetRunTrend)
+			execRuns.GET("/trigger-distribution", middleware.RequirePermission("task:list"), h.Execution.GetTriggerDistribution)
+			execRuns.GET("/top-failed", middleware.RequirePermission("task:list"), h.Execution.GetTopFailedTasks)
+			execRuns.GET("/top-active", middleware.RequirePermission("task:list"), h.Execution.GetTopActiveTasks)
+			// 动态路由
 			execRuns.GET("/:id", middleware.RequirePermission("task:detail"), h.Execution.GetRun)
 			execRuns.GET("/:id/logs", middleware.RequirePermission("task:detail"), h.Execution.GetRunLogs)
 			execRuns.GET("/:id/stream", middleware.RequirePermission("task:detail"), h.Execution.StreamLogs)
@@ -234,13 +254,19 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			notifications.GET("/:id", middleware.RequirePermission("notification:list"), h.Notification.GetNotification)
 		}
 
-		// -------------------- 审计日志 (待实现) --------------------
-		// auditLogs := protected.Group("/audit-logs")
-		// {
-		// 	auditLogs.GET("", middleware.RequirePermission("audit:list"), ListAuditLogs)
-		// 	auditLogs.GET("/:id", middleware.RequirePermission("audit:list"), GetAuditLog)
-		// 	auditLogs.GET("/export", middleware.RequirePermission("audit:export"), ExportAuditLogs)
-		// }
+		// -------------------- 审计日志 --------------------
+		auditLogs := protected.Group("/audit-logs")
+		{
+			auditLogs.GET("", middleware.RequirePermission("audit:list"), h.Audit.ListAuditLogs)
+			auditLogs.GET("/stats", middleware.RequirePermission("audit:list"), h.Audit.GetAuditStats)
+			auditLogs.GET("/user-ranking", middleware.RequirePermission("audit:list"), h.Audit.GetUserRanking)
+			auditLogs.GET("/action-grouping", middleware.RequirePermission("audit:list"), h.Audit.GetActionGrouping)
+			auditLogs.GET("/resource-stats", middleware.RequirePermission("audit:list"), h.Audit.GetResourceTypeStats)
+			auditLogs.GET("/trend", middleware.RequirePermission("audit:list"), h.Audit.GetTrend)
+			auditLogs.GET("/high-risk", middleware.RequirePermission("audit:list"), h.Audit.GetHighRiskLogs)
+			auditLogs.GET("/export", middleware.RequirePermission("audit:export"), h.Audit.ExportAuditLogs)
+			auditLogs.GET("/:id", middleware.RequirePermission("audit:list"), h.Audit.GetAuditLog)
+		}
 
 		// -------------------- 工单/事件 --------------------
 		incidents := protected.Group("/incidents")

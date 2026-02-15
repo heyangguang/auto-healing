@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -79,8 +80,22 @@ func (r *CMDBItemRepository) UpsertByExternalID(ctx context.Context, item *model
 	return false, nil
 }
 
-// List 获取配置项列表（支持过滤）
-func (r *CMDBItemRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool) ([]model.CMDBItem, int64, error) {
+// cmdbAllowedSortFields CMDB 可排序字段白名单
+var cmdbAllowedSortFields = map[string]bool{
+	"name":               true,
+	"type":               true,
+	"status":             true,
+	"environment":        true,
+	"os":                 true,
+	"owner":              true,
+	"department":         true,
+	"source_plugin_name": true,
+	"updated_at":         true,
+	"created_at":         true,
+}
+
+// List 获取配置项列表（支持过滤和排序）
+func (r *CMDBItemRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool, sortBy, sortOrder string) ([]model.CMDBItem, int64, error) {
 	var items []model.CMDBItem
 	var total int64
 
@@ -114,8 +129,18 @@ func (r *CMDBItemRepository) List(ctx context.Context, page, pageSize int, plugi
 		return nil, 0, err
 	}
 
+	// 排序：白名单校验防注入，默认 updated_at DESC
+	orderField := "updated_at"
+	orderDir := "DESC"
+	if sortBy != "" && cmdbAllowedSortFields[sortBy] {
+		orderField = sortBy
+	}
+	if sortOrder == "asc" || sortOrder == "ASC" {
+		orderDir = "ASC"
+	}
+
 	offset := (page - 1) * pageSize
-	if err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&items).Error; err != nil {
+	if err := query.Order(fmt.Sprintf("%s %s", orderField, orderDir)).Offset(offset).Limit(pageSize).Find(&items).Error; err != nil {
 		return nil, 0, err
 	}
 

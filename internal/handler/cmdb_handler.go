@@ -65,7 +65,11 @@ func (h *CMDBHandler) ListCMDBItems(c *gin.Context) {
 		hasPlugin = &hp
 	}
 
-	items, total, err := h.cmdbSvc.ListCMDBItems(c.Request.Context(), page, pageSize, pluginID, itemType, status, environment, sourcePluginName, hasPlugin)
+	// 排序参数
+	sortBy := c.Query("sort_by")
+	sortOrder := c.Query("sort_order")
+
+	items, total, err := h.cmdbSvc.ListCMDBItems(c.Request.Context(), page, pageSize, pluginID, itemType, status, environment, sourcePluginName, hasPlugin, sortBy, sortOrder)
 	if err != nil {
 		response.InternalError(c, "获取 CMDB 列表失败: "+err.Error())
 		return

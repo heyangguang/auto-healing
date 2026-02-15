@@ -2,9 +2,11 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/repository"
@@ -131,19 +133,60 @@ func (s *ExecutionScheduler) checkAndExecute() {
 				}
 			}
 
+			shortID := sched.ID.String()[:8]
 			_, err := s.execSvc.ExecuteTask(ctx, sched.TaskID, opts)
+
 			if err != nil {
-				logger.Sched("TASK").Error("[%s] 执行失败: %s - %v", sched.ID.String()[:8], sched.Name, err)
+				// 连续失败计数 +1
+				newCount := sched.ConsecutiveFailures + 1
+				updates := map[string]interface{}{
+					"consecutive_failures": newCount,
+				}
+
+				// 检查是否需要自动暂停（max_failures > 0 才启用，仅 Cron 任务）
+				if sched.MaxFailures > 0 && newCount >= sched.MaxFailures && sched.IsCron() {
+					updates["enabled"] = false
+					updates["status"] = model.ScheduleStatusAutoPaused
+					updates["next_run_at"] = nil
+					updates["pause_reason"] = fmt.Sprintf("连续失败 %d 次后自动暂停 (最后错误: %s)", newCount, truncateStr(err.Error(), 200))
+					logger.Sched("TASK").Warn("[%s] ⚠ 连续失败 %d/%d 次，已自动暂停: %s",
+						shortID, newCount, sched.MaxFailures, sched.Name)
+				} else {
+					if sched.MaxFailures > 0 {
+						logger.Sched("TASK").Error("[%s] 执行失败 (%d/%d): %s - %v",
+							shortID, newCount, sched.MaxFailures, sched.Name, err)
+					} else {
+						logger.Sched("TASK").Error("[%s] 执行失败 (第%d次): %s - %v",
+							shortID, newCount, sched.Name, err)
+					}
+				}
+
+				database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{}).Where("id = ?", sched.ID).Updates(updates)
 			} else {
-				logger.Sched("TASK").Info("[%s] 执行完成: %s", sched.ID.String()[:8], sched.Name)
+				// 成功 → 重置失败计数
+				updates := map[string]interface{}{
+					"consecutive_failures": 0,
+					"pause_reason":         "",
+				}
+				database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{}).Where("id = ?", sched.ID).Updates(updates)
+
+				if sched.ConsecutiveFailures > 0 {
+					logger.Sched("TASK").Info("[%s] 执行成功: %s | 失败计数已重置 (之前: %d)",
+						shortID, sched.Name, sched.ConsecutiveFailures)
+				} else {
+					logger.Sched("TASK").Info("[%s] 执行完成: %s", shortID, sched.Name)
+				}
 			}
 
 			// 更新上次执行时间
 			s.scheduleRepo.UpdateLastRunAt(ctx, sched.ID)
 
-			// 更新下次执行时间（仅 Cron 模式）或标记完成（Once 模式）
+			// 更新下次执行时间（仅 Cron 模式且未被自动暂停）或标记完成（Once 模式）
 			if sched.IsCron() {
-				s.scheduleSvc.UpdateNextRunAt(ctx, sched.ID, *sched.ScheduleExpr)
+				// 如果已经被自动暂停，不再计算下次时间
+				if !(sched.MaxFailures > 0 && err != nil && sched.ConsecutiveFailures+1 >= sched.MaxFailures) {
+					s.scheduleSvc.UpdateNextRunAt(ctx, sched.ID, *sched.ScheduleExpr)
+				}
 			} else {
 				// Once 模式执行后标记为已完成
 				s.scheduleSvc.MarkCompleted(ctx, sched.ID)

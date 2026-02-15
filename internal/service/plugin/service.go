@@ -120,8 +120,8 @@ func (s *Service) DeletePlugin(ctx context.Context, id uuid.UUID) error {
 }
 
 // ListPlugins 获取插件列表
-func (s *Service) ListPlugins(ctx context.Context, page, pageSize int, pluginType, status string) ([]model.Plugin, int64, error) {
-	return s.pluginRepo.List(ctx, page, pageSize, pluginType, status)
+func (s *Service) ListPlugins(ctx context.Context, page, pageSize int, pluginType, status, search, sortBy, sortOrder string) ([]model.Plugin, int64, error) {
+	return s.pluginRepo.List(ctx, page, pageSize, pluginType, status, search, sortBy, sortOrder)
 }
 
 // PluginStats 插件统计数据
@@ -139,7 +139,7 @@ type PluginStats struct {
 // GetStats 获取插件统计数据
 func (s *Service) GetStats(ctx context.Context) (*PluginStats, error) {
 	// 获取全部插件（不分页）
-	plugins, _, err := s.pluginRepo.List(ctx, 1, 10000, "", "")
+	plugins, _, err := s.pluginRepo.List(ctx, 1, 10000, "", "", "", "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -666,8 +666,8 @@ func (s *IncidentService) GetIncident(ctx context.Context, id uuid.UUID) (*model
 
 // ListIncidents 获取工单列表（支持查询已删除插件的工单）
 // hasPlugin: nil=不筛选, true=只有关联插件, false=只无关联插件
-func (s *IncidentService) ListIncidents(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, severity, sourcePluginName string, hasPlugin *bool) ([]model.Incident, int64, error) {
-	return s.incidentRepo.List(ctx, page, pageSize, pluginID, status, severity, sourcePluginName, hasPlugin)
+func (s *IncidentService) ListIncidents(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity, sourcePluginName, search string, hasPlugin *bool, sortBy, sortOrder string) ([]model.Incident, int64, error) {
+	return s.incidentRepo.List(ctx, page, pageSize, pluginID, status, healingStatus, severity, sourcePluginName, search, hasPlugin, sortBy, sortOrder)
 }
 
 // CloseIncidentResponse 关闭工单响应

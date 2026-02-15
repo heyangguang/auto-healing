@@ -15,6 +15,7 @@ type CreateRepoRequest struct {
 	AuthConfig    model.JSON `json:"auth_config"`
 	SyncEnabled   bool       `json:"sync_enabled"`
 	SyncInterval  string     `json:"sync_interval"`
+	MaxFailures   *int       `json:"max_failures"`
 }
 
 // ToModel 转换为 Model
@@ -32,6 +33,11 @@ func (r *CreateRepoRequest) ToModel() *model.GitRepository {
 		syncInterval = "1h"
 	}
 
+	maxFailures := 5
+	if r.MaxFailures != nil {
+		maxFailures = *r.MaxFailures
+	}
+
 	return &model.GitRepository{
 		Name:          r.Name,
 		URL:           r.URL,
@@ -41,6 +47,7 @@ func (r *CreateRepoRequest) ToModel() *model.GitRepository {
 		Status:        "pending",
 		SyncEnabled:   r.SyncEnabled,
 		SyncInterval:  syncInterval,
+		MaxFailures:   maxFailures,
 	}
 }
 
@@ -51,6 +58,7 @@ type UpdateRepoRequest struct {
 	AuthConfig    model.JSON `json:"auth_config"`
 	SyncEnabled   *bool      `json:"sync_enabled"`
 	SyncInterval  *string    `json:"sync_interval"`
+	MaxFailures   *int       `json:"max_failures"`
 }
 
 // ApplyTo 应用更新到模型
@@ -63,6 +71,20 @@ func (r *UpdateRepoRequest) ApplyTo(repo *model.GitRepository) {
 	}
 	if r.AuthConfig != nil {
 		repo.AuthConfig = r.AuthConfig
+	}
+	if r.SyncEnabled != nil {
+		// 重新启用同步时，重置失败计数
+		if *r.SyncEnabled && !repo.SyncEnabled {
+			repo.ConsecutiveFailures = 0
+			repo.PauseReason = ""
+		}
+		repo.SyncEnabled = *r.SyncEnabled
+	}
+	if r.SyncInterval != nil {
+		repo.SyncInterval = *r.SyncInterval
+	}
+	if r.MaxFailures != nil {
+		repo.MaxFailures = *r.MaxFailures
 	}
 }
 

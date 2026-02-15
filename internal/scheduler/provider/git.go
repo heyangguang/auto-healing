@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -9,7 +10,6 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	gitService "github.com/company/auto-healing/internal/service/git"
-	"github.com/google/uuid"
 )
 
 // GitScheduler Git 仓库同步调度器
@@ -121,36 +121,77 @@ func (s *GitScheduler) syncRepo(ctx context.Context, repo model.GitRepository) {
 	shortID := repo.ID.String()[:8]
 	logger.Sched("GIT").Info("[%s] 开始同步: %s", shortID, repo.Name)
 
-	err := s.gitSvc.SyncRepo(ctx, repo.ID)
+	err := s.gitSvc.SyncRepoWithTrigger(ctx, repo.ID, "scheduled")
 	duration := time.Since(startTime)
 
 	if err != nil {
-		logger.Sched("GIT").Error("[%s] 同步失败: %s - %v", shortID, repo.Name, err)
+		// 连续失败计数 +1
+		newCount := repo.ConsecutiveFailures + 1
+		updates := map[string]interface{}{
+			"consecutive_failures": newCount,
+		}
+
+		// 计算下次同步时间（保持原始间隔）
+		interval, _ := time.ParseDuration(repo.SyncInterval)
+		if interval == 0 {
+			interval = time.Hour
+		}
+		nextSyncAt := time.Now().Add(interval)
+		updates["next_sync_at"] = nextSyncAt
+
+		// 检查是否需要自动暂停（max_failures > 0 才启用）
+		if repo.MaxFailures > 0 && newCount >= repo.MaxFailures {
+			updates["sync_enabled"] = false
+			updates["next_sync_at"] = nil
+			updates["pause_reason"] = fmt.Sprintf("连续失败 %d 次后自动暂停 (最后错误: %s)", newCount, truncateStr(err.Error(), 200))
+			logger.Sched("GIT").Warn("[%s] ⚠ 连续失败 %d/%d 次，已自动暂停同步: %s",
+				shortID, newCount, repo.MaxFailures, repo.Name)
+		} else {
+			if repo.MaxFailures > 0 {
+				logger.Sched("GIT").Warn("[%s] 同步失败 (%d/%d): %s - %v | 下次: %s",
+					shortID, newCount, repo.MaxFailures, repo.Name, err, nextSyncAt.Format("15:04:05"))
+			} else {
+				logger.Sched("GIT").Warn("[%s] 同步失败 (第%d次): %s - %v | 下次: %s",
+					shortID, newCount, repo.Name, err, nextSyncAt.Format("15:04:05"))
+			}
+		}
+
+		database.DB.WithContext(ctx).Model(&model.GitRepository{}).Where("id = ?", repo.ID).Updates(updates)
 		return
 	}
 
+	// 成功 → 重置失败计数
 	interval, _ := time.ParseDuration(repo.SyncInterval)
 	if interval == 0 {
 		interval = time.Hour
 	}
 	nextSyncAt := time.Now().Add(interval)
-	if err := s.updateNextSyncTime(ctx, repo.ID, nextSyncAt); err != nil {
-		logger.Sched("GIT").Warn("[%s] 更新下次同步时间失败: %v", shortID, err)
-	}
 
-	logger.Sched("GIT").Info("[%s] 同步完成: %s | 分支: %s | 耗时: %v | 下次: %s",
-		shortID,
-		repo.Name,
-		repo.DefaultBranch,
-		duration,
-		nextSyncAt.Format("15:04:05"),
-	)
+	updates := map[string]interface{}{
+		"consecutive_failures": 0,
+		"pause_reason":         "",
+		"next_sync_at":         nextSyncAt,
+	}
+	database.DB.WithContext(ctx).Model(&model.GitRepository{}).Where("id = ?", repo.ID).Updates(updates)
+
+	if repo.ConsecutiveFailures > 0 {
+		logger.Sched("GIT").Info("[%s] 同步成功: %s | 失败计数已重置 (之前: %d) | 耗时: %v",
+			shortID, repo.Name, repo.ConsecutiveFailures, duration)
+	} else {
+		logger.Sched("GIT").Info("[%s] 同步完成: %s | 分支: %s | 耗时: %v | 下次: %s",
+			shortID,
+			repo.Name,
+			repo.DefaultBranch,
+			duration,
+			nextSyncAt.Format("15:04:05"),
+		)
+	}
 }
 
-// updateNextSyncTime 更新下次同步时间
-func (s *GitScheduler) updateNextSyncTime(ctx context.Context, repoID uuid.UUID, nextSyncAt time.Time) error {
-	return database.DB.WithContext(ctx).
-		Model(&model.GitRepository{}).
-		Where("id = ?", repoID).
-		Update("next_sync_at", nextSyncAt).Error
+// truncateStr 截断字符串
+func truncateStr(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

@@ -28,8 +28,11 @@ func (h *PluginHandler) ListPlugins(c *gin.Context) {
 	pageSize := getQueryInt(c, "page_size", 20)
 	pluginType := c.Query("type")
 	status := c.Query("status")
+	search := c.Query("search")
+	sortBy := c.Query("sort_by")
+	sortOrder := c.Query("sort_order")
 
-	plugins, total, err := h.pluginSvc.ListPlugins(c.Request.Context(), page, pageSize, pluginType, status)
+	plugins, total, err := h.pluginSvc.ListPlugins(c.Request.Context(), page, pageSize, pluginType, status, search, sortBy, sortOrder)
 	if err != nil {
 		response.InternalError(c, "获取插件列表失败")
 		return
@@ -225,8 +228,12 @@ func (h *PluginHandler) ListIncidents(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
 	status := c.Query("status")
+	healingStatus := c.Query("healing_status")
 	severity := c.Query("severity")
 	sourcePluginName := c.Query("source_plugin_name")
+	search := c.Query("search")
+	sortBy := c.Query("sort_by")
+	sortOrder := c.Query("sort_order")
 
 	var pluginID *uuid.UUID
 	if pidStr := c.Query("plugin_id"); pidStr != "" {
@@ -242,7 +249,7 @@ func (h *PluginHandler) ListIncidents(c *gin.Context) {
 		hasPlugin = &hp
 	}
 
-	incidents, total, err := h.incidentSvc.ListIncidents(c.Request.Context(), page, pageSize, pluginID, status, severity, sourcePluginName, hasPlugin)
+	incidents, total, err := h.incidentSvc.ListIncidents(c.Request.Context(), page, pageSize, pluginID, status, healingStatus, severity, sourcePluginName, search, hasPlugin, sortBy, sortOrder)
 	if err != nil {
 		response.InternalError(c, "获取工单列表失败")
 		return

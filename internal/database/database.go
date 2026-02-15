@@ -100,6 +100,8 @@ func AutoMigrate() error {
 		&model.DashboardConfig{},
 		&model.SystemWorkspace{},
 		&model.RoleWorkspace{},
+		// 用户偏好
+		&model.UserPreference{},
 	)
 
 	if err != nil {

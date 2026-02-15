@@ -26,6 +26,11 @@ type GitRepository struct {
 	SyncInterval string     `json:"sync_interval" gorm:"type:varchar(20);default:'1h'"` // 同步间隔，如 10s, 5m, 1h
 	NextSyncAt   *time.Time `json:"next_sync_at"`
 
+	// 连续失败自动暂停
+	MaxFailures         int    `json:"max_failures" gorm:"default:5"`                   // 最大连续失败次数，0=不启用自动暂停
+	ConsecutiveFailures int    `json:"consecutive_failures" gorm:"default:0"`           // 当前连续失败次数
+	PauseReason         string `json:"pause_reason,omitempty" gorm:"type:varchar(500)"` // 自动暂停原因
+
 	CreatedAt time.Time `json:"created_at" gorm:"default:now()"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"default:now()"`
 

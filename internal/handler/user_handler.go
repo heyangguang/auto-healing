@@ -30,18 +30,28 @@ func NewUserHandler(authSvc *authService.Service) *UserHandler {
 
 // ListUsers 获取用户列表
 func (h *UserHandler) ListUsers(c *gin.Context) {
-	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "page_size", 20)
-	status := c.Query("status")
-	search := c.Query("search")
+	params := &repository.UserListParams{
+		Page:        getQueryInt(c, "page", 1),
+		PageSize:    getQueryInt(c, "page_size", 20),
+		Status:      c.Query("status"),
+		Search:      c.Query("search"),
+		Username:    c.Query("username"),
+		Email:       c.Query("email"),
+		DisplayName: c.Query("display_name"),
+		RoleID:      c.Query("role_id"),
+		CreatedFrom: c.Query("created_from"),
+		CreatedTo:   c.Query("created_to"),
+		SortField:   c.Query("sort_field"),
+		SortOrder:   c.Query("sort_order"),
+	}
 
-	users, total, err := h.userRepo.List(c.Request.Context(), page, pageSize, status, search)
+	users, total, err := h.userRepo.List(c.Request.Context(), params)
 	if err != nil {
 		response.InternalError(c, "获取用户列表失败")
 		return
 	}
 
-	response.List(c, users, total, page, pageSize)
+	response.List(c, users, total, params.Page, params.PageSize)
 }
 
 // CreateUser 创建用户
@@ -199,7 +209,11 @@ func NewRoleHandler() *RoleHandler {
 
 // ListRoles 获取角色列表（含统计信息）
 func (h *RoleHandler) ListRoles(c *gin.Context) {
-	roles, err := h.roleRepo.List(c.Request.Context())
+	filter := repository.RoleFilter{
+		Search: c.Query("search"),
+	}
+
+	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), filter)
 	if err != nil {
 		response.InternalError(c, "获取角色列表失败")
 		return
@@ -275,6 +289,12 @@ func (h *RoleHandler) UpdateRole(c *gin.Context) {
 		return
 	}
 
+	// 系统角色不允许修改
+	if role.IsSystem {
+		response.BadRequest(c, "系统内置角色不允许修改")
+		return
+	}
+
 	var req UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数错误")
@@ -320,6 +340,17 @@ func (h *RoleHandler) AssignRolePermissions(c *gin.Context) {
 		return
 	}
 
+	// 系统角色不允许修改权限
+	role, err := h.roleRepo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		response.NotFound(c, "角色不存在")
+		return
+	}
+	if role.IsSystem {
+		response.BadRequest(c, "系统内置角色的权限不允许修改")
+		return
+	}
+
 	var req AssignPermissionsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数错误")
@@ -331,7 +362,7 @@ func (h *RoleHandler) AssignRolePermissions(c *gin.Context) {
 		return
 	}
 
-	role, _ := h.roleRepo.GetByID(c.Request.Context(), id)
+	role, _ = h.roleRepo.GetByID(c.Request.Context(), id)
 	response.Success(c, role)
 }
 
@@ -349,7 +380,14 @@ func NewPermissionHandler() *PermissionHandler {
 
 // ListPermissions 获取权限列表
 func (h *PermissionHandler) ListPermissions(c *gin.Context) {
-	perms, err := h.permRepo.List(c.Request.Context())
+	filter := repository.PermissionFilter{
+		Search: c.Query("search"),
+		Module: c.Query("module"),
+		Name:   c.Query("name"),
+		Code:   c.Query("code"),
+	}
+
+	perms, err := h.permRepo.ListWithFilter(c.Request.Context(), filter)
 	if err != nil {
 		response.InternalError(c, "获取权限列表失败")
 		return

@@ -72,26 +72,89 @@ func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&model.User{}, "id = ?", id).Error
 }
 
-// List 获取用户列表
-func (r *UserRepository) List(ctx context.Context, page, pageSize int, status, search string) ([]model.User, int64, error) {
+// UserListParams 用户列表查询参数
+type UserListParams struct {
+	Page        int
+	PageSize    int
+	Status      string // 按状态精确过滤
+	Search      string // 全文模糊搜索（兼容旧参数）
+	Username    string // 按用户名模糊搜索
+	Email       string // 按邮箱模糊搜索
+	DisplayName string // 按显示名模糊搜索
+	RoleID      string // 按角色 ID 精确过滤
+	CreatedFrom string // 创建时间起始（ISO 8601）
+	CreatedTo   string // 创建时间截止（ISO 8601）
+	SortField   string // 排序字段
+	SortOrder   string // 排序方向 (asc/desc)
+}
+
+// List 获取用户列表（支持按字段搜索、组合搜索、排序）
+func (r *UserRepository) List(ctx context.Context, params *UserListParams) ([]model.User, int64, error) {
 	var users []model.User
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&model.User{})
-	if status != "" {
-		query = query.Where("status = ?", status)
+
+	// 按状态精确过滤
+	if params.Status != "" {
+		query = query.Where("status = ?", params.Status)
 	}
-	if search != "" {
-		like := "%" + search + "%"
+
+	// 按字段独立搜索（优先于全文搜索）
+	hasFieldFilter := params.Username != "" || params.Email != "" || params.DisplayName != ""
+	if hasFieldFilter {
+		if params.Username != "" {
+			query = query.Where("username ILIKE ?", "%"+params.Username+"%")
+		}
+		if params.Email != "" {
+			query = query.Where("email ILIKE ?", "%"+params.Email+"%")
+		}
+		if params.DisplayName != "" {
+			query = query.Where("display_name ILIKE ?", "%"+params.DisplayName+"%")
+		}
+	} else if params.Search != "" {
+		// 全文模糊搜索（兼容旧参数）
+		like := "%" + params.Search + "%"
 		query = query.Where("username ILIKE ? OR email ILIKE ? OR display_name ILIKE ?", like, like, like)
+	}
+
+	// 按角色过滤
+	if params.RoleID != "" {
+		query = query.Where("id IN (SELECT user_id FROM user_roles WHERE role_id = ?)", params.RoleID)
+	}
+
+	// 按创建时间范围过滤
+	if params.CreatedFrom != "" {
+		query = query.Where("created_at >= ?", params.CreatedFrom)
+	}
+	if params.CreatedTo != "" {
+		query = query.Where("created_at <= ?", params.CreatedTo)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
-	err := query.Preload("Roles").Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&users).Error
+	// 排序
+	orderClause := "created_at DESC" // 默认排序
+	allowedSortFields := map[string]bool{
+		"username":      true,
+		"email":         true,
+		"display_name":  true,
+		"created_at":    true,
+		"last_login_at": true,
+		"status":        true,
+	}
+	if params.SortField != "" && allowedSortFields[params.SortField] {
+		direction := "DESC"
+		if params.SortOrder == "asc" {
+			direction = "ASC"
+		}
+		orderClause = params.SortField + " " + direction
+	}
+
+	offset := (params.Page - 1) * params.PageSize
+	err := query.Preload("Roles").Offset(offset).Limit(params.PageSize).Order(orderClause).Find(&users).Error
 	return users, total, err
 }
 

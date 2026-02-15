@@ -385,3 +385,78 @@ func (h *ExecutionHandler) StreamLogs(c *gin.Context) {
 		}
 	})
 }
+
+// ==================== 执行记录统计接口 ====================
+
+// GetRunStats 获取执行记录统计概览
+func (h *ExecutionHandler) GetRunStats(c *gin.Context) {
+	stats, err := h.service.GetRunStats(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.Success(c, stats)
+}
+
+// GetRunTrend 获取执行趋势
+func (h *ExecutionHandler) GetRunTrend(c *gin.Context) {
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "7"))
+	if days <= 0 {
+		days = 7
+	}
+
+	items, err := h.service.GetRunTrend(c.Request.Context(), days)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"items": items,
+		"days":  days,
+	})
+}
+
+// GetTriggerDistribution 获取触发方式分布
+func (h *ExecutionHandler) GetTriggerDistribution(c *gin.Context) {
+	items, err := h.service.GetTriggerDistribution(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.Success(c, items)
+}
+
+// GetTopFailedTasks 获取失败率最高的任务
+func (h *ExecutionHandler) GetTopFailedTasks(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "5"))
+	if limit <= 0 {
+		limit = 5
+	}
+
+	items, err := h.service.GetTopFailedTasks(c.Request.Context(), limit)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.Success(c, items)
+}
+
+// GetTopActiveTasks 获取最活跃的任务
+func (h *ExecutionHandler) GetTopActiveTasks(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "5"))
+	if limit <= 0 {
+		limit = 5
+	}
+
+	items, err := h.service.GetTopActiveTasks(c.Request.Context(), limit)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.Success(c, items)
+}

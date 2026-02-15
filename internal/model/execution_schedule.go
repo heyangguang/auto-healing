@@ -14,10 +14,11 @@ const (
 
 // 调度状态常量
 const (
-	ScheduleStatusRunning   = "running"   // 运行中：循环调度 + 启用
-	ScheduleStatusPending   = "pending"   // 待执行：单次调度 + 启用 + 未执行
-	ScheduleStatusCompleted = "completed" // 已完成：单次调度 + 已执行
-	ScheduleStatusDisabled  = "disabled"  // 已禁用：开关关闭
+	ScheduleStatusRunning    = "running"     // 运行中：循环调度 + 启用
+	ScheduleStatusPending    = "pending"     // 待执行：单次调度 + 启用 + 未执行
+	ScheduleStatusCompleted  = "completed"   // 已完成：单次调度 + 已执行
+	ScheduleStatusDisabled   = "disabled"    // 已禁用：开关关闭
+	ScheduleStatusAutoPaused = "auto_paused" // 连续失败自动暂停
 )
 
 // ExecutionSchedule 定时任务调度配置
@@ -34,6 +35,11 @@ type ExecutionSchedule struct {
 	LastRunAt    *time.Time `json:"last_run_at,omitempty"`                                // 上次执行时间
 	Enabled      bool       `json:"enabled"`                                              // 是否启用
 	Description  string     `json:"description,omitempty" gorm:"type:text"`               // 描述
+
+	// 连续失败自动暂停
+	MaxFailures         int    `json:"max_failures" gorm:"default:5"`                   // 最大连续失败次数，0=不启用自动暂停
+	ConsecutiveFailures int    `json:"consecutive_failures" gorm:"default:0"`           // 当前连续失败次数
+	PauseReason         string `json:"pause_reason,omitempty" gorm:"type:varchar(500)"` // 自动暂停原因
 
 	// 执行参数覆盖（可选，与手动执行保持一致）
 	TargetHostsOverride string      `json:"target_hosts_override,omitempty" gorm:"type:text"`            // 覆盖目标主机

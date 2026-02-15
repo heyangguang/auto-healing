@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -93,7 +94,7 @@ func (r *PluginRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // List 获取插件列表
-func (r *PluginRepository) List(ctx context.Context, page, pageSize int, pluginType, status string) ([]model.Plugin, int64, error) {
+func (r *PluginRepository) List(ctx context.Context, page, pageSize int, pluginType, status, search, sortBy, sortOrder string) ([]model.Plugin, int64, error) {
 	var plugins []model.Plugin
 	var total int64
 
@@ -105,13 +106,30 @@ func (r *PluginRepository) List(ctx context.Context, page, pageSize int, pluginT
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
+	if search != "" {
+		query = query.Where("name ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
+	// 排序（白名单校验防止 SQL 注入）
+	sortField := "created_at"
+	order := "DESC"
+	allowedSortFields := map[string]bool{
+		"name": true, "type": true, "status": true,
+		"last_sync_at": true, "created_at": true, "updated_at": true,
+	}
+	if sortBy != "" && allowedSortFields[sortBy] {
+		sortField = sortBy
+	}
+	if sortOrder == "asc" || sortOrder == "ASC" {
+		order = "ASC"
+	}
+
 	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&plugins).Error
+	err := query.Offset(offset).Limit(pageSize).Order(fmt.Sprintf("%s %s", sortField, order)).Find(&plugins).Error
 	return plugins, total, err
 }
 
@@ -223,7 +241,7 @@ func (r *IncidentRepository) Update(ctx context.Context, incident *model.Inciden
 
 // List 获取工单列表（支持查询已删除插件的工单）
 // hasPlugin: nil=不筛选, true=只有关联插件, false=只无关联插件
-func (r *IncidentRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, severity, sourcePluginName string, hasPlugin *bool) ([]model.Incident, int64, error) {
+func (r *IncidentRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity, sourcePluginName, search string, hasPlugin *bool, sortBy, sortOrder string) ([]model.Incident, int64, error) {
 	var incidents []model.Incident
 	var total int64
 
@@ -245,18 +263,40 @@ func (r *IncidentRepository) List(ctx context.Context, page, pageSize int, plugi
 		query = query.Where("LOWER(source_plugin_name) LIKE LOWER(?)", "%"+sourcePluginName+"%")
 	}
 	if status != "" {
-		query = query.Where("healing_status = ?", status)
+		query = query.Where("status = ?", status)
+	}
+	if healingStatus != "" {
+		query = query.Where("healing_status = ?", healingStatus)
 	}
 	if severity != "" {
 		query = query.Where("severity = ?", severity)
+	}
+	if search != "" {
+		query = query.Where("title ILIKE ?", "%"+search+"%")
 	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
+	// 排序（白名单校验防止 SQL 注入）
+	sortField := "created_at"
+	order := "DESC"
+	allowedSortFields := map[string]bool{
+		"title": true, "severity": true, "status": true,
+		"healing_status": true, "category": true, "assignee": true,
+		"external_id": true, "source_plugin_name": true,
+		"created_at": true, "updated_at": true,
+	}
+	if sortBy != "" && allowedSortFields[sortBy] {
+		sortField = sortBy
+	}
+	if sortOrder == "asc" || sortOrder == "ASC" {
+		order = "ASC"
+	}
+
 	offset := (page - 1) * pageSize
-	err := query.Preload("Plugin").Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&incidents).Error
+	err := query.Preload("Plugin").Offset(offset).Limit(pageSize).Order(fmt.Sprintf("%s %s", sortField, order)).Find(&incidents).Error
 	return incidents, total, err
 }
 

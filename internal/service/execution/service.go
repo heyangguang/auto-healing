@@ -673,6 +673,33 @@ func (s *Service) CancelRun(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// ==================== 统计方法 ====================
+
+// GetRunStats 获取执行记录统计概览
+func (s *Service) GetRunStats(ctx context.Context) (*repository.RunStats, error) {
+	return s.repo.GetRunStats(ctx)
+}
+
+// GetRunTrend 获取执行趋势
+func (s *Service) GetRunTrend(ctx context.Context, days int) ([]repository.RunTrendItem, error) {
+	return s.repo.GetRunTrend(ctx, days)
+}
+
+// GetTriggerDistribution 获取触发方式分布
+func (s *Service) GetTriggerDistribution(ctx context.Context) ([]repository.TriggerDistItem, error) {
+	return s.repo.GetTriggerDistribution(ctx)
+}
+
+// GetTopFailedTasks 获取失败率最高的 Top N 任务
+func (s *Service) GetTopFailedTasks(ctx context.Context, limit int) ([]repository.TaskFailRate, error) {
+	return s.repo.GetTopFailedTasks(ctx, limit)
+}
+
+// GetTopActiveTasks 获取最活跃的 Top N 任务
+func (s *Service) GetTopActiveTasks(ctx context.Context, limit int) ([]repository.TaskActivity, error) {
+	return s.repo.GetTopActiveTasks(ctx, limit)
+}
+
 // ==================== 内部方法 ====================
 
 // appendLog 追加日志

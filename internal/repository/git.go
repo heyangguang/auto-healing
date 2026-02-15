@@ -2,6 +2,9 @@ package repository
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
@@ -56,17 +59,110 @@ func (r *GitRepositoryRepository) Delete(ctx context.Context, id uuid.UUID) erro
 	return r.db.WithContext(ctx).Delete(&model.GitRepository{}, id).Error
 }
 
-// List 获取仓库列表
-func (r *GitRepositoryRepository) List(ctx context.Context, status string) ([]model.GitRepository, error) {
-	var repos []model.GitRepository
-	query := r.db.WithContext(ctx)
+// GitRepoListOptions Git 仓库列表查询选项
+type GitRepoListOptions struct {
+	// 分页
+	Page     int
+	PageSize int
 
-	if status != "" {
-		query = query.Where("status = ?", status)
+	// 搜索
+	Search string // 全文搜索（匹配 name + url）
+	Name   string // 按名称模糊搜索
+	URL    string // 按 URL 模糊搜索
+
+	// 过滤
+	Status      string // ready / pending / error / syncing
+	AuthType    string // none / token / password / ssh_key
+	SyncEnabled *bool  // 是否开启定时同步
+
+	// 排序
+	SortField string // name / status / created_at / updated_at / last_sync_at
+	SortOrder string // asc / desc
+
+	// 时间范围
+	CreatedFrom *time.Time
+	CreatedTo   *time.Time
+}
+
+// List 获取仓库列表（向后兼容）
+func (r *GitRepositoryRepository) List(ctx context.Context, status string) ([]model.GitRepository, error) {
+	repos, _, err := r.ListWithOptions(ctx, &GitRepoListOptions{
+		Status: status,
+	})
+	return repos, err
+}
+
+// ListWithOptions 获取仓库列表（支持完整查询参数）
+func (r *GitRepositoryRepository) ListWithOptions(ctx context.Context, opts *GitRepoListOptions) ([]model.GitRepository, int64, error) {
+	var repos []model.GitRepository
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&model.GitRepository{})
+
+	// 全文搜索（name + url）
+	if opts.Search != "" {
+		search := "%" + strings.ToLower(opts.Search) + "%"
+		query = query.Where("LOWER(name) LIKE ? OR LOWER(url) LIKE ?", search, search)
 	}
 
-	err := query.Order("created_at DESC").Find(&repos).Error
-	return repos, err
+	// 按名称模糊搜索
+	if opts.Name != "" {
+		query = query.Where("LOWER(name) LIKE ?", "%"+strings.ToLower(opts.Name)+"%")
+	}
+
+	// 按 URL 模糊搜索
+	if opts.URL != "" {
+		query = query.Where("LOWER(url) LIKE ?", "%"+strings.ToLower(opts.URL)+"%")
+	}
+
+	// 状态过滤
+	if opts.Status != "" {
+		query = query.Where("status = ?", opts.Status)
+	}
+
+	// 认证方式过滤
+	if opts.AuthType != "" {
+		query = query.Where("auth_type = ?", opts.AuthType)
+	}
+
+	// 定时同步过滤
+	if opts.SyncEnabled != nil {
+		query = query.Where("sync_enabled = ?", *opts.SyncEnabled)
+	}
+
+	// 时间范围
+	if opts.CreatedFrom != nil {
+		query = query.Where("created_at >= ?", *opts.CreatedFrom)
+	}
+	if opts.CreatedTo != nil {
+		query = query.Where("created_at <= ?", *opts.CreatedTo)
+	}
+
+	// 计数
+	query.Count(&total)
+
+	// 排序
+	allowedSortFields := map[string]bool{
+		"name": true, "status": true, "created_at": true,
+		"updated_at": true, "last_sync_at": true,
+	}
+	if opts.SortField != "" && allowedSortFields[opts.SortField] {
+		order := "ASC"
+		if strings.ToLower(opts.SortOrder) == "desc" {
+			order = "DESC"
+		}
+		query = query.Order(fmt.Sprintf("%s %s", opts.SortField, order))
+	} else {
+		query = query.Order("created_at DESC")
+	}
+
+	// 分页
+	if opts.Page > 0 && opts.PageSize > 0 {
+		query = query.Offset((opts.Page - 1) * opts.PageSize).Limit(opts.PageSize)
+	}
+
+	err := query.Find(&repos).Error
+	return repos, total, err
 }
 
 // UpdateStatus 更新仓库状态

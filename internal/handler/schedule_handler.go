@@ -183,7 +183,8 @@ type CreateScheduleRequest struct {
 	ScheduleExpr *string    `json:"schedule_expr"`                    // Cron 表达式（cron 模式必填）
 	ScheduledAt  *time.Time `json:"scheduled_at"`                     // 执行时间（once 模式必填）
 	Description  string     `json:"description"`
-	Enabled      *bool      `json:"enabled"` // 默认 true
+	Enabled      *bool      `json:"enabled"`      // 默认 true
+	MaxFailures  *int       `json:"max_failures"` // 最大连续失败次数，默认 5
 
 	// 执行参数覆盖（可选）
 	TargetHostsOverride string         `json:"target_hosts_override"`
@@ -207,6 +208,11 @@ func (r *CreateScheduleRequest) ToModel() *model.ExecutionSchedule {
 		enabled = *r.Enabled
 	}
 
+	maxFailures := 5
+	if r.MaxFailures != nil {
+		maxFailures = *r.MaxFailures
+	}
+
 	return &model.ExecutionSchedule{
 		Name:                r.Name,
 		TaskID:              r.TaskID,
@@ -215,6 +221,7 @@ func (r *CreateScheduleRequest) ToModel() *model.ExecutionSchedule {
 		ScheduledAt:         r.ScheduledAt,
 		Description:         r.Description,
 		Enabled:             enabled,
+		MaxFailures:         maxFailures,
 		TargetHostsOverride: r.TargetHostsOverride,
 		ExtraVarsOverride:   model.JSON(r.ExtraVarsOverride),
 		SecretsSourceIDs:    secretIDs,
@@ -229,6 +236,7 @@ type UpdateScheduleRequest struct {
 	ScheduleExpr *string    `json:"schedule_expr"`
 	ScheduledAt  *time.Time `json:"scheduled_at"`
 	Description  string     `json:"description"`
+	MaxFailures  *int       `json:"max_failures"` // 最大连续失败次数
 
 	// 执行参数覆盖（可选）
 	TargetHostsOverride string         `json:"target_hosts_override"`
@@ -247,7 +255,7 @@ func (r *UpdateScheduleRequest) ToModel() *model.ExecutionSchedule {
 		}
 	}
 
-	return &model.ExecutionSchedule{
+	schedule := &model.ExecutionSchedule{
 		Name:                r.Name,
 		ScheduleType:        r.ScheduleType,
 		ScheduleExpr:        r.ScheduleExpr,
@@ -258,4 +266,8 @@ func (r *UpdateScheduleRequest) ToModel() *model.ExecutionSchedule {
 		SecretsSourceIDs:    secretIDs,
 		SkipNotification:    r.SkipNotification,
 	}
+	if r.MaxFailures != nil {
+		schedule.MaxFailures = *r.MaxFailures
+	}
+	return schedule
 }

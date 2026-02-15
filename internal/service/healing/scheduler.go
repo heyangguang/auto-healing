@@ -163,7 +163,8 @@ func (s *Scheduler) processIncident(ctx context.Context, incident *model.Inciden
 
 	if matchedRule == nil {
 		// 没有匹配的规则，标记为已扫描并设置为 skipped
-		s.incidentRepo.MarkScanned(ctx, incident.ID, nil, nil)
+		// 注意：必须先更新内存对象再调用 Update，否则 Save 会把 scanned 覆盖回 false
+		incident.Scanned = true
 		incident.HealingStatus = "skipped"
 		s.incidentRepo.Update(ctx, incident)
 		logger.Sched("HEAL").Debug("工单 %s 无匹配规则，已跳过", incident.ID)

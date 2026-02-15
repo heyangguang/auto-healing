@@ -2,9 +2,11 @@ package handler
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/service/playbook"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -45,16 +47,67 @@ func (h *PlaybookHandler) Create(c *gin.Context) {
 func (h *PlaybookHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	status := c.Query("status")
 
-	var repositoryID *uuid.UUID
+	opts := &repository.PlaybookListOptions{
+		Page:       page,
+		PageSize:   pageSize,
+		Search:     c.Query("search"),
+		Name:       c.Query("name"),
+		FilePath:   c.Query("file_path"),
+		Status:     c.Query("status"),
+		ConfigMode: c.Query("config_mode"),
+		SortField:  c.Query("sort_by"),
+		SortOrder:  c.Query("sort_order"),
+	}
+
+	// 解析 repository_id
 	if repoIDStr := c.Query("repository_id"); repoIDStr != "" {
 		if id, err := uuid.Parse(repoIDStr); err == nil {
-			repositoryID = &id
+			opts.RepositoryID = &id
 		}
 	}
 
-	playbooks, total, err := h.svc.List(c.Request.Context(), repositoryID, status, page, pageSize)
+	// 解析 has_variables (bool)
+	if hasVarsStr := c.Query("has_variables"); hasVarsStr != "" {
+		hasVars := hasVarsStr == "true"
+		opts.HasVariables = &hasVars
+	}
+
+	// 解析 min_variables (int)
+	if minVarsStr := c.Query("min_variables"); minVarsStr != "" {
+		if v, err := strconv.Atoi(minVarsStr); err == nil && v >= 0 {
+			opts.MinVariables = &v
+		}
+	}
+
+	// 解析 max_variables (int)
+	if maxVarsStr := c.Query("max_variables"); maxVarsStr != "" {
+		if v, err := strconv.Atoi(maxVarsStr); err == nil && v >= 0 {
+			opts.MaxVariables = &v
+		}
+	}
+
+	// 解析 has_required_vars (bool)
+	if hasReqStr := c.Query("has_required_vars"); hasReqStr != "" {
+		hasReq := hasReqStr == "true"
+		opts.HasRequiredVars = &hasReq
+	}
+
+	// 解析时间范围
+	if createdFrom := c.Query("created_from"); createdFrom != "" {
+		t, err := time.Parse(time.RFC3339, createdFrom)
+		if err == nil {
+			opts.CreatedFrom = &t
+		}
+	}
+	if createdTo := c.Query("created_to"); createdTo != "" {
+		t, err := time.Parse(time.RFC3339, createdTo)
+		if err == nil {
+			opts.CreatedTo = &t
+		}
+	}
+
+	playbooks, total, err := h.svc.ListWithOptions(c.Request.Context(), opts)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return

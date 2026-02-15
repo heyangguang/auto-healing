@@ -28,8 +28,8 @@ func (s *CMDBService) GetCMDBItem(ctx context.Context, id uuid.UUID) (*model.CMD
 }
 
 // ListCMDBItems 获取配置项列表
-func (s *CMDBService) ListCMDBItems(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool) ([]model.CMDBItem, int64, error) {
-	return s.cmdbRepo.List(ctx, page, pageSize, pluginID, itemType, status, environment, sourcePluginName, hasPlugin)
+func (s *CMDBService) ListCMDBItems(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool, sortBy, sortOrder string) ([]model.CMDBItem, int64, error) {
+	return s.cmdbRepo.List(ctx, page, pageSize, pluginID, itemType, status, environment, sourcePluginName, hasPlugin, sortBy, sortOrder)
 }
 
 // GetCMDBStats 获取统计信息

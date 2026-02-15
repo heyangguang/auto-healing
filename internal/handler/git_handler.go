@@ -2,8 +2,10 @@ package handler
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/repository"
 	gitSvc "github.com/company/auto-healing/internal/service/git"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -23,15 +25,48 @@ func NewGitRepoHandler() *GitRepoHandler {
 
 // ListRepos 获取仓库列表
 func (h *GitRepoHandler) ListRepos(c *gin.Context) {
-	status := c.Query("status")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-	repos, err := h.svc.ListRepos(c.Request.Context(), status)
+	opts := &repository.GitRepoListOptions{
+		Page:      page,
+		PageSize:  pageSize,
+		Search:    c.Query("search"),
+		Name:      c.Query("name"),
+		URL:       c.Query("url"),
+		Status:    c.Query("status"),
+		AuthType:  c.Query("auth_type"),
+		SortField: c.Query("sort_field"),
+		SortOrder: c.Query("sort_order"),
+	}
+
+	// 解析 sync_enabled (bool)
+	if syncEnabledStr := c.Query("sync_enabled"); syncEnabledStr != "" {
+		syncEnabled := syncEnabledStr == "true"
+		opts.SyncEnabled = &syncEnabled
+	}
+
+	// 解析时间范围
+	if createdFrom := c.Query("created_from"); createdFrom != "" {
+		t, err := time.Parse(time.RFC3339, createdFrom)
+		if err == nil {
+			opts.CreatedFrom = &t
+		}
+	}
+	if createdTo := c.Query("created_to"); createdTo != "" {
+		t, err := time.Parse(time.RFC3339, createdTo)
+		if err == nil {
+			opts.CreatedTo = &t
+		}
+	}
+
+	repos, total, err := h.svc.ListReposWithOptions(c.Request.Context(), opts)
 	if err != nil {
 		response.InternalError(c, "获取仓库列表失败")
 		return
 	}
 
-	response.Success(c, repos)
+	response.List(c, repos, total, page, pageSize)
 }
 
 // CreateRepo 创建仓库

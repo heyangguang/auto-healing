@@ -250,9 +250,20 @@ func (s *Service) DeleteRepo(ctx context.Context, id uuid.UUID) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// ListRepos 列出仓库
+// ListRepos 列出仓库（向后兼容）
 func (s *Service) ListRepos(ctx context.Context, status string) ([]model.GitRepository, error) {
 	return s.repo.List(ctx, status)
+}
+
+// ListReposWithOptions 列出仓库（支持完整查询参数）
+func (s *Service) ListReposWithOptions(ctx context.Context, opts *repository.GitRepoListOptions) ([]model.GitRepository, int64, error) {
+	if opts.Page < 1 {
+		opts.Page = 1
+	}
+	if opts.PageSize < 1 || opts.PageSize > 100 {
+		opts.PageSize = 20
+	}
+	return s.repo.ListWithOptions(ctx, opts)
 }
 
 // ResetStatus 强制重置仓库状态

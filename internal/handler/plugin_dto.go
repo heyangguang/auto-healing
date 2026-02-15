@@ -17,6 +17,7 @@ type CreatePluginRequest struct {
 	SyncFilter          model.JSON `json:"sync_filter"`
 	SyncEnabled         bool       `json:"sync_enabled"`
 	SyncIntervalMinutes int        `json:"sync_interval_minutes"`
+	MaxFailures         *int       `json:"max_failures"`
 }
 
 // ToModel 转换为 Model
@@ -30,6 +31,11 @@ func (r *CreatePluginRequest) ToModel() *model.Plugin {
 		fieldMapping = model.JSON{}
 	}
 
+	maxFailures := 5
+	if r.MaxFailures != nil {
+		maxFailures = *r.MaxFailures
+	}
+
 	return &model.Plugin{
 		Name:                r.Name,
 		Type:                r.Type,
@@ -40,6 +46,7 @@ func (r *CreatePluginRequest) ToModel() *model.Plugin {
 		SyncFilter:          r.SyncFilter,
 		SyncEnabled:         r.SyncEnabled,
 		SyncIntervalMinutes: r.SyncIntervalMinutes,
+		MaxFailures:         maxFailures,
 		Status:              "inactive",
 	}
 }
@@ -53,6 +60,7 @@ type UpdatePluginRequest struct {
 	SyncFilter          model.JSON `json:"sync_filter"`
 	SyncEnabled         *bool      `json:"sync_enabled"`
 	SyncIntervalMinutes *int       `json:"sync_interval_minutes"`
+	MaxFailures         *int       `json:"max_failures"`
 }
 
 // ApplyTo 应用更新到模型
@@ -70,6 +78,11 @@ func (r *UpdatePluginRequest) ApplyTo(plugin *model.Plugin) {
 		plugin.FieldMapping = r.FieldMapping
 	}
 	if r.SyncEnabled != nil {
+		// 重新启用同步时，重置失败计数
+		if *r.SyncEnabled && !plugin.SyncEnabled {
+			plugin.ConsecutiveFailures = 0
+			plugin.PauseReason = ""
+		}
 		plugin.SyncEnabled = *r.SyncEnabled
 	}
 	if r.SyncFilter != nil {
@@ -77,6 +90,9 @@ func (r *UpdatePluginRequest) ApplyTo(plugin *model.Plugin) {
 	}
 	if r.SyncIntervalMinutes != nil {
 		plugin.SyncIntervalMinutes = *r.SyncIntervalMinutes
+	}
+	if r.MaxFailures != nil {
+		plugin.MaxFailures = *r.MaxFailures
 	}
 }
 

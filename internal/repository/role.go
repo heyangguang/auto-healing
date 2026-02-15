@@ -63,10 +63,27 @@ func (r *RoleRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&model.Role{}, "id = ?", id).Error
 }
 
+// RoleFilter 角色过滤参数
+type RoleFilter struct {
+	Search string // 模糊搜索 (name/display_name/description)
+}
+
 // List 获取角色列表
 func (r *RoleRepository) List(ctx context.Context) ([]model.Role, error) {
 	var roles []model.Role
 	err := r.db.WithContext(ctx).Preload("Permissions").Order("is_system DESC, created_at ASC").Find(&roles).Error
+	return roles, err
+}
+
+// ListWithFilter 带过滤条件获取角色列表
+func (r *RoleRepository) ListWithFilter(ctx context.Context, f RoleFilter) ([]model.Role, error) {
+	query := r.db.WithContext(ctx).Preload("Permissions")
+	if f.Search != "" {
+		like := "%" + f.Search + "%"
+		query = query.Where("name ILIKE ? OR display_name ILIKE ? OR description ILIKE ?", like, like, like)
+	}
+	var roles []model.Role
+	err := query.Order("is_system DESC, created_at ASC").Find(&roles).Error
 	return roles, err
 }
 
@@ -176,10 +193,41 @@ func (r *PermissionRepository) GetByCode(ctx context.Context, code string) (*mod
 	return &perm, err
 }
 
+// PermissionFilter 权限过滤参数
+type PermissionFilter struct {
+	Search string // 全文模糊搜索 (name/code/module)
+	Module string // 精确按模块过滤
+	Name   string // 模糊搜索 name
+	Code   string // 模糊搜索 code
+}
+
 // List 获取所有权限
 func (r *PermissionRepository) List(ctx context.Context) ([]model.Permission, error) {
 	var perms []model.Permission
 	err := r.db.WithContext(ctx).Order("module, resource, action").Find(&perms).Error
+	return perms, err
+}
+
+// ListWithFilter 带过滤条件获取权限
+func (r *PermissionRepository) ListWithFilter(ctx context.Context, f PermissionFilter) ([]model.Permission, error) {
+	query := r.db.WithContext(ctx)
+
+	if f.Search != "" {
+		like := "%" + f.Search + "%"
+		query = query.Where("name ILIKE ? OR code ILIKE ? OR module ILIKE ?", like, like, like)
+	}
+	if f.Module != "" {
+		query = query.Where("module = ?", f.Module)
+	}
+	if f.Name != "" {
+		query = query.Where("name ILIKE ?", "%"+f.Name+"%")
+	}
+	if f.Code != "" {
+		query = query.Where("code ILIKE ?", "%"+f.Code+"%")
+	}
+
+	var perms []model.Permission
+	err := query.Order("module, resource, action").Find(&perms).Error
 	return perms, err
 }
 

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -133,18 +134,94 @@ func (s *Scheduler) syncPlugin(ctx context.Context, plugin model.Plugin) {
 	logger.Sched("SYNC").Info("[%s] 开始同步: %s", shortID, plugin.Name)
 
 	syncLog, err := s.pluginSvc.TriggerSyncSync(ctx, plugin.ID)
+
+	// 计算下次同步时间（保持原始间隔）
+	nextSyncAt := time.Now().Add(time.Duration(plugin.SyncIntervalMinutes) * time.Minute)
+
 	if err != nil {
-		logger.Sched("SYNC").Error("[%s] 同步失败: %s - %v", shortID, plugin.Name, err)
+		// 连续失败计数 +1
+		newCount := plugin.ConsecutiveFailures + 1
+		updates := map[string]interface{}{
+			"consecutive_failures": newCount,
+			"next_sync_at":         nextSyncAt,
+		}
+
+		// 检查是否需要自动暂停（max_failures > 0 才启用）
+		if plugin.MaxFailures > 0 && newCount >= plugin.MaxFailures {
+			updates["sync_enabled"] = false
+			updates["next_sync_at"] = nil
+			updates["pause_reason"] = fmt.Sprintf("连续失败 %d 次后自动暂停 (最后错误: %s)", newCount, truncateStr(err.Error(), 200))
+			logger.Sched("SYNC").Warn("[%s] ⚠ 连续失败 %d/%d 次，已自动暂停同步: %s",
+				shortID, newCount, plugin.MaxFailures, plugin.Name)
+		} else {
+			if plugin.MaxFailures > 0 {
+				logger.Sched("SYNC").Warn("[%s] 同步失败 (%d/%d): %s - %v",
+					shortID, newCount, plugin.MaxFailures, plugin.Name, err)
+			} else {
+				logger.Sched("SYNC").Warn("[%s] 同步失败 (第%d次): %s - %v",
+					shortID, newCount, plugin.Name, err)
+			}
+		}
+
+		database.DB.WithContext(ctx).Model(&model.Plugin{}).Where("id = ?", plugin.ID).Updates(updates)
 		return
 	}
 
-	nextSyncAt := time.Now().Add(time.Duration(plugin.SyncIntervalMinutes) * time.Minute)
-	if err := s.updateNextSyncTime(ctx, plugin.ID, nextSyncAt); err != nil {
-		logger.Sched("SYNC").Warn("[%s] 更新下次同步时间失败: %v", shortID, err)
+	// 更新下次同步时间
+	updates := map[string]interface{}{
+		"next_sync_at": nextSyncAt,
 	}
 
+	// 检查 syncLog 结果：非 success 也视为失败
 	duration := time.Since(startTime)
-	if syncLog.Status == "success" {
+	if syncLog.Status != "success" {
+		newCount := plugin.ConsecutiveFailures + 1
+		updates["consecutive_failures"] = newCount
+
+		if plugin.MaxFailures > 0 && newCount >= plugin.MaxFailures {
+			updates["sync_enabled"] = false
+			updates["next_sync_at"] = nil
+			updates["pause_reason"] = fmt.Sprintf("连续失败 %d 次后自动暂停 (状态: %s)", newCount, syncLog.Status)
+			logger.Sched("SYNC").Warn("[%s] ⚠ 连续失败 %d/%d 次，已自动暂停同步: %s",
+				shortID, newCount, plugin.MaxFailures, plugin.Name)
+		} else {
+			cleanError := strings.ReplaceAll(syncLog.ErrorMessage, "\n", " ")
+			cleanError = strings.ReplaceAll(cleanError, "\r", "")
+			if len(cleanError) > 200 {
+				cleanError = cleanError[:200] + "..."
+			}
+			logger.Sched("SYNC").Warn("[%s] 同步异常 (%d/%d): %s | 状态: %s | 获取: %d条 | 处理: %d条 | 失败: %d条 | 错误: %s | 耗时: %v",
+				shortID,
+				newCount, func() int {
+					if plugin.MaxFailures > 0 {
+						return plugin.MaxFailures
+					}
+					return 0
+				}(),
+				plugin.Name,
+				syncLog.Status,
+				syncLog.RecordsFetched,
+				syncLog.RecordsProcessed,
+				syncLog.RecordsFailed,
+				cleanError,
+				duration,
+			)
+		}
+
+		database.DB.WithContext(ctx).Model(&model.Plugin{}).Where("id = ?", plugin.ID).Updates(updates)
+		return
+	}
+
+	// 成功 → 重置失败计数
+	updates["consecutive_failures"] = 0
+	updates["pause_reason"] = ""
+
+	database.DB.WithContext(ctx).Model(&model.Plugin{}).Where("id = ?", plugin.ID).Updates(updates)
+
+	if plugin.ConsecutiveFailures > 0 {
+		logger.Sched("SYNC").Info("[%s] 同步成功: %s | 失败计数已重置 (之前: %d) | 耗时: %v",
+			shortID, plugin.Name, plugin.ConsecutiveFailures, duration)
+	} else {
 		newCount := 0
 		updatedCount := 0
 		if syncLog.Details != nil {
@@ -164,22 +241,6 @@ func (s *Scheduler) syncPlugin(ctx context.Context, plugin model.Plugin) {
 			syncLog.RecordsFailed,
 			duration,
 			nextSyncAt.Format("15:04:05"),
-		)
-	} else {
-		cleanError := strings.ReplaceAll(syncLog.ErrorMessage, "\n", " ")
-		cleanError = strings.ReplaceAll(cleanError, "\r", "")
-		if len(cleanError) > 200 {
-			cleanError = cleanError[:200] + "..."
-		}
-		logger.Sched("SYNC").Warn("[%s] 同步异常: %s | 状态: %s | 获取: %d条 | 处理: %d条 | 失败: %d条 | 错误: %s | 耗时: %v",
-			shortID,
-			plugin.Name,
-			syncLog.Status,
-			syncLog.RecordsFetched,
-			syncLog.RecordsProcessed,
-			syncLog.RecordsFailed,
-			cleanError,
-			duration,
 		)
 	}
 }

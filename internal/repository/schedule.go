@@ -33,6 +33,7 @@ func (r *ScheduleRepository) Create(ctx context.Context, schedule *model.Executi
 	return database.DB.WithContext(ctx).
 		Select("id", "name", "task_id", "schedule_type", "schedule_expr", "scheduled_at", "status",
 			"next_run_at", "last_run_at", "enabled", "description",
+			"max_failures", "consecutive_failures", "pause_reason",
 			"target_hosts_override", "extra_vars_override", "secrets_source_ids",
 			"skip_notification", "created_at", "updated_at").
 		Create(schedule).Error
@@ -103,6 +104,7 @@ func (r *ScheduleRepository) Update(ctx context.Context, schedule *model.Executi
 		Model(schedule).
 		Select("name", "task_id", "schedule_type", "schedule_expr", "scheduled_at", "status",
 			"next_run_at", "last_run_at", "enabled", "description",
+			"max_failures", "consecutive_failures", "pause_reason",
 			"target_hosts_override", "extra_vars_override", "secrets_source_ids",
 			"skip_notification", "updated_at").
 		Updates(schedule).Error
