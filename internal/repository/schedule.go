@@ -278,13 +278,19 @@ type ScheduleTimelineItem struct {
 }
 
 // ListTimeline 获取调度时间线（轻量接口，用于可视化）
-func (r *ScheduleRepository) ListTimeline(ctx context.Context, enabled *bool, scheduleType string) ([]ScheduleTimelineItem, error) {
+func (r *ScheduleRepository) ListTimeline(ctx context.Context, date time.Time, enabled *bool, scheduleType string) ([]ScheduleTimelineItem, error) {
 	var items []ScheduleTimelineItem
+
+	// 计算日期范围：[dayStart, dayEnd)
+	dayStart := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	dayEnd := dayStart.AddDate(0, 0, 1)
 
 	query := database.DB.WithContext(ctx).
 		Table("execution_schedules AS s").
 		Select("s.id, s.name, s.schedule_type, s.schedule_expr, s.scheduled_at, s.status, s.enabled, s.next_run_at, s.last_run_at, s.task_id, t.name AS task_name").
-		Joins("LEFT JOIN execution_tasks t ON t.id = s.task_id")
+		Joins("LEFT JOIN execution_tasks t ON t.id = s.task_id").
+		Where("(s.next_run_at >= ? AND s.next_run_at < ?) OR (s.last_run_at >= ? AND s.last_run_at < ?)",
+			dayStart, dayEnd, dayStart, dayEnd)
 
 	if enabled != nil {
 		query = query.Where("s.enabled = ?", *enabled)

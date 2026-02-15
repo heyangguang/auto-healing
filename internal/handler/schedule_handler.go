@@ -214,6 +214,18 @@ func (h *ScheduleHandler) GetStats(c *gin.Context) {
 
 // GetTimeline 获取调度时间线（轻量接口，用于可视化）
 func (h *ScheduleHandler) GetTimeline(c *gin.Context) {
+	// 解析 date 参数，默认今天（Asia/Shanghai）
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	date := time.Now().In(loc)
+	if dateStr := c.Query("date"); dateStr != "" {
+		if parsed, err := time.ParseInLocation("2006-01-02", dateStr, loc); err == nil {
+			date = parsed
+		} else {
+			response.BadRequest(c, "date 参数格式错误，应为 YYYY-MM-DD")
+			return
+		}
+	}
+
 	var enabled *bool
 	if enabledStr := c.Query("enabled"); enabledStr != "" {
 		v := enabledStr == "true"
@@ -221,7 +233,7 @@ func (h *ScheduleHandler) GetTimeline(c *gin.Context) {
 	}
 	scheduleType := c.Query("schedule_type")
 
-	items, err := h.service.ListTimeline(c.Request.Context(), enabled, scheduleType)
+	items, err := h.service.ListTimeline(c.Request.Context(), date, enabled, scheduleType)
 	if err != nil {
 		response.InternalError(c, "获取时间线失败:"+err.Error())
 		return

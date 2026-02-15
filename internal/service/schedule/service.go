@@ -293,6 +293,6 @@ func (s *Service) GetStats(ctx context.Context) (map[string]interface{}, error) 
 }
 
 // ListTimeline 获取调度时间线（轻量接口，用于可视化）
-func (s *Service) ListTimeline(ctx context.Context, enabled *bool, scheduleType string) ([]repository.ScheduleTimelineItem, error) {
-	return s.repo.ListTimeline(ctx, enabled, scheduleType)
+func (s *Service) ListTimeline(ctx context.Context, date time.Time, enabled *bool, scheduleType string) ([]repository.ScheduleTimelineItem, error) {
+	return s.repo.ListTimeline(ctx, date, enabled, scheduleType)
 }
