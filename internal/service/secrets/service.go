@@ -208,3 +208,10 @@ func (s *Service) Disable(ctx context.Context, id uuid.UUID) error {
 
 	return s.repo.UpdateStatus(ctx, id, "inactive")
 }
+
+// ==================== 统计 ====================
+
+// GetStats 获取密钥源统计信息
+func (s *Service) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	return s.repo.GetStats(ctx)
+}

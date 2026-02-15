@@ -58,6 +58,8 @@ func (h *ExecutionHandler) ListTasks(c *gin.Context) {
 		TargetHosts:    c.Query("target_hosts"),
 		PlaybookName:   c.Query("playbook_name"),
 		RepositoryName: c.Query("repository_name"),
+		SortBy:         c.Query("sort_by"),
+		SortOrder:      c.Query("sort_order"),
 		Page:           page,
 		PageSize:       pageSize,
 	}
@@ -67,6 +69,24 @@ func (h *ExecutionHandler) ListTasks(c *gin.Context) {
 		id, err := uuid.Parse(playbookIDStr)
 		if err == nil {
 			opts.PlaybookID = &id
+		}
+	}
+
+	// 解析 needs_review (bool)
+	if needsReviewStr := c.Query("needs_review"); needsReviewStr != "" {
+		needsReview := needsReviewStr == "true"
+		opts.NeedsReview = &needsReview
+	}
+
+	// 解析 created_from / created_to (时间范围)
+	if createdFromStr := c.Query("created_from"); createdFromStr != "" {
+		if t, err := time.Parse(time.RFC3339, createdFromStr); err == nil {
+			opts.CreatedFrom = &t
+		}
+	}
+	if createdToStr := c.Query("created_to"); createdToStr != "" {
+		if t, err := time.Parse(time.RFC3339, createdToStr); err == nil {
+			opts.CreatedTo = &t
 		}
 	}
 
@@ -459,4 +479,32 @@ func (h *ExecutionHandler) GetTopActiveTasks(c *gin.Context) {
 	}
 
 	response.Success(c, items)
+}
+
+// GetTaskStats 获取任务模板统计概览
+func (h *ExecutionHandler) GetTaskStats(c *gin.Context) {
+	stats, err := h.service.GetTaskStats(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.Success(c, stats)
+}
+
+// BatchConfirmReview 批量确认审核
+func (h *ExecutionHandler) BatchConfirmReview(c *gin.Context) {
+	var req execution.BatchConfirmReviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数无效: "+err.Error())
+		return
+	}
+
+	result, err := h.service.BatchConfirmReview(c.Request.Context(), &req)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.Success(c, result)
 }

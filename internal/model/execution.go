@@ -36,6 +36,9 @@ type GitRepository struct {
 
 	// 关联
 	Playbooks []Playbook `json:"playbooks,omitempty" gorm:"foreignKey:RepositoryID"`
+
+	// 计算字段（非持久化）
+	PlaybookCount int64 `json:"playbook_count" gorm:"-"`
 }
 
 // TableName 表名
@@ -181,8 +184,9 @@ type ExecutionTask struct {
 	UpdatedAt time.Time `json:"updated_at" gorm:"default:now()"`
 
 	// 关联
-	Playbook *Playbook      `json:"playbook,omitempty" gorm:"foreignKey:PlaybookID"`
-	Runs     []ExecutionRun `json:"runs,omitempty" gorm:"foreignKey:TaskID"`
+	Playbook      *Playbook      `json:"playbook,omitempty" gorm:"foreignKey:PlaybookID"`
+	Runs          []ExecutionRun `json:"runs,omitempty" gorm:"foreignKey:TaskID"`
+	ScheduleCount int            `json:"schedule_count" gorm:"-"` // 关联的定时任务数量（非持久化，查询时填充）
 }
 
 // TableName 表名

@@ -32,6 +32,11 @@ func (s *CMDBService) ListCMDBItems(ctx context.Context, page, pageSize int, plu
 	return s.cmdbRepo.List(ctx, page, pageSize, pluginID, itemType, status, environment, sourcePluginName, hasPlugin, sortBy, sortOrder)
 }
 
+// ListCMDBItemIDs 获取符合筛选条件的配置项 ID 列表（轻量接口）
+func (s *CMDBService) ListCMDBItemIDs(ctx context.Context, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool) ([]repository.CMDBItemBasic, int64, error) {
+	return s.cmdbRepo.ListIDs(ctx, pluginID, itemType, status, environment, sourcePluginName, hasPlugin)
+}
+
 // GetCMDBStats 获取统计信息
 func (s *CMDBService) GetCMDBStats(ctx context.Context) (map[string]interface{}, error) {
 	return s.cmdbRepo.GetStats(ctx)

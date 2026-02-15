@@ -44,13 +44,17 @@ func (r *NotificationRepository) GetChannelByName(name string) (*model.Notificat
 }
 
 // ListChannels 获取渠道列表
-func (r *NotificationRepository) ListChannels(page, pageSize int, channelType string) ([]model.NotificationChannel, int64, error) {
+func (r *NotificationRepository) ListChannels(page, pageSize int, channelType string, search string) ([]model.NotificationChannel, int64, error) {
 	var channels []model.NotificationChannel
 	var total int64
 
 	query := r.db.Model(&model.NotificationChannel{})
 	if channelType != "" {
 		query = query.Where("type = ?", channelType)
+	}
+	if search != "" {
+		pattern := "%" + search + "%"
+		query = query.Where("(name ILIKE ? OR description ILIKE ?)", pattern, pattern)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -358,4 +362,63 @@ func (r *NotificationRepository) GetPendingRetryLogs() ([]model.NotificationLog,
 		return nil, err
 	}
 	return logs, nil
+}
+
+// ==================== 统计 ====================
+
+// GetStats 获取通知统计信息
+func (r *NotificationRepository) GetStats() (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// === 渠道统计 ===
+	var channelsTotal int64
+	if err := r.db.Model(&model.NotificationChannel{}).Count(&channelsTotal).Error; err != nil {
+		return nil, err
+	}
+	stats["channels_total"] = channelsTotal
+
+	// 渠道按类型统计
+	type TypeCount struct {
+		Type  string `json:"type"`
+		Count int64  `json:"count"`
+	}
+	var channelTypeCounts []TypeCount
+	r.db.Model(&model.NotificationChannel{}).
+		Select("type, count(*) as count").
+		Group("type").
+		Scan(&channelTypeCounts)
+	stats["channels_by_type"] = channelTypeCounts
+
+	// === 模板统计 ===
+	var templatesTotal int64
+	if err := r.db.Model(&model.NotificationTemplate{}).Count(&templatesTotal).Error; err != nil {
+		return nil, err
+	}
+	stats["templates_total"] = templatesTotal
+
+	var templatesActive int64
+	r.db.Model(&model.NotificationTemplate{}).
+		Where("is_active = ?", true).
+		Count(&templatesActive)
+	stats["templates_active"] = templatesActive
+
+	// === 日志统计 ===
+	var logsTotal int64
+	if err := r.db.Model(&model.NotificationLog{}).Count(&logsTotal).Error; err != nil {
+		return nil, err
+	}
+	stats["logs_total"] = logsTotal
+
+	type StatusCount struct {
+		Status string `json:"status"`
+		Count  int64  `json:"count"`
+	}
+	var logStatusCounts []StatusCount
+	r.db.Model(&model.NotificationLog{}).
+		Select("status, count(*) as count").
+		Group("status").
+		Scan(&logStatusCounts)
+	stats["logs_by_status"] = logStatusCounts
+
+	return stats, nil
 }

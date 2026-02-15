@@ -267,3 +267,15 @@ func (h *GitRepoHandler) GetFiles(c *gin.Context) {
 
 	response.Success(c, map[string]any{"files": files})
 }
+
+// ==================== 统计 ====================
+
+// GetStats 获取 Git 仓库统计信息
+func (h *GitRepoHandler) GetStats(c *gin.Context) {
+	stats, err := h.svc.GetStats(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, "获取统计信息失败:"+err.Error())
+		return
+	}
+	response.Success(c, stats)
+}

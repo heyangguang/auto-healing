@@ -243,6 +243,7 @@ func (h *HealingHandler) GetNodeSchema(c *gin.Context) {
 func (h *HealingHandler) ListFlows(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
+	search := c.Query("search")
 
 	var isActive *bool
 	if str := c.Query("is_active"); str != "" {
@@ -250,7 +251,7 @@ func (h *HealingHandler) ListFlows(c *gin.Context) {
 		isActive = &val
 	}
 
-	flows, total, err := h.flowRepo.List(c.Request.Context(), page, pageSize, isActive)
+	flows, total, err := h.flowRepo.List(c.Request.Context(), page, pageSize, isActive, search)
 	if err != nil {
 		response.InternalError(c, "获取自愈流程列表失败")
 		return
@@ -442,6 +443,7 @@ func (h *HealingHandler) DryRunFlowStream(c *gin.Context) {
 func (h *HealingHandler) ListRules(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
+	search := c.Query("search")
 
 	var isActive *bool
 	if str := c.Query("is_active"); str != "" {
@@ -456,7 +458,7 @@ func (h *HealingHandler) ListRules(c *gin.Context) {
 		}
 	}
 
-	rules, total, err := h.ruleRepo.List(c.Request.Context(), page, pageSize, isActive, flowID)
+	rules, total, err := h.ruleRepo.List(c.Request.Context(), page, pageSize, isActive, flowID, search)
 	if err != nil {
 		response.InternalError(c, "获取自愈规则列表失败")
 		return
@@ -601,6 +603,7 @@ func (h *HealingHandler) ListInstances(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
 	status := c.Query("status")
+	search := c.Query("search")
 
 	var flowID, ruleID *uuid.UUID
 	if str := c.Query("flow_id"); str != "" {
@@ -614,7 +617,7 @@ func (h *HealingHandler) ListInstances(c *gin.Context) {
 		}
 	}
 
-	instances, total, err := h.instanceRepo.List(c.Request.Context(), page, pageSize, flowID, ruleID, nil, status)
+	instances, total, err := h.instanceRepo.List(c.Request.Context(), page, pageSize, flowID, ruleID, nil, status, search)
 	if err != nil {
 		response.InternalError(c, "获取流程实例列表失败")
 		return
@@ -964,4 +967,36 @@ func (h *HealingHandler) TriggerIncidentManually(c *gin.Context) {
 	}
 
 	response.Created(c, instance)
+}
+
+// ==================== 统计 ====================
+
+// GetFlowStats 获取自愈流程统计信息
+func (h *HealingHandler) GetFlowStats(c *gin.Context) {
+	stats, err := h.flowRepo.GetStats(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, "获取流程统计信息失败:"+err.Error())
+		return
+	}
+	response.Success(c, stats)
+}
+
+// GetRuleStats 获取自愈规则统计信息
+func (h *HealingHandler) GetRuleStats(c *gin.Context) {
+	stats, err := h.ruleRepo.GetStats(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, "获取规则统计信息失败:"+err.Error())
+		return
+	}
+	response.Success(c, stats)
+}
+
+// GetInstanceStats 获取流程实例统计信息
+func (h *HealingHandler) GetInstanceStats(c *gin.Context) {
+	stats, err := h.instanceRepo.GetStats(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, "获取实例统计信息失败:"+err.Error())
+		return
+	}
+	response.Success(c, stats)
 }

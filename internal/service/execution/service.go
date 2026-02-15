@@ -700,6 +700,86 @@ func (s *Service) GetTopActiveTasks(ctx context.Context, limit int) ([]repositor
 	return s.repo.GetTopActiveTasks(ctx, limit)
 }
 
+// GetTaskStats 获取任务模板统计概览
+func (s *Service) GetTaskStats(ctx context.Context) (*repository.TaskStats, error) {
+	return s.repo.GetTaskStats(ctx)
+}
+
+// BatchConfirmReviewRequest 批量审核请求
+type BatchConfirmReviewRequest struct {
+	TaskIDs    []uuid.UUID `json:"task_ids"`
+	PlaybookID *uuid.UUID  `json:"playbook_id"`
+}
+
+// BatchConfirmReviewResponse 批量审核响应
+type BatchConfirmReviewResponse struct {
+	ConfirmedCount int64  `json:"confirmed_count"`
+	Message        string `json:"message"`
+}
+
+// BatchConfirmReview 批量确认审核（同时更新快照）
+func (s *Service) BatchConfirmReview(ctx context.Context, req *BatchConfirmReviewRequest) (*BatchConfirmReviewResponse, error) {
+	// 1. 查出需要审核的任务
+	var tasks []model.ExecutionTask
+	var err error
+
+	if req.PlaybookID != nil {
+		tasks, err = s.repo.ListTasksByPlaybookIDAndReview(ctx, *req.PlaybookID)
+	} else if len(req.TaskIDs) > 0 {
+		tasks, err = s.repo.ListTasksByIDsAndReview(ctx, req.TaskIDs)
+	} else {
+		return nil, fmt.Errorf("必须提供 task_ids 或 playbook_id")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(tasks) == 0 {
+		return &BatchConfirmReviewResponse{
+			ConfirmedCount: 0,
+			Message:        "没有需要确认的任务",
+		}, nil
+	}
+
+	// 2. 按 PlaybookID 分组，获取最新的 Playbook 变量
+	playbookVarsCache := make(map[uuid.UUID]model.JSONArray)
+	for _, task := range tasks {
+		if _, cached := playbookVarsCache[task.PlaybookID]; !cached {
+			playbook, err := s.repo.GetPlaybookByID(ctx, task.PlaybookID)
+			if err != nil {
+				logger.Exec("TASK").Warn("获取 Playbook %s 失败: %v", task.PlaybookID, err)
+				playbookVarsCache[task.PlaybookID] = nil // 标记为获取失败
+				continue
+			}
+			playbookVarsCache[task.PlaybookID] = playbook.Variables
+		}
+	}
+
+	// 3. 逐个更新任务（清除审核状态 + 同步快照）
+	var count int64
+	for _, task := range tasks {
+		vars := playbookVarsCache[task.PlaybookID]
+		if vars != nil {
+			task.PlaybookVariablesSnapshot = vars
+		}
+		task.NeedsReview = false
+		task.ChangedVariables = model.JSONArray{}
+
+		if err := s.repo.UpdateTask(ctx, &task); err != nil {
+			logger.Exec("TASK").Warn("批量审核更新任务 %s 失败: %v", task.ID, err)
+			continue
+		}
+		count++
+	}
+
+	logger.Exec("TASK").Info("批量审核确认: %d 个任务模板（快照已同步）", count)
+	return &BatchConfirmReviewResponse{
+		ConfirmedCount: count,
+		Message:        fmt.Sprintf("已确认 %d 个任务模板", count),
+	}, nil
+}
+
 // ==================== 内部方法 ====================
 
 // appendLog 追加日志

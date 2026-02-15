@@ -14,13 +14,22 @@ type ScheduleRepository struct{}
 
 // ScheduleListOptions 调度列表筛选选项
 type ScheduleListOptions struct {
-	TaskID       *uuid.UUID
-	Enabled      *bool
-	Search       string  // 模糊搜索（匹配 name 或 description）
-	ScheduleType *string // 调度类型：cron/once
-	Status       *string // 状态筛选
-	Page         int
-	PageSize     int
+	TaskID           *uuid.UUID
+	Enabled          *bool
+	Search           string  // 模糊搜索（匹配 name 或 description）
+	Name             string  // 名称精确模糊匹配（仅 name）
+	ScheduleType     *string // 调度类型：cron/once
+	Status           *string // 状态筛选
+	SkipNotification *bool   // 是否跳过通知
+	HasOverrides     *bool   // 是否有执行覆盖参数
+	// 时间范围
+	CreatedFrom *time.Time // 创建时间范围起始
+	CreatedTo   *time.Time // 创建时间范围结束
+	// 排序
+	SortBy    string // 排序字段：name / created_at / next_run_at / last_run_at
+	SortOrder string // 排序方向：asc / desc
+	Page      int
+	PageSize  int
 }
 
 // NewScheduleRepository 创建定时任务调度仓库
@@ -75,6 +84,11 @@ func (r *ScheduleRepository) List(ctx context.Context, opts *ScheduleListOptions
 		query = query.Where("name ILIKE ? OR description ILIKE ?", searchPattern, searchPattern)
 	}
 
+	// 名称精确模糊匹配（仅 name）
+	if opts.Name != "" {
+		query = query.Where("name ILIKE ?", "%"+opts.Name+"%")
+	}
+
 	// 调度类型筛选
 	if opts.ScheduleType != nil {
 		query = query.Where("schedule_type = ?", *opts.ScheduleType)
@@ -85,12 +99,53 @@ func (r *ScheduleRepository) List(ctx context.Context, opts *ScheduleListOptions
 		query = query.Where("status = ?", *opts.Status)
 	}
 
+	// 跳过通知筛选
+	if opts.SkipNotification != nil {
+		query = query.Where("skip_notification = ?", *opts.SkipNotification)
+	}
+
+	// 是否有执行覆盖参数
+	if opts.HasOverrides != nil {
+		if *opts.HasOverrides {
+			query = query.Where("(target_hosts_override != '' AND target_hosts_override IS NOT NULL) OR (extra_vars_override IS NOT NULL AND extra_vars_override != '{}' AND extra_vars_override != 'null') OR (secrets_source_ids IS NOT NULL AND secrets_source_ids != '[]' AND secrets_source_ids != 'null')")
+		} else {
+			query = query.Where("(target_hosts_override = '' OR target_hosts_override IS NULL) AND (extra_vars_override IS NULL OR extra_vars_override = '{}' OR extra_vars_override = 'null') AND (secrets_source_ids IS NULL OR secrets_source_ids = '[]' OR secrets_source_ids = 'null')")
+		}
+	}
+
+	// 创建时间范围过滤
+	if opts.CreatedFrom != nil {
+		query = query.Where("created_at >= ?", *opts.CreatedFrom)
+	}
+	if opts.CreatedTo != nil {
+		query = query.Where("created_at <= ?", *opts.CreatedTo)
+	}
+
 	query.Count(&total)
+
+	// 排序
+	orderClause := "created_at DESC" // 默认排序
+	if opts.SortBy != "" {
+		dir := "ASC"
+		if opts.SortOrder == "desc" {
+			dir = "DESC"
+		}
+		switch opts.SortBy {
+		case "name":
+			orderClause = "name " + dir
+		case "created_at":
+			orderClause = "created_at " + dir
+		case "next_run_at":
+			orderClause = "next_run_at " + dir
+		case "last_run_at":
+			orderClause = "last_run_at " + dir
+		}
+	}
 
 	offset := (opts.Page - 1) * opts.PageSize
 	err := query.
 		Preload("Task").
-		Order("created_at DESC").
+		Order(orderClause).
 		Offset(offset).
 		Limit(opts.PageSize).
 		Find(&schedules).Error
@@ -157,4 +212,87 @@ func (r *ScheduleRepository) UpdateLastRunAt(ctx context.Context, id uuid.UUID) 
 		Model(&model.ExecutionSchedule{}).
 		Where("id = ?", id).
 		Update("last_run_at", time.Now()).Error
+}
+
+// ==================== 统计 ====================
+
+// GetStats 获取定时任务调度统计信息
+func (r *ScheduleRepository) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// 总数
+	var total int64
+	if err := database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{}).Count(&total).Error; err != nil {
+		return nil, err
+	}
+	stats["total"] = total
+
+	// 按状态统计
+	type StatusCount struct {
+		Status string `json:"status"`
+		Count  int64  `json:"count"`
+	}
+	var statusCounts []StatusCount
+	database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{}).
+		Select("status, count(*) as count").
+		Group("status").
+		Scan(&statusCounts)
+	stats["by_status"] = statusCounts
+
+	// 按调度类型统计
+	type ScheduleTypeCount struct {
+		ScheduleType string `json:"schedule_type"`
+		Count        int64  `json:"count"`
+	}
+	var scheduleTypeCounts []ScheduleTypeCount
+	database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{}).
+		Select("schedule_type, count(*) as count").
+		Group("schedule_type").
+		Scan(&scheduleTypeCounts)
+	stats["by_schedule_type"] = scheduleTypeCounts
+
+	// 启用/禁用统计
+	var enabledCount int64
+	database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{}).
+		Where("enabled = ?", true).
+		Count(&enabledCount)
+	stats["enabled_count"] = enabledCount
+	stats["disabled_count"] = total - enabledCount
+
+	return stats, nil
+}
+
+// ScheduleTimelineItem 调度时间线项（轻量）
+type ScheduleTimelineItem struct {
+	ID           uuid.UUID  `json:"id"`
+	Name         string     `json:"name"`
+	ScheduleType string     `json:"schedule_type"`
+	ScheduleExpr *string    `json:"schedule_expr,omitempty"`
+	ScheduledAt  *time.Time `json:"scheduled_at,omitempty"`
+	Status       string     `json:"status"`
+	Enabled      bool       `json:"enabled"`
+	NextRunAt    *time.Time `json:"next_run_at,omitempty"`
+	LastRunAt    *time.Time `json:"last_run_at,omitempty"`
+	TaskID       uuid.UUID  `json:"task_id"`
+	TaskName     string     `json:"task_name"`
+}
+
+// ListTimeline 获取调度时间线（轻量接口，用于可视化）
+func (r *ScheduleRepository) ListTimeline(ctx context.Context, enabled *bool, scheduleType string) ([]ScheduleTimelineItem, error) {
+	var items []ScheduleTimelineItem
+
+	query := database.DB.WithContext(ctx).
+		Table("execution_schedules AS s").
+		Select("s.id, s.name, s.schedule_type, s.schedule_expr, s.scheduled_at, s.status, s.enabled, s.next_run_at, s.last_run_at, s.task_id, t.name AS task_name").
+		Joins("LEFT JOIN execution_tasks t ON t.id = s.task_id")
+
+	if enabled != nil {
+		query = query.Where("s.enabled = ?", *enabled)
+	}
+	if scheduleType != "" {
+		query = query.Where("s.schedule_type = ?", scheduleType)
+	}
+
+	err := query.Order("s.next_run_at ASC NULLS LAST").Find(&items).Error
+	return items, err
 }

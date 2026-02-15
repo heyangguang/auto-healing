@@ -125,3 +125,43 @@ func (r *SecretsSourceRepository) UpdateTestTime(ctx context.Context, id uuid.UU
 		Where("id = ?", id).
 		Update("last_test_at", gorm.Expr("NOW()")).Error
 }
+
+// ==================== 统计 ====================
+
+// GetStats 获取密钥源统计信息
+func (r *SecretsSourceRepository) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// 总数
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&model.SecretsSource{}).Count(&total).Error; err != nil {
+		return nil, err
+	}
+	stats["total"] = total
+
+	// 按状态统计
+	type StatusCount struct {
+		Status string `json:"status"`
+		Count  int64  `json:"count"`
+	}
+	var statusCounts []StatusCount
+	r.db.WithContext(ctx).Model(&model.SecretsSource{}).
+		Select("status, count(*) as count").
+		Group("status").
+		Scan(&statusCounts)
+	stats["by_status"] = statusCounts
+
+	// 按类型统计
+	type TypeCount struct {
+		Type  string `json:"type"`
+		Count int64  `json:"count"`
+	}
+	var typeCounts []TypeCount
+	r.db.WithContext(ctx).Model(&model.SecretsSource{}).
+		Select("type, count(*) as count").
+		Group("type").
+		Scan(&typeCounts)
+	stats["by_type"] = typeCounts
+
+	return stats, nil
+}

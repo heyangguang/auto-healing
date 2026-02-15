@@ -100,30 +100,7 @@ func (r *CMDBItemRepository) List(ctx context.Context, page, pageSize int, plugi
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&model.CMDBItem{})
-
-	if pluginID != nil {
-		query = query.Where("plugin_id = ?", *pluginID)
-	}
-	// 筛选有/无关联插件的配置项
-	if hasPlugin != nil {
-		if *hasPlugin {
-			query = query.Where("plugin_id IS NOT NULL")
-		} else {
-			query = query.Where("plugin_id IS NULL")
-		}
-	}
-	if itemType != "" {
-		query = query.Where("type = ?", itemType)
-	}
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
-	if environment != "" {
-		query = query.Where("environment = ?", environment)
-	}
-	if sourcePluginName != "" {
-		query = query.Where("LOWER(source_plugin_name) LIKE LOWER(?)", "%"+sourcePluginName+"%")
-	}
+	query = applyCMDBFilters(query, pluginID, itemType, status, environment, sourcePluginName, hasPlugin)
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -145,6 +122,61 @@ func (r *CMDBItemRepository) List(ctx context.Context, page, pageSize int, plugi
 	}
 
 	return items, total, nil
+}
+
+// CMDBItemBasic CMDB 配置项轻量信息（仅用于 ListIDs 返回）
+type CMDBItemBasic struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Hostname  string    `json:"hostname"`
+	IPAddress string    `json:"ip_address" gorm:"column:ip_address"`
+	Status    string    `json:"status"`
+}
+
+// ListIDs 获取符合筛选条件的配置项 ID 列表（轻量接口，用于全选）
+func (r *CMDBItemRepository) ListIDs(ctx context.Context, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool) ([]CMDBItemBasic, int64, error) {
+	var items []CMDBItemBasic
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&model.CMDBItem{})
+	query = applyCMDBFilters(query, pluginID, itemType, status, environment, sourcePluginName, hasPlugin)
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := query.Select("id, name, hostname, ip_address, status").Order("updated_at DESC").Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return items, total, nil
+}
+
+// applyCMDBFilters 通用 CMDB 筛选条件（List 和 ListIDs 共用）
+func applyCMDBFilters(query *gorm.DB, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool) *gorm.DB {
+	if pluginID != nil {
+		query = query.Where("plugin_id = ?", *pluginID)
+	}
+	if hasPlugin != nil {
+		if *hasPlugin {
+			query = query.Where("plugin_id IS NOT NULL")
+		} else {
+			query = query.Where("plugin_id IS NULL")
+		}
+	}
+	if itemType != "" {
+		query = query.Where("type = ?", itemType)
+	}
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if environment != "" {
+		query = query.Where("environment = ?", environment)
+	}
+	if sourcePluginName != "" {
+		query = query.Where("LOWER(source_plugin_name) LIKE LOWER(?)", "%"+sourcePluginName+"%")
+	}
+	return query
 }
 
 // GetStats 获取统计信息

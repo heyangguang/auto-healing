@@ -643,5 +643,12 @@ func (s *Service) cleanVarName(raw string) string {
 	return string(result)
 }
 
+// ==================== 统计 ====================
+
+// GetStats 获取 Git 仓库统计信息
+func (s *Service) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	return s.repo.GetStats(ctx)
+}
+
 // 注意：Activate、Deactivate 函数已移除
 // 相关功能现在由 Playbook Service 处理

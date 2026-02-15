@@ -290,12 +290,14 @@ func (s *Service) ScanVariables(ctx context.Context, playbookID uuid.UUID, trigg
 			"sources":        v.Sources,
 			"primary_source": v.PrimarySource,
 			"in_code":        true,
+			"type_source":    "inferred", // 自动推断的类型
 		}
 
 		// 如果增强模式中有此变量的定义，使用增强模式的配置
 		if enhanced, ok := enhancedVars[v.Name]; ok {
 			if enhanced.Type != "" {
 				varData["type"] = enhanced.Type
+				varData["type_source"] = "enhanced" // 增强模式明确指定的类型
 			}
 			if enhanced.Description != "" {
 				varData["description"] = enhanced.Description
@@ -426,16 +428,20 @@ func (s *Service) mergeVariables(userVars, scannedVars model.JSONArray) model.JS
 			merged["sources"] = vm["sources"]
 			merged["primary_source"] = vm["primary_source"]
 			merged["in_code"] = true
+			merged["type_source"] = vm["type_source"]
 
-			// 如果新扫描的类型更精确（通过 Jinja2 default 推断），则更新类型
-			// 规则：如果新扫描的类型不是 string（说明是从 Jinja2 default 或直接值推断的），则采用新类型
-			if newType, ok := vm["type"].(string); ok && newType != "string" {
-				oldType, _ := merged["type"].(string)
-				if oldType != newType {
-					merged["type"] = newType
-					// 如果新扫描有默认值，也更新
-					if newDefault := vm["default"]; newDefault != nil {
-						merged["default"] = newDefault
+			// 只有增强模式（.auto-healing.yml）明确指定的类型才覆盖用户设置
+			// 自动推断的类型不覆盖用户手动设置的类型
+			typeSource, _ := vm["type_source"].(string)
+			if typeSource == "enhanced" {
+				if newType, ok := vm["type"].(string); ok {
+					oldType, _ := merged["type"].(string)
+					if oldType != newType {
+						merged["type"] = newType
+						// 如果增强模式有默认值，也更新
+						if newDefault := vm["default"]; newDefault != nil {
+							merged["default"] = newDefault
+						}
 					}
 				}
 			}
@@ -1289,4 +1295,11 @@ func (s *Service) detectChangedVariables(snapshot model.JSONArray, newVarMap map
 	}
 
 	return changed
+}
+
+// ==================== 统计 ====================
+
+// GetStats 获取 Playbook 统计信息
+func (s *Service) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	return s.repo.GetStats(ctx)
 }

@@ -57,7 +57,7 @@ func (r *HealingFlowRepository) Delete(ctx context.Context, id uuid.UUID) error 
 }
 
 // List 获取自愈流程列表
-func (r *HealingFlowRepository) List(ctx context.Context, page, pageSize int, isActive *bool) ([]model.HealingFlow, int64, error) {
+func (r *HealingFlowRepository) List(ctx context.Context, page, pageSize int, isActive *bool, search string) ([]model.HealingFlow, int64, error) {
 	var flows []model.HealingFlow
 	var total int64
 
@@ -65,6 +65,10 @@ func (r *HealingFlowRepository) List(ctx context.Context, page, pageSize int, is
 
 	if isActive != nil {
 		query = query.Where("is_active = ?", *isActive)
+	}
+	if search != "" {
+		pattern := "%" + search + "%"
+		query = query.Where("(name ILIKE ? OR description ILIKE ?)", pattern, pattern)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -114,6 +118,28 @@ func (r *HealingFlowRepository) CountFlowsUsingChannel(ctx context.Context, chan
 		return count2, nil
 	}
 	return count, nil
+}
+
+// GetStats 获取自愈流程统计信息
+func (r *HealingFlowRepository) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// 总数
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&model.HealingFlow{}).Count(&total).Error; err != nil {
+		return nil, err
+	}
+	stats["total"] = total
+
+	// 启用/禁用统计
+	var activeCount int64
+	r.db.WithContext(ctx).Model(&model.HealingFlow{}).
+		Where("is_active = ?", true).
+		Count(&activeCount)
+	stats["active_count"] = activeCount
+	stats["inactive_count"] = total - activeCount
+
+	return stats, nil
 }
 
 // HealingRuleRepository 自愈规则仓库
@@ -182,7 +208,7 @@ func (r *HealingRuleRepository) Delete(ctx context.Context, id uuid.UUID, force 
 }
 
 // List 获取自愈规则列表
-func (r *HealingRuleRepository) List(ctx context.Context, page, pageSize int, isActive *bool, flowID *uuid.UUID) ([]model.HealingRule, int64, error) {
+func (r *HealingRuleRepository) List(ctx context.Context, page, pageSize int, isActive *bool, flowID *uuid.UUID, search string) ([]model.HealingRule, int64, error) {
 	var rules []model.HealingRule
 	var total int64
 
@@ -193,6 +219,10 @@ func (r *HealingRuleRepository) List(ctx context.Context, page, pageSize int, is
 	}
 	if flowID != nil {
 		query = query.Where("flow_id = ?", *flowID)
+	}
+	if search != "" {
+		pattern := "%" + search + "%"
+		query = query.Where("(name ILIKE ? OR description ILIKE ?)", pattern, pattern)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -234,6 +264,40 @@ func (r *HealingRuleRepository) Deactivate(ctx context.Context, id uuid.UUID) er
 	return r.db.WithContext(ctx).Model(&model.HealingRule{}).
 		Where("id = ?", id).
 		Update("is_active", false).Error
+}
+
+// GetStats 获取自愈规则统计信息
+func (r *HealingRuleRepository) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// 总数
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&model.HealingRule{}).Count(&total).Error; err != nil {
+		return nil, err
+	}
+	stats["total"] = total
+
+	// 启用/禁用统计
+	var activeCount int64
+	r.db.WithContext(ctx).Model(&model.HealingRule{}).
+		Where("is_active = ?", true).
+		Count(&activeCount)
+	stats["active_count"] = activeCount
+	stats["inactive_count"] = total - activeCount
+
+	// 按触发模式统计
+	type TriggerModeCount struct {
+		TriggerMode string `json:"trigger_mode"`
+		Count       int64  `json:"count"`
+	}
+	var triggerModeCounts []TriggerModeCount
+	r.db.WithContext(ctx).Model(&model.HealingRule{}).
+		Select("trigger_mode, count(*) as count").
+		Group("trigger_mode").
+		Scan(&triggerModeCounts)
+	stats["by_trigger_mode"] = triggerModeCounts
+
+	return stats, nil
 }
 
 // FlowInstanceRepository 流程实例仓库
@@ -298,23 +362,32 @@ func (r *FlowInstanceRepository) UpdateCurrentNodeAndStates(ctx context.Context,
 }
 
 // List 获取流程实例列表
-func (r *FlowInstanceRepository) List(ctx context.Context, page, pageSize int, flowID, ruleID *uuid.UUID, incidentID *uuid.UUID, status string) ([]model.FlowInstance, int64, error) {
+func (r *FlowInstanceRepository) List(ctx context.Context, page, pageSize int, flowID, ruleID *uuid.UUID, incidentID *uuid.UUID, status string, search string) ([]model.FlowInstance, int64, error) {
 	var instances []model.FlowInstance
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&model.FlowInstance{})
 
 	if flowID != nil {
-		query = query.Where("flow_id = ?", *flowID)
+		query = query.Where("flow_instances.flow_id = ?", *flowID)
 	}
 	if ruleID != nil {
-		query = query.Where("rule_id = ?", *ruleID)
+		query = query.Where("flow_instances.rule_id = ?", *ruleID)
 	}
 	if incidentID != nil {
-		query = query.Where("incident_id = ?", *incidentID)
+		query = query.Where("flow_instances.incident_id = ?", *incidentID)
 	}
 	if status != "" {
-		query = query.Where("status = ?", status)
+		query = query.Where("flow_instances.status = ?", status)
+	}
+	if search != "" {
+		pattern := "%" + search + "%"
+		query = query.
+			Joins("LEFT JOIN healing_flows ON healing_flows.id = flow_instances.flow_id").
+			Joins("LEFT JOIN healing_rules ON healing_rules.id = flow_instances.rule_id").
+			Joins("LEFT JOIN incidents ON incidents.id = flow_instances.incident_id").
+			Where("(flow_instances.id::text ILIKE ? OR healing_flows.name ILIKE ? OR healing_rules.name ILIKE ? OR incidents.title ILIKE ?)",
+				pattern, pattern, pattern, pattern)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -326,8 +399,34 @@ func (r *FlowInstanceRepository) List(ctx context.Context, page, pageSize int, f
 		Preload("Flow").
 		Preload("Rule").
 		Preload("Incident").
-		Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&instances).Error
+		Offset(offset).Limit(pageSize).Order("flow_instances.created_at DESC").Find(&instances).Error
 	return instances, total, err
+}
+
+// GetStats 获取流程实例统计信息
+func (r *FlowInstanceRepository) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// 总数
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&model.FlowInstance{}).Count(&total).Error; err != nil {
+		return nil, err
+	}
+	stats["total"] = total
+
+	// 按状态统计
+	type StatusCount struct {
+		Status string `json:"status"`
+		Count  int64  `json:"count"`
+	}
+	var statusCounts []StatusCount
+	r.db.WithContext(ctx).Model(&model.FlowInstance{}).
+		Select("status, count(*) as count").
+		Group("status").
+		Scan(&statusCounts)
+	stats["by_status"] = statusCounts
+
+	return stats, nil
 }
 
 // ApprovalTaskRepository 审批任务仓库

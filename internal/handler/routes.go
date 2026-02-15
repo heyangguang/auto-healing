@@ -1,5 +1,23 @@
 package handler
 
+// ==================== 路由注册规范 ====================
+//
+// 【重要】固定路径必须注册在参数路由（/:id）之前！
+//
+// Gin 使用基数树匹配路由，如果 /:id 注册在固定路径之前，
+// 固定路径（如 /stats）会被当作 :id 参数匹配，导致返回"无效的ID"。
+//
+// ✅ 正确顺序：
+//   group.GET("/stats", handler)   // 固定路径在前
+//   group.GET("/:id", handler)     // 参数路由在后
+//
+// ❌ 错误顺序：
+//   group.GET("/:id", handler)     // 参数路由在前 → 吞掉 /stats
+//   group.GET("/stats", handler)   // 永远匹配不到
+//
+// 同理适用于 /validate, /export, /pending 等所有固定子路径。
+// =======================================================
+
 import (
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/middleware"
@@ -81,6 +99,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		{
 			users.GET("", middleware.RequirePermission("user:list"), h.User.ListUsers)
 			users.POST("", middleware.RequirePermission("user:create"), h.User.CreateUser)
+			users.GET("/simple", middleware.RequirePermission("user:list"), h.User.ListSimpleUsers) // 轻量接口：用户选择下拉
 			users.GET("/:id", middleware.RequirePermission("user:list"), h.User.GetUser)
 			users.PUT("/:id", middleware.RequirePermission("user:update"), h.User.UpdateUser)
 			users.DELETE("/:id", middleware.RequirePermission("user:delete"), h.User.DeleteUser)
@@ -186,6 +205,8 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		{
 			execTasks.GET("", middleware.RequirePermission("task:list"), h.Execution.ListTasks)
 			execTasks.POST("", middleware.RequirePermission("playbook:execute"), h.Execution.CreateTask)
+			execTasks.GET("/stats", middleware.RequirePermission("task:list"), h.Execution.GetTaskStats)
+			execTasks.POST("/batch-confirm-review", middleware.RequirePermission("task:update"), h.Execution.BatchConfirmReview)
 			execTasks.GET("/:id", middleware.RequirePermission("task:detail"), h.Execution.GetTask)
 			execTasks.PUT("/:id", middleware.RequirePermission("task:update"), h.Execution.UpdateTask)
 			execTasks.DELETE("/:id", middleware.RequirePermission("task:delete"), h.Execution.DeleteTask)
@@ -216,6 +237,8 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		{
 			schedules.GET("", middleware.RequirePermission("task:list"), h.Schedule.List)
 			schedules.POST("", middleware.RequirePermission("task:create"), h.Schedule.Create)
+			schedules.GET("/stats", middleware.RequirePermission("task:list"), h.Schedule.GetStats)
+			schedules.GET("/timeline", middleware.RequirePermission("task:list"), h.Schedule.GetTimeline) // 轻量接口：调度时间线可视化
 			schedules.GET("/:id", middleware.RequirePermission("task:detail"), h.Schedule.Get)
 			schedules.PUT("/:id", middleware.RequirePermission("task:update"), h.Schedule.Update)
 			schedules.DELETE("/:id", middleware.RequirePermission("task:delete"), h.Schedule.Delete)
@@ -251,6 +274,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		{
 			notifications.POST("/send", middleware.RequirePermission("notification:send"), h.Notification.SendNotification)
 			notifications.GET("", middleware.RequirePermission("notification:list"), h.Notification.ListNotifications)
+			notifications.GET("/stats", middleware.RequirePermission("notification:list"), h.Notification.GetStats)
 			notifications.GET("/:id", middleware.RequirePermission("notification:list"), h.Notification.GetNotification)
 		}
 
@@ -286,6 +310,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			cmdb.POST("/batch-test-connection", middleware.RequirePermission("plugin:sync"), h.CMDB.BatchTestConnection)
 			cmdb.POST("/batch/maintenance", middleware.RequirePermission("plugin:update"), h.CMDB.BatchEnterMaintenance)
 			cmdb.POST("/batch/resume", middleware.RequirePermission("plugin:update"), h.CMDB.BatchExitMaintenance)
+			cmdb.GET("/ids", middleware.RequirePermission("plugin:list"), h.CMDB.ListCMDBItemIDs) // 轻量接口：仅返回 ID 列表（全选用）
 			cmdb.GET("/:id", middleware.RequirePermission("plugin:list"), h.CMDB.GetCMDBItem)
 			cmdb.POST("/:id/test-connection", middleware.RequirePermission("plugin:sync"), h.CMDB.TestConnection)
 			cmdb.POST("/:id/maintenance", middleware.RequirePermission("plugin:update"), h.CMDB.EnterMaintenance)
@@ -298,6 +323,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		{
 			secretsSources.GET("", middleware.RequirePermission("plugin:list"), h.Secrets.ListSources)
 			secretsSources.POST("", middleware.RequirePermission("plugin:create"), h.Secrets.CreateSource)
+			secretsSources.GET("/stats", middleware.RequirePermission("plugin:list"), h.Secrets.GetStats)
 			secretsSources.GET("/:id", middleware.RequirePermission("plugin:list"), h.Secrets.GetSource)
 			secretsSources.PUT("/:id", middleware.RequirePermission("plugin:update"), h.Secrets.UpdateSource)
 			secretsSources.DELETE("/:id", middleware.RequirePermission("plugin:delete"), h.Secrets.DeleteSource)
@@ -314,6 +340,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			gitRepos.POST("/validate", middleware.RequirePermission("plugin:list"), h.GitRepo.ValidateRepo)
 			gitRepos.GET("", middleware.RequirePermission("plugin:list"), h.GitRepo.ListRepos)
 			gitRepos.POST("", middleware.RequirePermission("plugin:create"), h.GitRepo.CreateRepo)
+			gitRepos.GET("/stats", middleware.RequirePermission("plugin:list"), h.GitRepo.GetStats)
 			gitRepos.GET("/:id", middleware.RequirePermission("plugin:list"), h.GitRepo.GetRepo)
 			gitRepos.PUT("/:id", middleware.RequirePermission("plugin:update"), h.GitRepo.UpdateRepo)
 			gitRepos.DELETE("/:id", middleware.RequirePermission("plugin:delete"), h.GitRepo.DeleteRepo)
@@ -329,6 +356,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		{
 			playbooks.GET("", middleware.RequirePermission("plugin:list"), h.Playbook.List)
 			playbooks.POST("", middleware.RequirePermission("plugin:create"), h.Playbook.Create)
+			playbooks.GET("/stats", middleware.RequirePermission("plugin:list"), h.Playbook.GetStats)
 			playbooks.GET("/:id", middleware.RequirePermission("plugin:list"), h.Playbook.Get)
 			playbooks.PUT("/:id", middleware.RequirePermission("plugin:update"), h.Playbook.Update)
 			playbooks.DELETE("/:id", middleware.RequirePermission("plugin:delete"), h.Playbook.Delete)
@@ -346,6 +374,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			healingFlows.GET("/node-schema", middleware.RequirePermission("healing:flows:view"), h.Healing.GetNodeSchema)
 			healingFlows.GET("", middleware.RequirePermission("healing:flows:view"), h.Healing.ListFlows)
 			healingFlows.POST("", middleware.RequirePermission("healing:flows:create"), h.Healing.CreateFlow)
+			healingFlows.GET("/stats", middleware.RequirePermission("healing:flows:view"), h.Healing.GetFlowStats)
 			healingFlows.GET("/:id", middleware.RequirePermission("healing:flows:view"), h.Healing.GetFlow)
 			healingFlows.PUT("/:id", middleware.RequirePermission("healing:flows:update"), h.Healing.UpdateFlow)
 			healingFlows.DELETE("/:id", middleware.RequirePermission("healing:flows:delete"), h.Healing.DeleteFlow)
@@ -358,6 +387,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		{
 			healingRules.GET("", middleware.RequirePermission("healing:rules:view"), h.Healing.ListRules)
 			healingRules.POST("", middleware.RequirePermission("healing:rules:create"), h.Healing.CreateRule)
+			healingRules.GET("/stats", middleware.RequirePermission("healing:rules:view"), h.Healing.GetRuleStats)
 			healingRules.GET("/:id", middleware.RequirePermission("healing:rules:view"), h.Healing.GetRule)
 			healingRules.PUT("/:id", middleware.RequirePermission("healing:rules:update"), h.Healing.UpdateRule)
 			healingRules.DELETE("/:id", middleware.RequirePermission("healing:rules:delete"), h.Healing.DeleteRule)
@@ -369,6 +399,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		flowInstances := protected.Group("/healing/instances")
 		{
 			flowInstances.GET("", middleware.RequirePermission("healing:instances:view"), h.Healing.ListInstances)
+			flowInstances.GET("/stats", middleware.RequirePermission("healing:instances:view"), h.Healing.GetInstanceStats)
 			flowInstances.GET("/:id", middleware.RequirePermission("healing:instances:view"), h.Healing.GetInstance)
 			flowInstances.POST("/:id/cancel", middleware.RequirePermission("healing:instances:view"), h.Healing.CancelInstance)
 			flowInstances.POST("/:id/retry", middleware.RequirePermission("healing:instances:view"), h.Healing.RetryInstance)

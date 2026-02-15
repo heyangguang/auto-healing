@@ -283,3 +283,15 @@ func (s *Service) calculateNextRun(scheduleExpr string) *time.Time {
 	next := schedule.Next(now)
 	return &next
 }
+
+// ==================== 统计 ====================
+
+// GetStats 获取定时任务调度统计信息
+func (s *Service) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	return s.repo.GetStats(ctx)
+}
+
+// ListTimeline 获取调度时间线（轻量接口，用于可视化）
+func (s *Service) ListTimeline(ctx context.Context, enabled *bool, scheduleType string) ([]repository.ScheduleTimelineItem, error) {
+	return s.repo.ListTimeline(ctx, enabled, scheduleType)
+}

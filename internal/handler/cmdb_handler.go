@@ -78,6 +78,39 @@ func (h *CMDBHandler) ListCMDBItems(c *gin.Context) {
 	response.List(c, items, total, page, pageSize)
 }
 
+// ListCMDBItemIDs 获取符合筛选条件的配置项 ID 列表（轻量接口，用于全选）
+func (h *CMDBHandler) ListCMDBItemIDs(c *gin.Context) {
+	itemType := c.Query("type")
+	status := c.Query("status")
+	environment := c.Query("environment")
+	sourcePluginName := c.Query("source_plugin_name")
+
+	var pluginID *uuid.UUID
+	if pidStr := c.Query("plugin_id"); pidStr != "" {
+		pid, err := uuid.Parse(pidStr)
+		if err == nil {
+			pluginID = &pid
+		}
+	}
+
+	var hasPlugin *bool
+	if hpStr := c.Query("has_plugin"); hpStr != "" {
+		hp := hpStr == "true"
+		hasPlugin = &hp
+	}
+
+	items, total, err := h.cmdbSvc.ListCMDBItemIDs(c.Request.Context(), pluginID, itemType, status, environment, sourcePluginName, hasPlugin)
+	if err != nil {
+		response.InternalError(c, "获取 CMDB ID 列表失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, map[string]interface{}{
+		"items": items,
+		"total": total,
+	})
+}
+
 // GetCMDBItem 获取 CMDB 详情
 func (h *CMDBHandler) GetCMDBItem(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))

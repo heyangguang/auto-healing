@@ -276,6 +276,18 @@ func (h *SecretsHandler) Disable(c *gin.Context) {
 	response.Message(c, "密钥源已禁用")
 }
 
+// ==================== 统计 ====================
+
+// GetStats 获取密钥源统计信息
+func (h *SecretsHandler) GetStats(c *gin.Context) {
+	stats, err := h.svc.GetStats(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, "获取统计信息失败:"+err.Error())
+		return
+	}
+	response.Success(c, stats)
+}
+
 // maskConfig 隐藏敏感配置
 func maskConfig(config model.JSON) model.JSON {
 	masked := make(model.JSON)

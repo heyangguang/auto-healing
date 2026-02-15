@@ -14,14 +14,16 @@ import (
 
 // NotificationHandler 通知处理器
 type NotificationHandler struct {
-	svc *notification.Service
+	svc       *notification.Service
+	notifRepo *repository.NotificationRepository
 }
 
 // NewNotificationHandler 创建通知处理器
 func NewNotificationHandler() *NotificationHandler {
 	db := database.DB
 	return &NotificationHandler{
-		svc: notification.NewService(db, "Auto-Healing", "", "1.0.0"),
+		svc:       notification.NewService(db, "Auto-Healing", "", "1.0.0"),
+		notifRepo: repository.NewNotificationRepository(db),
 	}
 }
 
@@ -32,8 +34,9 @@ func (h *NotificationHandler) ListChannels(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	channelType := c.Query("type")
+	search := c.Query("search")
 
-	channels, total, err := h.svc.ListChannels(page, pageSize, channelType)
+	channels, total, err := h.svc.ListChannels(page, pageSize, channelType, search)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return
@@ -373,4 +376,16 @@ func (h *NotificationHandler) GetNotification(c *gin.Context) {
 	}
 
 	response.Success(c, log)
+}
+
+// ==================== 统计 ====================
+
+// GetStats 获取通知统计信息
+func (h *NotificationHandler) GetStats(c *gin.Context) {
+	stats, err := h.notifRepo.GetStats()
+	if err != nil {
+		response.InternalError(c, "获取通知统计信息失败:"+err.Error())
+		return
+	}
+	response.Success(c, stats)
 }

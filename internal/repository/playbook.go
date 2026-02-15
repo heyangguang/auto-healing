@@ -252,3 +252,43 @@ func (r *PlaybookRepository) ListScanLogs(ctx context.Context, playbookID uuid.U
 	err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&logs).Error
 	return logs, total, err
 }
+
+// ==================== 统计 ====================
+
+// GetStats 获取 Playbook 统计信息
+func (r *PlaybookRepository) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// 总数
+	var total int64
+	if err := database.DB.WithContext(ctx).Model(&model.Playbook{}).Count(&total).Error; err != nil {
+		return nil, err
+	}
+	stats["total"] = total
+
+	// 按状态统计
+	type StatusCount struct {
+		Status string `json:"status"`
+		Count  int64  `json:"count"`
+	}
+	var statusCounts []StatusCount
+	database.DB.WithContext(ctx).Model(&model.Playbook{}).
+		Select("status, count(*) as count").
+		Group("status").
+		Scan(&statusCounts)
+	stats["by_status"] = statusCounts
+
+	// 按配置模式统计
+	type ConfigModeCount struct {
+		ConfigMode string `json:"config_mode"`
+		Count      int64  `json:"count"`
+	}
+	var configModeCounts []ConfigModeCount
+	database.DB.WithContext(ctx).Model(&model.Playbook{}).
+		Select("config_mode, count(*) as count").
+		Group("config_mode").
+		Scan(&configModeCounts)
+	stats["by_config_mode"] = configModeCounts
+
+	return stats, nil
+}

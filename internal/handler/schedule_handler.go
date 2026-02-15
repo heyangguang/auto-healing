@@ -47,9 +47,12 @@ func (h *ScheduleHandler) List(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
 	opts := &repository.ScheduleListOptions{
-		Search:   c.Query("search"),
-		Page:     page,
-		PageSize: pageSize,
+		Search:    c.Query("search"),
+		Name:      c.Query("name"),
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.Query("sort_order"),
+		Page:      page,
+		PageSize:  pageSize,
 	}
 
 	// 解析 task_id
@@ -74,6 +77,30 @@ func (h *ScheduleHandler) List(c *gin.Context) {
 	// 解析 status
 	if status := c.Query("status"); status != "" {
 		opts.Status = &status
+	}
+
+	// 解析 skip_notification
+	if skipStr := c.Query("skip_notification"); skipStr != "" {
+		skip := skipStr == "true"
+		opts.SkipNotification = &skip
+	}
+
+	// 解析 has_overrides
+	if hasOverridesStr := c.Query("has_overrides"); hasOverridesStr != "" {
+		has := hasOverridesStr == "true"
+		opts.HasOverrides = &has
+	}
+
+	// 解析 created_from / created_to
+	if createdFromStr := c.Query("created_from"); createdFromStr != "" {
+		if t, err := time.Parse(time.RFC3339, createdFromStr); err == nil {
+			opts.CreatedFrom = &t
+		}
+	}
+	if createdToStr := c.Query("created_to"); createdToStr != "" {
+		if t, err := time.Parse(time.RFC3339, createdToStr); err == nil {
+			opts.CreatedTo = &t
+		}
 	}
 
 	schedules, total, err := h.service.List(c.Request.Context(), opts)
@@ -171,6 +198,35 @@ func (h *ScheduleHandler) Disable(c *gin.Context) {
 	}
 
 	response.Message(c, "已禁用")
+}
+
+// ==================== 统计 ====================
+
+// GetStats 获取定时任务调度统计信息
+func (h *ScheduleHandler) GetStats(c *gin.Context) {
+	stats, err := h.service.GetStats(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, "获取统计信息失败:"+err.Error())
+		return
+	}
+	response.Success(c, stats)
+}
+
+// GetTimeline 获取调度时间线（轻量接口，用于可视化）
+func (h *ScheduleHandler) GetTimeline(c *gin.Context) {
+	var enabled *bool
+	if enabledStr := c.Query("enabled"); enabledStr != "" {
+		v := enabledStr == "true"
+		enabled = &v
+	}
+	scheduleType := c.Query("schedule_type")
+
+	items, err := h.service.ListTimeline(c.Request.Context(), enabled, scheduleType)
+	if err != nil {
+		response.InternalError(c, "获取时间线失败:"+err.Error())
+		return
+	}
+	response.Success(c, items)
 }
 
 // ==================== DTO ====================

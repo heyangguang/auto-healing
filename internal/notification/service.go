@@ -90,8 +90,8 @@ func (s *Service) GetChannel(id uuid.UUID) (*model.NotificationChannel, error) {
 }
 
 // ListChannels 获取渠道列表
-func (s *Service) ListChannels(page, pageSize int, channelType string) ([]model.NotificationChannel, int64, error) {
-	return s.repo.ListChannels(page, pageSize, channelType)
+func (s *Service) ListChannels(page, pageSize int, channelType string, search string) ([]model.NotificationChannel, int64, error) {
+	return s.repo.ListChannels(page, pageSize, channelType, search)
 }
 
 // UpdateChannelRequest 更新渠道请求

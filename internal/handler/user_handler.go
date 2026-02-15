@@ -54,6 +54,20 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 	response.List(c, users, total, params.Page, params.PageSize)
 }
 
+// ListSimpleUsers 获取简要用户列表（轻量接口，用于下拉选择）
+func (h *UserHandler) ListSimpleUsers(c *gin.Context) {
+	search := c.Query("search")
+	status := c.DefaultQuery("status", "active") // 默认只返回活跃用户
+
+	users, err := h.userRepo.ListSimple(c.Request.Context(), search, status)
+	if err != nil {
+		response.InternalError(c, "获取用户列表失败")
+		return
+	}
+
+	response.Success(c, users)
+}
+
 // CreateUser 创建用户
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req authService.RegisterRequest

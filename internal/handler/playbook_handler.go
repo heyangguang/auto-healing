@@ -283,6 +283,18 @@ func (h *PlaybookHandler) GetScanLogs(c *gin.Context) {
 	response.List(c, logs, total, page, pageSize)
 }
 
+// ==================== 统计 ====================
+
+// GetStats 获取 Playbook 统计信息
+func (h *PlaybookHandler) GetStats(c *gin.Context) {
+	stats, err := h.svc.GetStats(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, "获取统计信息失败:"+err.Error())
+		return
+	}
+	response.Success(c, stats)
+}
+
 // ==================== DTO ====================
 
 // CreatePlaybookRequest 创建 Playbook 请求

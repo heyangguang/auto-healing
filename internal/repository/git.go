@@ -162,7 +162,39 @@ func (r *GitRepositoryRepository) ListWithOptions(ctx context.Context, opts *Git
 	}
 
 	err := query.Find(&repos).Error
-	return repos, total, err
+	if err != nil {
+		return repos, total, err
+	}
+
+	// 批量填充 playbook_count
+	if len(repos) > 0 {
+		var repoIDs []uuid.UUID
+		for _, repo := range repos {
+			repoIDs = append(repoIDs, repo.ID)
+		}
+
+		type PlaybookCountResult struct {
+			RepositoryID uuid.UUID `gorm:"column:repository_id"`
+			Count        int64     `gorm:"column:count"`
+		}
+		var counts []PlaybookCountResult
+		r.db.WithContext(ctx).
+			Model(&model.Playbook{}).
+			Select("repository_id, COUNT(*) as count").
+			Where("repository_id IN ?", repoIDs).
+			Group("repository_id").
+			Find(&counts)
+
+		countMap := make(map[uuid.UUID]int64)
+		for _, c := range counts {
+			countMap[c.RepositoryID] = c.Count
+		}
+		for i := range repos {
+			repos[i].PlaybookCount = countMap[repos[i].ID]
+		}
+	}
+
+	return repos, total, nil
 }
 
 // UpdateStatus 更新仓库状态
@@ -209,4 +241,32 @@ func (r *GitRepositoryRepository) ListSyncLogs(ctx context.Context, repoID uuid.
 
 	err := query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&logs).Error
 	return logs, total, err
+}
+
+// ==================== 统计 ====================
+
+// GetStats 获取 Git 仓库统计信息
+func (r *GitRepositoryRepository) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// 总数
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&model.GitRepository{}).Count(&total).Error; err != nil {
+		return nil, err
+	}
+	stats["total"] = total
+
+	// 按状态统计
+	type StatusCount struct {
+		Status string `json:"status"`
+		Count  int64  `json:"count"`
+	}
+	var statusCounts []StatusCount
+	r.db.WithContext(ctx).Model(&model.GitRepository{}).
+		Select("status, count(*) as count").
+		Group("status").
+		Scan(&statusCounts)
+	stats["by_status"] = statusCounts
+
+	return stats, nil
 }

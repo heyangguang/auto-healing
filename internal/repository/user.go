@@ -221,3 +221,31 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, p
 			"password_changed_at": gorm.Expr("NOW()"),
 		}).Error
 }
+
+// SimpleUser 简要用户信息（用于下拉选择等场景）
+type SimpleUser struct {
+	ID          uuid.UUID `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	Status      string    `json:"status"`
+}
+
+// ListSimple 获取简要用户列表（轻量接口，不加载关联）
+func (r *UserRepository) ListSimple(ctx context.Context, search string, status string) ([]SimpleUser, error) {
+	var users []SimpleUser
+
+	query := r.db.WithContext(ctx).
+		Model(&model.User{}).
+		Select("id, username, display_name, status")
+
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if search != "" {
+		like := "%" + search + "%"
+		query = query.Where("username ILIKE ? OR display_name ILIKE ?", like, like)
+	}
+
+	err := query.Order("username ASC").Find(&users).Error
+	return users, err
+}

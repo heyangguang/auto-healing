@@ -16,12 +16,19 @@ type ExecutionRepository struct{}
 // TaskListOptions 任务列表筛选选项
 type TaskListOptions struct {
 	PlaybookID     *uuid.UUID
-	Search         string // 模糊搜索（匹配 name 或 description）
+	Search         string // 模糊搜索（匹配 name、description、playbook.name）
 	ExecutorType   string // 执行器类型（local / docker）
 	Status         string // 状态（pending_review / ready）
+	NeedsReview    *bool  // 直接按 needs_review 布尔值过滤
 	TargetHosts    string // 目标主机模糊匹配
 	PlaybookName   string // Playbook 名称模糊匹配
 	RepositoryName string // Git 仓库名称模糊匹配
+	// 时间范围
+	CreatedFrom *time.Time // 创建时间范围起始
+	CreatedTo   *time.Time // 创建时间范围结束
+	// 排序
+	SortBy    string // 排序字段：name / created_at / updated_at
+	SortOrder string // 排序方向：asc / desc
 	// 基于执行记录的过滤
 	HasRuns       *bool  // 是否有执行记录
 	MinRunCount   *int   // 最小执行次数
@@ -86,8 +93,8 @@ func (r *ExecutionRepository) ListTasks(ctx context.Context, opts *TaskListOptio
 
 	query := database.DB.WithContext(ctx).Model(&model.ExecutionTask{})
 
-	// 需要 JOIN 的筛选条件
-	needsPlaybookJoin := opts.PlaybookName != "" || opts.RepositoryName != ""
+	// 需要 JOIN 的筛选条件（search 也需要搜索 playbook.name）
+	needsPlaybookJoin := opts.PlaybookName != "" || opts.RepositoryName != "" || opts.Search != ""
 	if needsPlaybookJoin {
 		query = query.Joins("LEFT JOIN playbooks ON playbooks.id = execution_tasks.playbook_id")
 	}
@@ -100,10 +107,10 @@ func (r *ExecutionRepository) ListTasks(ctx context.Context, opts *TaskListOptio
 		query = query.Where("execution_tasks.playbook_id = ?", *opts.PlaybookID)
 	}
 
-	// 模糊搜索（匹配 name 或 description）
+	// 模糊搜索（匹配 name、description、playbook.name）
 	if opts.Search != "" {
 		searchPattern := "%" + opts.Search + "%"
-		query = query.Where("execution_tasks.name ILIKE ? OR execution_tasks.description ILIKE ?", searchPattern, searchPattern)
+		query = query.Where("(execution_tasks.name ILIKE ? OR execution_tasks.description ILIKE ? OR playbooks.name ILIKE ?)", searchPattern, searchPattern, searchPattern)
 	}
 
 	// 执行器类型筛选
@@ -119,6 +126,19 @@ func (r *ExecutionRepository) ListTasks(ctx context.Context, opts *TaskListOptio
 		case "ready":
 			query = query.Where("execution_tasks.needs_review = ?", false)
 		}
+	}
+
+	// needs_review 直接布尔过滤
+	if opts.NeedsReview != nil {
+		query = query.Where("execution_tasks.needs_review = ?", *opts.NeedsReview)
+	}
+
+	// 创建时间范围过滤
+	if opts.CreatedFrom != nil {
+		query = query.Where("execution_tasks.created_at >= ?", *opts.CreatedFrom)
+	}
+	if opts.CreatedTo != nil {
+		query = query.Where("execution_tasks.created_at <= ?", *opts.CreatedTo)
 	}
 
 	// 目标主机模糊匹配
@@ -164,15 +184,105 @@ func (r *ExecutionRepository) ListTasks(ctx context.Context, opts *TaskListOptio
 
 	query.Count(&total)
 
+	// 排序
+	orderClause := "execution_tasks.created_at DESC" // 默认排序
+	if opts.SortBy != "" {
+		dir := "ASC"
+		if opts.SortOrder == "desc" {
+			dir = "DESC"
+		}
+		switch opts.SortBy {
+		case "name":
+			orderClause = "execution_tasks.name " + dir
+		case "created_at":
+			orderClause = "execution_tasks.created_at " + dir
+		case "updated_at":
+			orderClause = "execution_tasks.updated_at " + dir
+		}
+	}
+
 	offset := (opts.Page - 1) * opts.PageSize
 	err := query.
 		Preload("Playbook").
-		Order("execution_tasks.created_at DESC").
+		Order(orderClause).
 		Offset(offset).
 		Limit(opts.PageSize).
 		Find(&tasks).Error
+	if err != nil {
+		return nil, 0, err
+	}
 
-	return tasks, total, err
+	// 批量填充 schedule_count（避免 N+1）
+	if len(tasks) > 0 {
+		taskIDs := make([]uuid.UUID, len(tasks))
+		for i, t := range tasks {
+			taskIDs[i] = t.ID
+		}
+
+		type scheduleCount struct {
+			TaskID uuid.UUID `gorm:"column:task_id"`
+			Count  int       `gorm:"column:count"`
+		}
+		var counts []scheduleCount
+		database.DB.WithContext(ctx).
+			Model(&model.ExecutionSchedule{}).
+			Select("task_id, COUNT(*) as count").
+			Where("task_id IN ?", taskIDs).
+			Group("task_id").
+			Scan(&counts)
+
+		countMap := make(map[uuid.UUID]int)
+		for _, c := range counts {
+			countMap[c.TaskID] = c.Count
+		}
+		for i := range tasks {
+			tasks[i].ScheduleCount = countMap[tasks[i].ID]
+		}
+	}
+
+	return tasks, total, nil
+}
+
+// BatchConfirmReviewByIDs 按任务 ID 列表批量确认审核
+func (r *ExecutionRepository) BatchConfirmReviewByIDs(ctx context.Context, taskIDs []uuid.UUID) (int64, error) {
+	result := database.DB.WithContext(ctx).
+		Model(&model.ExecutionTask{}).
+		Where("id IN ? AND needs_review = ?", taskIDs, true).
+		Updates(map[string]any{
+			"needs_review":      false,
+			"changed_variables": "[]",
+		})
+	return result.RowsAffected, result.Error
+}
+
+// BatchConfirmReviewByPlaybookID 按 Playbook ID 批量确认审核
+func (r *ExecutionRepository) BatchConfirmReviewByPlaybookID(ctx context.Context, playbookID uuid.UUID) (int64, error) {
+	result := database.DB.WithContext(ctx).
+		Model(&model.ExecutionTask{}).
+		Where("playbook_id = ? AND needs_review = ?", playbookID, true).
+		Updates(map[string]any{
+			"needs_review":      false,
+			"changed_variables": "[]",
+		})
+	return result.RowsAffected, result.Error
+}
+
+// ListTasksByPlaybookIDAndReview 查询指定 Playbook 下需要审核的任务
+func (r *ExecutionRepository) ListTasksByPlaybookIDAndReview(ctx context.Context, playbookID uuid.UUID) ([]model.ExecutionTask, error) {
+	var tasks []model.ExecutionTask
+	err := database.DB.WithContext(ctx).
+		Where("playbook_id = ? AND needs_review = ?", playbookID, true).
+		Find(&tasks).Error
+	return tasks, err
+}
+
+// ListTasksByIDsAndReview 查询指定 ID 列表中需要审核的任务
+func (r *ExecutionRepository) ListTasksByIDsAndReview(ctx context.Context, taskIDs []uuid.UUID) ([]model.ExecutionTask, error) {
+	var tasks []model.ExecutionTask
+	err := database.DB.WithContext(ctx).
+		Where("id IN ? AND needs_review = ?", taskIDs, true).
+		Find(&tasks).Error
+	return tasks, err
 }
 
 // UpdateTask 更新任务模板
@@ -623,4 +733,58 @@ func (r *ExecutionRepository) GetTopActiveTasks(ctx context.Context, limit int) 
 		Scan(&items).Error
 
 	return items, err
+}
+
+// TaskStats 任务模板统计概览
+type TaskStats struct {
+	Total            int64 `json:"total"`
+	Docker           int64 `json:"docker"`
+	Local            int64 `json:"local"`
+	NeedsReview      int64 `json:"needs_review"`
+	ChangedPlaybooks int64 `json:"changed_playbooks"`
+	Ready            int64 `json:"ready"`
+	NeverExecuted    int64 `json:"never_executed"`
+	LastRunFailed    int64 `json:"last_run_failed"`
+}
+
+// GetTaskStats 获取任务模板统计概览
+func (r *ExecutionRepository) GetTaskStats(ctx context.Context) (*TaskStats, error) {
+	stats := &TaskStats{}
+	db := database.DB.WithContext(ctx)
+
+	// 全部模板数
+	db.Model(&model.ExecutionTask{}).Count(&stats.Total)
+
+	// executor_type='docker' 的模板数
+	db.Model(&model.ExecutionTask{}).Where("executor_type = ?", "docker").Count(&stats.Docker)
+
+	// executor_type!='docker' 的模板数（包括 local 和 ssh）
+	db.Model(&model.ExecutionTask{}).Where("executor_type != ?", "docker").Count(&stats.Local)
+
+	// needs_review=true 的模板数
+	db.Model(&model.ExecutionTask{}).Where("needs_review = ?", true).Count(&stats.NeedsReview)
+
+	// needs_review=true 的模板中，去重 playbook_id 的数量
+	db.Model(&model.ExecutionTask{}).
+		Where("needs_review = ?", true).
+		Distinct("playbook_id").
+		Count(&stats.ChangedPlaybooks)
+
+	// 就绪可执行：needs_review=false 且 playbook status='ready'
+	db.Model(&model.ExecutionTask{}).
+		Joins("JOIN playbooks ON playbooks.id = execution_tasks.playbook_id").
+		Where("execution_tasks.needs_review = ? AND playbooks.status = ?", false, "ready").
+		Count(&stats.Ready)
+
+	// 从未执行过：没有任何 execution_runs 记录的模板
+	db.Model(&model.ExecutionTask{}).
+		Where("NOT EXISTS (SELECT 1 FROM execution_runs WHERE execution_runs.task_id = execution_tasks.id)").
+		Count(&stats.NeverExecuted)
+
+	// 最后执行失败：最新一次 run 的 status='failed'
+	db.Model(&model.ExecutionTask{}).
+		Where("EXISTS (SELECT 1 FROM execution_runs r1 WHERE r1.task_id = execution_tasks.id AND r1.status = 'failed' AND r1.created_at = (SELECT MAX(r2.created_at) FROM execution_runs r2 WHERE r2.task_id = execution_tasks.id))").
+		Count(&stats.LastRunFailed)
+
+	return stats, nil
 }
