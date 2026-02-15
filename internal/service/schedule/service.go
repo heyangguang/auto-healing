@@ -225,6 +225,7 @@ func (s *Service) Disable(ctx context.Context, id uuid.UUID) error {
 
 	schedule.Enabled = false
 	schedule.Status = model.ScheduleStatusDisabled
+	schedule.NextRunAt = nil // 禁用后清除下次执行时间
 
 	if err := s.repo.Update(ctx, schedule); err != nil {
 		return err
