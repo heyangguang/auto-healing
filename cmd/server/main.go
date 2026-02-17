@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 	"github.com/company/auto-healing/internal/handler"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/scheduler"
 	"github.com/company/auto-healing/internal/service/healing"
 	"github.com/gin-gonic/gin"
@@ -42,9 +44,25 @@ func main() {
 	}
 	defer database.Close()
 
+	// 自动迁移数据库表结构
+	if err := database.AutoMigrate(); err != nil {
+		logger.Fatal("数据库迁移失败: %v", err)
+	}
+
 	// 同步预置权限和角色
 	if err := database.SyncPermissionsAndRoles(); err != nil {
 		logger.Error("权限种子同步失败: %v", err)
+	}
+
+	// 插入站内信种子数据
+	if err := database.SeedSiteMessages(); err != nil {
+		logger.Error("站内信种子数据插入失败: %v", err)
+	}
+
+	// 清理过期站内信
+	siteMessageRepo := repository.NewSiteMessageRepository()
+	if _, err := siteMessageRepo.CleanExpired(context.Background()); err != nil {
+		logger.Error("站内信过期清理失败: %v", err)
 	}
 
 	// 初始化 Redis

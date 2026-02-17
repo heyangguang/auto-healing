@@ -1,22 +1,28 @@
 package handler
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
+	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/repository"
 	authService "github.com/company/auto-healing/internal/service/auth"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // AuthHandler 认证处理器
 type AuthHandler struct {
-	authSvc *authService.Service
-	jwtSvc  *jwt.Service
+	authSvc   *authService.Service
+	jwtSvc    *jwt.Service
+	auditRepo *repository.AuditLogRepository
 }
 
 // NewAuthHandler 创建认证处理器
@@ -30,8 +36,9 @@ func NewAuthHandler(cfg *config.Config) *AuthHandler {
 	}, blacklistStore)
 
 	return &AuthHandler{
-		authSvc: authService.NewService(jwtSvc),
-		jwtSvc:  jwtSvc,
+		authSvc:   authService.NewService(jwtSvc),
+		jwtSvc:    jwtSvc,
+		auditRepo: repository.NewAuditLogRepository(),
 	}
 }
 
@@ -48,14 +55,60 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.authSvc.Login(c.Request.Context(), &req, c.ClientIP())
+	clientIP := middleware.NormalizeIP(c.ClientIP())
+	userAgent := c.Request.UserAgent()
+	startTime := time.Now()
+
+	resp, err := h.authSvc.Login(c.Request.Context(), &req, clientIP)
 	if err != nil {
+		// 登录失败 — 记录审计日志
+		go h.writeLoginAuditLog(nil, req.Username, clientIP, userAgent, "failed", err.Error(), startTime)
 		response.Unauthorized(c, ToBusinessError(err))
 		return
 	}
 
+	// 登录成功 — 记录审计日志
+	userID := resp.User.ID
+	go h.writeLoginAuditLog(&userID, resp.User.Username, clientIP, userAgent, "success", "", startTime)
+
 	// 登录响应保持原格式（包含 token 字段）
 	c.JSON(http.StatusOK, resp)
+}
+
+// writeLoginAuditLog 异步写入登录审计日志
+func (h *AuthHandler) writeLoginAuditLog(userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time) {
+	defer func() {
+		if r := recover(); r != nil {
+			zap.L().Error("登录审计日志记录失败 (panic)", zap.Any("error", r))
+		}
+	}()
+
+	statusCode := http.StatusOK
+	if status == "failed" {
+		statusCode = http.StatusUnauthorized
+	}
+
+	auditLog := &model.AuditLog{
+		UserID:         userID,
+		Username:       username,
+		IPAddress:      ipAddress,
+		UserAgent:      userAgent,
+		Action:         "login",
+		ResourceType:   "auth",
+		RequestMethod:  "POST",
+		RequestPath:    "/api/v1/auth/login",
+		ResponseStatus: &statusCode,
+		Status:         status,
+		ErrorMessage:   errorMsg,
+		CreatedAt:      createdAt,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := h.auditRepo.Create(ctx, auditLog); err != nil {
+		zap.L().Error("登录审计日志写入失败", zap.Error(err))
+	}
 }
 
 // Logout 用户登出

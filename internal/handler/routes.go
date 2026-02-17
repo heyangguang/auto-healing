@@ -42,6 +42,9 @@ type Handlers struct {
 	Dashboard    *DashboardHandler
 	Preference   *PreferenceHandler
 	Audit        *AuditHandler
+	Activity     *UserActivityHandler
+	Search       *SearchHandler
+	SiteMessage  *SiteMessageHandler
 }
 
 // NewHandlers 创建所有处理器
@@ -65,6 +68,9 @@ func NewHandlers(cfg *config.Config) *Handlers {
 		Dashboard:    NewDashboardHandler(),
 		Preference:   NewPreferenceHandler(),
 		Audit:        NewAuditHandler(),
+		Activity:     NewUserActivityHandler(),
+		Search:       NewSearchHandler(),
+		SiteMessage:  NewSiteMessageHandler(),
 	}
 }
 
@@ -87,6 +93,9 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 	protected.Use(middleware.JWTAuth(h.Auth.GetJWTService()))
 	protected.Use(middleware.AuditMiddleware())
 	{
+		// -------------------- 全局搜索 --------------------
+		protected.GET("/search", h.Search.GlobalSearch)
+
 		// 用户认证相关
 		protected.GET("/auth/me", h.Auth.GetCurrentUser)
 		protected.GET("/auth/profile", h.Auth.GetProfile)
@@ -113,6 +122,21 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			userPrefs.GET("", h.Preference.GetPreferences)
 			userPrefs.PUT("", h.Preference.UpdatePreferences)
 			userPrefs.PATCH("", h.Preference.PatchPreferences)
+		}
+
+		// -------------------- 用户收藏 --------------------
+		userFavorites := protected.Group("/user/favorites")
+		{
+			userFavorites.GET("", h.Activity.ListFavorites)
+			userFavorites.POST("", h.Activity.AddFavorite)
+			userFavorites.DELETE("/:menu_key", h.Activity.RemoveFavorite)
+		}
+
+		// -------------------- 最近访问 --------------------
+		userRecents := protected.Group("/user/recents")
+		{
+			userRecents.GET("", h.Activity.ListRecents)
+			userRecents.POST("", h.Activity.RecordRecent)
 		}
 
 		// -------------------- 角色管理 --------------------
@@ -441,6 +465,20 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			// 角色-工作区关联
 			dashboard.GET("/roles/:roleId/workspaces", h.Dashboard.GetRoleWorkspaces)
 			dashboard.PUT("/roles/:roleId/workspaces", middleware.RequirePermission("dashboard:workspace:manage"), h.Dashboard.AssignRoleWorkspaces)
+		}
+
+		// -------------------- 站内信 --------------------
+		siteMessages := protected.Group("/site-messages")
+		{
+			// 固定路径必须在 /:id 之前注册
+			siteMessages.GET("/unread-count", h.SiteMessage.GetUnreadCount)
+			siteMessages.GET("/categories", h.SiteMessage.GetCategories)
+			siteMessages.GET("/settings", h.SiteMessage.GetSettings)
+			siteMessages.PUT("/settings", middleware.RequirePermission("site-message:create"), h.SiteMessage.UpdateSettings)
+			siteMessages.PUT("/read", h.SiteMessage.MarkRead)
+			siteMessages.PUT("/read-all", h.SiteMessage.MarkAllRead)
+			siteMessages.GET("", h.SiteMessage.ListMessages)
+			siteMessages.POST("", middleware.RequirePermission("site-message:create"), h.SiteMessage.CreateMessage)
 		}
 	}
 }

@@ -61,11 +61,12 @@ func Init(cfg *config.Config) error {
 	return nil
 }
 
-// AutoMigrate 自动迁移数据库表结构
+// AutoMigrate 自动迁移数据库表结构（增量：只创建不存在的表）
 func AutoMigrate() error {
 	logger.Info("开始自动迁移数据库表结构...")
 
-	err := DB.AutoMigrate(
+	// 所有需要迁移的模型
+	allModels := []interface{}{
 		// 用户权限
 		&model.User{},
 		&model.Role{},
@@ -102,19 +103,43 @@ func AutoMigrate() error {
 		&model.RoleWorkspace{},
 		// 用户偏好
 		&model.UserPreference{},
+		// 用户活动（收藏 + 最近访问）
+		&model.UserFavorite{},
+		&model.UserRecent{},
 		// 自愈引擎
 		&model.HealingFlow{},
 		&model.HealingRule{},
 		&model.FlowInstance{},
 		&model.ApprovalTask{},
 		&model.FlowExecutionLog{},
-	)
-
-	if err != nil {
-		return fmt.Errorf("自动迁移失败: %w", err)
+		// 站内信
+		&model.SiteMessage{},
+		&model.SiteMessageRead{},
+		&model.SiteMessageSettings{},
 	}
 
-	logger.Info("数据库表结构迁移完成")
+	// 增量迁移：只迁移不存在的表，避免修改已有表导致约束名冲突
+	migrated := 0
+	for _, m := range allModels {
+		stmt := &gorm.Statement{DB: DB}
+		if err := stmt.Parse(m); err != nil {
+			continue
+		}
+		tableName := stmt.Schema.Table
+		if !DB.Migrator().HasTable(tableName) {
+			if err := DB.AutoMigrate(m); err != nil {
+				return fmt.Errorf("迁移表 %s 失败: %w", tableName, err)
+			}
+			logger.Info("已创建表: %s", tableName)
+			migrated++
+		}
+	}
+
+	if migrated > 0 {
+		logger.Info("数据库迁移完成，新建 %d 张表", migrated)
+	} else {
+		logger.Info("数据库表结构已是最新，无需迁移")
+	}
 	return nil
 }
 

@@ -112,6 +112,9 @@ var AllPermissions = []PermissionSeed{
 
 	// ==================== Dashboard ====================
 	{Code: "dashboard:workspace:manage", Name: "管理工作区", Module: "dashboard", Resource: "workspace", Action: "manage"},
+
+	// ==================== 站内信 ====================
+	{Code: "site-message:create", Name: "创建站内信", Module: "site-message", Resource: "site-message", Action: "create"},
 }
 
 // SystemRoles 系统预置角色及其默认权限
@@ -151,6 +154,8 @@ var SystemRoles = []RoleSeed{
 			"healing:trigger:view", "healing:trigger:execute",
 			// Dashboard
 			"dashboard:workspace:manage",
+			// 站内信
+			"site-message:create",
 			// 审计日志（只读）
 			"audit:list",
 		},
