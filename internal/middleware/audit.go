@@ -532,6 +532,8 @@ var pathSegmentToTable = map[string]tableInfo{
 	"healing/flows":       {"healing_flows", "name"},
 	"healing/rules":       {"healing_rules", "name"},
 	"healing/instances":   {"flow_instances", "flow_name"},
+	// 站内信
+	"site-messages": {"site_messages", "title"},
 }
 
 // resolveResourceName 根据 URL 路径和资源 ID 查询资源名称

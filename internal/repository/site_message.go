@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -14,12 +15,16 @@ import (
 
 // SiteMessageRepository 站内信数据仓库
 type SiteMessageRepository struct {
-	db *gorm.DB
+	db               *gorm.DB
+	platformSettings *PlatformSettingsRepository
 }
 
 // NewSiteMessageRepository 创建站内信仓库
 func NewSiteMessageRepository() *SiteMessageRepository {
-	return &SiteMessageRepository{db: database.DB}
+	return &SiteMessageRepository{
+		db:               database.DB,
+		platformSettings: NewPlatformSettingsRepository(),
+	}
 }
 
 // List 分页查询站内信（带已读状态），支持 keyword 和 category 筛选
@@ -92,10 +97,6 @@ func (r *SiteMessageRepository) MarkRead(ctx context.Context, userID uuid.UUID, 
 // MarkAllRead 全部标记已读（将所有未读消息插入 reads 表）
 func (r *SiteMessageRepository) MarkAllRead(ctx context.Context, userID uuid.UUID) (int64, error) {
 	now := time.Now()
-	// INSERT INTO site_message_reads (message_id, user_id, read_at)
-	// SELECT sm.id, ?, ? FROM site_messages sm
-	// WHERE (sm.expires_at IS NULL OR sm.expires_at > ?)
-	// AND NOT EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = ?)
 	result := r.db.WithContext(ctx).Exec(`
 		INSERT INTO site_message_reads (id, message_id, user_id, read_at)
 		SELECT gen_random_uuid(), sm.id, ?, ? FROM site_messages sm
@@ -108,57 +109,15 @@ func (r *SiteMessageRepository) MarkAllRead(ctx context.Context, userID uuid.UUI
 
 // Create 创建站内信
 func (r *SiteMessageRepository) Create(ctx context.Context, msg *model.SiteMessage) error {
-	// 如果没有设置过期时间，按当前配置计算
+	// 如果没有设置过期时间，从 platform_settings 获取保留天数
 	if msg.ExpiresAt == nil {
-		settings, err := r.GetSettings(ctx)
-		if err == nil && settings.RetentionDays > 0 {
-			expiresAt := time.Now().AddDate(0, 0, settings.RetentionDays)
+		retentionDays := r.platformSettings.GetIntValue(ctx, "site_message.retention_days", 90)
+		if retentionDays > 0 {
+			expiresAt := time.Now().AddDate(0, 0, retentionDays)
 			msg.ExpiresAt = &expiresAt
 		}
 	}
 	return r.db.WithContext(ctx).Create(msg).Error
-}
-
-// GetSettings 获取站内信设置
-func (r *SiteMessageRepository) GetSettings(ctx context.Context) (*model.SiteMessageSettings, error) {
-	var settings model.SiteMessageSettings
-	err := r.db.WithContext(ctx).First(&settings).Error
-	if err != nil {
-		// 如果没有设置行，返回默认值
-		if err == gorm.ErrRecordNotFound {
-			return &model.SiteMessageSettings{RetentionDays: 90}, nil
-		}
-		return nil, err
-	}
-	return &settings, nil
-}
-
-// UpdateSettings 更新站内信设置
-func (r *SiteMessageRepository) UpdateSettings(ctx context.Context, retentionDays int) (*model.SiteMessageSettings, error) {
-	var settings model.SiteMessageSettings
-	err := r.db.WithContext(ctx).First(&settings).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			// 不存在则创建
-			settings = model.SiteMessageSettings{
-				RetentionDays: retentionDays,
-				UpdatedAt:     time.Now(),
-			}
-			if err := r.db.WithContext(ctx).Create(&settings).Error; err != nil {
-				return nil, err
-			}
-			return &settings, nil
-		}
-		return nil, err
-	}
-
-	// 更新已有设置
-	settings.RetentionDays = retentionDays
-	settings.UpdatedAt = time.Now()
-	if err := r.db.WithContext(ctx).Save(&settings).Error; err != nil {
-		return nil, err
-	}
-	return &settings, nil
 }
 
 // CleanExpired 清理已过期的站内信（级联删除 reads）
@@ -173,4 +132,26 @@ func (r *SiteMessageRepository) CleanExpired(ctx context.Context) (int64, error)
 		logger.Info("站内信过期清理：已删除 %d 条过期消息", result.RowsAffected)
 	}
 	return result.RowsAffected, nil
+}
+
+// ==================== 设置代理 ====================
+
+// SiteMessageSettingsResponse 站内信设置响应
+type SiteMessageSettingsResponse struct {
+	RetentionDays int `json:"retention_days"`
+}
+
+// GetSettings 获取站内信设置
+func (r *SiteMessageRepository) GetSettings(ctx context.Context) (*SiteMessageSettingsResponse, error) {
+	retentionDays := r.platformSettings.GetIntValue(ctx, "site_message.retention_days", 90)
+	return &SiteMessageSettingsResponse{RetentionDays: retentionDays}, nil
+}
+
+// UpdateSettings 更新站内信设置
+func (r *SiteMessageRepository) UpdateSettings(ctx context.Context, retentionDays int) (*SiteMessageSettingsResponse, error) {
+	_, err := r.platformSettings.Update(ctx, "site_message.retention_days", strconv.Itoa(retentionDays), nil)
+	if err != nil {
+		return nil, err
+	}
+	return &SiteMessageSettingsResponse{RetentionDays: retentionDays}, nil
 }

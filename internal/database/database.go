@@ -115,7 +115,8 @@ func AutoMigrate() error {
 		// 站内信
 		&model.SiteMessage{},
 		&model.SiteMessageRead{},
-		&model.SiteMessageSettings{},
+		// 平台级设置（KV 存储，与租户无关）
+		&model.PlatformSetting{},
 	}
 
 	// 增量迁移：只迁移不存在的表，避免修改已有表导致约束名冲突
