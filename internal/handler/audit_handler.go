@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/company/auto-healing/internal/pkg/response"
@@ -41,6 +42,14 @@ func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 		RiskLevel:    c.Query("risk_level"),
 		SortBy:       c.Query("sort_by"),
 		SortOrder:    c.Query("sort_order"),
+	}
+
+	// 解析排除过滤参数（逗号分隔）
+	if ea := c.Query("exclude_action"); ea != "" {
+		opts.ExcludeActions = splitAndTrim(ea)
+	}
+	if ert := c.Query("exclude_resource_type"); ert != "" {
+		opts.ExcludeResourceTypes = splitAndTrim(ert)
 	}
 
 	// 解析 user_id
@@ -358,4 +367,17 @@ func (h *AuditHandler) ExportAuditLogs(c *gin.Context) {
 			log.ErrorMessage,
 		})
 	}
+}
+
+// splitAndTrim 按逗号分隔并去除空白
+func splitAndTrim(s string) []string {
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }

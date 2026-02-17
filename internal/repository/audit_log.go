@@ -43,19 +43,21 @@ var HighRiskRules = []HighRiskRule{
 
 // AuditLogListOptions 审计日志查询选项
 type AuditLogListOptions struct {
-	Page          int
-	PageSize      int
-	Search        string     // 模糊搜索（username/resource_name/request_path）
-	Action        string     // 过滤操作类型
-	ResourceType  string     // 过滤资源类型
-	Username      string     // 过滤用户名
-	UserID        *uuid.UUID // 过滤用户 ID
-	Status        string     // 过滤状态 (success/failed)
-	RiskLevel     string     // 过滤风险等级 (high/normal)
-	CreatedAfter  *time.Time // 开始时间
-	CreatedBefore *time.Time // 结束时间
-	SortBy        string     // 排序字段
-	SortOrder     string     // 排序方向 (asc/desc)
+	Page                 int
+	PageSize             int
+	Search               string     // 模糊搜索（username/resource_name/request_path）
+	Action               string     // 过滤操作类型
+	ResourceType         string     // 过滤资源类型
+	ExcludeActions       []string   // 排除操作类型
+	ExcludeResourceTypes []string   // 排除资源类型
+	Username             string     // 过滤用户名
+	UserID               *uuid.UUID // 过滤用户 ID
+	Status               string     // 过滤状态 (success/failed)
+	RiskLevel            string     // 过滤风险等级 (high/normal)
+	CreatedAfter         *time.Time // 开始时间
+	CreatedBefore        *time.Time // 结束时间
+	SortBy               string     // 排序字段
+	SortOrder            string     // 排序方向 (asc/desc)
 }
 
 // AuditLogRepository 审计日志仓库
@@ -99,6 +101,12 @@ func (r *AuditLogRepository) List(ctx context.Context, opts *AuditLogListOptions
 	}
 	if opts.ResourceType != "" {
 		query = query.Where("resource_type = ?", opts.ResourceType)
+	}
+	if len(opts.ExcludeActions) > 0 {
+		query = query.Where("action NOT IN ?", opts.ExcludeActions)
+	}
+	if len(opts.ExcludeResourceTypes) > 0 {
+		query = query.Where("resource_type NOT IN ?", opts.ExcludeResourceTypes)
 	}
 	if opts.Username != "" {
 		query = query.Where("username = ?", opts.Username)
