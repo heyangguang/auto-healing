@@ -200,10 +200,16 @@ func (s *Scheduler) processIncident(ctx context.Context, incident *model.Inciden
 	}
 }
 
-// createFlowInstance 创建流程实例
+// createFlowInstance 创建流程实例（快照流程定义）
 func (s *Scheduler) createFlowInstance(ctx context.Context, incident *model.Incident, rule *model.HealingRule) (*model.FlowInstance, error) {
 	if rule.FlowID == nil {
 		return nil, nil
+	}
+
+	// 获取当前流程定义，用于快照
+	flow, err := s.flowRepo.GetByID(ctx, *rule.FlowID)
+	if err != nil {
+		return nil, err
 	}
 
 	// 将 incident 结构体转换为 map，确保 JSON 序列化正确
@@ -211,6 +217,9 @@ func (s *Scheduler) createFlowInstance(ctx context.Context, incident *model.Inci
 
 	instance := &model.FlowInstance{
 		FlowID:     *rule.FlowID,
+		FlowName:   flow.Name,
+		FlowNodes:  flow.Nodes,
+		FlowEdges:  flow.Edges,
 		RuleID:     &rule.ID,
 		IncidentID: &incident.ID,
 		Status:     model.FlowInstanceStatusPending,
@@ -227,7 +236,7 @@ func (s *Scheduler) createFlowInstance(ctx context.Context, incident *model.Inci
 		logger.Sched("HEAL").Error("更新工单自愈状态失败: %v", err)
 	}
 
-	logger.Sched("HEAL").Info("创建流程实例 %s", instance.ID)
+	logger.Sched("HEAL").Info("创建流程实例 %s（快照流程 %s）", instance.ID, flow.Name)
 	return instance, nil
 }
 

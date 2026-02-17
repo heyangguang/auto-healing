@@ -102,6 +102,12 @@ func AutoMigrate() error {
 		&model.RoleWorkspace{},
 		// 用户偏好
 		&model.UserPreference{},
+		// 自愈引擎
+		&model.HealingFlow{},
+		&model.HealingRule{},
+		&model.FlowInstance{},
+		&model.ApprovalTask{},
+		&model.FlowExecutionLog{},
 	)
 
 	if err != nil {

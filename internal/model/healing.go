@@ -69,8 +69,13 @@ type FlowInstance struct {
 	CreatedAt     time.Time  `json:"created_at" gorm:"default:now()"`
 	UpdatedAt     time.Time  `json:"updated_at" gorm:"default:now()"`
 
+	// 流程定义快照（创建时固化，不随流程修改而变化）
+	FlowName  string    `json:"flow_name" gorm:"type:varchar(255)"`
+	FlowNodes JSONArray `json:"flow_nodes" gorm:"type:jsonb;default:'[]'"`
+	FlowEdges JSONArray `json:"flow_edges" gorm:"type:jsonb;default:'[]'"`
+
 	// 关联
-	Flow     *HealingFlow `json:"flow,omitempty" gorm:"foreignKey:FlowID"`
+	Flow     *HealingFlow `json:"-" gorm:"foreignKey:FlowID"`
 	Rule     *HealingRule `json:"rule,omitempty" gorm:"foreignKey:RuleID"`
 	Incident *Incident    `json:"incident,omitempty" gorm:"foreignKey:IncidentID"`
 }

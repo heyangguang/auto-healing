@@ -98,15 +98,8 @@ func (e *FlowExecutor) Execute(ctx context.Context, instance *model.FlowInstance
 	instance.Status = model.FlowInstanceStatusRunning
 	e.instanceRepo.Update(ctx, instance)
 
-	// 获取流程定义
-	flow, err := e.flowRepo.GetByID(ctx, instance.FlowID)
-	if err != nil {
-		e.fail(ctx, instance, "获取流程定义失败: "+err.Error())
-		return err
-	}
-
-	// 解析节点和边
-	nodes, edges, err := e.parseFlowDefinition(flow)
+	// 从实例快照解析节点和边
+	nodes, edges, err := e.parseFlowSnapshot(instance)
 	if err != nil {
 		e.fail(ctx, instance, "解析流程定义失败: "+err.Error())
 		return err
@@ -138,15 +131,8 @@ func (e *FlowExecutor) RetryFromNode(ctx context.Context, instance *model.FlowIn
 	instance.ErrorMessage = ""
 	e.instanceRepo.Update(ctx, instance)
 
-	// 获取流程定义
-	flow, err := e.flowRepo.GetByID(ctx, instance.FlowID)
-	if err != nil {
-		e.fail(ctx, instance, "获取流程定义失败: "+err.Error())
-		return err
-	}
-
-	// 解析节点和边
-	nodes, edges, err := e.parseFlowDefinition(flow)
+	// 从实例快照解析节点和边
+	nodes, edges, err := e.parseFlowSnapshot(instance)
 	if err != nil {
 		e.fail(ctx, instance, "解析流程定义失败: "+err.Error())
 		return err
@@ -187,6 +173,47 @@ func (e *FlowExecutor) RetryFromNode(ctx context.Context, instance *model.FlowIn
 
 // executeNode 执行节点
 
+// setNodeState 更新节点状态到 instance.NodeStates 并持久化
+// 自动计算 duration_ms：当从 running 转为终态（completed/failed/approved/rejected/partial）时
+func (e *FlowExecutor) setNodeState(ctx context.Context, instance *model.FlowInstance, nodeID string, status string, errorMsg string) {
+	if instance.NodeStates == nil {
+		instance.NodeStates = make(model.JSON)
+	}
+	now := time.Now()
+	state := map[string]interface{}{
+		"status":     status,
+		"updated_at": now.Format(time.RFC3339),
+	}
+	if status == "running" {
+		state["started_at"] = now.Format(time.RFC3339)
+	}
+	if errorMsg != "" {
+		state["error_message"] = errorMsg
+	}
+	// 合并已有状态（保留 started_at 等历史字段）
+	if existing, ok := instance.NodeStates[nodeID].(map[string]interface{}); ok {
+		for k, v := range state {
+			existing[k] = v
+		}
+		// 计算耗时：从 started_at 到现在
+		if status != "running" {
+			if startedStr, ok := existing["started_at"].(string); ok {
+				if startedAt, err := time.Parse(time.RFC3339, startedStr); err == nil {
+					existing["duration_ms"] = now.Sub(startedAt).Milliseconds()
+				}
+			}
+		}
+		instance.NodeStates[nodeID] = existing
+	} else {
+		// 没有既存记录，直接设置（可能是跳过 running 直接到终态）
+		if status != "running" {
+			state["duration_ms"] = int64(0) // 无法计算耗时
+		}
+		instance.NodeStates[nodeID] = state
+	}
+	e.instanceRepo.UpdateNodeStates(ctx, instance.ID, instance.NodeStates)
+}
+
 func (e *FlowExecutor) executeNode(ctx context.Context, instance *model.FlowInstance, nodes []model.FlowNode, edges []model.FlowEdge, node *model.FlowNode) error {
 	logger.Exec("NODE").Info("[%s] 执行节点 %s (%s)", shortID(instance), node.ID, node.Type)
 
@@ -206,6 +233,11 @@ func (e *FlowExecutor) executeNode(ctx context.Context, instance *model.FlowInst
 
 	// 发布 node_start 事件
 	e.eventBus.PublishNodeStart(instance.ID, node.ID, node.Type, nodeName)
+
+	// 标记节点为 running（自管理分支的节点由各自方法处理）
+	if node.Type != model.NodeTypeApproval && node.Type != model.NodeTypeExecution && node.Type != model.NodeTypeCondition {
+		e.setNodeState(ctx, instance, node.ID, "running", "")
+	}
 
 	// 根据节点类型执行
 	var err error
@@ -234,6 +266,7 @@ func (e *FlowExecutor) executeNode(ctx context.Context, instance *model.FlowInst
 			"output":  nil,
 		}
 		e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelInfo, "流程结束", logDetails)
+		e.setNodeState(ctx, instance, node.ID, "completed", "")
 		e.eventBus.PublishNodeComplete(instance.ID, node.ID, node.Type, model.NodeStatusSuccess, nil, nil, nil, "")
 		return e.complete(ctx, instance)
 
@@ -244,18 +277,18 @@ func (e *FlowExecutor) executeNode(ctx context.Context, instance *model.FlowInst
 		err = e.executeCMDBValidator(ctx, instance, node)
 
 	case model.NodeTypeApproval:
-		// 审批节点需要等待，自己决定分支
+		// 审批节点需要等待，自己管理 node_states
 		return e.executeApproval(ctx, instance, node)
 
 	case model.NodeTypeExecution:
-		// 执行节点自己决定分支（success/partial/failed）
+		// 执行节点自己决定分支（success/partial/failed），自己管理 node_states
 		return e.executeExecutionWithBranch(ctx, instance, nodes, edges, node)
 
 	case model.NodeTypeNotification:
 		err = e.executeNotification(ctx, instance, node)
 
 	case model.NodeTypeCondition:
-		// 条件节点需要特殊处理，自己决定下一个节点
+		// 条件节点需要特殊处理，自己管理 node_states
 		return e.executeCondition(ctx, instance, nodes, edges, node)
 
 	case model.NodeTypeSetVariable:
@@ -269,12 +302,16 @@ func (e *FlowExecutor) executeNode(ctx context.Context, instance *model.FlowInst
 	}
 
 	if err != nil {
+		// 记录节点失败状态
+		e.setNodeState(ctx, instance, node.ID, "failed", err.Error())
 		// 发布失败事件
 		e.eventBus.PublishNodeComplete(instance.ID, node.ID, node.Type, model.NodeStatusFailed, nil, nil, nil, "")
 		e.fail(ctx, instance, "节点执行失败: "+err.Error())
 		return err
 	}
 
+	// 记录节点成功状态
+	e.setNodeState(ctx, instance, node.ID, "completed", "")
 	// 发布成功事件
 	e.eventBus.PublishNodeComplete(instance.ID, node.ID, node.Type, model.NodeStatusSuccess, nil, nil, nil, "default")
 
@@ -288,17 +325,17 @@ func (e *FlowExecutor) executeNode(ctx context.Context, instance *model.FlowInst
 	return e.executeNode(ctx, instance, nodes, edges, nextNode)
 }
 
-// parseFlowDefinition 解析流程定义
-func (e *FlowExecutor) parseFlowDefinition(flow *model.HealingFlow) ([]model.FlowNode, []model.FlowEdge, error) {
+// parseFlowSnapshot 从实例快照解析节点和边
+func (e *FlowExecutor) parseFlowSnapshot(instance *model.FlowInstance) ([]model.FlowNode, []model.FlowEdge, error) {
 	var nodes []model.FlowNode
 	var edges []model.FlowEdge
 
-	nodesData, _ := json.Marshal(flow.Nodes)
+	nodesData, _ := json.Marshal(instance.FlowNodes)
 	if err := json.Unmarshal(nodesData, &nodes); err != nil {
 		return nil, nil, err
 	}
 
-	edgesData, _ := json.Marshal(flow.Edges)
+	edgesData, _ := json.Marshal(instance.FlowEdges)
 	if err := json.Unmarshal(edgesData, &edges); err != nil {
 		return nil, nil, err
 	}
@@ -349,7 +386,8 @@ func (e *FlowExecutor) findNextNodeByHandle(nodes []model.FlowNode, edges []mode
 	}
 
 	// 如果没有找到，尝试 default 分支（向后兼容）
-	if handle != "default" {
+	// 注意：rejected 和 failed 等负向分支不应 fallback 到 default，否则会导致拒绝后继续执行
+	if handle != "default" && handle != "rejected" && handle != "failed" {
 		for _, edge := range edges {
 			if edge.GetFrom() == currentNodeID && edge.GetSourceHandle() == "default" {
 				for i := range nodes {
@@ -362,13 +400,16 @@ func (e *FlowExecutor) findNextNodeByHandle(nodes []model.FlowNode, edges []mode
 		}
 	}
 
-	// 最后尝试无 handle 的边（向后兼容旧数据）
-	for _, edge := range edges {
-		if edge.GetFrom() == currentNodeID && edge.SourceHandle == "" {
-			for i := range nodes {
-				if nodes[i].ID == edge.GetTo() {
-					logger.Exec("FLOW").Debug("使用无 handle 的边 %s -> %s", currentNodeID, nodes[i].ID)
-					return &nodes[i]
+	// 最后尝试无 handle 的边（仅在请求的 handle 也为空时才兼容旧数据）
+	// 当有明确的 handle（如 "failed", "partial"）时，不应 fallback 到无标记的边
+	if handle == "" || handle == "default" || handle == "success" {
+		for _, edge := range edges {
+			if edge.GetFrom() == currentNodeID && edge.SourceHandle == "" {
+				for i := range nodes {
+					if nodes[i].ID == edge.GetTo() {
+						logger.Exec("FLOW").Debug("使用无 handle 的边 %s -> %s", currentNodeID, nodes[i].ID)
+						return &nodes[i]
+					}
 				}
 			}
 		}
@@ -644,6 +685,9 @@ func (e *FlowExecutor) logNode(ctx context.Context, instanceID uuid.UUID, nodeID
 func (e *FlowExecutor) executeCondition(ctx context.Context, instance *model.FlowInstance, nodes []model.FlowNode, edges []model.FlowEdge, node *model.FlowNode) error {
 	logger.Exec("NODE").Debug("执行条件节点 %s", node.ID)
 
+	// 标记节点为 running
+	e.setNodeState(ctx, instance, node.ID, "running", "")
+
 	config := node.Config
 
 	// 解析条件配置
@@ -701,11 +745,12 @@ func (e *FlowExecutor) executeCondition(ctx context.Context, instance *model.Flo
 	}
 
 	if matchedTarget == "" {
-		err := fmt.Errorf("条件节点没有匹配的分支且无默认目标")
+		errMsg := "条件节点没有匹配的分支且无默认目标"
+		e.setNodeState(ctx, instance, node.ID, "failed", errMsg)
 		e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelError, "条件判断失败", map[string]interface{}{
-			"error": err.Error(),
+			"error": errMsg,
 		})
-		return err
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	// 找到目标节点
@@ -718,13 +763,17 @@ func (e *FlowExecutor) executeCondition(ctx context.Context, instance *model.Flo
 	}
 
 	if nextNode == nil {
-		err := fmt.Errorf("找不到目标节点: %s", matchedTarget)
+		errMsg := fmt.Sprintf("找不到目标节点: %s", matchedTarget)
+		e.setNodeState(ctx, instance, node.ID, "failed", errMsg)
 		e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelError, "条件判断失败", map[string]interface{}{
-			"error":  err.Error(),
+			"error":  errMsg,
 			"target": matchedTarget,
 		})
-		return err
+		return fmt.Errorf("%s", errMsg)
 	}
+
+	// 标记条件节点为完成
+	e.setNodeState(ctx, instance, node.ID, "completed", "")
 
 	logger.Exec("NODE").Info("条件节点跳转到: %s", matchedTarget)
 
@@ -1246,6 +1295,7 @@ func (e *FlowExecutor) executeApproval(ctx context.Context, instance *model.Flow
 		"description": description,
 		"timeout_at":  timeoutAt.Format(time.RFC3339),
 		"created_at":  time.Now().Format(time.RFC3339),
+		"started_at":  time.Now().Format(time.RFC3339),
 	}
 	e.instanceRepo.Update(ctx, instance)
 	e.instanceRepo.UpdateNodeStates(ctx, instance.ID, instance.NodeStates)
@@ -1338,7 +1388,15 @@ func (e *FlowExecutor) executeExecution(ctx context.Context, instance *model.Flo
 	if instance.Context != nil {
 		hostsData := instance.Context[hostsKey]
 		switch list := hostsData.(type) {
+		case []string:
+			// host_extractor 的 split/direct 模式直接存储 []string
+			for _, h := range list {
+				if h != "" {
+					hostIPs = append(hostIPs, h)
+				}
+			}
 		case []interface{}:
+			// JSON 反序列化后的数组 或 从 DB 加载的数据
 			for _, h := range list {
 				if hostMap, ok := h.(map[string]interface{}); ok {
 					if ip, ok := hostMap["ip_address"].(string); ok && ip != "" {
@@ -1346,9 +1404,12 @@ func (e *FlowExecutor) executeExecution(ctx context.Context, instance *model.Flo
 					} else if name, ok := hostMap["original_name"].(string); ok {
 						hostIPs = append(hostIPs, name)
 					}
+				} else if hostStr, ok := h.(string); ok && hostStr != "" {
+					hostIPs = append(hostIPs, hostStr)
 				}
 			}
 		case []map[string]interface{}:
+			// cmdb_validator 的输出格式
 			for _, hostMap := range list {
 				if ip, ok := hostMap["ip_address"].(string); ok && ip != "" {
 					hostIPs = append(hostIPs, ip)
@@ -1360,7 +1421,9 @@ func (e *FlowExecutor) executeExecution(ctx context.Context, instance *model.Flo
 
 		// 兼容：尝试从 hosts 获取
 		if len(hostIPs) == 0 {
-			if hostList, ok := instance.Context["hosts"].([]interface{}); ok {
+			if hostList, ok := instance.Context["hosts"].([]string); ok {
+				hostIPs = hostList
+			} else if hostList, ok := instance.Context["hosts"].([]interface{}); ok {
 				for _, h := range hostList {
 					if hostStr, ok := h.(string); ok {
 						hostIPs = append(hostIPs, hostStr)
@@ -1520,6 +1583,9 @@ func (e *FlowExecutor) executeExecution(ctx context.Context, instance *model.Flo
 			if completedRun.Status == "failed" {
 				executionStatus = "failed"
 				executionMessage = fmt.Sprintf("任务执行失败 (退出码: %d)", completedRun.ExitCode)
+			} else if completedRun.Status == "partial" {
+				executionStatus = "partial"
+				executionMessage = "任务部分成功（部分主机执行失败或不可达）"
 			}
 		}
 	}
@@ -1552,12 +1618,17 @@ func (e *FlowExecutor) executeExecution(ctx context.Context, instance *model.Flo
 	logLevel := model.LogLevelInfo
 	if executionStatus == "failed" {
 		logLevel = model.LogLevelError
+	} else if executionStatus == "partial" {
+		logLevel = model.LogLevelWarn
 	}
 	e.logNode(ctx, instance.ID, node.ID, node.Type, logLevel, executionMessage, executionResult)
 
 	logger.Exec("ANSIBLE").Info("[%s] 执行完成，状态: %s", shortID(instance), executionStatus)
 
 	if executionStatus == "failed" {
+		return fmt.Errorf("%s", executionMessage)
+	}
+	if executionStatus == "partial" {
 		return fmt.Errorf("%s", executionMessage)
 	}
 
@@ -1569,6 +1640,9 @@ func (e *FlowExecutor) executeExecution(ctx context.Context, instance *model.Flo
 func (e *FlowExecutor) executeExecutionWithBranch(ctx context.Context, instance *model.FlowInstance, nodes []model.FlowNode, edges []model.FlowEdge, node *model.FlowNode) error {
 	// 调用原有的执行逻辑（但不返回错误，改为记录状态）
 	logger.Exec("ANSIBLE").Info("[%s] 执行任务节点（分支模式）", shortID(instance))
+
+	// 标记节点为 running
+	e.setNodeState(ctx, instance, node.ID, "running", "")
 
 	// 执行任务
 	err := e.executeExecution(ctx, instance, node)
@@ -1619,6 +1693,19 @@ func (e *FlowExecutor) executeExecutionWithBranch(ctx context.Context, instance 
 
 	logger.Exec("ANSIBLE").Info("[%s] 执行节点结果分支: %s", shortID(instance), outputHandle)
 
+	// 记录节点状态
+	nodeStateStatus := "completed"
+	var nodeErrMsg string
+	if outputHandle == "failed" {
+		nodeStateStatus = "failed"
+		if err != nil {
+			nodeErrMsg = err.Error()
+		}
+	} else if outputHandle == "partial" {
+		nodeStateStatus = "partial"
+	}
+	e.setNodeState(ctx, instance, node.ID, nodeStateStatus, nodeErrMsg)
+
 	// 发布执行节点完成事件，包含分支信息
 	nodeStatus := model.NodeStatusSuccess
 	if outputHandle == "failed" {
@@ -1631,12 +1718,24 @@ func (e *FlowExecutor) executeExecutionWithBranch(ctx context.Context, instance 
 	// 找到对应分支的下一个节点
 	nextNode := e.findNextNodeByHandle(nodes, edges, node.ID, outputHandle)
 	if nextNode == nil {
-		// 如果没有找到对应分支，且是失败状态，则流程失败
-		if outputHandle == "failed" && err != nil {
-			e.fail(ctx, instance, "执行失败且无 failed 分支: "+err.Error())
-			return err
+		// 如果没有找到对应分支，非 success 状态应让流程失败
+		if outputHandle == "failed" {
+			errMsg := "执行失败且无 failed 分支"
+			if err != nil {
+				errMsg += ": " + err.Error()
+			}
+			e.fail(ctx, instance, errMsg)
+			return fmt.Errorf("%s", errMsg)
 		}
-		// 没有下一个节点，流程结束
+		if outputHandle == "partial" {
+			errMsg := "部分成功但无 partial 分支"
+			if err != nil {
+				errMsg += ": " + err.Error()
+			}
+			e.fail(ctx, instance, errMsg)
+			return fmt.Errorf("%s", errMsg)
+		}
+		// success 且没有下一个节点，流程结束
 		return e.complete(ctx, instance)
 	}
 
@@ -1659,7 +1758,7 @@ func (e *FlowExecutor) waitForRunCompletion(ctx context.Context, runID uuid.UUID
 			return nil, err
 		}
 
-		if run.Status == "success" || run.Status == "failed" || run.Status == "cancelled" {
+		if run.Status == "success" || run.Status == "failed" || run.Status == "cancelled" || run.Status == "partial" {
 			return run, nil
 		}
 
@@ -2163,13 +2262,8 @@ func (e *FlowExecutor) ResumeAfterApproval(ctx context.Context, instanceID uuid.
 		}
 	}
 
-	// 获取流程定义
-	flow, err := e.flowRepo.GetByID(ctx, instance.FlowID)
-	if err != nil {
-		return err
-	}
-
-	nodes, edges, err := e.parseFlowDefinition(flow)
+	// 从实例快照解析节点和边
+	nodes, edges, err := e.parseFlowSnapshot(instance)
 	if err != nil {
 		return err
 	}
@@ -2197,9 +2291,11 @@ func (e *FlowExecutor) ResumeAfterApproval(ctx context.Context, instanceID uuid.
 	if approved {
 		outputHandle = "approved"
 		logger.Exec("FLOW").Info("[%s] 审批通过，走 approved 分支", instance.ID.String()[:8])
+		e.setNodeState(ctx, instance, currentNode.ID, "approved", "")
 	} else {
 		outputHandle = "rejected"
 		logger.Exec("FLOW").Info("[%s] 审批拒绝，走 rejected 分支", instance.ID.String()[:8])
+		e.setNodeState(ctx, instance, currentNode.ID, "rejected", "审批被拒绝")
 	}
 
 	// 找到对应分支的下一个节点

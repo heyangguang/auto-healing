@@ -2,8 +2,13 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"strconv"
+	"time"
 
+	"github.com/company/auto-healing/internal/database"
+	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	healing "github.com/company/auto-healing/internal/service/healing"
@@ -18,6 +23,7 @@ type HealingHandler struct {
 	instanceRepo *repository.FlowInstanceRepository
 	approvalRepo *repository.ApprovalTaskRepository
 	incidentRepo *repository.IncidentRepository
+	notifRepo    *repository.NotificationRepository
 	executor     *healing.FlowExecutor
 	scheduler    *healing.Scheduler
 }
@@ -30,6 +36,7 @@ func NewHealingHandler() *HealingHandler {
 		instanceRepo: repository.NewFlowInstanceRepository(),
 		approvalRepo: repository.NewApprovalTaskRepository(),
 		incidentRepo: repository.NewIncidentRepository(),
+		notifRepo:    repository.NewNotificationRepository(database.DB),
 		executor:     healing.NewFlowExecutor(),
 		scheduler:    healing.NewScheduler(),
 	}
@@ -239,11 +246,20 @@ func (h *HealingHandler) GetNodeSchema(c *gin.Context) {
 }
 
 // ListFlows 获取自愈流程列表
-
+// 支持 Query 参数：search, is_active, name, description, node_type, min_nodes, max_nodes, created_from, created_to, updated_from, updated_to, sort_by, sort_order
 func (h *HealingHandler) ListFlows(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
 	search := c.Query("search")
+	name := c.Query("name")
+	description := c.Query("description")
+	nodeType := c.Query("node_type")
+	createdFrom := c.Query("created_from")
+	createdTo := c.Query("created_to")
+	updatedFrom := c.Query("updated_from")
+	updatedTo := c.Query("updated_to")
+	sortBy := c.Query("sort_by")
+	sortOrder := c.Query("sort_order")
 
 	var isActive *bool
 	if str := c.Query("is_active"); str != "" {
@@ -251,11 +267,28 @@ func (h *HealingHandler) ListFlows(c *gin.Context) {
 		isActive = &val
 	}
 
-	flows, total, err := h.flowRepo.List(c.Request.Context(), page, pageSize, isActive, search)
+	var minNodes *int
+	if str := c.Query("min_nodes"); str != "" {
+		if val := getQueryInt(c, "min_nodes", -1); val >= 0 {
+			minNodes = &val
+		}
+	}
+
+	var maxNodes *int
+	if str := c.Query("max_nodes"); str != "" {
+		if val := getQueryInt(c, "max_nodes", -1); val >= 0 {
+			maxNodes = &val
+		}
+	}
+
+	flows, total, err := h.flowRepo.List(c.Request.Context(), page, pageSize, isActive, search, name, description, nodeType, minNodes, maxNodes, createdFrom, createdTo, updatedFrom, updatedTo, sortBy, sortOrder)
 	if err != nil {
 		response.InternalError(c, "获取自愈流程列表失败")
 		return
 	}
+
+	// 填充通知节点名称
+	h.enrichFlowNodes(flows)
 
 	response.List(c, flows, total, page, pageSize)
 }
@@ -277,6 +310,111 @@ func (h *HealingHandler) CreateFlow(c *gin.Context) {
 	response.Created(c, flow)
 }
 
+// enrichFlowNodes 填充 flow 中 notification 节点的 channel_names 和 template_name
+func (h *HealingHandler) enrichFlowNodes(flows []model.HealingFlow) {
+	// 收集所有 channel_ids 和 template_ids
+	channelIDSet := make(map[uuid.UUID]bool)
+	templateIDSet := make(map[uuid.UUID]bool)
+
+	for _, flow := range flows {
+		for _, item := range flow.Nodes {
+			node, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			nodeType, _ := node["type"].(string)
+			if nodeType != "notification" {
+				continue
+			}
+			config, _ := node["config"].(map[string]interface{})
+			if config == nil {
+				continue
+			}
+			if cids, ok := config["channel_ids"].([]interface{}); ok {
+				for _, cid := range cids {
+					if s, ok := cid.(string); ok {
+						if uid, err := uuid.Parse(s); err == nil {
+							channelIDSet[uid] = true
+						}
+					}
+				}
+			}
+			if tid, ok := config["template_id"].(string); ok {
+				if uid, err := uuid.Parse(tid); err == nil {
+					templateIDSet[uid] = true
+				}
+			}
+		}
+	}
+
+	if len(channelIDSet) == 0 && len(templateIDSet) == 0 {
+		return
+	}
+
+	// 批量查询
+	channelNameMap := make(map[string]string)
+	if len(channelIDSet) > 0 {
+		ids := make([]uuid.UUID, 0, len(channelIDSet))
+		for id := range channelIDSet {
+			ids = append(ids, id)
+		}
+		if channels, err := h.notifRepo.GetChannelsByIDs(ids); err == nil {
+			for _, ch := range channels {
+				channelNameMap[ch.ID.String()] = ch.Name
+			}
+		}
+	}
+
+	templateNameMap := make(map[string]string)
+	if len(templateIDSet) > 0 {
+		ids := make([]uuid.UUID, 0, len(templateIDSet))
+		for id := range templateIDSet {
+			ids = append(ids, id)
+		}
+		if templates, err := h.notifRepo.GetTemplatesByIDs(ids); err == nil {
+			for _, t := range templates {
+				templateNameMap[t.ID.String()] = t.Name
+			}
+		}
+	}
+
+	// 回写到节点 config 中（map 是引用类型，直接修改即可）
+	for _, flow := range flows {
+		for _, item := range flow.Nodes {
+			node, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			nodeType, _ := node["type"].(string)
+			if nodeType != "notification" {
+				continue
+			}
+			config, _ := node["config"].(map[string]interface{})
+			if config == nil {
+				continue
+			}
+			if cids, ok := config["channel_ids"].([]interface{}); ok {
+				cnames := make(map[string]string)
+				for _, cid := range cids {
+					if s, ok := cid.(string); ok {
+						if name, found := channelNameMap[s]; found {
+							cnames[s] = name
+						}
+					}
+				}
+				if len(cnames) > 0 {
+					config["channel_names"] = cnames
+				}
+			}
+			if tid, ok := config["template_id"].(string); ok {
+				if name, found := templateNameMap[tid]; found {
+					config["template_name"] = name
+				}
+			}
+		}
+	}
+}
+
 // GetFlow 获取自愈流程详情
 func (h *HealingHandler) GetFlow(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
@@ -290,6 +428,10 @@ func (h *HealingHandler) GetFlow(c *gin.Context) {
 		response.NotFound(c, "自愈流程不存在")
 		return
 	}
+
+	// 填充通知节点名称（Nodes 内部是 map 引用，enrichFlowNodes 会直接修改）
+	enriched := []model.HealingFlow{*flow}
+	h.enrichFlowNodes(enriched)
 
 	response.Success(c, flow)
 }
@@ -323,7 +465,7 @@ func (h *HealingHandler) UpdateFlow(c *gin.Context) {
 	response.Success(c, flow)
 }
 
-// DeleteFlow 删除自愈流程
+// DeleteFlow 删除自愈流程（保护性删除）
 func (h *HealingHandler) DeleteFlow(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -331,7 +473,31 @@ func (h *HealingHandler) DeleteFlow(c *gin.Context) {
 		return
 	}
 
-	if err := h.flowRepo.Delete(c.Request.Context(), id); err != nil {
+	ctx := c.Request.Context()
+
+	// 检查是否有规则引用该流程
+	ruleCount, err := h.flowRepo.CountRulesUsingFlow(ctx, id)
+	if err != nil {
+		response.InternalError(c, "检查关联规则失败")
+		return
+	}
+	if ruleCount > 0 {
+		response.Conflict(c, "无法删除：有 "+fmt.Sprintf("%d", ruleCount)+" 个自愈规则引用此流程，请先修改这些规则的流程关联")
+		return
+	}
+
+	// 检查是否有运行中/待审批的实例
+	activeCount, err := h.flowRepo.CountActiveInstancesByFlowID(ctx, id)
+	if err != nil {
+		response.InternalError(c, "检查关联实例失败")
+		return
+	}
+	if activeCount > 0 {
+		response.Conflict(c, "无法删除：有 "+fmt.Sprintf("%d", activeCount)+" 个运行中或待审批的流程实例，请等待执行完成或取消后再删除")
+		return
+	}
+
+	if err := h.flowRepo.Delete(ctx, id); err != nil {
 		response.InternalError(c, "删除自愈流程失败")
 		return
 	}
@@ -440,10 +606,17 @@ func (h *HealingHandler) DryRunFlowStream(c *gin.Context) {
 // ========== HealingRule 相关 ==========
 
 // ListRules 获取自愈规则列表
+// 支持 Query 参数：search, is_active, flow_id, trigger_mode, priority, match_mode, has_flow, created_from, created_to, sort_by, sort_order
 func (h *HealingHandler) ListRules(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
 	search := c.Query("search")
+	triggerMode := c.Query("trigger_mode")
+	matchMode := c.Query("match_mode")
+	sortBy := c.Query("sort_by")
+	sortOrder := c.Query("sort_order")
+	createdFrom := c.Query("created_from")
+	createdTo := c.Query("created_to")
 
 	var isActive *bool
 	if str := c.Query("is_active"); str != "" {
@@ -458,7 +631,20 @@ func (h *HealingHandler) ListRules(c *gin.Context) {
 		}
 	}
 
-	rules, total, err := h.ruleRepo.List(c.Request.Context(), page, pageSize, isActive, flowID, search)
+	var priority *int
+	if str := c.Query("priority"); str != "" {
+		if val := getQueryInt(c, "priority", -1); val >= 0 {
+			priority = &val
+		}
+	}
+
+	var hasFlow *bool
+	if str := c.Query("has_flow"); str != "" {
+		val := str == "true"
+		hasFlow = &val
+	}
+
+	rules, total, err := h.ruleRepo.List(c.Request.Context(), page, pageSize, isActive, flowID, search, triggerMode, sortBy, sortOrder, priority, matchMode, hasFlow, createdFrom, createdTo)
 	if err != nil {
 		response.InternalError(c, "获取自愈规则列表失败")
 		return
@@ -602,22 +788,81 @@ func (h *HealingHandler) DeactivateRule(c *gin.Context) {
 func (h *HealingHandler) ListInstances(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
-	status := c.Query("status")
-	search := c.Query("search")
 
-	var flowID, ruleID *uuid.UUID
+	opts := repository.FlowInstanceListOptions{
+		Page:          page,
+		PageSize:      pageSize,
+		Status:        c.Query("status"),
+		Search:        c.Query("search"),
+		FlowName:      c.Query("flow_name"),
+		RuleName:      c.Query("rule_name"),
+		IncidentTitle: c.Query("incident_title"),
+		CurrentNodeID: c.Query("current_node_id"),
+		ErrorMessage:  c.Query("error_message"),
+		SortBy:        c.Query("sort_by"),
+		SortOrder:     c.Query("sort_order"),
+	}
+
+	// UUID 参数
 	if str := c.Query("flow_id"); str != "" {
 		if val, err := uuid.Parse(str); err == nil {
-			flowID = &val
+			opts.FlowID = &val
 		}
 	}
 	if str := c.Query("rule_id"); str != "" {
 		if val, err := uuid.Parse(str); err == nil {
-			ruleID = &val
+			opts.RuleID = &val
+		}
+	}
+	if str := c.Query("incident_id"); str != "" {
+		if val, err := uuid.Parse(str); err == nil {
+			opts.IncidentID = &val
 		}
 	}
 
-	instances, total, err := h.instanceRepo.List(c.Request.Context(), page, pageSize, flowID, ruleID, nil, status, search)
+	// bool 参数
+	if str := c.Query("has_error"); str != "" {
+		val := str == "true" || str == "1"
+		opts.HasError = &val
+	}
+
+	// 时间范围参数
+	parseTime := func(s string) *time.Time {
+		if s == "" {
+			return nil
+		}
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			return &t
+		}
+		// 兼容纯日期格式
+		if t, err := time.Parse("2006-01-02", s); err == nil {
+			return &t
+		}
+		return nil
+	}
+	opts.CreatedFrom = parseTime(c.Query("created_from"))
+	opts.CreatedTo = parseTime(c.Query("created_to"))
+	opts.StartedFrom = parseTime(c.Query("started_from"))
+	opts.StartedTo = parseTime(c.Query("started_to"))
+	opts.CompletedFrom = parseTime(c.Query("completed_from"))
+	opts.CompletedTo = parseTime(c.Query("completed_to"))
+
+	// 数量范围参数
+	parseIntPtr := func(s string) *int {
+		if s == "" {
+			return nil
+		}
+		if v, err := strconv.Atoi(s); err == nil {
+			return &v
+		}
+		return nil
+	}
+	opts.MinNodes = parseIntPtr(c.Query("min_nodes"))
+	opts.MaxNodes = parseIntPtr(c.Query("max_nodes"))
+	opts.MinFailedNodes = parseIntPtr(c.Query("min_failed_nodes"))
+	opts.MaxFailedNodes = parseIntPtr(c.Query("max_failed_nodes"))
+
+	instances, total, err := h.instanceRepo.ListSummaryWithOptions(c.Request.Context(), opts)
 	if err != nil {
 		response.InternalError(c, "获取流程实例列表失败")
 		return
@@ -895,15 +1140,9 @@ func (h *HealingHandler) RejectTask(c *gin.Context) {
 		return
 	}
 
-	// 更新 FlowInstance 状态为失败
-	h.instanceRepo.UpdateStatus(c.Request.Context(), task.FlowInstanceID, "failed", "审批被拒绝: "+req.Comment)
-
-	// 更新关联的 Incident 状态为 failed
-	if instance, err := h.instanceRepo.GetByID(c.Request.Context(), task.FlowInstanceID); err == nil && instance.IncidentID != nil {
-		if incident, err := h.incidentRepo.GetByID(c.Request.Context(), *instance.IncidentID); err == nil {
-			incident.HealingStatus = "failed"
-			h.incidentRepo.Update(c.Request.Context(), incident)
-		}
+	// 通过 executor 的统一审批路径处理拒绝（会更新 node_states）
+	if err := h.executor.ResumeAfterApproval(context.Background(), task.FlowInstanceID, false); err != nil {
+		log.Printf("[HealingHandler] 审批拒绝后恢复流程失败: %v", err)
 	}
 
 	response.Message(c, "审批已拒绝")

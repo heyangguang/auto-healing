@@ -380,14 +380,10 @@ func (r *DashboardRepository) GetHealingSection(ctx context.Context) (*HealingSe
 
 	// 最近实例
 	var instances []model.FlowInstance
-	db.Model(&model.FlowInstance{}).Preload("Flow").Order("created_at DESC").Limit(10).Find(&instances)
+	db.Model(&model.FlowInstance{}).Order("created_at DESC").Limit(10).Find(&instances)
 	for _, inst := range instances {
-		flowName := ""
-		if inst.Flow != nil {
-			flowName = inst.Flow.Name
-		}
 		section.RecentInstances = append(section.RecentInstances, InstanceItem{
-			ID: inst.ID, FlowName: flowName, Status: inst.Status, CreatedAt: inst.CreatedAt,
+			ID: inst.ID, FlowName: inst.FlowName, Status: inst.Status, CreatedAt: inst.CreatedAt,
 		})
 	}
 

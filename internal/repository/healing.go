@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
@@ -57,7 +58,8 @@ func (r *HealingFlowRepository) Delete(ctx context.Context, id uuid.UUID) error 
 }
 
 // List 获取自愈流程列表
-func (r *HealingFlowRepository) List(ctx context.Context, page, pageSize int, isActive *bool, search string) ([]model.HealingFlow, int64, error) {
+// 支持排序（name/created_at/updated_at/nodes_count）、高级过滤（name精确/description模糊/node_type/nodes数量/时间范围）
+func (r *HealingFlowRepository) List(ctx context.Context, page, pageSize int, isActive *bool, search, name, description, nodeType string, minNodes, maxNodes *int, createdFrom, createdTo, updatedFrom, updatedTo, sortBy, sortOrder string) ([]model.HealingFlow, int64, error) {
 	var flows []model.HealingFlow
 	var total int64
 
@@ -70,13 +72,60 @@ func (r *HealingFlowRepository) List(ctx context.Context, page, pageSize int, is
 		pattern := "%" + search + "%"
 		query = query.Where("(name ILIKE ? OR description ILIKE ?)", pattern, pattern)
 	}
+	if name != "" {
+		query = query.Where("name ILIKE ?", "%"+name+"%")
+	}
+	if description != "" {
+		query = query.Where("description ILIKE ?", "%"+description+"%")
+	}
+	if nodeType != "" {
+		query = query.Where("nodes @> ?", `[{"type": "`+nodeType+`"}]`)
+	}
+	if minNodes != nil {
+		query = query.Where("jsonb_array_length(nodes) >= ?", *minNodes)
+	}
+	if maxNodes != nil {
+		query = query.Where("jsonb_array_length(nodes) <= ?", *maxNodes)
+	}
+	if createdFrom != "" {
+		query = query.Where("created_at >= ?", createdFrom)
+	}
+	if createdTo != "" {
+		query = query.Where("created_at <= ?", createdTo)
+	}
+	if updatedFrom != "" {
+		query = query.Where("updated_at >= ?", updatedFrom)
+	}
+	if updatedTo != "" {
+		query = query.Where("updated_at <= ?", updatedTo)
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
+	// 排序方向校验
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "desc"
+	}
+
+	// 排序字段白名单
+	var orderClause string
+	switch sortBy {
+	case "name":
+		orderClause = "name " + sortOrder
+	case "created_at":
+		orderClause = "created_at " + sortOrder
+	case "updated_at":
+		orderClause = "updated_at " + sortOrder
+	case "nodes_count":
+		orderClause = "jsonb_array_length(nodes) " + sortOrder
+	default:
+		orderClause = "created_at DESC"
+	}
+
 	offset := (page - 1) * pageSize
-	err := query.Preload("Creator").Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&flows).Error
+	err := query.Preload("Creator").Offset(offset).Limit(pageSize).Order(orderClause).Find(&flows).Error
 	return flows, total, err
 }
 
@@ -118,6 +167,35 @@ func (r *HealingFlowRepository) CountFlowsUsingChannel(ctx context.Context, chan
 		return count2, nil
 	}
 	return count, nil
+}
+
+// CountRulesUsingFlow 统计引用指定流程的规则数量
+func (r *HealingFlowRepository) CountRulesUsingFlow(ctx context.Context, flowID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.HealingRule{}).
+		Where("flow_id = ?", flowID).
+		Count(&count).Error
+	return count, err
+}
+
+// CountActiveInstancesByFlowID 统计指定流程的运行中/待审批实例数量
+func (r *HealingFlowRepository) CountActiveInstancesByFlowID(ctx context.Context, flowID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.FlowInstance{}).
+		Where("flow_id = ?", flowID).
+		Where("status IN ?", []string{model.FlowInstanceStatusPending, model.FlowInstanceStatusRunning, model.FlowInstanceStatusWaitingApproval}).
+		Count(&count).Error
+	return count, err
+}
+
+// CountFlowsUsingTemplate 统计使用指定通知模板的自愈流程数量
+// 检查 nodes JSONB 数组中是否有 notification 节点引用该 template_id
+func (r *HealingFlowRepository) CountFlowsUsingTemplate(ctx context.Context, templateID string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.HealingFlow{}).
+		Where("nodes @> ?", `[{"config": {"template_id": "`+templateID+`"}}]`).
+		Count(&count).Error
+	return count, err
 }
 
 // GetStats 获取自愈流程统计信息
@@ -208,7 +286,8 @@ func (r *HealingRuleRepository) Delete(ctx context.Context, id uuid.UUID, force 
 }
 
 // List 获取自愈规则列表
-func (r *HealingRuleRepository) List(ctx context.Context, page, pageSize int, isActive *bool, flowID *uuid.UUID, search string) ([]model.HealingRule, int64, error) {
+// 支持 triggerMode, priority, matchMode, hasFlow, createdFrom/To 过滤、sortBy/sortOrder 排序（含 conditions_count）
+func (r *HealingRuleRepository) List(ctx context.Context, page, pageSize int, isActive *bool, flowID *uuid.UUID, search, triggerMode, sortBy, sortOrder string, priority *int, matchMode string, hasFlow *bool, createdFrom, createdTo string) ([]model.HealingRule, int64, error) {
 	var rules []model.HealingRule
 	var total int64
 
@@ -224,13 +303,57 @@ func (r *HealingRuleRepository) List(ctx context.Context, page, pageSize int, is
 		pattern := "%" + search + "%"
 		query = query.Where("(name ILIKE ? OR description ILIKE ?)", pattern, pattern)
 	}
+	if triggerMode != "" {
+		query = query.Where("trigger_mode = ?", triggerMode)
+	}
+	if priority != nil {
+		query = query.Where("priority = ?", *priority)
+	}
+	if matchMode != "" {
+		query = query.Where("match_mode = ?", matchMode)
+	}
+	if hasFlow != nil {
+		if *hasFlow {
+			query = query.Where("flow_id IS NOT NULL")
+		} else {
+			query = query.Where("flow_id IS NULL")
+		}
+	}
+	if createdFrom != "" {
+		query = query.Where("created_at >= ?", createdFrom)
+	}
+	if createdTo != "" {
+		query = query.Where("created_at <= ?", createdTo)
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
+	// 排序方向校验
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "desc"
+	}
+
+	// 排序字段白名单
+	var orderClause string
+	switch sortBy {
+	case "priority":
+		orderClause = "priority " + sortOrder
+	case "created_at":
+		orderClause = "created_at " + sortOrder
+	case "updated_at":
+		orderClause = "updated_at " + sortOrder
+	case "name":
+		orderClause = "name " + sortOrder
+	case "conditions_count":
+		orderClause = "jsonb_array_length(conditions) " + sortOrder
+	default:
+		orderClause = "priority DESC, created_at DESC"
+	}
+
 	offset := (page - 1) * pageSize
-	err := query.Preload("Flow").Preload("Creator").Offset(offset).Limit(pageSize).Order("priority DESC, created_at DESC").Find(&rules).Error
+	err := query.Preload("Flow").Preload("Creator").Offset(offset).Limit(pageSize).Order(orderClause).Find(&rules).Error
 	return rules, total, err
 }
 
@@ -319,7 +442,6 @@ func (r *FlowInstanceRepository) Create(ctx context.Context, instance *model.Flo
 func (r *FlowInstanceRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.FlowInstance, error) {
 	var instance model.FlowInstance
 	err := r.db.WithContext(ctx).
-		Preload("Flow").
 		Preload("Rule").
 		Preload("Incident").
 		First(&instance, "id = ?", id).Error
@@ -396,11 +518,338 @@ func (r *FlowInstanceRepository) List(ctx context.Context, page, pageSize int, f
 
 	offset := (page - 1) * pageSize
 	err := query.
-		Preload("Flow").
 		Preload("Rule").
 		Preload("Incident").
 		Offset(offset).Limit(pageSize).Order("flow_instances.created_at DESC").Find(&instances).Error
 	return instances, total, err
+}
+
+// FlowInstanceListOptions 实例列表查询选项
+type FlowInstanceListOptions struct {
+	// 分页
+	Page     int
+	PageSize int
+
+	// 搜索
+	Search string // 全文模糊搜索（流程名/规则名/工单标题/实例ID）
+
+	// 排序
+	SortBy    string // created_at, started_at, completed_at, status, flow_name, rule_name
+	SortOrder string // asc / desc
+
+	// 精确/模糊过滤
+	Status        string     // 状态精确匹配
+	FlowID        *uuid.UUID // 流程 ID 精确
+	FlowName      string     // 流程名称模糊
+	RuleID        *uuid.UUID // 规则 ID 精确
+	RuleName      string     // 规则名称模糊
+	IncidentID    *uuid.UUID // 工单 ID 精确
+	IncidentTitle string     // 工单标题模糊
+	CurrentNodeID string     // 当前节点 ID
+	ErrorMessage  string     // 错误信息模糊
+	HasError      *bool      // 是否有错误
+
+	// 时间范围
+	CreatedFrom   *time.Time
+	CreatedTo     *time.Time
+	StartedFrom   *time.Time
+	StartedTo     *time.Time
+	CompletedFrom *time.Time
+	CompletedTo   *time.Time
+
+	// 数量范围
+	MinNodes       *int
+	MaxNodes       *int
+	MinFailedNodes *int
+	MaxFailedNodes *int
+}
+
+// FlowInstanceSummary 列表接口的精简 DTO
+type FlowInstanceSummary struct {
+	ID              uuid.UUID  `json:"id"`
+	Status          string     `json:"status"`
+	FlowID          uuid.UUID  `json:"flow_id"`
+	FlowName        string     `json:"flow_name"`
+	RuleID          *uuid.UUID `json:"rule_id,omitempty"`
+	RuleName        *string    `json:"rule_name,omitempty"`
+	IncidentID      *uuid.UUID `json:"incident_id,omitempty"`
+	IncidentTitle   *string    `json:"incident_title,omitempty"`
+	CurrentNodeID   string     `json:"current_node_id,omitempty"`
+	ErrorMessage    string     `json:"error_message,omitempty"`
+	NodeCount       int        `json:"node_count"`
+	FailedNodeCount int        `json:"failed_node_count"`
+	StartedAt       *time.Time `json:"started_at,omitempty"`
+	CompletedAt     *time.Time `json:"completed_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+// ListSummary 获取流程实例精简列表（瘦身版）
+func (r *FlowInstanceRepository) ListSummary(ctx context.Context, page, pageSize int, flowID, ruleID *uuid.UUID, incidentID *uuid.UUID, status string, search string) ([]FlowInstanceSummary, int64, error) {
+	var total int64
+
+	// === 构建 count 查询 ===
+	countQuery := r.db.WithContext(ctx).Model(&model.FlowInstance{})
+	if flowID != nil {
+		countQuery = countQuery.Where("flow_instances.flow_id = ?", *flowID)
+	}
+	if ruleID != nil {
+		countQuery = countQuery.Where("flow_instances.rule_id = ?", *ruleID)
+	}
+	if incidentID != nil {
+		countQuery = countQuery.Where("flow_instances.incident_id = ?", *incidentID)
+	}
+	if status != "" {
+		countQuery = countQuery.Where("flow_instances.status = ?", status)
+	}
+	if search != "" {
+		pattern := "%" + search + "%"
+		countQuery = countQuery.
+			Joins("LEFT JOIN healing_flows ON healing_flows.id = flow_instances.flow_id").
+			Joins("LEFT JOIN healing_rules ON healing_rules.id = flow_instances.rule_id").
+			Joins("LEFT JOIN incidents ON incidents.id = flow_instances.incident_id").
+			Where("(flow_instances.id::text ILIKE ? OR healing_flows.name ILIKE ? OR healing_rules.name ILIKE ? OR incidents.title ILIKE ?)",
+				pattern, pattern, pattern, pattern)
+	}
+	if err := countQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// === 构建数据查询 ===
+	offset := (page - 1) * pageSize
+	var results []FlowInstanceSummary
+
+	dataQuery := r.db.WithContext(ctx).
+		Table("flow_instances").
+		Select(`
+			flow_instances.id,
+			flow_instances.status,
+			flow_instances.flow_id,
+			COALESCE(flow_instances.flow_name, healing_flows.name, '') AS flow_name,
+			flow_instances.rule_id,
+			healing_rules.name AS rule_name,
+			flow_instances.incident_id,
+			incidents.title AS incident_title,
+			flow_instances.current_node_id,
+			flow_instances.error_message,
+			COALESCE(jsonb_array_length(healing_flows.nodes), 0) AS node_count,
+			(SELECT COUNT(*) FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' IN ('failed', 'error')) AS failed_node_count,
+			flow_instances.started_at,
+			flow_instances.completed_at,
+			flow_instances.created_at
+		`).
+		Joins("LEFT JOIN healing_flows ON healing_flows.id = flow_instances.flow_id").
+		Joins("LEFT JOIN healing_rules ON healing_rules.id = flow_instances.rule_id").
+		Joins("LEFT JOIN incidents ON incidents.id = flow_instances.incident_id")
+
+	if flowID != nil {
+		dataQuery = dataQuery.Where("flow_instances.flow_id = ?", *flowID)
+	}
+	if ruleID != nil {
+		dataQuery = dataQuery.Where("flow_instances.rule_id = ?", *ruleID)
+	}
+	if incidentID != nil {
+		dataQuery = dataQuery.Where("flow_instances.incident_id = ?", *incidentID)
+	}
+	if status != "" {
+		dataQuery = dataQuery.Where("flow_instances.status = ?", status)
+	}
+	if search != "" {
+		pattern := "%" + search + "%"
+		dataQuery = dataQuery.Where("(flow_instances.id::text ILIKE ? OR healing_flows.name ILIKE ? OR healing_rules.name ILIKE ? OR incidents.title ILIKE ?)",
+			pattern, pattern, pattern, pattern)
+	}
+
+	err := dataQuery.
+		Offset(offset).Limit(pageSize).
+		Order("flow_instances.created_at DESC").
+		Scan(&results).Error
+
+	return results, total, err
+}
+
+// ListSummaryWithOptions 增强版列表查询，支持排序/过滤/时间范围/数量范围
+func (r *FlowInstanceRepository) ListSummaryWithOptions(ctx context.Context, opts FlowInstanceListOptions) ([]FlowInstanceSummary, int64, error) {
+	// ===== 构建通用条件 =====
+	applyFilters := func(q *gorm.DB, needJoins bool) *gorm.DB {
+		if needJoins {
+			q = q.
+				Joins("LEFT JOIN healing_flows ON healing_flows.id = flow_instances.flow_id").
+				Joins("LEFT JOIN healing_rules ON healing_rules.id = flow_instances.rule_id").
+				Joins("LEFT JOIN incidents ON incidents.id = flow_instances.incident_id")
+		}
+
+		// 状态
+		if opts.Status != "" {
+			q = q.Where("flow_instances.status = ?", opts.Status)
+		}
+		// 精确 ID
+		if opts.FlowID != nil {
+			q = q.Where("flow_instances.flow_id = ?", *opts.FlowID)
+		}
+		if opts.RuleID != nil {
+			q = q.Where("flow_instances.rule_id = ?", *opts.RuleID)
+		}
+		if opts.IncidentID != nil {
+			q = q.Where("flow_instances.incident_id = ?", *opts.IncidentID)
+		}
+		// 模糊搜索
+		if opts.FlowName != "" {
+			q = q.Where("COALESCE(flow_instances.flow_name, healing_flows.name, '') ILIKE ?", "%"+opts.FlowName+"%")
+		}
+		if opts.RuleName != "" {
+			q = q.Where("healing_rules.name ILIKE ?", "%"+opts.RuleName+"%")
+		}
+		if opts.IncidentTitle != "" {
+			q = q.Where("incidents.title ILIKE ?", "%"+opts.IncidentTitle+"%")
+		}
+		if opts.CurrentNodeID != "" {
+			q = q.Where("flow_instances.current_node_id = ?", opts.CurrentNodeID)
+		}
+		if opts.ErrorMessage != "" {
+			q = q.Where("flow_instances.error_message ILIKE ?", "%"+opts.ErrorMessage+"%")
+		}
+		if opts.HasError != nil {
+			if *opts.HasError {
+				q = q.Where("flow_instances.error_message IS NOT NULL AND flow_instances.error_message != ''")
+			} else {
+				q = q.Where("(flow_instances.error_message IS NULL OR flow_instances.error_message = '')")
+			}
+		}
+		// 全文搜索
+		if opts.Search != "" {
+			pattern := "%" + opts.Search + "%"
+			q = q.Where("(flow_instances.id::text ILIKE ? OR COALESCE(flow_instances.flow_name, healing_flows.name, '') ILIKE ? OR healing_rules.name ILIKE ? OR incidents.title ILIKE ?)",
+				pattern, pattern, pattern, pattern)
+		}
+		// 时间范围
+		if opts.CreatedFrom != nil {
+			q = q.Where("flow_instances.created_at >= ?", *opts.CreatedFrom)
+		}
+		if opts.CreatedTo != nil {
+			q = q.Where("flow_instances.created_at <= ?", *opts.CreatedTo)
+		}
+		if opts.StartedFrom != nil {
+			q = q.Where("flow_instances.started_at >= ?", *opts.StartedFrom)
+		}
+		if opts.StartedTo != nil {
+			q = q.Where("flow_instances.started_at <= ?", *opts.StartedTo)
+		}
+		if opts.CompletedFrom != nil {
+			q = q.Where("flow_instances.completed_at >= ?", *opts.CompletedFrom)
+		}
+		if opts.CompletedTo != nil {
+			q = q.Where("flow_instances.completed_at <= ?", *opts.CompletedTo)
+		}
+		return q
+	}
+
+	// ===== COUNT 查询 =====
+	var total int64
+	countQuery := r.db.WithContext(ctx).Model(&model.FlowInstance{})
+	// count 查询在存在 name 模糊搜索或全文搜索时才需要 join
+	needJoins := opts.FlowName != "" || opts.RuleName != "" || opts.IncidentTitle != "" || opts.Search != ""
+	countQuery = applyFilters(countQuery, needJoins)
+
+	// 数量范围需要子查询过滤
+	if opts.MinNodes != nil || opts.MaxNodes != nil || opts.MinFailedNodes != nil || opts.MaxFailedNodes != nil {
+		// 使用子查询包装，因为 node_count/failed_node_count 是计算列
+		subQuery := r.db.WithContext(ctx).
+			Table("flow_instances").
+			Select("flow_instances.id").
+			Joins("LEFT JOIN healing_flows ON healing_flows.id = flow_instances.flow_id")
+		subQuery = applyFilters(subQuery, needJoins)
+
+		if opts.MinNodes != nil {
+			subQuery = subQuery.Where("COALESCE(jsonb_array_length(healing_flows.nodes), 0) >= ?", *opts.MinNodes)
+		}
+		if opts.MaxNodes != nil {
+			subQuery = subQuery.Where("COALESCE(jsonb_array_length(healing_flows.nodes), 0) <= ?", *opts.MaxNodes)
+		}
+		if opts.MinFailedNodes != nil {
+			subQuery = subQuery.Where("(SELECT COUNT(*) FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' IN ('failed', 'error')) >= ?", *opts.MinFailedNodes)
+		}
+		if opts.MaxFailedNodes != nil {
+			subQuery = subQuery.Where("(SELECT COUNT(*) FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' IN ('failed', 'error')) <= ?", *opts.MaxFailedNodes)
+		}
+
+		countQuery = r.db.WithContext(ctx).Model(&model.FlowInstance{}).
+			Where("flow_instances.id IN (?)", subQuery)
+	}
+
+	if err := countQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// ===== DATA 查询 =====
+	offset := (opts.Page - 1) * opts.PageSize
+	var results []FlowInstanceSummary
+
+	dataQuery := r.db.WithContext(ctx).
+		Table("flow_instances").
+		Select(`
+			flow_instances.id,
+			flow_instances.status,
+			flow_instances.flow_id,
+			COALESCE(flow_instances.flow_name, healing_flows.name, '') AS flow_name,
+			flow_instances.rule_id,
+			healing_rules.name AS rule_name,
+			flow_instances.incident_id,
+			incidents.title AS incident_title,
+			flow_instances.current_node_id,
+			flow_instances.error_message,
+			COALESCE(jsonb_array_length(healing_flows.nodes), 0) AS node_count,
+			(SELECT COUNT(*) FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' IN ('failed', 'error')) AS failed_node_count,
+			flow_instances.started_at,
+			flow_instances.completed_at,
+			flow_instances.created_at
+		`).
+		Joins("LEFT JOIN healing_flows ON healing_flows.id = flow_instances.flow_id").
+		Joins("LEFT JOIN healing_rules ON healing_rules.id = flow_instances.rule_id").
+		Joins("LEFT JOIN incidents ON incidents.id = flow_instances.incident_id")
+
+	dataQuery = applyFilters(dataQuery, false) // joins 已在上面加了
+
+	// 数量范围过滤
+	if opts.MinNodes != nil {
+		dataQuery = dataQuery.Where("COALESCE(jsonb_array_length(healing_flows.nodes), 0) >= ?", *opts.MinNodes)
+	}
+	if opts.MaxNodes != nil {
+		dataQuery = dataQuery.Where("COALESCE(jsonb_array_length(healing_flows.nodes), 0) <= ?", *opts.MaxNodes)
+	}
+	if opts.MinFailedNodes != nil {
+		dataQuery = dataQuery.Where("(SELECT COUNT(*) FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' IN ('failed', 'error')) >= ?", *opts.MinFailedNodes)
+	}
+	if opts.MaxFailedNodes != nil {
+		dataQuery = dataQuery.Where("(SELECT COUNT(*) FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' IN ('failed', 'error')) <= ?", *opts.MaxFailedNodes)
+	}
+
+	// 排序
+	orderClause := "flow_instances.created_at DESC" // 默认
+	if opts.SortBy != "" {
+		// 白名单校验
+		sortColumnMap := map[string]string{
+			"created_at":   "flow_instances.created_at",
+			"started_at":   "flow_instances.started_at",
+			"completed_at": "flow_instances.completed_at",
+			"status":       "flow_instances.status",
+			"flow_name":    "flow_name",
+			"rule_name":    "rule_name",
+		}
+		if col, ok := sortColumnMap[opts.SortBy]; ok {
+			direction := "DESC"
+			if opts.SortOrder == "asc" {
+				direction = "ASC"
+			}
+			orderClause = col + " " + direction
+		}
+	}
+
+	err := dataQuery.
+		Offset(offset).Limit(opts.PageSize).
+		Order(orderClause).
+		Scan(&results).Error
+
+	return results, total, err
 }
 
 // GetStats 获取流程实例统计信息
@@ -449,7 +898,6 @@ func (r *ApprovalTaskRepository) GetByID(ctx context.Context, id uuid.UUID) (*mo
 	var task model.ApprovalTask
 	err := r.db.WithContext(ctx).
 		Preload("FlowInstance").
-		Preload("FlowInstance.Flow").
 		Preload("FlowInstance.Incident").
 		Preload("Initiator").
 		Preload("Decider").
@@ -529,7 +977,6 @@ func (r *ApprovalTaskRepository) ListPending(ctx context.Context, page, pageSize
 	offset := (page - 1) * pageSize
 	err := query.
 		Preload("FlowInstance").
-		Preload("FlowInstance.Flow").
 		Preload("FlowInstance.Incident").
 		Preload("Initiator").
 		Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&tasks).Error

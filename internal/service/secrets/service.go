@@ -74,8 +74,26 @@ func (s *Service) UpdateSource(ctx context.Context, id uuid.UUID, config model.J
 	return source, nil
 }
 
-// DeleteSource 删除密钥源
+// DeleteSource 删除密钥源（保护性删除）
 func (s *Service) DeleteSource(ctx context.Context, id uuid.UUID) error {
+	// 检查是否被任务模板的 secrets_source_ids 引用
+	taskCount, err := s.repo.CountTasksUsingSource(ctx, id.String())
+	if err != nil {
+		return fmt.Errorf("检查关联任务模板失败: %w", err)
+	}
+	if taskCount > 0 {
+		return fmt.Errorf("无法删除：有 %d 个任务模板使用此密钥源，请先修改这些任务模板的密钥源配置", taskCount)
+	}
+
+	// 检查是否被调度任务的 secrets_source_ids 引用
+	scheduleCount, err := s.repo.CountSchedulesUsingSource(ctx, id.String())
+	if err != nil {
+		return fmt.Errorf("检查关联调度任务失败: %w", err)
+	}
+	if scheduleCount > 0 {
+		return fmt.Errorf("无法删除：有 %d 个调度任务使用此密钥源，请先修改这些调度任务的密钥源配置", scheduleCount)
+	}
+
 	return s.repo.Delete(ctx, id)
 }
 

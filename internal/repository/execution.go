@@ -504,14 +504,17 @@ func (r *ExecutionRepository) UpdateRunStarted(ctx context.Context, id uuid.UUID
 func (r *ExecutionRepository) UpdateRunResult(ctx context.Context, id uuid.UUID, exitCode int, stdout, stderr string, stats model.JSON) error {
 	now := time.Now()
 
-	// 基于 stats 判断真实执行状态
-	// 规则：
-	// 1. 如果 exit code 非 0，一定是 failed
-	// 2. 全部成功（ok > 0, failed == 0, unreachable == 0）→ success
-	// 3. 全部失败（ok == 0）→ failed
-	// 4. 部分成功部分失败（ok > 0 且有 failed 或 unreachable）→ partial
+	// 基于 stats 判断真实执行状态（Stats 优先）
+	// Ansible 退出码规则：0=全成功, 2=有failed, 4=有unreachable, 6=两者都有
+	// 因此 exitCode != 0 并不意味着全部失败，可能只是部分主机出问题
+	// 正确规则：
+	// 1. 优先看 stats（主机级别的真实结果）
+	// 2. ok > 0 且 failed == 0 且 unreachable == 0 → success
+	// 3. ok > 0 且有 failed 或 unreachable → partial（部分成功）
+	// 4. ok == 0 → failed（全部失败）
+	// 5. 无 stats 时 fallback 到 exitCode 判断
 	status := "failed"
-	if exitCode == 0 && stats != nil {
+	if stats != nil {
 		ok := getStatValue(stats, "ok")
 		failed := getStatValue(stats, "failed")
 		unreachable := getStatValue(stats, "unreachable")
@@ -526,6 +529,9 @@ func (r *ExecutionRepository) UpdateRunResult(ctx context.Context, id uuid.UUID,
 			}
 		}
 		// 如果 ok == 0，保持 failed 状态
+	} else if exitCode == 0 {
+		// 无 stats 但退出码为 0，视为成功
+		status = "success"
 	}
 
 	return database.DB.WithContext(ctx).

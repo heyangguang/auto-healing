@@ -143,6 +143,15 @@ func (r *NotificationRepository) GetTemplateByID(id uuid.UUID) (*model.Notificat
 	return &template, nil
 }
 
+// GetTemplatesByIDs 批量获取模板
+func (r *NotificationRepository) GetTemplatesByIDs(ids []uuid.UUID) ([]model.NotificationTemplate, error) {
+	var templates []model.NotificationTemplate
+	if err := r.db.Where("id IN ?", ids).Find(&templates).Error; err != nil {
+		return nil, err
+	}
+	return templates, nil
+}
+
 // TemplateListOptions 模板列表查询选项
 type TemplateListOptions struct {
 	Page             int

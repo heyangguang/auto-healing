@@ -329,6 +329,15 @@ func (s *Service) DeleteTemplate(id uuid.UUID) error {
 		return fmt.Errorf("无法删除：有 %d 个任务模板使用此通知模板，请先修改这些任务的通知配置", taskCount)
 	}
 
+	// 检查是否被自愈流程的 notification 节点引用
+	flowCount, err := s.healingFlowRepo.CountFlowsUsingTemplate(context.Background(), id.String())
+	if err != nil {
+		return fmt.Errorf("检查关联自愈流程失败: %w", err)
+	}
+	if flowCount > 0 {
+		return fmt.Errorf("无法删除：有 %d 个自愈流程使用此通知模板，请先修改这些流程的通知节点配置", flowCount)
+	}
+
 	return s.repo.DeleteTemplate(id)
 }
 
