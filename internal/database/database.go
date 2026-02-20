@@ -2,6 +2,8 @@ package database
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"github.com/company/auto-healing/internal/config"
@@ -36,7 +38,15 @@ func Init(cfg *config.Config) error {
 	}
 
 	DB, err = gorm.Open(postgres.Open(cfg.Database.DSN()), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(logLevel),
+		Logger: gormlogger.New(
+			log.New(os.Stderr, "\r\n", log.LstdFlags),
+			gormlogger.Config{
+				SlowThreshold:             200 * time.Millisecond,
+				LogLevel:                  logLevel,
+				IgnoreRecordNotFoundError: true,
+				Colorful:                  true,
+			},
+		),
 	})
 	if err != nil {
 		return fmt.Errorf("连接数据库失败: %w", err)
@@ -95,6 +105,7 @@ func AutoMigrate() error {
 		&model.NotificationLog{},
 		// 日志
 		&model.AuditLog{},
+		&model.PlatformAuditLog{},
 		&model.ExecutionLog{},
 		&model.WorkflowLog{},
 		// Dashboard
@@ -117,6 +128,9 @@ func AutoMigrate() error {
 		&model.SiteMessageRead{},
 		// 平台级设置（KV 存储，与租户无关）
 		&model.PlatformSetting{},
+		// 多租户
+		&model.Tenant{},
+		&model.UserTenantRole{},
 	}
 
 	// 增量迁移：只迁移不存在的表，避免修改已有表导致约束名冲突

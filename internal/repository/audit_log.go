@@ -46,6 +46,7 @@ type AuditLogListOptions struct {
 	Page                 int
 	PageSize             int
 	Search               string     // 模糊搜索（username/resource_name/request_path）
+	Category             string     // 过滤分类 (login/operation)
 	Action               string     // 过滤操作类型
 	ResourceType         string     // 过滤资源类型
 	ExcludeActions       []string   // 排除操作类型
@@ -72,13 +73,17 @@ func NewAuditLogRepository() *AuditLogRepository {
 
 // Create 创建审计日志
 func (r *AuditLogRepository) Create(ctx context.Context, log *model.AuditLog) error {
+	if log.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		log.TenantID = &tenantID
+	}
 	return r.db.WithContext(ctx).Create(log).Error
 }
 
 // GetByID 根据 ID 获取审计日志
 func (r *AuditLogRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.AuditLog, error) {
 	var log model.AuditLog
-	err := r.db.WithContext(ctx).Preload("User").First(&log, "id = ?", id).Error
+	err := TenantDB(r.db, ctx).Preload("User").First(&log, "id = ?", id).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -93,9 +98,12 @@ func (r *AuditLogRepository) List(ctx context.Context, opts *AuditLogListOptions
 	var logs []model.AuditLog
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.AuditLog{})
+	query := TenantDB(r.db, ctx).Model(&model.AuditLog{})
 
 	// 过滤条件
+	if opts.Category != "" {
+		query = query.Where("category = ?", opts.Category)
+	}
 	if opts.Action != "" {
 		query = query.Where("action = ?", opts.Action)
 	}
@@ -141,7 +149,7 @@ func (r *AuditLogRepository) List(ctx context.Context, opts *AuditLogListOptions
 	}
 
 	// 计数
-	if err := query.Count(&total).Error; err != nil {
+	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -196,19 +204,21 @@ func (r *AuditLogRepository) GetStats(ctx context.Context) (*AuditStats, error) 
 	stats := &AuditStats{}
 
 	// 总数
-	r.db.WithContext(ctx).Model(&model.AuditLog{}).Count(&stats.TotalCount)
+	// 每次查询使用新的 TenantDB 实例，避免 GORM session WHERE 条件累积
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
+	newDB().Model(&model.AuditLog{}).Count(&stats.TotalCount)
 
 	// 成功/失败
-	r.db.WithContext(ctx).Model(&model.AuditLog{}).Where("status = ?", "success").Count(&stats.SuccessCount)
-	r.db.WithContext(ctx).Model(&model.AuditLog{}).Where("status = ?", "failed").Count(&stats.FailedCount)
+	newDB().Model(&model.AuditLog{}).Where("status = ?", "success").Count(&stats.SuccessCount)
+	newDB().Model(&model.AuditLog{}).Where("status = ?", "failed").Count(&stats.FailedCount)
 
 	// 高危操作数
-	r.db.WithContext(ctx).Model(&model.AuditLog{}).
+	newDB().Model(&model.AuditLog{}).
 		Where(buildHighRiskCondition()).
 		Count(&stats.HighRiskCount)
 
 	// 按操作类型分组
-	r.db.WithContext(ctx).Model(&model.AuditLog{}).
+	newDB().Model(&model.AuditLog{}).
 		Select("action, count(*) as count").
 		Group("action").
 		Order("count DESC").
@@ -218,8 +228,8 @@ func (r *AuditLogRepository) GetStats(ctx context.Context) (*AuditStats, error) 
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	weekStart := todayStart.AddDate(0, 0, -int(now.Weekday()))
-	r.db.WithContext(ctx).Model(&model.AuditLog{}).Where("created_at >= ?", todayStart).Count(&stats.TodayCount)
-	r.db.WithContext(ctx).Model(&model.AuditLog{}).Where("created_at >= ?", weekStart).Count(&stats.WeekCount)
+	newDB().Model(&model.AuditLog{}).Where("created_at >= ?", todayStart).Count(&stats.TodayCount)
+	newDB().Model(&model.AuditLog{}).Where("created_at >= ?", weekStart).Count(&stats.WeekCount)
 
 	return stats, nil
 }
@@ -235,7 +245,7 @@ type UserRanking struct {
 func (r *AuditLogRepository) GetUserRanking(ctx context.Context, limit int, days int) ([]UserRanking, error) {
 	var rankings []UserRanking
 
-	query := r.db.WithContext(ctx).Model(&model.AuditLog{}).
+	query := TenantDB(r.db, ctx).Model(&model.AuditLog{}).
 		Select("user_id, username, count(*) as count")
 
 	if days > 0 {
@@ -265,7 +275,7 @@ type ActionGroupItem struct {
 func (r *AuditLogRepository) GetActionGrouping(ctx context.Context, action string, days int) ([]ActionGroupItem, error) {
 	var items []ActionGroupItem
 
-	query := r.db.WithContext(ctx).Model(&model.AuditLog{}).
+	query := TenantDB(r.db, ctx).Model(&model.AuditLog{}).
 		Select("action, resource_type, username, count(*) as count")
 
 	if action != "" {
@@ -294,7 +304,7 @@ type ResourceTypeGroupItem struct {
 func (r *AuditLogRepository) GetResourceTypeStats(ctx context.Context, days int) ([]ResourceTypeGroupItem, error) {
 	var items []ResourceTypeGroupItem
 
-	query := r.db.WithContext(ctx).Model(&model.AuditLog{}).
+	query := TenantDB(r.db, ctx).Model(&model.AuditLog{}).
 		Select("resource_type, count(*) as count")
 
 	if days > 0 {
@@ -322,7 +332,7 @@ func (r *AuditLogRepository) GetTrend(ctx context.Context, days int) ([]TrendIte
 
 	since := time.Now().AddDate(0, 0, -days)
 
-	err := r.db.WithContext(ctx).Model(&model.AuditLog{}).
+	err := TenantDB(r.db, ctx).Model(&model.AuditLog{}).
 		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, count(*) as count").
 		Where("created_at >= ?", since).
 		Group("TO_CHAR(created_at, 'YYYY-MM-DD')").
@@ -343,10 +353,10 @@ func (r *AuditLogRepository) GetHighRiskLogs(ctx context.Context, page, pageSize
 	var logs []model.AuditLog
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.AuditLog{}).
+	query := TenantDB(r.db, ctx).Model(&model.AuditLog{}).
 		Where(buildHighRiskCondition())
 
-	if err := query.Count(&total).Error; err != nil {
+	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 

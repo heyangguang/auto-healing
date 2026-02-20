@@ -49,7 +49,8 @@ type searchCategoryDef struct {
 
 // GlobalSearch 全局搜索
 func (r *SearchRepository) GlobalSearch(ctx context.Context, keyword string, limit int) ([]SearchResultCategory, int64, error) {
-	db := r.db.WithContext(ctx)
+	// 每次查询使用新的 TenantDB 实例，避免并发 GORM session 共享导致的竞态和 WHERE 条件累积
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
 	like := "%" + keyword + "%"
 
 	// 定义所有搜索分类
@@ -78,7 +79,7 @@ func (r *SearchRepository) GlobalSearch(ctx context.Context, keyword string, lim
 		wg.Add(1)
 		go func(idx int, def searchCategoryDef) {
 			defer wg.Done()
-			items, total, err := def.searchFn(ctx, db, like, limit)
+			items, total, err := def.searchFn(ctx, newDB(), like, limit)
 
 			mu.Lock()
 			defer mu.Unlock()

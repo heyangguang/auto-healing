@@ -22,6 +22,10 @@ func NewRoleRepository() *RoleRepository {
 
 // Create 创建角色
 func (r *RoleRepository) Create(ctx context.Context, role *model.Role) error {
+	if role.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		role.TenantID = &tenantID
+	}
 	return r.db.WithContext(ctx).Create(role).Error
 }
 
@@ -65,7 +69,9 @@ func (r *RoleRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 // RoleFilter 角色过滤参数
 type RoleFilter struct {
-	Search string // 模糊搜索 (name/display_name/description)
+	Search   string    // 模糊搜索 (name/display_name/description)
+	Scope    string    // platform=平台级, tenant=租户级, 空=全部
+	TenantID uuid.UUID // 租户 ID（Scope=tenant 时使用，用于返回租户自定义角色）
 }
 
 // List 获取角色列表
@@ -82,6 +88,17 @@ func (r *RoleRepository) ListWithFilter(ctx context.Context, f RoleFilter) ([]mo
 		like := "%" + f.Search + "%"
 		query = query.Where("name ILIKE ? OR display_name ILIKE ? OR description ILIKE ?", like, like, like)
 	}
+
+	// 按 scope 过滤
+	if f.Scope != "" {
+		query = query.Where("scope = ?", f.Scope)
+	}
+
+	// 租户级：只返回系统角色(tenant_id IS NULL) + 属于当前租户的自定义角色
+	if f.Scope == "tenant" && f.TenantID != uuid.Nil {
+		query = query.Where("tenant_id IS NULL OR tenant_id = ?", f.TenantID)
+	}
+
 	var roles []model.Role
 	err := query.Order("is_system DESC, created_at ASC").Find(&roles).Error
 	return roles, err
@@ -161,6 +178,44 @@ func (r *RoleRepository) AssignPermissions(ctx context.Context, roleID uuid.UUID
 		}
 		return nil
 	})
+}
+
+// RoleUserInfo 角色关联用户信息
+type RoleUserInfo struct {
+	ID          uuid.UUID `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	Email       string    `json:"email"`
+	Status      string    `json:"status"`
+}
+
+// GetRoleUsers 获取角色下的关联用户（分页 + 搜索）
+func (r *RoleRepository) GetRoleUsers(ctx context.Context, roleID uuid.UUID, page, pageSize int, search string) ([]RoleUserInfo, int64, error) {
+	query := r.db.WithContext(ctx).
+		Table("users").
+		Joins("INNER JOIN user_roles ON user_roles.user_id = users.id").
+		Where("user_roles.role_id = ?", roleID)
+
+	if search != "" {
+		like := "%" + search + "%"
+		query = query.Where("users.username ILIKE ? OR users.display_name ILIKE ?", like, like)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var users []RoleUserInfo
+	offset := (page - 1) * pageSize
+	err := query.
+		Select("users.id, users.username, users.display_name, users.email, users.status").
+		Order("users.created_at DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&users).Error
+
+	return users, total, err
 }
 
 // PermissionRepository 权限数据仓库

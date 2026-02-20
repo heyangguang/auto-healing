@@ -288,7 +288,7 @@ func (h *HealingHandler) ListFlows(c *gin.Context) {
 	}
 
 	// 填充通知节点名称
-	h.enrichFlowNodes(flows)
+	h.enrichFlowNodes(c.Request.Context(), flows)
 
 	response.List(c, flows, total, page, pageSize)
 }
@@ -311,7 +311,7 @@ func (h *HealingHandler) CreateFlow(c *gin.Context) {
 }
 
 // enrichFlowNodes 填充 flow 中 notification 节点的 channel_names 和 template_name
-func (h *HealingHandler) enrichFlowNodes(flows []model.HealingFlow) {
+func (h *HealingHandler) enrichFlowNodes(ctx context.Context, flows []model.HealingFlow) {
 	// 收集所有 channel_ids 和 template_ids
 	channelIDSet := make(map[uuid.UUID]bool)
 	templateIDSet := make(map[uuid.UUID]bool)
@@ -358,7 +358,7 @@ func (h *HealingHandler) enrichFlowNodes(flows []model.HealingFlow) {
 		for id := range channelIDSet {
 			ids = append(ids, id)
 		}
-		if channels, err := h.notifRepo.GetChannelsByIDs(ids); err == nil {
+		if channels, err := h.notifRepo.GetChannelsByIDs(ctx, ids); err == nil {
 			for _, ch := range channels {
 				channelNameMap[ch.ID.String()] = ch.Name
 			}
@@ -371,7 +371,7 @@ func (h *HealingHandler) enrichFlowNodes(flows []model.HealingFlow) {
 		for id := range templateIDSet {
 			ids = append(ids, id)
 		}
-		if templates, err := h.notifRepo.GetTemplatesByIDs(ids); err == nil {
+		if templates, err := h.notifRepo.GetTemplatesByIDs(ctx, ids); err == nil {
 			for _, t := range templates {
 				templateNameMap[t.ID.String()] = t.Name
 			}
@@ -431,7 +431,7 @@ func (h *HealingHandler) GetFlow(c *gin.Context) {
 
 	// 填充通知节点名称（Nodes 内部是 map 引用，enrichFlowNodes 会直接修改）
 	enriched := []model.HealingFlow{*flow}
-	h.enrichFlowNodes(enriched)
+	h.enrichFlowNodes(c.Request.Context(), enriched)
 
 	response.Success(c, flow)
 }
@@ -937,10 +937,18 @@ func (h *HealingHandler) RetryInstance(c *gin.Context) {
 	var req struct {
 		FromNodeID string `json:"from_node_id"` // 可选，从哪个节点开始
 	}
-	c.ShouldBindJSON(&req) // 允许为空
+	if err := c.ShouldBindJSON(&req); err != nil && c.Request.ContentLength > 0 {
+		response.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
 
 	// 异步执行重试
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[RETRY] panic 恢复: %v", r)
+			}
+		}()
 		ctx := context.Background()
 		if err := h.executor.RetryFromNode(ctx, instance, req.FromNodeID); err != nil {
 			log.Printf("[RETRY] 重试失败: %v", err)

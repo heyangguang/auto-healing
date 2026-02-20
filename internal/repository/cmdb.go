@@ -30,13 +30,17 @@ func NewCMDBItemRepository() *CMDBItemRepository {
 
 // Create 创建配置项
 func (r *CMDBItemRepository) Create(ctx context.Context, item *model.CMDBItem) error {
+	if item.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		item.TenantID = &tenantID
+	}
 	return r.db.WithContext(ctx).Create(item).Error
 }
 
 // GetByID 根据 ID 获取配置项
 func (r *CMDBItemRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.CMDBItem, error) {
 	var item model.CMDBItem
-	err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error
+	err := TenantDB(r.db, ctx).First(&item, "id = ?", id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrCMDBItemNotFound
@@ -55,7 +59,7 @@ func (r *CMDBItemRepository) Update(ctx context.Context, item *model.CMDBItem) e
 // 返回: (isNew, error) - isNew=true 表示新增，false 表示更新
 func (r *CMDBItemRepository) UpsertByExternalID(ctx context.Context, item *model.CMDBItem) (bool, error) {
 	var existing model.CMDBItem
-	err := r.db.WithContext(ctx).
+	err := TenantDB(r.db, ctx).
 		Where("plugin_id = ? AND external_id = ?", item.PluginID, item.ExternalID).
 		First(&existing).Error
 
@@ -99,10 +103,10 @@ func (r *CMDBItemRepository) List(ctx context.Context, page, pageSize int, plugi
 	var items []model.CMDBItem
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.CMDBItem{})
+	query := TenantDB(r.db, ctx).Model(&model.CMDBItem{})
 	query = applyCMDBFilters(query, pluginID, itemType, status, environment, sourcePluginName, hasPlugin)
 
-	if err := query.Count(&total).Error; err != nil {
+	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -138,10 +142,10 @@ func (r *CMDBItemRepository) ListIDs(ctx context.Context, pluginID *uuid.UUID, i
 	var items []CMDBItemBasic
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.CMDBItem{})
+	query := TenantDB(r.db, ctx).Model(&model.CMDBItem{})
 	query = applyCMDBFilters(query, pluginID, itemType, status, environment, sourcePluginName, hasPlugin)
 
-	if err := query.Count(&total).Error; err != nil {
+	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -183,9 +187,12 @@ func applyCMDBFilters(query *gorm.DB, pluginID *uuid.UUID, itemType, status, env
 func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
+	// 每次查询使用新的 TenantDB 实例，避免 GORM session WHERE 条件累积
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
+
 	// 总数
 	var total int64
-	if err := r.db.WithContext(ctx).Model(&model.CMDBItem{}).Count(&total).Error; err != nil {
+	if err := newDB().Model(&model.CMDBItem{}).Count(&total).Error; err != nil {
 		return nil, err
 	}
 	stats["total"] = total
@@ -196,7 +203,7 @@ func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface
 		Count int64  `json:"count"`
 	}
 	var typeCounts []TypeCount
-	r.db.WithContext(ctx).Model(&model.CMDBItem{}).
+	newDB().Model(&model.CMDBItem{}).
 		Select("type, count(*) as count").
 		Group("type").
 		Scan(&typeCounts)
@@ -208,7 +215,7 @@ func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface
 		Count  int64  `json:"count"`
 	}
 	var statusCounts []StatusCount
-	r.db.WithContext(ctx).Model(&model.CMDBItem{}).
+	newDB().Model(&model.CMDBItem{}).
 		Select("status, count(*) as count").
 		Group("status").
 		Scan(&statusCounts)
@@ -220,7 +227,7 @@ func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface
 		Count       int64  `json:"count"`
 	}
 	var envCounts []EnvCount
-	r.db.WithContext(ctx).Model(&model.CMDBItem{}).
+	newDB().Model(&model.CMDBItem{}).
 		Select("environment, count(*) as count").
 		Group("environment").
 		Scan(&envCounts)
@@ -228,7 +235,7 @@ func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface
 
 	// 统计维护中数量
 	var maintenanceCount int64
-	r.db.WithContext(ctx).Model(&model.CMDBItem{}).
+	newDB().Model(&model.CMDBItem{}).
 		Where("status = ?", "maintenance").
 		Count(&maintenanceCount)
 	stats["maintenance_count"] = maintenanceCount
@@ -245,7 +252,7 @@ func (r *CMDBItemRepository) EnterMaintenance(ctx context.Context, id uuid.UUID,
 		"maintenance_start_at": &now,
 		"maintenance_end_at":   endAt,
 	}
-	return r.db.WithContext(ctx).Model(&model.CMDBItem{}).Where("id = ?", id).Updates(updates).Error
+	return TenantDB(r.db, ctx).Model(&model.CMDBItem{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // ExitMaintenance 退出维护模式
@@ -256,13 +263,13 @@ func (r *CMDBItemRepository) ExitMaintenance(ctx context.Context, id uuid.UUID) 
 		"maintenance_start_at": nil,
 		"maintenance_end_at":   nil,
 	}
-	return r.db.WithContext(ctx).Model(&model.CMDBItem{}).Where("id = ?", id).Updates(updates).Error
+	return TenantDB(r.db, ctx).Model(&model.CMDBItem{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // GetExpiredMaintenanceItems 获取维护到期的配置项
 func (r *CMDBItemRepository) GetExpiredMaintenanceItems(ctx context.Context) ([]model.CMDBItem, error) {
 	var items []model.CMDBItem
-	err := r.db.WithContext(ctx).
+	err := TenantDB(r.db, ctx).
 		Where("status = ? AND maintenance_end_at IS NOT NULL AND maintenance_end_at <= ?", "maintenance", time.Now()).
 		Find(&items).Error
 	return items, err
@@ -270,6 +277,10 @@ func (r *CMDBItemRepository) GetExpiredMaintenanceItems(ctx context.Context) ([]
 
 // CreateMaintenanceLog 创建维护日志
 func (r *CMDBItemRepository) CreateMaintenanceLog(ctx context.Context, log *model.CMDBMaintenanceLog) error {
+	if log.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		log.TenantID = &tenantID
+	}
 	return r.db.WithContext(ctx).Create(log).Error
 }
 
@@ -278,8 +289,8 @@ func (r *CMDBItemRepository) ListMaintenanceLogs(ctx context.Context, cmdbItemID
 	var logs []model.CMDBMaintenanceLog
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.CMDBMaintenanceLog{}).Where("cmdb_item_id = ?", cmdbItemID)
-	query.Count(&total)
+	query := TenantDB(r.db, ctx).Model(&model.CMDBMaintenanceLog{}).Where("cmdb_item_id = ?", cmdbItemID)
+	query.Session(&gorm.Session{}).Count(&total)
 
 	offset := (page - 1) * pageSize
 	err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&logs).Error
@@ -290,7 +301,7 @@ func (r *CMDBItemRepository) ListMaintenanceLogs(ctx context.Context, cmdbItemID
 // 用于 CMDB 验证节点
 func (r *CMDBItemRepository) FindByNameOrIP(ctx context.Context, identifier string) (*model.CMDBItem, error) {
 	var item model.CMDBItem
-	err := r.db.WithContext(ctx).
+	err := TenantDB(r.db, ctx).
 		Where("name = ? OR hostname = ? OR ip_address = ?", identifier, identifier, identifier).
 		First(&item).Error
 	if err != nil {
@@ -305,7 +316,7 @@ func (r *CMDBItemRepository) FindByNameOrIP(ctx context.Context, identifier stri
 // FindActiveByNameOrIP 根据名称、主机名或 IP 地址查找活跃的配置项
 func (r *CMDBItemRepository) FindActiveByNameOrIP(ctx context.Context, identifier string) (*model.CMDBItem, error) {
 	var item model.CMDBItem
-	err := r.db.WithContext(ctx).
+	err := TenantDB(r.db, ctx).
 		Where("(name = ? OR hostname = ? OR ip_address = ?) AND status = ?",
 			identifier, identifier, identifier, "active").
 		First(&item).Error

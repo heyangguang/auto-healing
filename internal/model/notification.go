@@ -12,6 +12,7 @@ import (
 // NotificationChannel 通知渠道模型
 type NotificationChannel struct {
 	ID                 uuid.UUID    `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID           *uuid.UUID   `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	Name               string       `json:"name" gorm:"type:varchar(200);not null;uniqueIndex"`
 	Type               string       `json:"type" gorm:"type:varchar(50);not null"` // email, dingtalk, webhook
 	Description        string       `json:"description,omitempty" gorm:"type:text"`
@@ -59,6 +60,7 @@ func (NotificationChannel) TableName() string {
 // NotificationTemplate 通知模板模型
 type NotificationTemplate struct {
 	ID                 uuid.UUID   `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID           *uuid.UUID  `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	Name               string      `json:"name" gorm:"type:varchar(200);not null"`
 	Description        string      `json:"description,omitempty" gorm:"type:text"`
 	EventType          string      `json:"event_type,omitempty" gorm:"type:varchar(50)"` // incident_created, incident_resolved, approval_required, execution_result, custom
@@ -80,6 +82,7 @@ func (NotificationTemplate) TableName() string {
 // NotificationLog 通知日志模型
 type NotificationLog struct {
 	ID                 uuid.UUID   `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID           *uuid.UUID  `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	TemplateID         *uuid.UUID  `json:"template_id,omitempty" gorm:"type:uuid"`
 	ChannelID          uuid.UUID   `json:"channel_id" gorm:"type:uuid;not null"`
 	ExecutionRunID     *uuid.UUID  `json:"execution_run_id,omitempty" gorm:"type:uuid"` // 关联执行记录

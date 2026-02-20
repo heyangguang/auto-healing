@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
@@ -28,21 +29,22 @@ func NewUserHandler(authSvc *authService.Service) *UserHandler {
 	}
 }
 
-// ListUsers 获取用户列表
+// ListUsers 获取平台管理员用户列表
+// 只返回拥有 platform_admin 或 super_admin 角色的用户
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	params := &repository.UserListParams{
-		Page:        getQueryInt(c, "page", 1),
-		PageSize:    getQueryInt(c, "page_size", 20),
-		Status:      c.Query("status"),
-		Search:      c.Query("search"),
-		Username:    c.Query("username"),
-		Email:       c.Query("email"),
-		DisplayName: c.Query("display_name"),
-		RoleID:      c.Query("role_id"),
-		CreatedFrom: c.Query("created_from"),
-		CreatedTo:   c.Query("created_to"),
-		SortField:   c.Query("sort_field"),
-		SortOrder:   c.Query("sort_order"),
+		Page:         getQueryInt(c, "page", 1),
+		PageSize:     getQueryInt(c, "page_size", 20),
+		Status:       c.Query("status"),
+		Search:       c.Query("search"),
+		Username:     c.Query("username"),
+		Email:        c.Query("email"),
+		DisplayName:  c.Query("display_name"),
+		CreatedFrom:  c.Query("created_from"),
+		CreatedTo:    c.Query("created_to"),
+		SortField:    c.Query("sort_field"),
+		SortOrder:    c.Query("sort_order"),
+		PlatformOnly: true, // 平台接口只展示平台级角色用户
 	}
 
 	users, total, err := h.userRepo.List(c.Request.Context(), params)
@@ -68,7 +70,7 @@ func (h *UserHandler) ListSimpleUsers(c *gin.Context) {
 	response.Success(c, users)
 }
 
-// CreateUser 创建用户
+// CreateUser 创建平台管理员账号，并自动赋予 platform_admin 角色
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req authService.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -82,7 +84,19 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	response.Created(c, user)
+	// 自动赋予 platform_admin 角色
+	platformAdminRole, err := h.roleRepo.GetByName(c.Request.Context(), "platform_admin")
+	if err == nil {
+		_ = h.userRepo.AssignRoles(c.Request.Context(), user.ID, []uuid.UUID{platformAdminRole.ID})
+	}
+
+	// 返回完整用户信息（含角色）
+	userWithRoles, _ := h.userRepo.GetByID(c.Request.Context(), user.ID)
+	if userWithRoles != nil {
+		response.Created(c, userWithRoles)
+	} else {
+		response.Created(c, user)
+	}
 }
 
 // GetUser 获取用户详情
@@ -140,7 +154,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	response.Success(c, user)
 }
 
-// DeleteUser 删除用户
+// DeleteUser 删除平台管理员账号
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -152,6 +166,22 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	if currentUserID == id.String() {
 		response.BadRequest(c, "不能删除自己的账户")
 		return
+	}
+
+	// 保护：最后一个 platform_admin 不允许删除
+	platformAdmins, _, err := h.userRepo.List(c.Request.Context(), &repository.UserListParams{
+		Page:         1,
+		PageSize:     2,
+		PlatformOnly: true,
+	})
+	if err == nil && len(platformAdmins) <= 1 {
+		// 检查被删除的用户是否是 platform_admin
+		for _, u := range platformAdmins {
+			if u.ID == id {
+				response.BadRequest(c, "系统中必须保留至少一个平台管理员，无法删除")
+				return
+			}
+		}
 	}
 
 	if err := h.userRepo.Delete(c.Request.Context(), id); err != nil {
@@ -221,10 +251,11 @@ func NewRoleHandler() *RoleHandler {
 	}
 }
 
-// ListRoles 获取角色列表（含统计信息）
+// ListRoles 平台级：获取所有角色列表（含统计信息）
 func (h *RoleHandler) ListRoles(c *gin.Context) {
 	filter := repository.RoleFilter{
 		Search: c.Query("search"),
+		Scope:  "platform",
 	}
 
 	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), filter)
@@ -233,13 +264,36 @@ func (h *RoleHandler) ListRoles(c *gin.Context) {
 		return
 	}
 
-	stats, _ := h.roleRepo.GetRoleStats(c.Request.Context())
+	response.Success(c, h.buildRoleStats(c, roles))
+}
 
-	type RoleWithStats struct {
-		model.Role
-		UserCount       int64 `json:"user_count"`
-		PermissionCount int64 `json:"permission_count"`
+// ListTenantRoles 租户级：只返回租户可见角色，永远排除 platform_admin/super_admin
+func (h *RoleHandler) ListTenantRoles(c *gin.Context) {
+	filter := repository.RoleFilter{
+		Search:   c.Query("search"),
+		Scope:    "tenant",
+		TenantID: repository.TenantIDFromContext(c.Request.Context()),
 	}
+
+	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), filter)
+	if err != nil {
+		response.InternalError(c, "获取角色列表失败")
+		return
+	}
+
+	response.Success(c, h.buildRoleStats(c, roles))
+}
+
+// RoleWithStats 角色+统计
+type RoleWithStats struct {
+	model.Role
+	UserCount       int64 `json:"user_count"`
+	PermissionCount int64 `json:"permission_count"`
+}
+
+// buildRoleStats 构建角色列表（含统计信息）
+func (h *RoleHandler) buildRoleStats(c *gin.Context, roles []model.Role) []RoleWithStats {
+	stats, _ := h.roleRepo.GetRoleStats(c.Request.Context())
 
 	result := make([]RoleWithStats, len(roles))
 	for i, role := range roles {
@@ -252,8 +306,7 @@ func (h *RoleHandler) ListRoles(c *gin.Context) {
 		}
 		result[i] = rws
 	}
-
-	response.Success(c, result)
+	return result
 }
 
 // CreateRole 创建角色
@@ -378,6 +431,34 @@ func (h *RoleHandler) AssignRolePermissions(c *gin.Context) {
 
 	role, _ = h.roleRepo.GetByID(c.Request.Context(), id)
 	response.Success(c, role)
+}
+
+// GetRoleUsers 获取角色下的关联用户
+func (h *RoleHandler) GetRoleUsers(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "无效的角色 ID")
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	search := c.Query("search")
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	users, total, err := h.roleRepo.GetRoleUsers(c.Request.Context(), id, page, pageSize, search)
+	if err != nil {
+		response.InternalError(c, "获取角色用户失败")
+		return
+	}
+
+	response.List(c, users, total, page, pageSize)
 }
 
 // PermissionHandler 权限处理器

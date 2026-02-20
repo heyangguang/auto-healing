@@ -9,6 +9,7 @@ import (
 // GitRepository Git仓库模型（只负责代码同步）
 type GitRepository struct {
 	ID            uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID      *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	Name          string     `json:"name" gorm:"type:varchar(100);not null;unique"`
 	URL           string     `json:"url" gorm:"column:url;type:varchar(500);not null"`
 	DefaultBranch string     `json:"default_branch" gorm:"type:varchar(100);default:'main'"`
@@ -48,16 +49,17 @@ func (GitRepository) TableName() string {
 
 // GitSyncLog Git 仓库同步日志
 type GitSyncLog struct {
-	ID           uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	RepositoryID uuid.UUID `json:"repository_id" gorm:"type:uuid;not null"`
-	TriggerType  string    `json:"trigger_type" gorm:"type:varchar(20);default:'manual'"` // manual / scheduled
-	Action       string    `json:"action" gorm:"type:varchar(20);not null"`               // clone / pull
-	Status       string    `json:"status" gorm:"type:varchar(20);not null"`               // success / failed
-	CommitID     string    `json:"commit_id,omitempty" gorm:"type:varchar(40)"`
-	Branch       string    `json:"branch,omitempty" gorm:"type:varchar(100)"`
-	DurationMs   int       `json:"duration_ms,omitempty" gorm:"type:integer"`
-	ErrorMessage string    `json:"error_message,omitempty" gorm:"type:text"`
-	CreatedAt    time.Time `json:"created_at" gorm:"default:now()"`
+	ID           uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID     *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	RepositoryID uuid.UUID  `json:"repository_id" gorm:"type:uuid;not null"`
+	TriggerType  string     `json:"trigger_type" gorm:"type:varchar(20);default:'manual'"` // manual / scheduled
+	Action       string     `json:"action" gorm:"type:varchar(20);not null"`               // clone / pull
+	Status       string     `json:"status" gorm:"type:varchar(20);not null"`               // success / failed
+	CommitID     string     `json:"commit_id,omitempty" gorm:"type:varchar(40)"`
+	Branch       string     `json:"branch,omitempty" gorm:"type:varchar(100)"`
+	DurationMs   int        `json:"duration_ms,omitempty" gorm:"type:integer"`
+	ErrorMessage string     `json:"error_message,omitempty" gorm:"type:text"`
+	CreatedAt    time.Time  `json:"created_at" gorm:"default:now()"`
 
 	// 关联
 	Repository *GitRepository `json:"repository,omitempty" gorm:"foreignKey:RepositoryID"`
@@ -99,11 +101,12 @@ type VariableConfig struct {
 
 // Playbook Playbook 模板（管理入口文件和变量配置）
 type Playbook struct {
-	ID           uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	RepositoryID uuid.UUID `json:"repository_id" gorm:"type:uuid;not null"`
-	Name         string    `json:"name" gorm:"type:varchar(200);not null"`
-	Description  string    `json:"description,omitempty" gorm:"type:text"`
-	FilePath     string    `json:"file_path" gorm:"type:varchar(500);not null"` // 主入口文件
+	ID           uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID     *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	RepositoryID uuid.UUID  `json:"repository_id" gorm:"type:uuid;not null"`
+	Name         string     `json:"name" gorm:"type:varchar(200);not null"`
+	Description  string     `json:"description,omitempty" gorm:"type:text"`
+	FilePath     string     `json:"file_path" gorm:"type:varchar(500);not null"` // 主入口文件
 
 	// 变量配置
 	Variables        JSONArray  `json:"variables" gorm:"type:jsonb;default:'[]'"`         // 用户确认的变量配置
@@ -133,9 +136,10 @@ func (Playbook) TableName() string {
 
 // PlaybookScanLog Playbook 扫描日志
 type PlaybookScanLog struct {
-	ID          uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	PlaybookID  uuid.UUID `json:"playbook_id" gorm:"type:uuid;not null"`
-	TriggerType string    `json:"trigger_type" gorm:"type:varchar(20);not null"` // manual / repo_sync
+	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID    *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	PlaybookID  uuid.UUID  `json:"playbook_id" gorm:"type:uuid;not null"`
+	TriggerType string     `json:"trigger_type" gorm:"type:varchar(20);not null"` // manual / repo_sync
 
 	// 扫描统计
 	FilesScanned   int `json:"files_scanned" gorm:"default:0"`
@@ -160,6 +164,7 @@ func (PlaybookScanLog) TableName() string {
 // 通过 PlaybookID 关联 Playbook，再通过 Playbook 获取仓库
 type ExecutionTask struct {
 	ID                 uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID           *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	Name               string     `json:"name" gorm:"type:varchar(200)"`             // 任务名称
 	PlaybookID         uuid.UUID  `json:"playbook_id" gorm:"type:uuid;not null"`     // 关联的 Playbook
 	WorkflowInstanceID *uuid.UUID `json:"workflow_instance_id,omitempty" gorm:"-"`   // 临时字段，不存储

@@ -11,11 +11,12 @@ import (
 
 // DashboardConfig 用户 Dashboard 配置
 type DashboardConfig struct {
-	ID        uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	UserID    uuid.UUID `json:"user_id" gorm:"type:uuid;not null;uniqueIndex"`
-	Config    JSON      `json:"config" gorm:"type:jsonb;not null;default:'{}'"`
-	CreatedAt time.Time `json:"created_at" gorm:"default:now()"`
-	UpdatedAt time.Time `json:"updated_at" gorm:"default:now()"`
+	ID        uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	UserID    uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;uniqueIndex"`
+	TenantID  *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	Config    JSON       `json:"config" gorm:"type:jsonb;not null;default:'{}'"`
+	CreatedAt time.Time  `json:"created_at" gorm:"default:now()"`
+	UpdatedAt time.Time  `json:"updated_at" gorm:"default:now()"`
 
 	// 关联
 	User *User `json:"user,omitempty" gorm:"foreignKey:UserID"`
@@ -62,6 +63,7 @@ type DashboardLayoutItem struct {
 // SystemWorkspace 系统工作区（管理员创建的模板，可分配给角色）
 type SystemWorkspace struct {
 	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID    *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	Name        string     `json:"name" gorm:"type:varchar(200);not null"`
 	Description string     `json:"description,omitempty" gorm:"type:text;default:''"`
 	Config      JSON       `json:"config" gorm:"type:jsonb;not null;default:'{}'"`

@@ -50,7 +50,7 @@ type CreateChannelRequest struct {
 }
 
 // CreateChannel 创建通知渠道
-func (s *Service) CreateChannel(req CreateChannelRequest) (*model.NotificationChannel, error) {
+func (s *Service) CreateChannel(ctx context.Context, req CreateChannelRequest) (*model.NotificationChannel, error) {
 	// 验证渠道类型
 	if _, ok := s.providerRegistry.Get(req.Type); !ok {
 		return nil, fmt.Errorf("不支持的渠道类型: %s", req.Type)
@@ -78,20 +78,20 @@ func (s *Service) CreateChannel(req CreateChannelRequest) (*model.NotificationCh
 	}
 	json.Unmarshal(configJSON, &channel.Config)
 
-	if err := s.repo.CreateChannel(channel); err != nil {
+	if err := s.repo.CreateChannel(ctx, channel); err != nil {
 		return nil, err
 	}
 	return channel, nil
 }
 
 // GetChannel 获取渠道
-func (s *Service) GetChannel(id uuid.UUID) (*model.NotificationChannel, error) {
-	return s.repo.GetChannelByID(id)
+func (s *Service) GetChannel(ctx context.Context, id uuid.UUID) (*model.NotificationChannel, error) {
+	return s.repo.GetChannelByID(ctx, id)
 }
 
 // ListChannels 获取渠道列表
-func (s *Service) ListChannels(page, pageSize int, channelType string, search string) ([]model.NotificationChannel, int64, error) {
-	return s.repo.ListChannels(page, pageSize, channelType, search)
+func (s *Service) ListChannels(ctx context.Context, page, pageSize int, channelType string, search string) ([]model.NotificationChannel, int64, error) {
+	return s.repo.ListChannels(ctx, page, pageSize, channelType, search)
 }
 
 // UpdateChannelRequest 更新渠道请求
@@ -107,8 +107,8 @@ type UpdateChannelRequest struct {
 }
 
 // UpdateChannel 更新渠道
-func (s *Service) UpdateChannel(id uuid.UUID, req UpdateChannelRequest) (*model.NotificationChannel, error) {
-	channel, err := s.repo.GetChannelByID(id)
+func (s *Service) UpdateChannel(ctx context.Context, id uuid.UUID, req UpdateChannelRequest) (*model.NotificationChannel, error) {
+	channel, err := s.repo.GetChannelByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -140,22 +140,22 @@ func (s *Service) UpdateChannel(id uuid.UUID, req UpdateChannelRequest) (*model.
 	}
 	channel.UpdatedAt = time.Now()
 
-	if err := s.repo.UpdateChannel(channel); err != nil {
+	if err := s.repo.UpdateChannel(ctx, channel); err != nil {
 		return nil, err
 	}
 	return channel, nil
 }
 
 // DeleteChannel 删除渠道（保护性删除）
-func (s *Service) DeleteChannel(id uuid.UUID) error {
+func (s *Service) DeleteChannel(ctx context.Context, id uuid.UUID) error {
 	// 获取渠道信息
-	channel, err := s.repo.GetChannelByID(id)
+	channel, err := s.repo.GetChannelByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("渠道不存在: %w", err)
 	}
 
 	// 检查是否被通知模板的 supported_channels 引用
-	templateCount, err := s.repo.CountTemplatesUsingChannelType(channel.Type)
+	templateCount, err := s.repo.CountTemplatesUsingChannelType(ctx, channel.Type)
 	if err != nil {
 		return fmt.Errorf("检查关联模板失败: %w", err)
 	}
@@ -164,7 +164,7 @@ func (s *Service) DeleteChannel(id uuid.UUID) error {
 	}
 
 	// 检查是否被任务模板的 notification_config.channel_ids 引用
-	taskCount, err := s.repo.CountTasksUsingChannel(id)
+	taskCount, err := s.repo.CountTasksUsingChannel(ctx, id)
 	if err != nil {
 		return fmt.Errorf("检查关联任务模板失败: %w", err)
 	}
@@ -173,7 +173,7 @@ func (s *Service) DeleteChannel(id uuid.UUID) error {
 	}
 
 	// 检查是否被自愈流程的 notification 节点引用
-	flowCount, err := s.healingFlowRepo.CountFlowsUsingChannel(context.Background(), id.String())
+	flowCount, err := s.healingFlowRepo.CountFlowsUsingChannel(ctx, id.String())
 	if err != nil {
 		return fmt.Errorf("检查关联自愈流程失败: %w", err)
 	}
@@ -181,12 +181,12 @@ func (s *Service) DeleteChannel(id uuid.UUID) error {
 		return fmt.Errorf("无法删除：有 %d 个自愈流程使用此通知渠道，请先修改这些流程的通知节点配置", flowCount)
 	}
 
-	return s.repo.DeleteChannel(id)
+	return s.repo.DeleteChannel(ctx, id)
 }
 
 // TestChannel 测试渠道
-func (s *Service) TestChannel(id uuid.UUID) error {
-	channel, err := s.repo.GetChannelByID(id)
+func (s *Service) TestChannel(ctx context.Context, id uuid.UUID) error {
+	channel, err := s.repo.GetChannelByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -196,10 +196,10 @@ func (s *Service) TestChannel(id uuid.UUID) error {
 		return fmt.Errorf("不支持的渠道类型: %s", channel.Type)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	testCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	return p.Test(ctx, channel.Config)
+	return p.Test(testCtx, channel.Config)
 }
 
 // ==================== 模板管理 ====================
@@ -216,7 +216,7 @@ type CreateTemplateRequest struct {
 }
 
 // CreateTemplate 创建模板
-func (s *Service) CreateTemplate(req CreateTemplateRequest) (*model.NotificationTemplate, error) {
+func (s *Service) CreateTemplate(ctx context.Context, req CreateTemplateRequest) (*model.NotificationTemplate, error) {
 	format := req.Format
 	if format == "" {
 		format = "text"
@@ -242,20 +242,20 @@ func (s *Service) CreateTemplate(req CreateTemplateRequest) (*model.Notification
 		IsActive:           true,
 	}
 
-	if err := s.repo.CreateTemplate(template); err != nil {
+	if err := s.repo.CreateTemplate(ctx, template); err != nil {
 		return nil, err
 	}
 	return template, nil
 }
 
 // GetTemplate 获取模板
-func (s *Service) GetTemplate(id uuid.UUID) (*model.NotificationTemplate, error) {
-	return s.repo.GetTemplateByID(id)
+func (s *Service) GetTemplate(ctx context.Context, id uuid.UUID) (*model.NotificationTemplate, error) {
+	return s.repo.GetTemplateByID(ctx, id)
 }
 
 // ListTemplates 获取模板列表
-func (s *Service) ListTemplates(opts *repository.TemplateListOptions) ([]model.NotificationTemplate, int64, error) {
-	return s.repo.ListTemplates(opts)
+func (s *Service) ListTemplates(ctx context.Context, opts *repository.TemplateListOptions) ([]model.NotificationTemplate, int64, error) {
+	return s.repo.ListTemplates(ctx, opts)
 }
 
 // UpdateTemplateRequest 更新模板请求
@@ -271,8 +271,8 @@ type UpdateTemplateRequest struct {
 }
 
 // UpdateTemplate 更新模板
-func (s *Service) UpdateTemplate(id uuid.UUID, req UpdateTemplateRequest) (*model.NotificationTemplate, error) {
-	template, err := s.repo.GetTemplateByID(id)
+func (s *Service) UpdateTemplate(ctx context.Context, id uuid.UUID, req UpdateTemplateRequest) (*model.NotificationTemplate, error) {
+	template, err := s.repo.GetTemplateByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -312,16 +312,16 @@ func (s *Service) UpdateTemplate(id uuid.UUID, req UpdateTemplateRequest) (*mode
 	template.AvailableVariables = model.JSONArray(availableVars)
 	template.UpdatedAt = time.Now()
 
-	if err := s.repo.UpdateTemplate(template); err != nil {
+	if err := s.repo.UpdateTemplate(ctx, template); err != nil {
 		return nil, err
 	}
 	return template, nil
 }
 
 // DeleteTemplate 删除模板（保护性删除）
-func (s *Service) DeleteTemplate(id uuid.UUID) error {
+func (s *Service) DeleteTemplate(ctx context.Context, id uuid.UUID) error {
 	// 检查是否被任务模板的 notification_config.template_id 引用
-	taskCount, err := s.repo.CountTasksUsingTemplate(id)
+	taskCount, err := s.repo.CountTasksUsingTemplate(ctx, id)
 	if err != nil {
 		return fmt.Errorf("检查关联任务模板失败: %w", err)
 	}
@@ -330,7 +330,7 @@ func (s *Service) DeleteTemplate(id uuid.UUID) error {
 	}
 
 	// 检查是否被自愈流程的 notification 节点引用
-	flowCount, err := s.healingFlowRepo.CountFlowsUsingTemplate(context.Background(), id.String())
+	flowCount, err := s.healingFlowRepo.CountFlowsUsingTemplate(ctx, id.String())
 	if err != nil {
 		return fmt.Errorf("检查关联自愈流程失败: %w", err)
 	}
@@ -338,7 +338,7 @@ func (s *Service) DeleteTemplate(id uuid.UUID) error {
 		return fmt.Errorf("无法删除：有 %d 个自愈流程使用此通知模板，请先修改这些流程的通知节点配置", flowCount)
 	}
 
-	return s.repo.DeleteTemplate(id)
+	return s.repo.DeleteTemplate(ctx, id)
 }
 
 // PreviewResult 预览结果
@@ -348,8 +348,8 @@ type PreviewResult struct {
 }
 
 // PreviewTemplate 预览模板
-func (s *Service) PreviewTemplate(id uuid.UUID, variables map[string]interface{}) (*PreviewResult, error) {
-	template, err := s.repo.GetTemplateByID(id)
+func (s *Service) PreviewTemplate(ctx context.Context, id uuid.UUID, variables map[string]interface{}) (*PreviewResult, error) {
+	template, err := s.repo.GetTemplateByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -392,13 +392,13 @@ func (s *Service) Send(ctx context.Context, req SendNotificationRequest) ([]*mod
 
 	// 如果没有指定渠道，使用默认渠道
 	if len(req.ChannelIDs) == 0 {
-		defaultChannel, err := s.repo.GetDefaultChannel()
+		defaultChannel, err := s.repo.GetDefaultChannel(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("未指定渠道且没有可用的默认渠道")
 		}
 		channels = []model.NotificationChannel{*defaultChannel}
 	} else {
-		channels, err = s.repo.GetChannelsByIDs(req.ChannelIDs)
+		channels, err = s.repo.GetChannelsByIDs(ctx, req.ChannelIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -416,7 +416,7 @@ func (s *Service) Send(ctx context.Context, req SendNotificationRequest) ([]*mod
 	}
 
 	if req.TemplateID != nil {
-		template, err := s.repo.GetTemplateByID(*req.TemplateID)
+		template, err := s.repo.GetTemplateByID(ctx, *req.TemplateID)
 		if err != nil {
 			return nil, fmt.Errorf("模板不存在: %w", err)
 		}
@@ -448,7 +448,7 @@ func (s *Service) sendToChannel(ctx context.Context, channel *model.Notification
 		Body:           body,
 		Status:         "pending",
 	}
-	s.repo.CreateLog(log)
+	s.repo.CreateLog(ctx, log)
 
 	// 速率限制检查
 	if channel.RateLimitPerMinute != nil && *channel.RateLimitPerMinute > 0 {
@@ -456,7 +456,7 @@ func (s *Service) sendToChannel(ctx context.Context, channel *model.Notification
 		if !s.rateLimiter.Allow(rateLimitKey, *channel.RateLimitPerMinute, time.Minute) {
 			log.Status = "failed"
 			log.ErrorMessage = fmt.Sprintf("超出速率限制: %d 条/分钟", *channel.RateLimitPerMinute)
-			s.repo.UpdateLog(log)
+			s.repo.UpdateLog(ctx, log)
 			return log
 		}
 	}
@@ -466,7 +466,7 @@ func (s *Service) sendToChannel(ctx context.Context, channel *model.Notification
 	if !ok {
 		log.Status = "failed"
 		log.ErrorMessage = fmt.Sprintf("不支持的渠道类型: %s", channel.Type)
-		s.repo.UpdateLog(log)
+		s.repo.UpdateLog(ctx, log)
 		return log
 	}
 
@@ -508,7 +508,7 @@ func (s *Service) sendToChannel(ctx context.Context, channel *model.Notification
 		}
 	}
 
-	s.repo.UpdateLog(log)
+	s.repo.UpdateLog(ctx, log)
 	return log
 }
 
@@ -563,24 +563,24 @@ func (s *Service) SendOnStart(ctx context.Context, run *model.ExecutionRun, task
 // ==================== 通知日志 ====================
 
 // GetNotification 获取通知日志
-func (s *Service) GetNotification(id uuid.UUID) (*model.NotificationLog, error) {
-	return s.repo.GetLogByID(id)
+func (s *Service) GetNotification(ctx context.Context, id uuid.UUID) (*model.NotificationLog, error) {
+	return s.repo.GetLogByID(ctx, id)
 }
 
 // ListNotifications 获取通知日志列表
-func (s *Service) ListNotifications(opts *repository.NotificationLogListOptions) ([]model.NotificationLog, int64, error) {
-	return s.repo.ListLogs(opts)
+func (s *Service) ListNotifications(ctx context.Context, opts *repository.NotificationLogListOptions) ([]model.NotificationLog, int64, error) {
+	return s.repo.ListLogs(ctx, opts)
 }
 
 // RetryFailed 重试失败的通知
 func (s *Service) RetryFailed(ctx context.Context) error {
-	logs, err := s.repo.GetPendingRetryLogs()
+	logs, err := s.repo.GetPendingRetryLogs(ctx)
 	if err != nil {
 		return err
 	}
 
 	for _, log := range logs {
-		channel, err := s.repo.GetChannelByID(log.ChannelID)
+		channel, err := s.repo.GetChannelByID(ctx, log.ChannelID)
 		if err != nil {
 			continue
 		}
@@ -591,7 +591,7 @@ func (s *Service) RetryFailed(ctx context.Context) error {
 		p, ok := s.providerRegistry.Get(channel.Type)
 		if !ok {
 			log.ErrorMessage = fmt.Sprintf("不支持的渠道类型: %s", channel.Type)
-			s.repo.UpdateLog(&log)
+			s.repo.UpdateLog(ctx, &log)
 			continue
 		}
 
@@ -628,7 +628,7 @@ func (s *Service) RetryFailed(ctx context.Context) error {
 			log.ExternalMessageID = resp.ExternalMessageID
 		}
 
-		s.repo.UpdateLog(&log)
+		s.repo.UpdateLog(ctx, &log)
 	}
 
 	return nil

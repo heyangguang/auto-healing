@@ -34,12 +34,14 @@ var AllSiteMessageCategories = []SiteMessageCategoryInfo{
 
 // SiteMessage 站内信消息主表
 type SiteMessage struct {
-	ID        uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	Category  string     `json:"category" gorm:"type:varchar(50);not null;index"`
-	Title     string     `json:"title" gorm:"type:varchar(500);not null"`
-	Content   string     `json:"content" gorm:"type:text;not null"`
-	CreatedAt time.Time  `json:"created_at" gorm:"default:now();index"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty" gorm:"index"`
+	ID             uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID       *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	TargetTenantID *uuid.UUID `json:"target_tenant_id,omitempty" gorm:"type:uuid;index"` // 目标租户（NULL=全局广播）
+	Category       string     `json:"category" gorm:"type:varchar(50);not null;index"`
+	Title          string     `json:"title" gorm:"type:varchar(500);not null"`
+	Content        string     `json:"content" gorm:"type:text;not null"`
+	CreatedAt      time.Time  `json:"created_at" gorm:"default:now();index"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty" gorm:"index"`
 }
 
 // TableName 表名
@@ -49,10 +51,11 @@ func (SiteMessage) TableName() string {
 
 // SiteMessageRead 站内信已读记录（懒创建：标记已读时才插入）
 type SiteMessageRead struct {
-	ID        uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	MessageID uuid.UUID `json:"message_id" gorm:"type:uuid;not null;uniqueIndex:idx_site_message_read_unique"`
-	UserID    uuid.UUID `json:"user_id" gorm:"type:uuid;not null;uniqueIndex:idx_site_message_read_unique"`
-	ReadAt    time.Time `json:"read_at" gorm:"default:now()"`
+	ID        uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID  *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	MessageID uuid.UUID  `json:"message_id" gorm:"type:uuid;not null;uniqueIndex:idx_site_message_read_unique"`
+	UserID    uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;uniqueIndex:idx_site_message_read_unique"`
+	ReadAt    time.Time  `json:"read_at" gorm:"default:now()"`
 }
 
 // TableName 表名
@@ -60,17 +63,8 @@ func (SiteMessageRead) TableName() string {
 	return "site_message_reads"
 }
 
-// SiteMessageSettings 站内信全局设置（单行表）
-type SiteMessageSettings struct {
-	ID            uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	RetentionDays int       `json:"retention_days" gorm:"default:90;not null"`
-	UpdatedAt     time.Time `json:"updated_at" gorm:"default:now()"`
-}
-
-// TableName 表名
-func (SiteMessageSettings) TableName() string {
-	return "site_message_settings"
-}
+// 注意：站内信设置已迁移到 platform_settings 表（KV 存储）
+// key: "site_message.retention_days" → 消息保留天数
 
 // SiteMessageWithReadStatus 带已读状态的站内信（查询用 DTO）
 type SiteMessageWithReadStatus struct {

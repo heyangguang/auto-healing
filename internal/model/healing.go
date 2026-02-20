@@ -9,6 +9,7 @@ import (
 // HealingFlow 自愈流程
 type HealingFlow struct {
 	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	TenantID    *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	Name        string     `json:"name" gorm:"type:varchar(255);not null"`
 	Description string     `json:"description,omitempty" gorm:"type:text"`
 	Nodes       JSONArray  `json:"nodes" gorm:"type:jsonb;not null;default:'[]'"`
@@ -30,6 +31,7 @@ func (HealingFlow) TableName() string {
 // HealingRule 自愈规则
 type HealingRule struct {
 	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	TenantID    *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	Name        string     `json:"name" gorm:"type:varchar(255);not null"`
 	Description string     `json:"description,omitempty" gorm:"type:text"`
 	Priority    int        `json:"priority" gorm:"default:0"`
@@ -56,6 +58,7 @@ func (HealingRule) TableName() string {
 // FlowInstance 流程实例
 type FlowInstance struct {
 	ID            uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	TenantID      *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	FlowID        uuid.UUID  `json:"flow_id" gorm:"type:uuid;not null;index"`
 	RuleID        *uuid.UUID `json:"rule_id,omitempty" gorm:"type:uuid;index"`
 	IncidentID    *uuid.UUID `json:"incident_id,omitempty" gorm:"type:uuid;index"`
@@ -98,6 +101,7 @@ const (
 // ApprovalTask 审批任务
 type ApprovalTask struct {
 	ID               uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	TenantID         *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	FlowInstanceID   uuid.UUID  `json:"flow_instance_id" gorm:"type:uuid;not null;index"`
 	NodeID           string     `json:"node_id" gorm:"type:varchar(100);not null"`
 	InitiatedBy      *uuid.UUID `json:"initiated_by,omitempty" gorm:"type:uuid"`
@@ -278,14 +282,15 @@ const (
 
 // FlowExecutionLog 流程执行日志
 type FlowExecutionLog struct {
-	ID             uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	FlowInstanceID uuid.UUID `json:"flow_instance_id" gorm:"type:uuid;not null;index"`
-	NodeID         string    `json:"node_id" gorm:"type:varchar(100);not null"`
-	NodeType       string    `json:"node_type" gorm:"type:varchar(50);not null"`
-	Level          string    `json:"level" gorm:"type:varchar(20);not null;default:'info'"`
-	Message        string    `json:"message" gorm:"type:text;not null"`
-	Details        JSON      `json:"details,omitempty" gorm:"type:jsonb"`
-	CreatedAt      time.Time `json:"created_at" gorm:"default:now()"`
+	ID             uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	TenantID       *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	FlowInstanceID uuid.UUID  `json:"flow_instance_id" gorm:"type:uuid;not null;index"`
+	NodeID         string     `json:"node_id" gorm:"type:varchar(100);not null"`
+	NodeType       string     `json:"node_type" gorm:"type:varchar(50);not null"`
+	Level          string     `json:"level" gorm:"type:varchar(20);not null;default:'info'"`
+	Message        string     `json:"message" gorm:"type:text;not null"`
+	Details        JSON       `json:"details,omitempty" gorm:"type:jsonb"`
+	CreatedAt      time.Time  `json:"created_at" gorm:"default:now()"`
 
 	// 关联
 	FlowInstance *FlowInstance `json:"-" gorm:"foreignKey:FlowInstanceID"`

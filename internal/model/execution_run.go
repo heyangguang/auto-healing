@@ -10,6 +10,7 @@ import (
 // 每次执行任务都会创建一条记录，用于保存执行状态和结果
 type ExecutionRun struct {
 	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID    *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	TaskID      uuid.UUID  `json:"task_id" gorm:"type:uuid;not null"`
 	Status      string     `json:"status" gorm:"type:varchar(50);default:'pending'"` // pending, running, success, failed, cancelled, timeout
 	ExitCode    *int       `json:"exit_code,omitempty"`

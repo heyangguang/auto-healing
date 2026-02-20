@@ -35,6 +35,7 @@ func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 		Page:         page,
 		PageSize:     pageSize,
 		Search:       c.Query("search"),
+		Category:     c.Query("category"),
 		Action:       c.Query("action"),
 		ResourceType: c.Query("resource_type"),
 		Username:     c.Query("username"),
@@ -94,6 +95,7 @@ func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 			"username":        log.Username,
 			"ip_address":      log.IPAddress,
 			"user_agent":      log.UserAgent,
+			"category":        log.Category,
 			"action":          log.Action,
 			"resource_type":   log.ResourceType,
 			"resource_id":     log.ResourceID,
@@ -296,6 +298,7 @@ func (h *AuditHandler) ExportAuditLogs(c *gin.Context) {
 		Page:         1,
 		PageSize:     10000, // 最多导出 10000 条
 		Search:       c.Query("search"),
+		Category:     c.Query("category"),
 		Action:       c.Query("action"),
 		ResourceType: c.Query("resource_type"),
 		Username:     c.Query("username"),

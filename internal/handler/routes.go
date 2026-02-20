@@ -26,25 +26,29 @@ import (
 
 // Handlers 所有处理器集合
 type Handlers struct {
-	Auth         *AuthHandler
-	User         *UserHandler
-	Role         *RoleHandler
-	Permission   *PermissionHandler
-	Plugin       *PluginHandler
-	CMDB         *CMDBHandler
-	Secrets      *SecretsHandler
-	GitRepo      *GitRepoHandler
-	Playbook     *PlaybookHandler
-	Execution    *ExecutionHandler
-	Schedule     *ScheduleHandler
-	Notification *NotificationHandler
-	Healing      *HealingHandler
-	Dashboard    *DashboardHandler
-	Preference   *PreferenceHandler
-	Audit        *AuditHandler
-	Activity     *UserActivityHandler
-	Search       *SearchHandler
-	SiteMessage  *SiteMessageHandler
+	Auth             *AuthHandler
+	User             *UserHandler
+	TenantUser       *TenantUserHandler // 租户级用户管理
+	Role             *RoleHandler
+	Permission       *PermissionHandler
+	Plugin           *PluginHandler
+	CMDB             *CMDBHandler
+	Secrets          *SecretsHandler
+	GitRepo          *GitRepoHandler
+	Playbook         *PlaybookHandler
+	Execution        *ExecutionHandler
+	Schedule         *ScheduleHandler
+	Notification     *NotificationHandler
+	Healing          *HealingHandler
+	Dashboard        *DashboardHandler
+	Preference       *PreferenceHandler
+	Audit            *AuditHandler
+	PlatformAudit    *PlatformAuditHandler
+	Activity         *UserActivityHandler
+	Search           *SearchHandler
+	SiteMessage      *SiteMessageHandler
+	PlatformSettings *PlatformSettingsHandler
+	Tenant           *TenantHandler
 }
 
 // NewHandlers 创建所有处理器
@@ -52,25 +56,29 @@ func NewHandlers(cfg *config.Config) *Handlers {
 	authHandler := NewAuthHandler(cfg)
 
 	return &Handlers{
-		Auth:         authHandler,
-		User:         NewUserHandler(authHandler.authSvc),
-		Role:         NewRoleHandler(),
-		Permission:   NewPermissionHandler(),
-		Plugin:       NewPluginHandler(),
-		CMDB:         NewCMDBHandler(),
-		Secrets:      NewSecretsHandler(),
-		GitRepo:      NewGitRepoHandler(),
-		Playbook:     NewPlaybookHandler(),
-		Execution:    NewExecutionHandler(),
-		Schedule:     NewScheduleHandler(),
-		Notification: NewNotificationHandler(),
-		Healing:      NewHealingHandler(),
-		Dashboard:    NewDashboardHandler(),
-		Preference:   NewPreferenceHandler(),
-		Audit:        NewAuditHandler(),
-		Activity:     NewUserActivityHandler(),
-		Search:       NewSearchHandler(),
-		SiteMessage:  NewSiteMessageHandler(),
+		Auth:             authHandler,
+		User:             NewUserHandler(authHandler.authSvc),
+		TenantUser:       NewTenantUserHandler(authHandler.authSvc),
+		Role:             NewRoleHandler(),
+		Permission:       NewPermissionHandler(),
+		Plugin:           NewPluginHandler(),
+		CMDB:             NewCMDBHandler(),
+		Secrets:          NewSecretsHandler(),
+		GitRepo:          NewGitRepoHandler(),
+		Playbook:         NewPlaybookHandler(),
+		Execution:        NewExecutionHandler(),
+		Schedule:         NewScheduleHandler(),
+		Notification:     NewNotificationHandler(),
+		Healing:          NewHealingHandler(),
+		Dashboard:        NewDashboardHandler(),
+		Preference:       NewPreferenceHandler(),
+		Audit:            NewAuditHandler(),
+		PlatformAudit:    NewPlatformAuditHandler(),
+		Activity:         NewUserActivityHandler(),
+		Search:           NewSearchHandler(),
+		SiteMessage:      NewSiteMessageHandler(),
+		PlatformSettings: NewPlatformSettingsHandler(),
+		Tenant:           NewTenantHandler(authHandler.authSvc),
 	}
 }
 
@@ -92,6 +100,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 	protected := api.Group("")
 	protected.Use(middleware.JWTAuth(h.Auth.GetJWTService()))
 	protected.Use(middleware.AuditMiddleware())
+	protected.Use(middleware.TenantMiddleware())
 	{
 		// -------------------- 全局搜索 --------------------
 		protected.GET("/search", h.Search.GlobalSearch)
@@ -103,17 +112,21 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		protected.PUT("/auth/password", h.Auth.ChangePassword)
 		protected.POST("/auth/logout", h.Auth.Logout)
 
-		// -------------------- 用户管理 --------------------
-		users := protected.Group("/users")
+		// -------------------- 租户级用户管理 --------------------
+		tenantUsers := protected.Group("/tenant/users")
 		{
-			users.GET("", middleware.RequirePermission("user:list"), h.User.ListUsers)
-			users.POST("", middleware.RequirePermission("user:create"), h.User.CreateUser)
-			users.GET("/simple", middleware.RequirePermission("user:list"), h.User.ListSimpleUsers) // 轻量接口：用户选择下拉
-			users.GET("/:id", middleware.RequirePermission("user:list"), h.User.GetUser)
-			users.PUT("/:id", middleware.RequirePermission("user:update"), h.User.UpdateUser)
-			users.DELETE("/:id", middleware.RequirePermission("user:delete"), h.User.DeleteUser)
-			users.POST("/:id/reset-password", middleware.RequirePermission("user:reset_password"), h.User.ResetPassword)
-			users.PUT("/:id/roles", middleware.RequirePermission("role:assign"), h.User.AssignUserRoles)
+			tenantUsers.POST("", middleware.RequirePermission("user:create"), h.TenantUser.CreateTenantUser) // 租户级创建用户
+		}
+
+		// -------------------- 租户级角色管理 --------------------
+		tenantRoles := protected.Group("/tenant/roles")
+		{
+			tenantRoles.GET("", middleware.RequirePermission("role:list"), h.Role.ListTenantRoles)
+			tenantRoles.GET("/:id", middleware.RequirePermission("role:list"), h.Role.GetRole)
+			tenantRoles.POST("", middleware.RequirePermission("role:create"), h.Role.CreateRole)
+			tenantRoles.PUT("/:id", middleware.RequirePermission("role:update"), h.Role.UpdateRole)
+			tenantRoles.DELETE("/:id", middleware.RequirePermission("role:delete"), h.Role.DeleteRole)
+			tenantRoles.PUT("/:id/permissions", middleware.RequirePermission("role:assign"), h.Role.AssignRolePermissions)
 		}
 
 		// -------------------- 用户偏好设置 --------------------
@@ -138,21 +151,6 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			userRecents.GET("", h.Activity.ListRecents)
 			userRecents.POST("", h.Activity.RecordRecent)
 		}
-
-		// -------------------- 角色管理 --------------------
-		roles := protected.Group("/roles")
-		{
-			roles.GET("", middleware.RequirePermission("role:list"), h.Role.ListRoles)
-			roles.POST("", middleware.RequirePermission("role:create"), h.Role.CreateRole)
-			roles.GET("/:id", middleware.RequirePermission("role:list"), h.Role.GetRole)
-			roles.PUT("/:id", middleware.RequirePermission("role:update"), h.Role.UpdateRole)
-			roles.DELETE("/:id", middleware.RequirePermission("role:delete"), h.Role.DeleteRole)
-			roles.PUT("/:id/permissions", middleware.RequirePermission("role:assign"), h.Role.AssignRolePermissions)
-		}
-
-		// -------------------- 权限 --------------------
-		protected.GET("/permissions", h.Permission.ListPermissions)
-		protected.GET("/permissions/tree", h.Permission.GetPermissionTree)
 
 		// -------------------- 插件管理 --------------------
 		plugins := protected.Group("/plugins")
@@ -321,9 +319,10 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		{
 			incidents.GET("/stats", middleware.RequirePermission("plugin:list"), h.Plugin.GetIncidentStats)
 			incidents.GET("", middleware.RequirePermission("plugin:list"), h.Plugin.ListIncidents)
+			incidents.POST("/batch-reset-scan", middleware.RequirePermission("plugin:sync"), h.Plugin.BatchResetIncidentScan) // 固定路径在 /:id 之前
 			incidents.GET("/:id", middleware.RequirePermission("plugin:list"), h.Plugin.GetIncident)
 			incidents.POST("/:id/reset-scan", middleware.RequirePermission("plugin:sync"), h.Plugin.ResetIncidentScan)
-			incidents.POST("/batch-reset-scan", middleware.RequirePermission("plugin:sync"), h.Plugin.BatchResetIncidentScan)
+			incidents.POST("/:id/close", middleware.RequirePermission("plugin:sync"), h.Plugin.CloseIncident)
 		}
 
 		// -------------------- CMDB 配置项 --------------------
@@ -474,11 +473,80 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			siteMessages.GET("/unread-count", h.SiteMessage.GetUnreadCount)
 			siteMessages.GET("/categories", h.SiteMessage.GetCategories)
 			siteMessages.GET("/settings", h.SiteMessage.GetSettings)
+			siteMessages.GET("/events", h.SiteMessage.Events) // SSE 实时推送
 			siteMessages.PUT("/settings", middleware.RequirePermission("site-message:create"), h.SiteMessage.UpdateSettings)
 			siteMessages.PUT("/read", h.SiteMessage.MarkRead)
 			siteMessages.PUT("/read-all", h.SiteMessage.MarkAllRead)
 			siteMessages.GET("", h.SiteMessage.ListMessages)
-			siteMessages.POST("", middleware.RequirePermission("site-message:create"), h.SiteMessage.CreateMessage)
 		}
+
+		// ==================== 平台级管理接口（Platform） ====================
+		// 所有平台级操作统一在 /api/v1/platform/ 下
+		platform := protected.Group("/platform")
+		{
+			// ---- 平台级用户管理 ----
+			platformUsers := platform.Group("/users")
+			{
+				platformUsers.GET("", middleware.RequirePermission("platform:users:list"), h.User.ListUsers)
+				platformUsers.POST("", middleware.RequirePermission("platform:users:create"), h.User.CreateUser)
+				platformUsers.GET("/simple", middleware.RequirePermission("platform:users:list"), h.User.ListSimpleUsers)
+				platformUsers.GET("/:id", middleware.RequirePermission("platform:users:list"), h.User.GetUser)
+				platformUsers.PUT("/:id", middleware.RequirePermission("platform:users:update"), h.User.UpdateUser)
+				platformUsers.DELETE("/:id", middleware.RequirePermission("platform:users:delete"), h.User.DeleteUser)
+				platformUsers.POST("/:id/reset-password", middleware.RequirePermission("platform:users:reset_password"), h.User.ResetPassword)
+				platformUsers.PUT("/:id/roles", middleware.RequirePermission("platform:roles:manage"), h.User.AssignUserRoles)
+			}
+
+			// ---- 平台级角色管理 ----
+			platformRoles := platform.Group("/roles")
+			{
+				platformRoles.GET("", middleware.RequirePermission("platform:roles:list"), h.Role.ListRoles)
+				platformRoles.POST("", middleware.RequirePermission("platform:roles:manage"), h.Role.CreateRole)
+				platformRoles.GET("/:id", middleware.RequirePermission("platform:roles:list"), h.Role.GetRole)
+				platformRoles.PUT("/:id", middleware.RequirePermission("platform:roles:manage"), h.Role.UpdateRole)
+				platformRoles.DELETE("/:id", middleware.RequirePermission("platform:roles:manage"), h.Role.DeleteRole)
+				platformRoles.PUT("/:id/permissions", middleware.RequirePermission("platform:roles:manage"), h.Role.AssignRolePermissions)
+				platformRoles.GET("/:id/users", middleware.RequirePermission("platform:roles:list"), h.Role.GetRoleUsers)
+			}
+
+			// ---- 平台级权限 ----
+			platform.GET("/permissions", h.Permission.ListPermissions)
+			platform.GET("/permissions/tree", h.Permission.GetPermissionTree)
+
+			// ---- 平台设置 ----
+			platform.GET("/settings", middleware.RequirePermission("platform:settings:manage"), h.PlatformSettings.ListSettings)
+			platform.PUT("/settings/:key", middleware.RequirePermission("platform:settings:manage"), h.PlatformSettings.UpdateSetting)
+
+			// ---- 租户管理 ----
+			platform.GET("/tenants", middleware.RequireAnyPermission("platform:tenants:manage", "platform:tenants:list"), h.Tenant.ListTenants)
+			platform.POST("/tenants", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.CreateTenant)
+			platform.GET("/tenants/:id", middleware.RequireAnyPermission("platform:tenants:manage", "platform:tenants:list"), h.Tenant.GetTenant)
+			platform.PUT("/tenants/:id", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.UpdateTenant)
+			platform.DELETE("/tenants/:id", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.DeleteTenant)
+			platform.POST("/tenants/:id/users", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.CreateTenantUser)
+			platform.GET("/tenants/:id/members", middleware.RequireAnyPermission("platform:tenants:manage", "platform:tenants:list"), h.Tenant.ListMembers)
+			platform.POST("/tenants/:id/admin", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.SetTenantAdmin)
+			platform.PUT("/tenants/:id/members/:userId/role", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.UpdateMemberRole)
+
+			// ---- 平台级站内信管理 ----
+			platformSiteMessages := platform.Group("/site-messages")
+			{
+				platformSiteMessages.POST("", middleware.RequirePermission("platform:messages:send"), h.SiteMessage.CreateMessage)
+			}
+
+			// ---- 平台级审计日志 ----
+			platformAudit := platform.Group("/audit-logs")
+			{
+				platformAudit.GET("", middleware.RequirePermission("platform:audit:list"), h.PlatformAudit.ListPlatformAuditLogs)
+				platformAudit.GET("/stats", middleware.RequirePermission("platform:audit:list"), h.PlatformAudit.GetPlatformAuditStats)
+				platformAudit.GET("/trend", middleware.RequirePermission("platform:audit:list"), h.PlatformAudit.GetPlatformAuditTrend)
+				platformAudit.GET("/user-ranking", middleware.RequirePermission("platform:audit:list"), h.PlatformAudit.GetPlatformUserRanking)
+				platformAudit.GET("/high-risk", middleware.RequirePermission("platform:audit:list"), h.PlatformAudit.GetPlatformHighRiskLogs)
+				platformAudit.GET("/:id", middleware.RequirePermission("platform:audit:list"), h.PlatformAudit.GetPlatformAuditLog)
+			}
+		}
+
+		// -------------------- 用户租户 --------------------
+		protected.GET("/user/tenants", h.Tenant.GetUserTenants)
 	}
 }

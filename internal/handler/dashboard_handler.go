@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -53,6 +54,13 @@ func (h *DashboardHandler) GetOverview(c *gin.Context) {
 		wg.Add(1)
 		go func(section string) {
 			defer wg.Done()
+			defer func() {
+				if rec := recover(); rec != nil {
+					mu.Lock()
+					lastErr = fmt.Errorf("section %s panic: %v", section, rec)
+					mu.Unlock()
+				}
+			}()
 
 			var data interface{}
 			var err error

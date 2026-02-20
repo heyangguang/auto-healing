@@ -327,6 +327,14 @@ func (s *Service) executeInBackground(runID uuid.UUID, task *model.ExecutionTask
 		cancel() // 确保资源释放
 	}()
 
+	// panic 保护：防止 panic 导致执行记录永远停留在 running 状态
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Exec("RUN").Error("[%s] executeInBackground panic: %v", runID.String()[:8], rec)
+			s.repo.UpdateRunResult(ctx, runID, -1, "", fmt.Sprintf("内部错误: %v", rec), nil)
+		}
+	}()
+
 	// 更新状态为 running
 	s.repo.UpdateRunStarted(ctx, runID)
 

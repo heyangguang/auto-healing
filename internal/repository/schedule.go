@@ -7,6 +7,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // ScheduleRepository 定时任务调度仓库
@@ -51,7 +52,7 @@ func (r *ScheduleRepository) Create(ctx context.Context, schedule *model.Executi
 // GetByID 根据 ID 获取定时任务调度
 func (r *ScheduleRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.ExecutionSchedule, error) {
 	var schedule model.ExecutionSchedule
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Preload("Task").
 		Preload("Task.Playbook").
 		First(&schedule, "id = ?", id).Error
@@ -66,7 +67,7 @@ func (r *ScheduleRepository) List(ctx context.Context, opts *ScheduleListOptions
 	var schedules []model.ExecutionSchedule
 	var total int64
 
-	query := database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{})
+	query := TenantDB(database.DB, ctx).Model(&model.ExecutionSchedule{})
 
 	// 任务 ID 筛选
 	if opts.TaskID != nil {
@@ -121,7 +122,7 @@ func (r *ScheduleRepository) List(ctx context.Context, opts *ScheduleListOptions
 		query = query.Where("created_at <= ?", *opts.CreatedTo)
 	}
 
-	query.Count(&total)
+	query.Session(&gorm.Session{}).Count(&total)
 
 	// 排序
 	orderClause := "created_at DESC" // 默认排序
@@ -155,7 +156,7 @@ func (r *ScheduleRepository) List(ctx context.Context, opts *ScheduleListOptions
 
 // Update 更新定时任务调度
 func (r *ScheduleRepository) Update(ctx context.Context, schedule *model.ExecutionSchedule) error {
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(schedule).
 		Select("name", "task_id", "schedule_type", "schedule_expr", "scheduled_at", "status",
 			"next_run_at", "last_run_at", "enabled", "description",
@@ -167,13 +168,13 @@ func (r *ScheduleRepository) Update(ctx context.Context, schedule *model.Executi
 
 // Delete 删除定时任务调度
 func (r *ScheduleRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return database.DB.WithContext(ctx).Delete(&model.ExecutionSchedule{}, "id = ?", id).Error
+	return TenantDB(database.DB, ctx).Delete(&model.ExecutionSchedule{}, "id = ?", id).Error
 }
 
 // GetDueSchedules 获取到期需要执行的调度
 func (r *ScheduleRepository) GetDueSchedules(ctx context.Context) ([]model.ExecutionSchedule, error) {
 	var schedules []model.ExecutionSchedule
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Preload("Task").
 		Preload("Task.Playbook").
 		Where("enabled = ? AND next_run_at <= ?", true, time.Now()).
@@ -183,7 +184,7 @@ func (r *ScheduleRepository) GetDueSchedules(ctx context.Context) ([]model.Execu
 
 // UpdateNextRunAt 更新下次执行时间
 func (r *ScheduleRepository) UpdateNextRunAt(ctx context.Context, id uuid.UUID, nextRunAt time.Time) error {
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(&model.ExecutionSchedule{}).
 		Where("id = ?", id).
 		Update("next_run_at", nextRunAt).Error
@@ -191,7 +192,7 @@ func (r *ScheduleRepository) UpdateNextRunAt(ctx context.Context, id uuid.UUID, 
 
 // SetEnabled 设置启用状态
 func (r *ScheduleRepository) SetEnabled(ctx context.Context, id uuid.UUID, enabled bool) error {
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(&model.ExecutionSchedule{}).
 		Where("id = ?", id).
 		Update("enabled", enabled).Error
@@ -200,7 +201,7 @@ func (r *ScheduleRepository) SetEnabled(ctx context.Context, id uuid.UUID, enabl
 // ListByTaskID 根据任务 ID 列出调度
 func (r *ScheduleRepository) ListByTaskID(ctx context.Context, taskID uuid.UUID) ([]model.ExecutionSchedule, error) {
 	var schedules []model.ExecutionSchedule
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Where("task_id = ?", taskID).
 		Find(&schedules).Error
 	return schedules, err
@@ -208,7 +209,7 @@ func (r *ScheduleRepository) ListByTaskID(ctx context.Context, taskID uuid.UUID)
 
 // UpdateLastRunAt 更新上次执行时间
 func (r *ScheduleRepository) UpdateLastRunAt(ctx context.Context, id uuid.UUID) error {
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(&model.ExecutionSchedule{}).
 		Where("id = ?", id).
 		Update("last_run_at", time.Now()).Error
@@ -222,7 +223,9 @@ func (r *ScheduleRepository) GetStats(ctx context.Context) (map[string]interface
 
 	// 总数
 	var total int64
-	if err := database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{}).Count(&total).Error; err != nil {
+	// 每次查询使用新的 TenantDB 实例，避免 GORM session WHERE 条件累积
+	newDB := func() *gorm.DB { return TenantDB(database.DB, ctx) }
+	if err := newDB().Model(&model.ExecutionSchedule{}).Count(&total).Error; err != nil {
 		return nil, err
 	}
 	stats["total"] = total
@@ -233,7 +236,7 @@ func (r *ScheduleRepository) GetStats(ctx context.Context) (map[string]interface
 		Count  int64  `json:"count"`
 	}
 	var statusCounts []StatusCount
-	database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{}).
+	newDB().Model(&model.ExecutionSchedule{}).
 		Select("status, count(*) as count").
 		Group("status").
 		Scan(&statusCounts)
@@ -245,7 +248,7 @@ func (r *ScheduleRepository) GetStats(ctx context.Context) (map[string]interface
 		Count        int64  `json:"count"`
 	}
 	var scheduleTypeCounts []ScheduleTypeCount
-	database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{}).
+	newDB().Model(&model.ExecutionSchedule{}).
 		Select("schedule_type, count(*) as count").
 		Group("schedule_type").
 		Scan(&scheduleTypeCounts)
@@ -253,7 +256,7 @@ func (r *ScheduleRepository) GetStats(ctx context.Context) (map[string]interface
 
 	// 启用/禁用统计
 	var enabledCount int64
-	database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{}).
+	newDB().Model(&model.ExecutionSchedule{}).
 		Where("enabled = ?", true).
 		Count(&enabledCount)
 	stats["enabled_count"] = enabledCount
@@ -285,7 +288,8 @@ func (r *ScheduleRepository) ListTimeline(ctx context.Context, date time.Time, e
 	dayStart := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
 	dayEnd := dayStart.AddDate(0, 0, 1)
 
-	query := database.DB.WithContext(ctx).
+	tenantID := TenantIDFromContext(ctx)
+	query := database.DB.WithContext(ctx).Where("s.tenant_id = ?", tenantID).
 		Table("execution_schedules AS s").
 		Select("s.id, s.name, s.schedule_type, s.schedule_expr, s.scheduled_at, s.status, s.enabled, s.next_run_at, s.last_run_at, s.task_id, t.name AS task_name").
 		Joins("LEFT JOIN execution_tasks t ON t.id = s.task_id").

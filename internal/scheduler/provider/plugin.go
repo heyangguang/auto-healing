@@ -108,7 +108,14 @@ func (s *Scheduler) checkAndSync() {
 	logger.Sched("SYNC").Info("发现 %d 个插件需要同步", len(plugins))
 
 	for _, plugin := range plugins {
-		go s.syncPlugin(ctx, plugin)
+		go func(p model.Plugin) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Sched("SYNC").Error("[%s] syncPlugin panic: %v", p.ID.String()[:8], rec)
+				}
+			}()
+			s.syncPlugin(ctx, p)
+		}(plugin)
 	}
 }
 

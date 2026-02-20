@@ -9,6 +9,7 @@ import (
 // CMDBItem CMDB 配置项模型
 type CMDBItem struct {
 	ID               uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID         *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	PluginID         *uuid.UUID `json:"plugin_id" gorm:"type:uuid"`                  // 可空，插件删除后为 NULL
 	SourcePluginName string     `json:"source_plugin_name" gorm:"type:varchar(100)"` // 插件名称（插件删除后保留）
 	ExternalID       string     `json:"external_id" gorm:"type:varchar(200);not null"`
@@ -54,6 +55,7 @@ func (CMDBItem) TableName() string {
 // CMDBMaintenanceLog CMDB 维护日志
 type CMDBMaintenanceLog struct {
 	ID             uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID       *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	CMDBItemID     uuid.UUID  `json:"cmdb_item_id" gorm:"type:uuid;not null;index"`
 	CMDBItemName   string     `json:"cmdb_item_name" gorm:"type:varchar(200)"`
 	Action         string     `json:"action" gorm:"type:varchar(20);not null"` // enter, exit

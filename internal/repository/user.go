@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
@@ -74,18 +75,19 @@ func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 // UserListParams 用户列表查询参数
 type UserListParams struct {
-	Page        int
-	PageSize    int
-	Status      string // 按状态精确过滤
-	Search      string // 全文模糊搜索（兼容旧参数）
-	Username    string // 按用户名模糊搜索
-	Email       string // 按邮箱模糊搜索
-	DisplayName string // 按显示名模糊搜索
-	RoleID      string // 按角色 ID 精确过滤
-	CreatedFrom string // 创建时间起始（ISO 8601）
-	CreatedTo   string // 创建时间截止（ISO 8601）
-	SortField   string // 排序字段
-	SortOrder   string // 排序方向 (asc/desc)
+	Page         int
+	PageSize     int
+	Status       string // 按状态精确过滤
+	Search       string // 全文模糊搜索（兼容旧参数）
+	Username     string // 按用户名模糊搜索
+	Email        string // 按邮箱模糊搜索
+	DisplayName  string // 按显示名模糊搜索
+	RoleID       string // 按角色 ID 精确过滤
+	CreatedFrom  string // 创建时间起始（ISO 8601）
+	CreatedTo    string // 创建时间截止（ISO 8601）
+	SortField    string // 排序字段
+	SortOrder    string // 排序方向 (asc/desc)
+	PlatformOnly bool   // 仅返回有平台级角色的用户（platform_admin）
 }
 
 // List 获取用户列表（支持按字段搜索、组合搜索、排序）
@@ -119,7 +121,14 @@ func (r *UserRepository) List(ctx context.Context, params *UserListParams) ([]mo
 	}
 
 	// 按角色过滤
-	if params.RoleID != "" {
+	if params.PlatformOnly {
+		// 只返回拥有平台管理员角色的用户
+		query = query.Where(`id IN (
+			SELECT ur.user_id FROM user_roles ur
+			JOIN roles r ON r.id = ur.role_id
+			WHERE r.name = 'platform_admin'
+		)`)
+	} else if params.RoleID != "" {
 		query = query.Where("id IN (SELECT user_id FROM user_roles WHERE role_id = ?)", params.RoleID)
 	}
 
@@ -131,7 +140,7 @@ func (r *UserRepository) List(ctx context.Context, params *UserListParams) ([]mo
 		query = query.Where("created_at <= ?", params.CreatedTo)
 	}
 
-	if err := query.Count(&total).Error; err != nil {
+	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -194,7 +203,7 @@ func (r *UserRepository) AssignRoles(ctx context.Context, userID uuid.UUID, role
 	})
 }
 
-// UpdateLoginInfo 更新登录信息
+// UpdateLoginInfo 更新登录信息（同时解锁账户、重置失败计数）
 func (r *UserRepository) UpdateLoginInfo(ctx context.Context, userID uuid.UUID, ip string) error {
 	return r.db.WithContext(ctx).Model(&model.User{}).
 		Where("id = ?", userID).
@@ -202,14 +211,38 @@ func (r *UserRepository) UpdateLoginInfo(ctx context.Context, userID uuid.UUID, 
 			"last_login_at":      gorm.Expr("NOW()"),
 			"last_login_ip":      ip,
 			"failed_login_count": 0,
+			"status":             "active",
+			"locked_until":       nil,
 		}).Error
 }
 
-// IncrementFailedLogin 增加登录失败次数
+// IncrementFailedLogin 增加登录失败次数，达到阈值时自动锁定账户
 func (r *UserRepository) IncrementFailedLogin(ctx context.Context, userID uuid.UUID) error {
-	return r.db.WithContext(ctx).Model(&model.User{}).
-		Where("id = ?", userID).
-		Update("failed_login_count", gorm.Expr("failed_login_count + 1")).Error
+	const maxAttempts = 5
+	const lockDuration = 30 * time.Minute
+
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 增加失败计数
+		if err := tx.Model(&model.User{}).Where("id = ?", userID).
+			Update("failed_login_count", gorm.Expr("failed_login_count + 1")).Error; err != nil {
+			return err
+		}
+		// 检查是否需要锁定
+		var count int
+		if err := tx.Model(&model.User{}).Where("id = ?", userID).
+			Select("failed_login_count").Scan(&count).Error; err != nil {
+			return err
+		}
+		if count >= maxAttempts {
+			lockUntil := time.Now().Add(lockDuration)
+			return tx.Model(&model.User{}).Where("id = ?", userID).
+				Updates(map[string]interface{}{
+					"status":       "locked",
+					"locked_until": lockUntil,
+				}).Error
+		}
+		return nil
+	})
 }
 
 // UpdatePassword 更新密码
@@ -224,10 +257,11 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, p
 
 // SimpleUser 简要用户信息（用于下拉选择等场景）
 type SimpleUser struct {
-	ID          uuid.UUID `json:"id"`
-	Username    string    `json:"username"`
-	DisplayName string    `json:"display_name"`
-	Status      string    `json:"status"`
+	ID              uuid.UUID `json:"id"`
+	Username        string    `json:"username"`
+	DisplayName     string    `json:"display_name"`
+	Status          string    `json:"status"`
+	IsPlatformAdmin bool      `json:"is_platform_admin"`
 }
 
 // ListSimple 获取简要用户列表（轻量接口，不加载关联）
@@ -236,7 +270,10 @@ func (r *UserRepository) ListSimple(ctx context.Context, search string, status s
 
 	query := r.db.WithContext(ctx).
 		Model(&model.User{}).
-		Select("id, username, display_name, status")
+		Select(`id, username, display_name, status,
+			EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+				WHERE ur.user_id = users.id AND r.name = 'platform_admin'
+			) AS is_platform_admin`)
 
 	if status != "" {
 		query = query.Where("status = ?", status)
@@ -246,6 +283,6 @@ func (r *UserRepository) ListSimple(ctx context.Context, search string, status s
 		query = query.Where("username ILIKE ? OR display_name ILIKE ?", like, like)
 	}
 
-	err := query.Order("username ASC").Find(&users).Error
+	err := query.Order("username ASC").Limit(500).Find(&users).Error
 	return users, err
 }

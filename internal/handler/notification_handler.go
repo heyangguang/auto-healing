@@ -36,7 +36,7 @@ func (h *NotificationHandler) ListChannels(c *gin.Context) {
 	channelType := c.Query("type")
 	search := c.Query("search")
 
-	channels, total, err := h.svc.ListChannels(page, pageSize, channelType, search)
+	channels, total, err := h.svc.ListChannels(c.Request.Context(), page, pageSize, channelType, search)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return
@@ -53,7 +53,7 @@ func (h *NotificationHandler) CreateChannel(c *gin.Context) {
 		return
 	}
 
-	channel, err := h.svc.CreateChannel(req)
+	channel, err := h.svc.CreateChannel(c.Request.Context(), req)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -70,7 +70,7 @@ func (h *NotificationHandler) GetChannel(c *gin.Context) {
 		return
 	}
 
-	channel, err := h.svc.GetChannel(id)
+	channel, err := h.svc.GetChannel(c.Request.Context(), id)
 	if err != nil {
 		response.NotFound(c, "渠道不存在")
 		return
@@ -93,7 +93,7 @@ func (h *NotificationHandler) UpdateChannel(c *gin.Context) {
 		return
 	}
 
-	channel, err := h.svc.UpdateChannel(id, req)
+	channel, err := h.svc.UpdateChannel(c.Request.Context(), id, req)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -110,7 +110,7 @@ func (h *NotificationHandler) DeleteChannel(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.DeleteChannel(id); err != nil {
+	if err := h.svc.DeleteChannel(c.Request.Context(), id); err != nil {
 		response.InternalError(c, err.Error())
 		return
 	}
@@ -126,7 +126,7 @@ func (h *NotificationHandler) TestChannel(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.TestChannel(id); err != nil {
+	if err := h.svc.TestChannel(c.Request.Context(), id); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
@@ -158,7 +158,7 @@ func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 		opts.IsActive = &isActive
 	}
 
-	templates, total, err := h.svc.ListTemplates(opts)
+	templates, total, err := h.svc.ListTemplates(c.Request.Context(), opts)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return
@@ -175,7 +175,7 @@ func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 		return
 	}
 
-	template, err := h.svc.CreateTemplate(req)
+	template, err := h.svc.CreateTemplate(c.Request.Context(), req)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -192,7 +192,7 @@ func (h *NotificationHandler) GetTemplate(c *gin.Context) {
 		return
 	}
 
-	template, err := h.svc.GetTemplate(id)
+	template, err := h.svc.GetTemplate(c.Request.Context(), id)
 	if err != nil {
 		response.NotFound(c, "模板不存在")
 		return
@@ -215,7 +215,7 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 		return
 	}
 
-	template, err := h.svc.UpdateTemplate(id, req)
+	template, err := h.svc.UpdateTemplate(c.Request.Context(), id, req)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -232,7 +232,7 @@ func (h *NotificationHandler) DeleteTemplate(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.DeleteTemplate(id); err != nil {
+	if err := h.svc.DeleteTemplate(c.Request.Context(), id); err != nil {
 		response.InternalError(c, err.Error())
 		return
 	}
@@ -259,7 +259,7 @@ func (h *NotificationHandler) PreviewTemplate(c *gin.Context) {
 		return
 	}
 
-	result, err := h.svc.PreviewTemplate(id, req.Variables)
+	result, err := h.svc.PreviewTemplate(c.Request.Context(), id, req.Variables)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -352,7 +352,7 @@ func (h *NotificationHandler) ListNotifications(c *gin.Context) {
 		}
 	}
 
-	logs, total, err := h.svc.ListNotifications(opts)
+	logs, total, err := h.svc.ListNotifications(c.Request.Context(), opts)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return
@@ -369,7 +369,7 @@ func (h *NotificationHandler) GetNotification(c *gin.Context) {
 		return
 	}
 
-	log, err := h.svc.GetNotification(id)
+	log, err := h.svc.GetNotification(c.Request.Context(), id)
 	if err != nil {
 		response.NotFound(c, "通知记录不存在")
 		return
@@ -382,7 +382,7 @@ func (h *NotificationHandler) GetNotification(c *gin.Context) {
 
 // GetStats 获取通知统计信息
 func (h *NotificationHandler) GetStats(c *gin.Context) {
-	stats, err := h.notifRepo.GetStats()
+	stats, err := h.notifRepo.GetStats(c.Request.Context())
 	if err != nil {
 		response.InternalError(c, "获取通知统计信息失败:"+err.Error())
 		return

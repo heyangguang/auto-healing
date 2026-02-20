@@ -137,7 +137,7 @@ func RequireRole(requiredRole string) gin.HandlerFunc {
 		}
 
 		for _, role := range roles {
-			if role == requiredRole || role == "super_admin" {
+			if role == requiredRole || role == "platform_admin" {
 				c.Next()
 				return
 			}

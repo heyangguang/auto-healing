@@ -97,7 +97,14 @@ func (s *GitScheduler) checkAndSync() {
 	logger.Sched("GIT").Info("发现 %d 个 Git 仓库需要同步", len(repos))
 
 	for _, repo := range repos {
-		go s.syncRepo(ctx, repo)
+		go func(r model.GitRepository) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Sched("GIT").Error("[%s] syncRepo panic: %v", r.ID.String()[:8], rec)
+				}
+			}()
+			s.syncRepo(ctx, r)
+		}(repo)
 	}
 }
 

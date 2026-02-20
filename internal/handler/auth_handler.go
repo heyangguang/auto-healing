@@ -20,9 +20,11 @@ import (
 
 // AuthHandler 认证处理器
 type AuthHandler struct {
-	authSvc   *authService.Service
-	jwtSvc    *jwt.Service
-	auditRepo *repository.AuditLogRepository
+	authSvc           *authService.Service
+	jwtSvc            *jwt.Service
+	auditRepo         *repository.AuditLogRepository
+	platformAuditRepo *repository.PlatformAuditLogRepository
+	userRepo          *repository.UserRepository
 }
 
 // NewAuthHandler 创建认证处理器
@@ -36,9 +38,11 @@ func NewAuthHandler(cfg *config.Config) *AuthHandler {
 	}, blacklistStore)
 
 	return &AuthHandler{
-		authSvc:   authService.NewService(jwtSvc),
-		jwtSvc:    jwtSvc,
-		auditRepo: repository.NewAuditLogRepository(),
+		authSvc:           authService.NewService(jwtSvc),
+		jwtSvc:            jwtSvc,
+		auditRepo:         repository.NewAuditLogRepository(),
+		platformAuditRepo: repository.NewPlatformAuditLogRepository(),
+		userRepo:          repository.NewUserRepository(),
 	}
 }
 
@@ -61,53 +65,87 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	resp, err := h.authSvc.Login(c.Request.Context(), &req, clientIP)
 	if err != nil {
-		// 登录失败 — 记录审计日志
-		go h.writeLoginAuditLog(nil, req.Username, clientIP, userAgent, "failed", err.Error(), startTime)
+		// 登录失败 — 记录审计日志（通过用户名查找用户判断平台/租户）
+		go h.writeLoginAuditLog(nil, req.Username, clientIP, userAgent, "failed", err.Error(), startTime, false)
 		response.Unauthorized(c, ToBusinessError(err))
 		return
 	}
 
 	// 登录成功 — 记录审计日志
 	userID := resp.User.ID
-	go h.writeLoginAuditLog(&userID, resp.User.Username, clientIP, userAgent, "success", "", startTime)
+	go h.writeLoginAuditLog(&userID, resp.User.Username, clientIP, userAgent, "success", "", startTime, resp.User.IsPlatformAdmin)
 
 	// 登录响应保持原格式（包含 token 字段）
 	c.JSON(http.StatusOK, resp)
 }
 
 // writeLoginAuditLog 异步写入登录审计日志
-func (h *AuthHandler) writeLoginAuditLog(userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time) {
+// isPlatformAdmin: 是否是平台管理员（决定写入哪张表）
+func (h *AuthHandler) writeLoginAuditLog(userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, isPlatformAdmin bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			zap.L().Error("登录审计日志记录失败 (panic)", zap.Any("error", r))
 		}
 	}()
 
+	// 对于失败的登录（无 userID），尝试查找用户以判断平台/租户
+	if userID == nil && username != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		user, _ := h.userRepo.GetByUsername(ctx, username)
+		if user != nil {
+			isPlatformAdmin = user.IsPlatformAdmin
+		}
+	}
+
 	statusCode := http.StatusOK
 	if status == "failed" {
 		statusCode = http.StatusUnauthorized
 	}
 
-	auditLog := &model.AuditLog{
-		UserID:         userID,
-		Username:       username,
-		IPAddress:      ipAddress,
-		UserAgent:      userAgent,
-		Action:         "login",
-		ResourceType:   "auth",
-		RequestMethod:  "POST",
-		RequestPath:    "/api/v1/auth/login",
-		ResponseStatus: &statusCode,
-		Status:         status,
-		ErrorMessage:   errorMsg,
-		CreatedAt:      createdAt,
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := h.auditRepo.Create(ctx, auditLog); err != nil {
-		zap.L().Error("登录审计日志写入失败", zap.Error(err))
+	if isPlatformAdmin {
+		// 平台管理员登录 — 写入 platform_audit_logs
+		platformLog := &model.PlatformAuditLog{
+			UserID:         userID,
+			Username:       username,
+			IPAddress:      ipAddress,
+			UserAgent:      userAgent,
+			Category:       "login",
+			Action:         "login",
+			ResourceType:   "auth",
+			RequestMethod:  "POST",
+			RequestPath:    "/api/v1/auth/login",
+			ResponseStatus: &statusCode,
+			Status:         status,
+			ErrorMessage:   errorMsg,
+			CreatedAt:      createdAt,
+		}
+		if err := h.platformAuditRepo.Create(ctx, platformLog); err != nil {
+			zap.L().Error("平台登录审计日志写入失败", zap.Error(err))
+		}
+	} else {
+		// 租户用户登录 — 写入 audit_logs
+		auditLog := &model.AuditLog{
+			UserID:         userID,
+			Username:       username,
+			IPAddress:      ipAddress,
+			UserAgent:      userAgent,
+			Category:       "login",
+			Action:         "login",
+			ResourceType:   "auth",
+			RequestMethod:  "POST",
+			RequestPath:    "/api/v1/auth/login",
+			ResponseStatus: &statusCode,
+			Status:         status,
+			ErrorMessage:   errorMsg,
+			CreatedAt:      createdAt,
+		}
+		if err := h.auditRepo.Create(ctx, auditLog); err != nil {
+			zap.L().Error("登录审计日志写入失败", zap.Error(err))
+		}
 	}
 }
 
@@ -146,7 +184,43 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	tokenPair, err := h.jwtSvc.GenerateTokenPair(userID, userInfo.Username, userInfo.Roles, userInfo.Permissions)
+	// 查询用户所属租户（和 Login 一样）
+	tenantRepo := repository.NewTenantRepository()
+	tenants, err := tenantRepo.GetUserTenants(c.Request.Context(), uid, "")
+	if err != nil {
+		response.InternalError(c, "获取租户信息失败")
+		return
+	}
+
+	tenantBriefs := make([]authService.TenantBrief, len(tenants))
+	tenantIDs := make([]string, len(tenants))
+	for i, tenant := range tenants {
+		tenantBriefs[i] = authService.TenantBrief{
+			ID:   tenant.ID.String(),
+			Name: tenant.Name,
+			Code: tenant.Code,
+		}
+		tenantIDs[i] = tenant.ID.String()
+	}
+
+	defaultTenantID := ""
+	if len(tenants) > 0 {
+		defaultTenantID = tenants[0].ID.String()
+	}
+
+	// 生成新 Token（携带租户信息）
+	var tokenOpts []func(*jwt.Claims)
+	if userInfo.IsPlatformAdmin {
+		tokenOpts = append(tokenOpts, func(c *jwt.Claims) {
+			c.IsPlatformAdmin = true
+		})
+	}
+	tokenOpts = append(tokenOpts, func(c *jwt.Claims) {
+		c.TenantIDs = tenantIDs
+		c.DefaultTenantID = defaultTenantID
+	})
+
+	tokenPair, err := h.jwtSvc.GenerateTokenPair(userID, userInfo.Username, userInfo.Roles, userInfo.Permissions, tokenOpts...)
 	if err != nil {
 		response.InternalError(c, "生成令牌失败")
 		return
@@ -154,11 +228,13 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 
 	// 刷新 token 响应保持原格式
 	c.JSON(http.StatusOK, authService.LoginResponse{
-		AccessToken:  tokenPair.AccessToken,
-		RefreshToken: tokenPair.RefreshToken,
-		TokenType:    tokenPair.TokenType,
-		ExpiresIn:    tokenPair.ExpiresIn,
-		User:         *userInfo,
+		AccessToken:     tokenPair.AccessToken,
+		RefreshToken:    tokenPair.RefreshToken,
+		TokenType:       tokenPair.TokenType,
+		ExpiresIn:       tokenPair.ExpiresIn,
+		User:            *userInfo,
+		Tenants:         tenantBriefs,
+		CurrentTenantID: defaultTenantID,
 	})
 }
 

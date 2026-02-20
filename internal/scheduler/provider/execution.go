@@ -109,6 +109,11 @@ func (s *ExecutionScheduler) checkAndExecute() {
 	// 并发执行任务
 	for _, schedule := range schedules {
 		go func(sched model.ExecutionSchedule) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Sched("TASK").Error("[%s] 定时任务 panic: %v", sched.ID.String()[:8], rec)
+				}
+			}()
 			logger.Sched("TASK").Info("[%s] 开始执行定时任务: %s", sched.ID.String()[:8], sched.Name)
 
 			// 构建执行选项，传递调度中的覆盖参数

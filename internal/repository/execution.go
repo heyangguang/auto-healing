@@ -58,13 +58,17 @@ func NewExecutionRepository() *ExecutionRepository {
 
 // CreateTask 创建任务模板
 func (r *ExecutionRepository) CreateTask(ctx context.Context, task *model.ExecutionTask) error {
+	if task.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		task.TenantID = &tenantID
+	}
 	return database.DB.WithContext(ctx).Create(task).Error
 }
 
 // GetTaskByID 根据 ID 获取任务模板
 func (r *ExecutionRepository) GetTaskByID(ctx context.Context, id uuid.UUID) (*model.ExecutionTask, error) {
 	var task model.ExecutionTask
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Preload("Playbook").
 		Preload("Playbook.Repository").
 		First(&task, "id = ?", id).Error
@@ -77,7 +81,7 @@ func (r *ExecutionRepository) GetTaskByID(ctx context.Context, id uuid.UUID) (*m
 // GetPlaybookByID 根据 ID 获取 Playbook
 func (r *ExecutionRepository) GetPlaybookByID(ctx context.Context, id uuid.UUID) (*model.Playbook, error) {
 	var playbook model.Playbook
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Preload("Repository").
 		First(&playbook, "id = ?", id).Error
 	if err != nil {
@@ -91,7 +95,8 @@ func (r *ExecutionRepository) ListTasks(ctx context.Context, opts *TaskListOptio
 	var tasks []model.ExecutionTask
 	var total int64
 
-	query := database.DB.WithContext(ctx).Model(&model.ExecutionTask{})
+	query := database.DB.WithContext(ctx).Model(&model.ExecutionTask{}).
+		Where("execution_tasks.tenant_id = ?", TenantIDFromContext(ctx))
 
 	// 需要 JOIN 的筛选条件（search 也需要搜索 playbook.name）
 	needsPlaybookJoin := opts.PlaybookName != "" || opts.RepositoryName != "" || opts.Search != ""
@@ -182,7 +187,7 @@ func (r *ExecutionRepository) ListTasks(ctx context.Context, opts *TaskListOptio
 		)`, opts.LastRunStatus)
 	}
 
-	query.Count(&total)
+	query.Session(&gorm.Session{}).Count(&total)
 
 	// 排序
 	orderClause := "execution_tasks.created_at DESC" // 默认排序
@@ -224,7 +229,7 @@ func (r *ExecutionRepository) ListTasks(ctx context.Context, opts *TaskListOptio
 			Count  int       `gorm:"column:count"`
 		}
 		var counts []scheduleCount
-		database.DB.WithContext(ctx).
+		TenantDB(database.DB, ctx).
 			Model(&model.ExecutionSchedule{}).
 			Select("task_id, COUNT(*) as count").
 			Where("task_id IN ?", taskIDs).
@@ -245,7 +250,7 @@ func (r *ExecutionRepository) ListTasks(ctx context.Context, opts *TaskListOptio
 
 // BatchConfirmReviewByIDs 按任务 ID 列表批量确认审核
 func (r *ExecutionRepository) BatchConfirmReviewByIDs(ctx context.Context, taskIDs []uuid.UUID) (int64, error) {
-	result := database.DB.WithContext(ctx).
+	result := TenantDB(database.DB, ctx).
 		Model(&model.ExecutionTask{}).
 		Where("id IN ? AND needs_review = ?", taskIDs, true).
 		Updates(map[string]any{
@@ -257,7 +262,7 @@ func (r *ExecutionRepository) BatchConfirmReviewByIDs(ctx context.Context, taskI
 
 // BatchConfirmReviewByPlaybookID 按 Playbook ID 批量确认审核
 func (r *ExecutionRepository) BatchConfirmReviewByPlaybookID(ctx context.Context, playbookID uuid.UUID) (int64, error) {
-	result := database.DB.WithContext(ctx).
+	result := TenantDB(database.DB, ctx).
 		Model(&model.ExecutionTask{}).
 		Where("playbook_id = ? AND needs_review = ?", playbookID, true).
 		Updates(map[string]any{
@@ -270,7 +275,7 @@ func (r *ExecutionRepository) BatchConfirmReviewByPlaybookID(ctx context.Context
 // ListTasksByPlaybookIDAndReview 查询指定 Playbook 下需要审核的任务
 func (r *ExecutionRepository) ListTasksByPlaybookIDAndReview(ctx context.Context, playbookID uuid.UUID) ([]model.ExecutionTask, error) {
 	var tasks []model.ExecutionTask
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Where("playbook_id = ? AND needs_review = ?", playbookID, true).
 		Find(&tasks).Error
 	return tasks, err
@@ -279,7 +284,7 @@ func (r *ExecutionRepository) ListTasksByPlaybookIDAndReview(ctx context.Context
 // ListTasksByIDsAndReview 查询指定 ID 列表中需要审核的任务
 func (r *ExecutionRepository) ListTasksByIDsAndReview(ctx context.Context, taskIDs []uuid.UUID) ([]model.ExecutionTask, error) {
 	var tasks []model.ExecutionTask
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Where("id IN ? AND needs_review = ?", taskIDs, true).
 		Find(&tasks).Error
 	return tasks, err
@@ -288,7 +293,7 @@ func (r *ExecutionRepository) ListTasksByIDsAndReview(ctx context.Context, taskI
 // UpdateTask 更新任务模板
 func (r *ExecutionRepository) UpdateTask(ctx context.Context, task *model.ExecutionTask) error {
 	// 使用 Select 明确指定要更新的列，避免 GORM 忽略某些字段
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(task).
 		Select("name", "playbook_id", "target_hosts", "extra_vars", "executor_type", "description", "secrets_source_ids", "notification_config", "playbook_variables_snapshot", "needs_review", "changed_variables", "updated_at").
 		Updates(task).Error
@@ -332,7 +337,7 @@ func (r *ExecutionRepository) DeleteTask(ctx context.Context, id uuid.UUID) erro
 
 // UpdateNextRunAt 更新下次执行时间
 func (r *ExecutionRepository) UpdateNextRunAt(ctx context.Context, id uuid.UUID, nextRunAt time.Time) error {
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(&model.ExecutionTask{}).
 		Where("id = ?", id).
 		Update("next_run_at", nextRunAt).Error
@@ -341,7 +346,7 @@ func (r *ExecutionRepository) UpdateNextRunAt(ctx context.Context, id uuid.UUID,
 // GetScheduledTasks 获取需要执行的定时任务
 func (r *ExecutionRepository) GetScheduledTasks(ctx context.Context) ([]model.ExecutionTask, error) {
 	var tasks []model.ExecutionTask
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Where("is_recurring = ? AND next_run_at <= ?", true, time.Now()).
 		Find(&tasks).Error
 	return tasks, err
@@ -350,7 +355,7 @@ func (r *ExecutionRepository) GetScheduledTasks(ctx context.Context) ([]model.Ex
 // ListTasksByPlaybookID 获取关联指定 Playbook 的所有任务模板
 func (r *ExecutionRepository) ListTasksByPlaybookID(ctx context.Context, playbookID uuid.UUID) ([]model.ExecutionTask, error) {
 	var tasks []model.ExecutionTask
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Where("playbook_id = ?", playbookID).
 		Find(&tasks).Error
 	return tasks, err
@@ -359,7 +364,7 @@ func (r *ExecutionRepository) ListTasksByPlaybookID(ctx context.Context, playboo
 // CountTasksByPlaybookID 统计指定 Playbook 下的任务模板数量
 func (r *ExecutionRepository) CountTasksByPlaybookID(ctx context.Context, playbookID uuid.UUID) (int64, error) {
 	var count int64
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Model(&model.ExecutionTask{}).
 		Where("playbook_id = ?", playbookID).
 		Count(&count).Error
@@ -369,7 +374,7 @@ func (r *ExecutionRepository) CountTasksByPlaybookID(ctx context.Context, playbo
 // CountSchedulesByTaskID 统计指定任务模板下的调度任务数量
 func (r *ExecutionRepository) CountSchedulesByTaskID(ctx context.Context, taskID uuid.UUID) (int64, error) {
 	var count int64
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Model(&model.ExecutionSchedule{}).
 		Where("task_id = ?", taskID).
 		Count(&count).Error
@@ -378,7 +383,7 @@ func (r *ExecutionRepository) CountSchedulesByTaskID(ctx context.Context, taskID
 
 // UpdateTaskReviewStatus 更新任务模板的 review 状态
 func (r *ExecutionRepository) UpdateTaskReviewStatus(ctx context.Context, taskID uuid.UUID, needsReview bool, changedVariables model.JSONArray) error {
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(&model.ExecutionTask{}).
 		Where("id = ?", taskID).
 		Updates(map[string]any{
@@ -392,13 +397,17 @@ func (r *ExecutionRepository) UpdateTaskReviewStatus(ctx context.Context, taskID
 
 // CreateRun 创建执行记录
 func (r *ExecutionRepository) CreateRun(ctx context.Context, run *model.ExecutionRun) error {
+	if run.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		run.TenantID = &tenantID
+	}
 	return database.DB.WithContext(ctx).Create(run).Error
 }
 
 // GetRunByID 根据 ID 获取执行记录
 func (r *ExecutionRepository) GetRunByID(ctx context.Context, id uuid.UUID) (*model.ExecutionRun, error) {
 	var run model.ExecutionRun
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Preload("Task").
 		Preload("Task.Playbook").
 		First(&run, "id = ?", id).Error
@@ -413,8 +422,8 @@ func (r *ExecutionRepository) ListRunsByTaskID(ctx context.Context, taskID uuid.
 	var runs []model.ExecutionRun
 	var total int64
 
-	query := database.DB.WithContext(ctx).Model(&model.ExecutionRun{}).Where("task_id = ?", taskID)
-	query.Count(&total)
+	query := TenantDB(database.DB, ctx).Model(&model.ExecutionRun{}).Where("task_id = ?", taskID)
+	query.Session(&gorm.Session{}).Count(&total)
 
 	offset := (page - 1) * pageSize
 	err := query.
@@ -431,7 +440,7 @@ func (r *ExecutionRepository) ListAllRuns(ctx context.Context, opts *RunListOpti
 	var runs []model.ExecutionRun
 	var total int64
 
-	query := database.DB.WithContext(ctx).Model(&model.ExecutionRun{})
+	query := TenantDB(database.DB, ctx).Model(&model.ExecutionRun{})
 
 	// 全局搜索需要 JOIN task 表
 	if opts.Search != "" {
@@ -467,7 +476,7 @@ func (r *ExecutionRepository) ListAllRuns(ctx context.Context, opts *RunListOpti
 		query = query.Where("execution_runs.started_at <= ?", *opts.StartedBefore)
 	}
 
-	query.Count(&total)
+	query.Session(&gorm.Session{}).Count(&total)
 
 	offset := (opts.Page - 1) * opts.PageSize
 	err := query.
@@ -482,7 +491,7 @@ func (r *ExecutionRepository) ListAllRuns(ctx context.Context, opts *RunListOpti
 
 // UpdateRunStatus 更新执行状态
 func (r *ExecutionRepository) UpdateRunStatus(ctx context.Context, id uuid.UUID, status string) error {
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(&model.ExecutionRun{}).
 		Where("id = ?", id).
 		Update("status", status).Error
@@ -491,7 +500,7 @@ func (r *ExecutionRepository) UpdateRunStatus(ctx context.Context, id uuid.UUID,
 // UpdateRunStarted 更新执行开始
 func (r *ExecutionRepository) UpdateRunStarted(ctx context.Context, id uuid.UUID) error {
 	now := time.Now()
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(&model.ExecutionRun{}).
 		Where("id = ?", id).
 		Updates(map[string]any{
@@ -534,7 +543,7 @@ func (r *ExecutionRepository) UpdateRunResult(ctx context.Context, id uuid.UUID,
 		status = "success"
 	}
 
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(&model.ExecutionRun{}).
 		Where("id = ?", id).
 		Updates(map[string]any{
@@ -562,13 +571,17 @@ func getStatValue(stats model.JSON, key string) float64 {
 
 // AppendLog 追加执行日志
 func (r *ExecutionRepository) AppendLog(ctx context.Context, log *model.ExecutionLog) error {
+	if log.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		log.TenantID = &tenantID
+	}
 	return database.DB.WithContext(ctx).Create(log).Error
 }
 
 // GetLogsByRunID 获取执行记录的日志
 func (r *ExecutionRepository) GetLogsByRunID(ctx context.Context, runID uuid.UUID) ([]model.ExecutionLog, error) {
 	var logs []model.ExecutionLog
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Where("run_id = ?", runID).
 		Order("sequence ASC").
 		Find(&logs).Error
@@ -578,7 +591,7 @@ func (r *ExecutionRepository) GetLogsByRunID(ctx context.Context, runID uuid.UUI
 // GetNextLogSequence 获取下一个日志序号
 func (r *ExecutionRepository) GetNextLogSequence(ctx context.Context, runID uuid.UUID) (int, error) {
 	var maxSeq int
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Model(&model.ExecutionLog{}).
 		Where("run_id = ?", runID).
 		Select("COALESCE(MAX(sequence), 0)").
@@ -632,16 +645,17 @@ type TaskActivity struct {
 // GetRunStats 获取执行记录统计概览
 func (r *ExecutionRepository) GetRunStats(ctx context.Context) (*RunStats, error) {
 	stats := &RunStats{}
-	db := database.DB.WithContext(ctx)
+	// 每次查询使用新的 TenantDB 实例，避免 GORM session WHERE 条件累积
+	newDB := func() *gorm.DB { return TenantDB(database.DB, ctx) }
 
 	// 总数
-	db.Model(&model.ExecutionRun{}).Count(&stats.TotalCount)
+	newDB().Model(&model.ExecutionRun{}).Count(&stats.TotalCount)
 
 	// 各状态数量
-	db.Model(&model.ExecutionRun{}).Where("status = ?", "success").Count(&stats.SuccessCount)
-	db.Model(&model.ExecutionRun{}).Where("status = ?", "failed").Count(&stats.FailedCount)
-	db.Model(&model.ExecutionRun{}).Where("status = ?", "partial").Count(&stats.PartialCount)
-	db.Model(&model.ExecutionRun{}).Where("status = ?", "cancelled").Count(&stats.CancelledCount)
+	newDB().Model(&model.ExecutionRun{}).Where("status = ?", "success").Count(&stats.SuccessCount)
+	newDB().Model(&model.ExecutionRun{}).Where("status = ?", "failed").Count(&stats.FailedCount)
+	newDB().Model(&model.ExecutionRun{}).Where("status = ?", "partial").Count(&stats.PartialCount)
+	newDB().Model(&model.ExecutionRun{}).Where("status = ?", "cancelled").Count(&stats.CancelledCount)
 
 	// 成功率
 	if stats.TotalCount > 0 {
@@ -650,7 +664,7 @@ func (r *ExecutionRepository) GetRunStats(ctx context.Context) (*RunStats, error
 
 	// 平均执行时间（秒）
 	var avgDuration *float64
-	db.Model(&model.ExecutionRun{}).
+	newDB().Model(&model.ExecutionRun{}).
 		Where("completed_at IS NOT NULL AND started_at IS NOT NULL").
 		Select("EXTRACT(EPOCH FROM AVG(completed_at - started_at))").
 		Scan(&avgDuration)
@@ -661,7 +675,7 @@ func (r *ExecutionRepository) GetRunStats(ctx context.Context) (*RunStats, error
 	// 今日执行数量
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	db.Model(&model.ExecutionRun{}).Where("created_at >= ?", todayStart).Count(&stats.TodayCount)
+	newDB().Model(&model.ExecutionRun{}).Where("created_at >= ?", todayStart).Count(&stats.TodayCount)
 
 	return stats, nil
 }
@@ -671,8 +685,10 @@ func (r *ExecutionRepository) GetRunTrend(ctx context.Context, days int) ([]RunT
 	var items []RunTrendItem
 	since := time.Now().AddDate(0, 0, -days)
 
+	tenantID := TenantIDFromContext(ctx)
 	err := database.DB.WithContext(ctx).
 		Model(&model.ExecutionRun{}).
+		Where("tenant_id = ?", tenantID).
 		Where("created_at >= ?", since).
 		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, status, COUNT(*) as count").
 		Group("date, status").
@@ -686,7 +702,7 @@ func (r *ExecutionRepository) GetRunTrend(ctx context.Context, days int) ([]RunT
 func (r *ExecutionRepository) GetTriggerDistribution(ctx context.Context) ([]TriggerDistItem, error) {
 	var items []TriggerDistItem
 
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Model(&model.ExecutionRun{}).
 		Select("COALESCE(triggered_by, 'unknown') as triggered_by, COUNT(*) as count").
 		Group("triggered_by").
@@ -700,6 +716,7 @@ func (r *ExecutionRepository) GetTriggerDistribution(ctx context.Context) ([]Tri
 func (r *ExecutionRepository) GetTopFailedTasks(ctx context.Context, limit int) ([]TaskFailRate, error) {
 	var items []TaskFailRate
 
+	tenantID := TenantIDFromContext(ctx)
 	err := database.DB.WithContext(ctx).
 		Raw(`
 			SELECT 
@@ -710,11 +727,12 @@ func (r *ExecutionRepository) GetTopFailedTasks(ctx context.Context, limit int) 
 				ROUND(SUM(CASE WHEN r.status = 'failed' THEN 1 ELSE 0 END)::numeric / COUNT(*)::numeric * 100, 2) as fail_rate
 			FROM execution_runs r
 			LEFT JOIN execution_tasks t ON t.id = r.task_id
+			WHERE r.tenant_id = ?
 			GROUP BY r.task_id, t.name
 			HAVING COUNT(*) >= 2
 			ORDER BY fail_rate DESC
 			LIMIT ?
-		`, limit).
+		`, tenantID, limit).
 		Scan(&items).Error
 
 	return items, err
@@ -724,6 +742,7 @@ func (r *ExecutionRepository) GetTopFailedTasks(ctx context.Context, limit int) 
 func (r *ExecutionRepository) GetTopActiveTasks(ctx context.Context, limit int) ([]TaskActivity, error) {
 	var items []TaskActivity
 
+	tenantID := TenantIDFromContext(ctx)
 	err := database.DB.WithContext(ctx).
 		Raw(`
 			SELECT 
@@ -732,10 +751,11 @@ func (r *ExecutionRepository) GetTopActiveTasks(ctx context.Context, limit int) 
 				COUNT(*) as total
 			FROM execution_runs r
 			LEFT JOIN execution_tasks t ON t.id = r.task_id
+			WHERE r.tenant_id = ?
 			GROUP BY r.task_id, t.name
 			ORDER BY total DESC
 			LIMIT ?
-		`, limit).
+		`, tenantID, limit).
 		Scan(&items).Error
 
 	return items, err
@@ -756,39 +776,42 @@ type TaskStats struct {
 // GetTaskStats 获取任务模板统计概览
 func (r *ExecutionRepository) GetTaskStats(ctx context.Context) (*TaskStats, error) {
 	stats := &TaskStats{}
-	db := database.DB.WithContext(ctx)
+	// 每次查询使用新的 TenantDB 实例，避免 GORM session WHERE 条件累积
+	newDB := func() *gorm.DB { return TenantDB(database.DB, ctx) }
 
 	// 全部模板数
-	db.Model(&model.ExecutionTask{}).Count(&stats.Total)
+	newDB().Model(&model.ExecutionTask{}).Count(&stats.Total)
 
 	// executor_type='docker' 的模板数
-	db.Model(&model.ExecutionTask{}).Where("executor_type = ?", "docker").Count(&stats.Docker)
+	newDB().Model(&model.ExecutionTask{}).Where("executor_type = ?", "docker").Count(&stats.Docker)
 
 	// executor_type!='docker' 的模板数（包括 local 和 ssh）
-	db.Model(&model.ExecutionTask{}).Where("executor_type != ?", "docker").Count(&stats.Local)
+	newDB().Model(&model.ExecutionTask{}).Where("executor_type != ?", "docker").Count(&stats.Local)
 
 	// needs_review=true 的模板数
-	db.Model(&model.ExecutionTask{}).Where("needs_review = ?", true).Count(&stats.NeedsReview)
+	newDB().Model(&model.ExecutionTask{}).Where("needs_review = ?", true).Count(&stats.NeedsReview)
 
 	// needs_review=true 的模板中，去重 playbook_id 的数量
-	db.Model(&model.ExecutionTask{}).
+	newDB().Model(&model.ExecutionTask{}).
 		Where("needs_review = ?", true).
 		Distinct("playbook_id").
 		Count(&stats.ChangedPlaybooks)
 
 	// 就绪可执行：needs_review=false 且 playbook status='ready'
-	db.Model(&model.ExecutionTask{}).
+	// 注意：JOIN 后两张表都有 tenant_id，需显式加表前缀避免 SQLSTATE 42702 歧义
+	tenantID := TenantIDFromContext(ctx)
+	database.DB.WithContext(ctx).Model(&model.ExecutionTask{}).
 		Joins("JOIN playbooks ON playbooks.id = execution_tasks.playbook_id").
-		Where("execution_tasks.needs_review = ? AND playbooks.status = ?", false, "ready").
+		Where("execution_tasks.tenant_id = ? AND execution_tasks.needs_review = ? AND playbooks.status = ?", tenantID, false, "ready").
 		Count(&stats.Ready)
 
 	// 从未执行过：没有任何 execution_runs 记录的模板
-	db.Model(&model.ExecutionTask{}).
+	newDB().Model(&model.ExecutionTask{}).
 		Where("NOT EXISTS (SELECT 1 FROM execution_runs WHERE execution_runs.task_id = execution_tasks.id)").
 		Count(&stats.NeverExecuted)
 
 	// 最后执行失败：最新一次 run 的 status='failed'
-	db.Model(&model.ExecutionTask{}).
+	newDB().Model(&model.ExecutionTask{}).
 		Where("EXISTS (SELECT 1 FROM execution_runs r1 WHERE r1.task_id = execution_tasks.id AND r1.status = 'failed' AND r1.created_at = (SELECT MAX(r2.created_at) FROM execution_runs r2 WHERE r2.task_id = execution_tasks.id))").
 		Count(&stats.LastRunFailed)
 

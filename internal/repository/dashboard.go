@@ -8,6 +8,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // DashboardRepository Dashboard 仓库
@@ -27,7 +28,7 @@ func NewDashboardRepository() *DashboardRepository {
 // GetConfigByUserID 获取用户配置
 func (r *DashboardRepository) GetConfigByUserID(ctx context.Context, userID uuid.UUID) (*model.DashboardConfig, error) {
 	var config model.DashboardConfig
-	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&config).Error
+	err := TenantDB(r.db, ctx).Where("user_id = ?", userID).First(&config).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -37,26 +38,23 @@ func (r *DashboardRepository) GetConfigByUserID(ctx context.Context, userID uuid
 	return &config, nil
 }
 
-// UpsertConfig 创建或更新用户配置
+// UpsertConfig 创建或更新用户配置（使用 ON CONFLICT DO UPDATE 保证原子性）
 func (r *DashboardRepository) UpsertConfig(ctx context.Context, userID uuid.UUID, configData model.JSON) error {
-	var existing model.DashboardConfig
-	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&existing).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			// 新建
-			config := model.DashboardConfig{
-				UserID: userID,
-				Config: configData,
-			}
-			return r.db.WithContext(ctx).Create(&config).Error
-		}
-		return err
+	tenantID := TenantIDFromContext(ctx)
+	config := model.DashboardConfig{
+		UserID:   userID,
+		TenantID: &tenantID,
+		Config:   configData,
 	}
-	// 更新
-	return r.db.WithContext(ctx).Model(&existing).Updates(map[string]interface{}{
-		"config":     configData,
-		"updated_at": time.Now(),
-	}).Error
+	// user_id 列有唯一约束（dashboard_configs_user_id_key）
+	// ON CONFLICT(user_id) DO UPDATE 原子性地处理创建或更新，彻底消除竞态
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "user_id"}},
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"config":     configData,
+			"updated_at": time.Now(),
+		}),
+	}).Create(&config).Error
 }
 
 // ==================== Section: incidents ====================
@@ -97,24 +95,24 @@ type RecentItem struct {
 
 func (r *DashboardRepository) GetIncidentSection(ctx context.Context) (*IncidentSection, error) {
 	section := &IncidentSection{}
-	db := r.db.WithContext(ctx)
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
 
 	// 总数
-	db.Model(&model.Incident{}).Count(&section.Total)
+	newDB().Model(&model.Incident{}).Count(&section.Total)
 
 	// 今日
 	today := time.Now().Truncate(24 * time.Hour)
-	db.Model(&model.Incident{}).Where("created_at >= ?", today).Count(&section.Today)
+	newDB().Model(&model.Incident{}).Where("created_at >= ?", today).Count(&section.Today)
 
 	// 本周
 	weekAgo := time.Now().AddDate(0, 0, -7)
-	db.Model(&model.Incident{}).Where("created_at >= ?", weekAgo).Count(&section.ThisWeek)
+	newDB().Model(&model.Incident{}).Where("created_at >= ?", weekAgo).Count(&section.ThisWeek)
 
 	// 未扫描
-	db.Model(&model.Incident{}).Where("scanned = ?", false).Count(&section.Unscanned)
+	newDB().Model(&model.Incident{}).Where("scanned = ?", false).Count(&section.Unscanned)
 
 	// 按 healing_status 分组
-	db.Model(&model.Incident{}).
+	newDB().Model(&model.Incident{}).
 		Select("healing_status as status, count(*) as count").
 		Group("healing_status").
 		Scan(&section.ByHealingStatus)
@@ -134,32 +132,32 @@ func (r *DashboardRepository) GetIncidentSection(ctx context.Context) (*Incident
 	}
 
 	// 按 severity 分组
-	db.Model(&model.Incident{}).
+	newDB().Model(&model.Incident{}).
 		Select("severity as status, count(*) as count").
 		Group("severity").
 		Scan(&section.BySeverity)
 
 	// 按 category 分组 (在 SQL 层面统一处理 NULL 和空字符串)
-	db.Model(&model.Incident{}).
+	newDB().Model(&model.Incident{}).
 		Select("COALESCE(NULLIF(category, ''), 'unknown') as status, count(*) as count").
 		Group("COALESCE(NULLIF(category, ''), 'unknown')").
 		Order("count DESC").
 		Scan(&section.ByCategory)
 
 	// 按原始 status 分组
-	db.Model(&model.Incident{}).
+	newDB().Model(&model.Incident{}).
 		Select("status, count(*) as count").
 		Group("status").
 		Scan(&section.ByStatus)
 
 	// 按来源插件分组
-	db.Model(&model.Incident{}).
+	newDB().Model(&model.Incident{}).
 		Select("source_plugin_name as status, count(*) as count").
 		Group("source_plugin_name").
 		Scan(&section.BySource)
 
 	// 7天趋势
-	db.Model(&model.Incident{}).
+	newDB().Model(&model.Incident{}).
 		Select("DATE(created_at) as date, count(*) as count").
 		Where("created_at >= ?", weekAgo).
 		Group("DATE(created_at)").
@@ -168,7 +166,7 @@ func (r *DashboardRepository) GetIncidentSection(ctx context.Context) (*Incident
 
 	// 30天趋势
 	monthAgo := time.Now().AddDate(0, 0, -30)
-	db.Model(&model.Incident{}).
+	newDB().Model(&model.Incident{}).
 		Select("DATE(created_at) as date, count(*) as count").
 		Where("created_at >= ?", monthAgo).
 		Group("DATE(created_at)").
@@ -177,7 +175,7 @@ func (r *DashboardRepository) GetIncidentSection(ctx context.Context) (*Incident
 
 	// 最近工单
 	var recentIncidents []model.Incident
-	db.Model(&model.Incident{}).
+	newDB().Model(&model.Incident{}).
 		Order("created_at DESC").
 		Limit(10).
 		Find(&recentIncidents)
@@ -189,7 +187,7 @@ func (r *DashboardRepository) GetIncidentSection(ctx context.Context) (*Incident
 
 	// 紧急工单
 	var criticalIncidents []model.Incident
-	db.Model(&model.Incident{}).
+	newDB().Model(&model.Incident{}).
 		Where("severity = ?", "critical").
 		Order("created_at DESC").
 		Limit(10).
@@ -239,12 +237,12 @@ type AssetItem struct {
 
 func (r *DashboardRepository) GetCMDBSection(ctx context.Context) (*CMDBSection, error) {
 	section := &CMDBSection{}
-	db := r.db.WithContext(ctx)
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
 
-	db.Model(&model.CMDBItem{}).Count(&section.Total)
-	db.Model(&model.CMDBItem{}).Where("status = ?", "active").Count(&section.Active)
-	db.Model(&model.CMDBItem{}).Where("status = ?", "maintenance").Count(&section.Maintenance)
-	db.Model(&model.CMDBItem{}).Where("status = ?", "offline").Count(&section.Offline)
+	newDB().Model(&model.CMDBItem{}).Count(&section.Total)
+	newDB().Model(&model.CMDBItem{}).Where("status = ?", "active").Count(&section.Active)
+	newDB().Model(&model.CMDBItem{}).Where("status = ?", "maintenance").Count(&section.Maintenance)
+	newDB().Model(&model.CMDBItem{}).Where("status = ?", "offline").Count(&section.Offline)
 
 	if section.Total > 0 {
 		section.ActiveRate = float64(section.Active) / float64(section.Total) * 100
@@ -258,16 +256,16 @@ func (r *DashboardRepository) GetCMDBSection(ctx context.Context) (*CMDBSection,
 	section.ByDepartment = []StatusCount{}
 	section.ByManufacturer = []StatusCount{}
 
-	db.Model(&model.CMDBItem{}).Select("status, count(*) as count").Group("status").Scan(&section.ByStatus)
-	db.Model(&model.CMDBItem{}).Select("environment as status, count(*) as count").Group("environment").Scan(&section.ByEnvironment)
-	db.Model(&model.CMDBItem{}).Select("type as status, count(*) as count").Group("type").Scan(&section.ByType)
-	db.Model(&model.CMDBItem{}).Select("os as status, count(*) as count").Group("os").Scan(&section.ByOS)
-	db.Model(&model.CMDBItem{}).Select("department as status, count(*) as count").Group("department").Scan(&section.ByDepartment)
-	db.Model(&model.CMDBItem{}).Select("manufacturer as status, count(*) as count").Group("manufacturer").Scan(&section.ByManufacturer)
+	newDB().Model(&model.CMDBItem{}).Select("status, count(*) as count").Group("status").Scan(&section.ByStatus)
+	newDB().Model(&model.CMDBItem{}).Select("environment as status, count(*) as count").Group("environment").Scan(&section.ByEnvironment)
+	newDB().Model(&model.CMDBItem{}).Select("type as status, count(*) as count").Group("type").Scan(&section.ByType)
+	newDB().Model(&model.CMDBItem{}).Select("os as status, count(*) as count").Group("os").Scan(&section.ByOS)
+	newDB().Model(&model.CMDBItem{}).Select("department as status, count(*) as count").Group("department").Scan(&section.ByDepartment)
+	newDB().Model(&model.CMDBItem{}).Select("manufacturer as status, count(*) as count").Group("manufacturer").Scan(&section.ByManufacturer)
 
 	// 最近维护记录
 	var logs []model.CMDBMaintenanceLog
-	db.Model(&model.CMDBMaintenanceLog{}).Order("created_at DESC").Limit(10).Find(&logs)
+	newDB().Model(&model.CMDBMaintenanceLog{}).Order("created_at DESC").Limit(10).Find(&logs)
 	for _, l := range logs {
 		section.RecentMaintenance = append(section.RecentMaintenance, MaintenanceItem{
 			ID: l.ID, CMDBItemName: l.CMDBItemName, Action: l.Action, Reason: l.Reason, CreatedAt: l.CreatedAt,
@@ -276,7 +274,7 @@ func (r *DashboardRepository) GetCMDBSection(ctx context.Context) (*CMDBSection,
 
 	// 离线资产
 	var offlineItems []model.CMDBItem
-	db.Model(&model.CMDBItem{}).Where("status = ?", "offline").Order("updated_at DESC").Limit(10).Find(&offlineItems)
+	newDB().Model(&model.CMDBItem{}).Where("status = ?", "offline").Order("updated_at DESC").Limit(10).Find(&offlineItems)
 	for _, item := range offlineItems {
 		section.OfflineAssets = append(section.OfflineAssets, AssetItem{
 			ID: item.ID, Name: item.Name, Type: item.Type, IPAddress: item.IPAddress, Environment: item.Environment,
@@ -337,40 +335,42 @@ type TriggerItem struct {
 
 func (r *DashboardRepository) GetHealingSection(ctx context.Context) (*HealingSection, error) {
 	section := &HealingSection{}
-	db := r.db.WithContext(ctx)
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
+	tenantID := TenantIDFromContext(ctx)
 
-	db.Model(&model.HealingFlow{}).Count(&section.FlowsTotal)
-	db.Model(&model.HealingFlow{}).Where("is_active = ?", true).Count(&section.FlowsActive)
-	db.Model(&model.HealingRule{}).Count(&section.RulesTotal)
-	db.Model(&model.HealingRule{}).Where("is_active = ?", true).Count(&section.RulesActive)
-	db.Model(&model.FlowInstance{}).Count(&section.InstancesTotal)
-	db.Model(&model.FlowInstance{}).Where("status = ?", "running").Count(&section.InstancesRunning)
-	db.Model(&model.ApprovalTask{}).Where("status = ?", "pending").Count(&section.PendingApprovals)
+	newDB().Model(&model.HealingFlow{}).Count(&section.FlowsTotal)
+	newDB().Model(&model.HealingFlow{}).Where("is_active = ?", true).Count(&section.FlowsActive)
+	newDB().Model(&model.HealingRule{}).Count(&section.RulesTotal)
+	newDB().Model(&model.HealingRule{}).Where("is_active = ?", true).Count(&section.RulesActive)
+	newDB().Model(&model.FlowInstance{}).Count(&section.InstancesTotal)
+	newDB().Model(&model.FlowInstance{}).Where("status = ?", "running").Count(&section.InstancesRunning)
+	newDB().Model(&model.ApprovalTask{}).Where("status = ?", "pending").Count(&section.PendingApprovals)
 
 	// 待触发工单数
-	db.Model(&model.Incident{}).
+	newDB().Model(&model.Incident{}).
 		Where("scanned = ? AND matched_rule_id IS NOT NULL AND healing_flow_instance_id IS NULL", true).
 		Count(&section.PendingTriggers)
 
 	// 实例按状态
-	db.Model(&model.FlowInstance{}).Select("status, count(*) as count").Group("status").Scan(&section.InstancesByStatus)
+	newDB().Model(&model.FlowInstance{}).Select("status, count(*) as count").Group("status").Scan(&section.InstancesByStatus)
 
 	// 实例7天趋势
 	weekAgo := time.Now().AddDate(0, 0, -7)
-	db.Model(&model.FlowInstance{}).
+	newDB().Model(&model.FlowInstance{}).
 		Select("DATE(created_at) as date, count(*) as count").
 		Where("created_at >= ?", weekAgo).
 		Group("DATE(created_at)").Order("date").
 		Scan(&section.InstanceTrend7d)
 
 	// 审批按状态
-	db.Model(&model.ApprovalTask{}).Select("status, count(*) as count").Group("status").Scan(&section.ApprovalsByStatus)
+	newDB().Model(&model.ApprovalTask{}).Select("status, count(*) as count").Group("status").Scan(&section.ApprovalsByStatus)
 
 	// 规则按触发模式
-	db.Model(&model.HealingRule{}).Select("trigger_mode as status, count(*) as count").Group("trigger_mode").Scan(&section.RulesByTriggerMode)
+	newDB().Model(&model.HealingRule{}).Select("trigger_mode as status, count(*) as count").Group("trigger_mode").Scan(&section.RulesByTriggerMode)
 
-	// 流程触发排行 TOP10
-	db.Table("flow_instances fi").
+	// 流程触发排行 TOP10（JOIN 需要显式 tenant_id 前缀）
+	r.db.WithContext(ctx).Where("fi.tenant_id = ?", tenantID).
+		Table("flow_instances fi").
 		Select("hf.name as name, count(*) as count").
 		Joins("JOIN healing_flows hf ON fi.flow_id = hf.id").
 		Group("hf.name").
@@ -380,7 +380,7 @@ func (r *DashboardRepository) GetHealingSection(ctx context.Context) (*HealingSe
 
 	// 最近实例
 	var instances []model.FlowInstance
-	db.Model(&model.FlowInstance{}).Order("created_at DESC").Limit(10).Find(&instances)
+	newDB().Model(&model.FlowInstance{}).Order("created_at DESC").Limit(10).Find(&instances)
 	for _, inst := range instances {
 		section.RecentInstances = append(section.RecentInstances, InstanceItem{
 			ID: inst.ID, FlowName: inst.FlowName, Status: inst.Status, CreatedAt: inst.CreatedAt,
@@ -389,7 +389,7 @@ func (r *DashboardRepository) GetHealingSection(ctx context.Context) (*HealingSe
 
 	// 待审批列表
 	var approvals []model.ApprovalTask
-	db.Model(&model.ApprovalTask{}).Where("status = ?", "pending").Order("created_at DESC").Limit(10).Find(&approvals)
+	newDB().Model(&model.ApprovalTask{}).Where("status = ?", "pending").Order("created_at DESC").Limit(10).Find(&approvals)
 	for _, a := range approvals {
 		section.PendingApprovalList = append(section.PendingApprovalList, ApprovalItem{
 			ID: a.ID, FlowInstanceID: a.FlowInstanceID, NodeID: a.NodeID, Status: a.Status, CreatedAt: a.CreatedAt,
@@ -398,7 +398,7 @@ func (r *DashboardRepository) GetHealingSection(ctx context.Context) (*HealingSe
 
 	// 待触发列表
 	var triggers []model.Incident
-	db.Model(&model.Incident{}).
+	newDB().Model(&model.Incident{}).
 		Where("scanned = ? AND matched_rule_id IS NOT NULL AND healing_flow_instance_id IS NULL", true).
 		Order("created_at DESC").Limit(10).Find(&triggers)
 	for _, t := range triggers {
@@ -440,34 +440,35 @@ type RunItem struct {
 
 func (r *DashboardRepository) GetExecutionSection(ctx context.Context) (*ExecutionSection, error) {
 	section := &ExecutionSection{}
-	db := r.db.WithContext(ctx)
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
+	tenantID := TenantIDFromContext(ctx)
 
-	db.Model(&model.ExecutionTask{}).Count(&section.TasksTotal)
-	db.Model(&model.ExecutionRun{}).Count(&section.RunsTotal)
-	db.Model(&model.ExecutionRun{}).Where("status = ?", "running").Count(&section.Running)
+	newDB().Model(&model.ExecutionTask{}).Count(&section.TasksTotal)
+	newDB().Model(&model.ExecutionRun{}).Count(&section.RunsTotal)
+	newDB().Model(&model.ExecutionRun{}).Where("status = ?", "running").Count(&section.Running)
 
 	// 成功率
 	var successCount int64
-	db.Model(&model.ExecutionRun{}).Where("status = ?", "success").Count(&successCount)
+	newDB().Model(&model.ExecutionRun{}).Where("status = ?", "success").Count(&successCount)
 	if section.RunsTotal > 0 {
 		section.SuccessRate = float64(successCount) / float64(section.RunsTotal) * 100
 	}
 
 	// 平均执行时长
-	db.Model(&model.ExecutionRun{}).
+	newDB().Model(&model.ExecutionRun{}).
 		Where("started_at IS NOT NULL AND completed_at IS NOT NULL").
 		Select("COALESCE(AVG(EXTRACT(EPOCH FROM (completed_at - started_at))), 0)").
 		Scan(&section.AvgDurationSec)
 
-	db.Model(&model.ExecutionSchedule{}).Count(&section.SchedulesTotal)
-	db.Model(&model.ExecutionSchedule{}).Where("enabled = ?", true).Count(&section.SchedulesEnabled)
+	newDB().Model(&model.ExecutionSchedule{}).Count(&section.SchedulesTotal)
+	newDB().Model(&model.ExecutionSchedule{}).Where("enabled = ?", true).Count(&section.SchedulesEnabled)
 
 	// 按状态
-	db.Model(&model.ExecutionRun{}).Select("status, count(*) as count").Group("status").Scan(&section.RunsByStatus)
+	newDB().Model(&model.ExecutionRun{}).Select("status, count(*) as count").Group("status").Scan(&section.RunsByStatus)
 
 	// 7天趋势
 	weekAgo := time.Now().AddDate(0, 0, -7)
-	db.Model(&model.ExecutionRun{}).
+	newDB().Model(&model.ExecutionRun{}).
 		Select("DATE(created_at) as date, count(*) as count").
 		Where("created_at >= ?", weekAgo).
 		Group("DATE(created_at)").Order("date").
@@ -475,17 +476,18 @@ func (r *DashboardRepository) GetExecutionSection(ctx context.Context) (*Executi
 
 	// 30天趋势
 	monthAgo := time.Now().AddDate(0, 0, -30)
-	db.Model(&model.ExecutionRun{}).
+	newDB().Model(&model.ExecutionRun{}).
 		Select("DATE(created_at) as date, count(*) as count").
 		Where("created_at >= ?", monthAgo).
 		Group("DATE(created_at)").Order("date").
 		Scan(&section.Trend30d)
 
 	// 定时任务按类型
-	db.Model(&model.ExecutionSchedule{}).Select("schedule_type as status, count(*) as count").Group("schedule_type").Scan(&section.SchedulesByType)
+	newDB().Model(&model.ExecutionSchedule{}).Select("schedule_type as status, count(*) as count").Group("schedule_type").Scan(&section.SchedulesByType)
 
-	// 任务执行排行 TOP10
-	db.Table("execution_runs er").
+	// 任务执行排行 TOP10（JOIN 需要显式 tenant_id 前缀）
+	r.db.WithContext(ctx).Where("er.tenant_id = ?", tenantID).
+		Table("execution_runs er").
 		Select("et.name as name, count(*) as count").
 		Joins("JOIN execution_tasks et ON er.task_id = et.id").
 		Group("et.name").
@@ -495,7 +497,7 @@ func (r *DashboardRepository) GetExecutionSection(ctx context.Context) (*Executi
 
 	// 最近执行
 	var runs []model.ExecutionRun
-	db.Model(&model.ExecutionRun{}).Preload("Task").Order("created_at DESC").Limit(10).Find(&runs)
+	newDB().Model(&model.ExecutionRun{}).Preload("Task").Order("created_at DESC").Limit(10).Find(&runs)
 	for _, run := range runs {
 		taskName := ""
 		if run.Task != nil {
@@ -508,7 +510,7 @@ func (r *DashboardRepository) GetExecutionSection(ctx context.Context) (*Executi
 
 	// 失败执行
 	var failedRuns []model.ExecutionRun
-	db.Model(&model.ExecutionRun{}).Preload("Task").Where("status = ?", "failed").Order("created_at DESC").Limit(10).Find(&failedRuns)
+	newDB().Model(&model.ExecutionRun{}).Preload("Task").Where("status = ?", "failed").Order("created_at DESC").Limit(10).Find(&failedRuns)
 	for _, run := range failedRuns {
 		taskName := ""
 		if run.Task != nil {
@@ -556,17 +558,17 @@ type PluginItem struct {
 
 func (r *DashboardRepository) GetPluginSection(ctx context.Context) (*PluginSection, error) {
 	section := &PluginSection{}
-	db := r.db.WithContext(ctx)
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
 
-	db.Model(&model.Plugin{}).Count(&section.Total)
-	db.Model(&model.Plugin{}).Where("status = ?", "active").Count(&section.Active)
-	db.Model(&model.Plugin{}).Where("status = ?", "inactive").Count(&section.Inactive)
-	db.Model(&model.Plugin{}).Where("status = ?", "error").Count(&section.Error)
+	newDB().Model(&model.Plugin{}).Count(&section.Total)
+	newDB().Model(&model.Plugin{}).Where("status = ?", "active").Count(&section.Active)
+	newDB().Model(&model.Plugin{}).Where("status = ?", "inactive").Count(&section.Inactive)
+	newDB().Model(&model.Plugin{}).Where("status = ?", "error").Count(&section.Error)
 
 	// 同步成功率
 	var syncTotal, syncSuccess int64
-	db.Model(&model.PluginSyncLog{}).Count(&syncTotal)
-	db.Model(&model.PluginSyncLog{}).Where("status = ?", "success").Count(&syncSuccess)
+	newDB().Model(&model.PluginSyncLog{}).Count(&syncTotal)
+	newDB().Model(&model.PluginSyncLog{}).Where("status = ?", "success").Count(&syncSuccess)
 	if syncTotal > 0 {
 		section.SyncSuccessRate = float64(syncSuccess) / float64(syncTotal) * 100
 	}
@@ -575,12 +577,12 @@ func (r *DashboardRepository) GetPluginSection(ctx context.Context) (*PluginSect
 	section.ByStatus = []StatusCount{}
 	section.ByType = []StatusCount{}
 
-	db.Model(&model.Plugin{}).Select("status, count(*) as count").Group("status").Scan(&section.ByStatus)
-	db.Model(&model.Plugin{}).Select("type as status, count(*) as count").Group("type").Scan(&section.ByType)
+	newDB().Model(&model.Plugin{}).Select("status, count(*) as count").Group("status").Scan(&section.ByStatus)
+	newDB().Model(&model.Plugin{}).Select("type as status, count(*) as count").Group("type").Scan(&section.ByType)
 
 	// 同步7天趋势
 	weekAgo := time.Now().AddDate(0, 0, -7)
-	db.Model(&model.PluginSyncLog{}).
+	newDB().Model(&model.PluginSyncLog{}).
 		Select("DATE(started_at) as date, count(*) as count").
 		Where("started_at >= ?", weekAgo).
 		Group("DATE(started_at)").Order("date").
@@ -588,7 +590,7 @@ func (r *DashboardRepository) GetPluginSection(ctx context.Context) (*PluginSect
 
 	// 最近同步
 	var syncs []model.PluginSyncLog
-	db.Model(&model.PluginSyncLog{}).Preload("Plugin").Order("started_at DESC").Limit(10).Find(&syncs)
+	newDB().Model(&model.PluginSyncLog{}).Preload("Plugin").Order("started_at DESC").Limit(10).Find(&syncs)
 	for _, s := range syncs {
 		name := ""
 		if s.Plugin.Name != "" {
@@ -601,7 +603,7 @@ func (r *DashboardRepository) GetPluginSection(ctx context.Context) (*PluginSect
 
 	// 异常插件
 	var errorPlugins []model.Plugin
-	db.Model(&model.Plugin{}).Where("status = ?", "error").Find(&errorPlugins)
+	newDB().Model(&model.Plugin{}).Where("status = ?", "error").Find(&errorPlugins)
 	for _, p := range errorPlugins {
 		section.ErrorPlugins = append(section.ErrorPlugins, PluginItem{
 			ID: p.ID, Name: p.Name, Type: p.Type, Status: p.Status, LastSyncAt: p.LastSyncAt,
@@ -610,7 +612,7 @@ func (r *DashboardRepository) GetPluginSection(ctx context.Context) (*PluginSect
 
 	// 全部插件概览
 	var allPlugins []model.Plugin
-	db.Model(&model.Plugin{}).Order("name").Find(&allPlugins)
+	newDB().Model(&model.Plugin{}).Order("name").Find(&allPlugins)
 	for _, p := range allPlugins {
 		section.PluginOverview = append(section.PluginOverview, PluginItem{
 			ID: p.ID, Name: p.Name, Type: p.Type, Status: p.Status, LastSyncAt: p.LastSyncAt,
@@ -643,31 +645,31 @@ type NotifLogItem struct {
 
 func (r *DashboardRepository) GetNotificationSection(ctx context.Context) (*NotificationSection, error) {
 	section := &NotificationSection{}
-	db := r.db.WithContext(ctx)
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
 
-	db.Model(&model.NotificationChannel{}).Count(&section.ChannelsTotal)
-	db.Model(&model.NotificationTemplate{}).Count(&section.TemplatesTotal)
-	db.Model(&model.NotificationLog{}).Count(&section.LogsTotal)
+	newDB().Model(&model.NotificationChannel{}).Count(&section.ChannelsTotal)
+	newDB().Model(&model.NotificationTemplate{}).Count(&section.TemplatesTotal)
+	newDB().Model(&model.NotificationLog{}).Count(&section.LogsTotal)
 
 	// 送达率
 	var sentCount int64
-	db.Model(&model.NotificationLog{}).Where("status IN ?", []string{"sent", "delivered"}).Count(&sentCount)
+	newDB().Model(&model.NotificationLog{}).Where("status IN ?", []string{"sent", "delivered"}).Count(&sentCount)
 	if section.LogsTotal > 0 {
 		section.DeliveryRate = float64(sentCount) / float64(section.LogsTotal) * 100
 	}
 
-	db.Model(&model.NotificationChannel{}).Select("type as status, count(*) as count").Group("type").Scan(&section.ByChannelType)
-	db.Model(&model.NotificationLog{}).Select("status, count(*) as count").Group("status").Scan(&section.ByLogStatus)
+	newDB().Model(&model.NotificationChannel{}).Select("type as status, count(*) as count").Group("type").Scan(&section.ByChannelType)
+	newDB().Model(&model.NotificationLog{}).Select("status, count(*) as count").Group("status").Scan(&section.ByLogStatus)
 
 	weekAgo := time.Now().AddDate(0, 0, -7)
-	db.Model(&model.NotificationLog{}).
+	newDB().Model(&model.NotificationLog{}).
 		Select("DATE(created_at) as date, count(*) as count").
 		Where("created_at >= ?", weekAgo).
 		Group("DATE(created_at)").Order("date").
 		Scan(&section.Trend7d)
 
 	var recentLogs []model.NotificationLog
-	db.Model(&model.NotificationLog{}).Order("created_at DESC").Limit(10).Find(&recentLogs)
+	newDB().Model(&model.NotificationLog{}).Order("created_at DESC").Limit(10).Find(&recentLogs)
 	for _, l := range recentLogs {
 		section.RecentLogs = append(section.RecentLogs, NotifLogItem{
 			ID: l.ID, Subject: l.Subject, Status: l.Status, CreatedAt: l.CreatedAt,
@@ -675,7 +677,7 @@ func (r *DashboardRepository) GetNotificationSection(ctx context.Context) (*Noti
 	}
 
 	var failedLogs []model.NotificationLog
-	db.Model(&model.NotificationLog{}).Where("status = ?", "failed").Order("created_at DESC").Limit(10).Find(&failedLogs)
+	newDB().Model(&model.NotificationLog{}).Where("status = ?", "failed").Order("created_at DESC").Limit(10).Find(&failedLogs)
 	for _, l := range failedLogs {
 		section.FailedLogs = append(section.FailedLogs, NotifLogItem{
 			ID: l.ID, Subject: l.Subject, Status: l.Status, CreatedAt: l.CreatedAt,
@@ -712,19 +714,19 @@ type GitSyncItem struct {
 
 func (r *DashboardRepository) GetGitSection(ctx context.Context) (*GitSection, error) {
 	section := &GitSection{}
-	db := r.db.WithContext(ctx)
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
 
-	db.Model(&model.GitRepository{}).Count(&section.ReposTotal)
+	newDB().Model(&model.GitRepository{}).Count(&section.ReposTotal)
 
 	var syncTotal, syncSuccess int64
-	db.Model(&model.GitSyncLog{}).Count(&syncTotal)
-	db.Model(&model.GitSyncLog{}).Where("status = ?", "success").Count(&syncSuccess)
+	newDB().Model(&model.GitSyncLog{}).Count(&syncTotal)
+	newDB().Model(&model.GitSyncLog{}).Where("status = ?", "success").Count(&syncSuccess)
 	if syncTotal > 0 {
 		section.SyncSuccessRate = float64(syncSuccess) / float64(syncTotal) * 100
 	}
 
 	var repos []model.GitRepository
-	db.Model(&model.GitRepository{}).Order("name").Find(&repos)
+	newDB().Model(&model.GitRepository{}).Order("name").Find(&repos)
 	for _, r := range repos {
 		section.Repos = append(section.Repos, GitRepoItem{
 			ID: r.ID, Name: r.Name, URL: r.URL, Status: r.Status, Branch: r.DefaultBranch, LastSyncAt: r.LastSyncAt,
@@ -732,7 +734,7 @@ func (r *DashboardRepository) GetGitSection(ctx context.Context) (*GitSection, e
 	}
 
 	var syncs []model.GitSyncLog
-	db.Model(&model.GitSyncLog{}).Preload("Repository").Order("created_at DESC").Limit(10).Find(&syncs)
+	newDB().Model(&model.GitSyncLog{}).Preload("Repository").Order("created_at DESC").Limit(10).Find(&syncs)
 	for _, s := range syncs {
 		repoName := ""
 		if s.Repository != nil {
@@ -764,14 +766,14 @@ type ScanItem struct {
 
 func (r *DashboardRepository) GetPlaybookSection(ctx context.Context) (*PlaybookSection, error) {
 	section := &PlaybookSection{}
-	db := r.db.WithContext(ctx)
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
 
-	db.Model(&model.Playbook{}).Count(&section.Total)
-	db.Model(&model.Playbook{}).Where("status = ?", "ready").Count(&section.Ready)
-	db.Model(&model.Playbook{}).Select("status, count(*) as count").Group("status").Scan(&section.ByStatus)
+	newDB().Model(&model.Playbook{}).Count(&section.Total)
+	newDB().Model(&model.Playbook{}).Where("status = ?", "ready").Count(&section.Ready)
+	newDB().Model(&model.Playbook{}).Select("status, count(*) as count").Group("status").Scan(&section.ByStatus)
 
 	var scans []model.PlaybookScanLog
-	db.Model(&model.PlaybookScanLog{}).Preload("Playbook").Order("created_at DESC").Limit(10).Find(&scans)
+	newDB().Model(&model.PlaybookScanLog{}).Preload("Playbook").Order("created_at DESC").Limit(10).Find(&scans)
 	for _, s := range scans {
 		pbName := ""
 		if s.Playbook != nil {
@@ -796,12 +798,12 @@ type SecretsSection struct {
 
 func (r *DashboardRepository) GetSecretsSection(ctx context.Context) (*SecretsSection, error) {
 	section := &SecretsSection{}
-	db := r.db.WithContext(ctx)
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
 
-	db.Model(&model.SecretsSource{}).Count(&section.Total)
-	db.Model(&model.SecretsSource{}).Where("status = ?", "active").Count(&section.Active)
-	db.Model(&model.SecretsSource{}).Select("type as status, count(*) as count").Group("type").Scan(&section.ByType)
-	db.Model(&model.SecretsSource{}).Select("auth_type as status, count(*) as count").Group("auth_type").Scan(&section.ByAuthType)
+	newDB().Model(&model.SecretsSource{}).Count(&section.Total)
+	newDB().Model(&model.SecretsSource{}).Where("status = ?", "active").Count(&section.Active)
+	newDB().Model(&model.SecretsSource{}).Select("type as status, count(*) as count").Group("type").Scan(&section.ByType)
+	newDB().Model(&model.SecretsSource{}).Select("auth_type as status, count(*) as count").Group("auth_type").Scan(&section.ByAuthType)
 
 	return section, nil
 }
@@ -825,14 +827,15 @@ type LoginItem struct {
 
 func (r *DashboardRepository) GetUsersSection(ctx context.Context) (*UsersSection, error) {
 	section := &UsersSection{}
-	db := r.db.WithContext(ctx)
+	// users 和 roles 表是全局资源，没有 tenant_id 列，使用普通 DB
+	userDB := func() *gorm.DB { return r.db.WithContext(ctx) }
 
-	db.Model(&model.User{}).Count(&section.Total)
-	db.Model(&model.User{}).Where("status = ?", "active").Count(&section.Active)
-	db.Model(&model.Role{}).Count(&section.RolesTotal)
+	userDB().Model(&model.User{}).Count(&section.Total)
+	userDB().Model(&model.User{}).Where("status = ?", "active").Count(&section.Active)
+	userDB().Model(&model.Role{}).Count(&section.RolesTotal)
 
 	var users []model.User
-	db.Model(&model.User{}).Where("last_login_at IS NOT NULL").Order("last_login_at DESC").Limit(10).Find(&users)
+	userDB().Model(&model.User{}).Where("last_login_at IS NOT NULL").Order("last_login_at DESC").Limit(10).Find(&users)
 	for _, u := range users {
 		section.RecentLogins = append(section.RecentLogins, LoginItem{
 			ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, LastLoginAt: u.LastLoginAt, LastLoginIP: u.LastLoginIP,

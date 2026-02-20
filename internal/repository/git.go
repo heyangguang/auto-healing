@@ -26,13 +26,17 @@ func NewGitRepositoryRepository() *GitRepositoryRepository {
 
 // Create 创建仓库
 func (r *GitRepositoryRepository) Create(ctx context.Context, repo *model.GitRepository) error {
+	if repo.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		repo.TenantID = &tenantID
+	}
 	return r.db.WithContext(ctx).Create(repo).Error
 }
 
 // GetByID 根据ID获取仓库
 func (r *GitRepositoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.GitRepository, error) {
 	var repo model.GitRepository
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&repo).Error
+	err := TenantDB(r.db, ctx).Where("id = ?", id).First(&repo).Error
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +46,7 @@ func (r *GitRepositoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*m
 // GetByName 根据名称获取仓库
 func (r *GitRepositoryRepository) GetByName(ctx context.Context, name string) (*model.GitRepository, error) {
 	var repo model.GitRepository
-	err := r.db.WithContext(ctx).Where("name = ?", name).First(&repo).Error
+	err := TenantDB(r.db, ctx).Where("name = ?", name).First(&repo).Error
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +60,7 @@ func (r *GitRepositoryRepository) Update(ctx context.Context, repo *model.GitRep
 
 // Delete 删除仓库
 func (r *GitRepositoryRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&model.GitRepository{}, id).Error
+	return TenantDB(r.db, ctx).Delete(&model.GitRepository{}, id).Error
 }
 
 // GitRepoListOptions Git 仓库列表查询选项
@@ -97,7 +101,7 @@ func (r *GitRepositoryRepository) ListWithOptions(ctx context.Context, opts *Git
 	var repos []model.GitRepository
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.GitRepository{})
+	query := TenantDB(r.db, ctx).Model(&model.GitRepository{})
 
 	// 全文搜索（name + url）
 	if opts.Search != "" {
@@ -139,7 +143,7 @@ func (r *GitRepositoryRepository) ListWithOptions(ctx context.Context, opts *Git
 	}
 
 	// 计数
-	query.Count(&total)
+	query.Session(&gorm.Session{}).Count(&total)
 
 	// 排序
 	allowedSortFields := map[string]bool{
@@ -178,7 +182,7 @@ func (r *GitRepositoryRepository) ListWithOptions(ctx context.Context, opts *Git
 			Count        int64     `gorm:"column:count"`
 		}
 		var counts []PlaybookCountResult
-		r.db.WithContext(ctx).
+		TenantDB(r.db, ctx).
 			Model(&model.Playbook{}).
 			Select("repository_id, COUNT(*) as count").
 			Where("repository_id IN ?", repoIDs).
@@ -207,7 +211,7 @@ func (r *GitRepositoryRepository) UpdateStatus(ctx context.Context, id uuid.UUID
 	} else {
 		updates["error_message"] = ""
 	}
-	return r.db.WithContext(ctx).Model(&model.GitRepository{}).Where("id = ?", id).Updates(updates).Error
+	return TenantDB(r.db, ctx).Model(&model.GitRepository{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // UpdateBranches 更新分支列表
@@ -217,17 +221,21 @@ func (r *GitRepositoryRepository) UpdateBranches(ctx context.Context, id uuid.UU
 	for i, b := range branches {
 		jsonBranches[i] = b
 	}
-	return r.db.WithContext(ctx).Model(&model.GitRepository{}).Where("id = ?", id).Update("branches", jsonBranches).Error
+	return TenantDB(r.db, ctx).Model(&model.GitRepository{}).Where("id = ?", id).Update("branches", jsonBranches).Error
 }
 
 // UpdateLastSync 更新最后同步时间
 func (r *GitRepositoryRepository) UpdateLastSync(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Model(&model.GitRepository{}).Where("id = ?", id).
+	return TenantDB(r.db, ctx).Model(&model.GitRepository{}).Where("id = ?", id).
 		Update("last_sync_at", gorm.Expr("NOW()")).Error
 }
 
 // CreateSyncLog 创建同步日志
 func (r *GitRepositoryRepository) CreateSyncLog(ctx context.Context, log *model.GitSyncLog) error {
+	if log.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		log.TenantID = &tenantID
+	}
 	return r.db.WithContext(ctx).Create(log).Error
 }
 
@@ -236,8 +244,8 @@ func (r *GitRepositoryRepository) ListSyncLogs(ctx context.Context, repoID uuid.
 	var logs []model.GitSyncLog
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.GitSyncLog{}).Where("repository_id = ?", repoID)
-	query.Count(&total)
+	query := TenantDB(r.db, ctx).Model(&model.GitSyncLog{}).Where("repository_id = ?", repoID)
+	query.Session(&gorm.Session{}).Count(&total)
 
 	err := query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&logs).Error
 	return logs, total, err
@@ -251,7 +259,9 @@ func (r *GitRepositoryRepository) GetStats(ctx context.Context) (map[string]inte
 
 	// 总数
 	var total int64
-	if err := r.db.WithContext(ctx).Model(&model.GitRepository{}).Count(&total).Error; err != nil {
+	// 每次查询使用新的 TenantDB 实例，避免 GORM session WHERE 条件累积
+	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
+	if err := newDB().Model(&model.GitRepository{}).Count(&total).Error; err != nil {
 		return nil, err
 	}
 	stats["total"] = total
@@ -262,7 +272,7 @@ func (r *GitRepositoryRepository) GetStats(ctx context.Context) (map[string]inte
 		Count  int64  `json:"count"`
 	}
 	var statusCounts []StatusCount
-	r.db.WithContext(ctx).Model(&model.GitRepository{}).
+	newDB().Model(&model.GitRepository{}).
 		Select("status, count(*) as count").
 		Group("status").
 		Scan(&statusCounts)

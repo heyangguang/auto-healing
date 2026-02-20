@@ -23,6 +23,7 @@ type User struct {
 	LockedUntil       *time.Time `json:"-"`
 	CreatedAt         time.Time  `json:"created_at" gorm:"default:now()"`
 	UpdatedAt         time.Time  `json:"updated_at" gorm:"default:now()"`
+	IsPlatformAdmin   bool       `json:"is_platform_admin" gorm:"default:false"` // 平台管理员标识
 
 	// 关联
 	Roles []Role `json:"roles,omitempty" gorm:"many2many:user_roles;"`
@@ -35,13 +36,15 @@ func (User) TableName() string {
 
 // Role 角色模型
 type Role struct {
-	ID          uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	Name        string    `json:"name" gorm:"type:varchar(100);not null;uniqueIndex"`
-	DisplayName string    `json:"display_name" gorm:"type:varchar(200);not null"`
-	Description string    `json:"description,omitempty" gorm:"type:text"`
-	IsSystem    bool      `json:"is_system" gorm:"default:false"`
-	CreatedAt   time.Time `json:"created_at" gorm:"default:now()"`
-	UpdatedAt   time.Time `json:"updated_at" gorm:"default:now()"`
+	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	Name        string     `json:"name" gorm:"type:varchar(100);not null;uniqueIndex"`
+	DisplayName string     `json:"display_name" gorm:"type:varchar(200);not null"`
+	Description string     `json:"description,omitempty" gorm:"type:text"`
+	IsSystem    bool       `json:"is_system" gorm:"default:false"`
+	Scope       string     `json:"scope" gorm:"type:varchar(20);default:'tenant'"` // platform=平台级, tenant=租户级
+	TenantID    *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid"`           // NULL=系统模板, UUID=租户自定义
+	CreatedAt   time.Time  `json:"created_at" gorm:"default:now()"`
+	UpdatedAt   time.Time  `json:"updated_at" gorm:"default:now()"`
 
 	// 关联
 	Permissions []Permission `json:"permissions,omitempty" gorm:"many2many:role_permissions;"`

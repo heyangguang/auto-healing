@@ -266,6 +266,14 @@ func (s *Service) TriggerSyncSync(ctx context.Context, id uuid.UUID) (*model.Plu
 
 // performSync 执行真实的数据同步
 func (s *Service) performSync(ctx context.Context, plugin *model.Plugin, syncLog *model.PluginSyncLog) {
+	// panic 保护：防止 panic 导致同步日志永远停留在 running 状态
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Sync_("PLUGIN").Error("performSync panic: %v", rec)
+			s.updateSyncLogError(ctx, syncLog, fmt.Sprintf("内部错误: %v", rec))
+		}
+	}()
+
 	// 确定同步起始时间
 	since := time.Now().Add(-24 * time.Hour) // 默认拉取最近24小时
 	if plugin.LastSyncAt != nil {

@@ -199,7 +199,10 @@ func (h *ExecutionHandler) ExecuteTask(c *gin.Context) {
 	}
 
 	var req ExecuteTaskRequest
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil && c.Request.ContentLength > 0 {
+		response.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
 
 	opts := &execution.ExecuteOptions{
 		TriggeredBy:      req.GetTriggeredBy(),

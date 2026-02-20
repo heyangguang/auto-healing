@@ -8,16 +8,17 @@ import (
 
 // Workflow 工作流模型
 type Workflow struct {
-	ID            uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	Name          string    `json:"name" gorm:"type:varchar(200);not null"`
-	Description   string    `json:"description,omitempty" gorm:"type:text"`
-	Version       int       `json:"version" gorm:"default:1"`
-	Status        string    `json:"status" gorm:"type:varchar(20);default:'draft'"` // draft, active, inactive, archived
-	TriggerType   string    `json:"trigger_type" gorm:"type:varchar(50);not null"`  // incident, scheduled, manual, webhook
-	TriggerConfig JSON      `json:"trigger_config" gorm:"type:jsonb;default:'{}'"`
-	CreatedBy     string    `json:"created_by,omitempty" gorm:"type:varchar(200)"`
-	CreatedAt     time.Time `json:"created_at" gorm:"default:now()"`
-	UpdatedAt     time.Time `json:"updated_at" gorm:"default:now()"`
+	ID            uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID      *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	Name          string     `json:"name" gorm:"type:varchar(200);not null"`
+	Description   string     `json:"description,omitempty" gorm:"type:text"`
+	Version       int        `json:"version" gorm:"default:1"`
+	Status        string     `json:"status" gorm:"type:varchar(20);default:'draft'"` // draft, active, inactive, archived
+	TriggerType   string     `json:"trigger_type" gorm:"type:varchar(50);not null"`  // incident, scheduled, manual, webhook
+	TriggerConfig JSON       `json:"trigger_config" gorm:"type:jsonb;default:'{}'"`
+	CreatedBy     string     `json:"created_by,omitempty" gorm:"type:varchar(200)"`
+	CreatedAt     time.Time  `json:"created_at" gorm:"default:now()"`
+	UpdatedAt     time.Time  `json:"updated_at" gorm:"default:now()"`
 
 	// 关联
 	Nodes []WorkflowNode `json:"nodes,omitempty" gorm:"foreignKey:WorkflowID"`

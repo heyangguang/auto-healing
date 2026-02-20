@@ -17,9 +17,12 @@ var (
 // Claims JWT声明
 type Claims struct {
 	jwt.RegisteredClaims
-	Username    string   `json:"username"`
-	Roles       []string `json:"roles"`
-	Permissions []string `json:"permissions"`
+	Username        string   `json:"username"`
+	Roles           []string `json:"roles"`
+	Permissions     []string `json:"permissions"`
+	IsPlatformAdmin bool     `json:"is_platform_admin,omitempty"`
+	TenantIDs       []string `json:"tenant_ids,omitempty"`        // 用户所属的租户列表
+	DefaultTenantID string   `json:"default_tenant_id,omitempty"` // 用户的默认租户（第一个）
 }
 
 // Service JWT服务
@@ -65,7 +68,7 @@ func NewService(cfg Config, blacklist BlacklistStore) *Service {
 }
 
 // GenerateTokenPair 生成令牌对
-func (s *Service) GenerateTokenPair(userID, username string, roles, permissions []string) (*TokenPair, error) {
+func (s *Service) GenerateTokenPair(userID, username string, roles, permissions []string, opts ...func(*Claims)) (*TokenPair, error) {
 	now := time.Now()
 
 	// 生成 Access Token
@@ -81,6 +84,11 @@ func (s *Service) GenerateTokenPair(userID, username string, roles, permissions 
 		Username:    username,
 		Roles:       roles,
 		Permissions: permissions,
+	}
+
+	// 应用可选配置（如 IsPlatformAdmin）
+	for _, opt := range opts {
+		opt(&accessClaims)
 	}
 
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)

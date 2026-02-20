@@ -2,6 +2,7 @@ package healing
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -191,7 +192,14 @@ func (s *Scheduler) processIncident(ctx context.Context, incident *model.Inciden
 		s.ruleRepo.UpdateLastRunAt(ctx, matchedRule.ID)
 
 		// 异步执行流程
-		go s.executor.Execute(ctx, instance)
+		go func(inst *model.FlowInstance) {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Sched("HEAL").Error("流程执行 panic [%s]: %v", inst.ID.String()[:8], fmt.Sprintf("%v", r))
+				}
+			}()
+			s.executor.Execute(ctx, inst)
+		}(instance)
 
 	case model.TriggerModeManual:
 		// 手动触发：只标记匹配，不创建流程实例
@@ -345,7 +353,14 @@ func (s *Scheduler) TriggerManual(ctx context.Context, incidentID string, ruleID
 	s.incidentRepo.MarkScanned(ctx, incident.ID, &rule.ID, &instance.ID)
 
 	// 异步执行流程（使用独立 context，避免 HTTP 请求结束后 context 被取消）
-	go s.executor.Execute(context.Background(), instance)
+	go func(inst *model.FlowInstance) {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Sched("HEAL").Error("手动触发流程 panic [%s]: %v", inst.ID.String()[:8], fmt.Sprintf("%v", r))
+			}
+		}()
+		s.executor.Execute(context.Background(), inst)
+	}(instance)
 
 	return instance, nil
 }

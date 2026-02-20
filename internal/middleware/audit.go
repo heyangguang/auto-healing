@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,6 +33,7 @@ func (w *responseBodyWriter) Write(b []byte) (int, error) {
 // AuditMiddleware 审计中间件 — 自动记录写操作的审计日志
 func AuditMiddleware() gin.HandlerFunc {
 	repo := repository.NewAuditLogRepository()
+	platformRepo := repository.NewPlatformAuditLogRepository()
 
 	return func(c *gin.Context) {
 		// 只记录写操作
@@ -60,9 +62,18 @@ func AuditMiddleware() gin.HandlerFunc {
 
 		// ===== 在 handler 执行前：提取资源 ID 并捕获旧状态 =====
 		resourceID := extractResourceID(path)
+		resourceKey := extractResourceKey(path) // 字符串主键（如 platform/settings 的 key）
+		// 提取租户 ID 用于审计查询的租户隔离
+		tenantID := repository.TenantIDFromContext(c.Request.Context())
+		// 提取用户身份 — 决定审计日志写入平台表还是租户表
+		isPlatformAdmin := IsPlatformAdmin(c)
 		var oldState map[string]interface{}
 		if method == "PUT" || method == "PATCH" || method == "DELETE" {
-			oldState = captureOldState(path, resourceID)
+			if isPlatformAdmin || isPlatformRoute(path) {
+				oldState = captureOldState(path, resourceID, resourceKey, uuid.Nil)
+			} else {
+				oldState = captureOldState(path, resourceID, resourceKey, tenantID)
+			}
 		}
 
 		// 包装 ResponseWriter 以捕获响应体（用于提取错误信息）
@@ -83,6 +94,7 @@ func AuditMiddleware() gin.HandlerFunc {
 		ipAddress := NormalizeIP(c.ClientIP())
 		userAgent := c.Request.UserAgent()
 		responseBody := bodyWriter.body.Bytes()
+		// isPlatformAdmin 已在上方提取，goroutine 中安全使用
 
 		// ===== 异步记录审计日志 =====
 		go func() {
@@ -117,7 +129,11 @@ func AuditMiddleware() gin.HandlerFunc {
 			}
 
 			// 解析资源名称
-			resourceName := resolveResourceName(path, resourceID, bodyJSON)
+			var resourceNameTenantID uuid.UUID
+			if !isPlatformAdmin && !isPlatformRoute(path) {
+				resourceNameTenantID = tenantID
+			}
+			resourceName := resolveResourceName(path, resourceID, resourceKey, bodyJSON, resourceNameTenantID)
 
 			// 计算变更记录（PUT/PATCH/DELETE）
 			var changes model.JSON
@@ -125,30 +141,60 @@ func AuditMiddleware() gin.HandlerFunc {
 				changes = computeChanges(method, oldState, bodyJSON)
 			}
 
-			auditLog := &model.AuditLog{
-				UserID:         userID,
-				Username:       username,
-				IPAddress:      ipAddress,
-				UserAgent:      userAgent,
-				Action:         action,
-				ResourceType:   resourceType,
-				ResourceID:     resourceID,
-				ResourceName:   resourceName,
-				RequestMethod:  method,
-				RequestPath:    path,
-				RequestBody:    bodyJSON,
-				ResponseStatus: &statusCode,
-				Changes:        changes,
-				Status:         status,
-				ErrorMessage:   errorMsg,
-				CreatedAt:      startTime,
-			}
-
+			// 根据用户身份判断是平台级还是租户级，写入对应的表
+			// 平台管理员的所有操作 → platform_audit_logs
+			// 租户用户的所有操作 → audit_logs
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			if err := repo.Create(ctx, auditLog); err != nil {
-				zap.L().Error("审计日志写入失败", zap.Error(err))
+			if isPlatformAdmin {
+				// 平台管理员 — 写入 platform_audit_logs
+				platformLog := &model.PlatformAuditLog{
+					UserID:         userID,
+					Username:       username,
+					IPAddress:      ipAddress,
+					UserAgent:      userAgent,
+					Category:       "operation",
+					Action:         action,
+					ResourceType:   resourceType,
+					ResourceID:     resourceID,
+					ResourceName:   resourceName,
+					RequestMethod:  method,
+					RequestPath:    path,
+					RequestBody:    bodyJSON,
+					ResponseStatus: &statusCode,
+					Changes:        changes,
+					Status:         status,
+					ErrorMessage:   errorMsg,
+					CreatedAt:      startTime,
+				}
+				if err := platformRepo.Create(ctx, platformLog); err != nil {
+					zap.L().Error("平台审计日志写入失败", zap.Error(err))
+				}
+			} else {
+				// 租户用户 — 写入 audit_logs
+				auditLog := &model.AuditLog{
+					UserID:         userID,
+					Username:       username,
+					IPAddress:      ipAddress,
+					UserAgent:      userAgent,
+					Category:       "operation",
+					Action:         action,
+					ResourceType:   resourceType,
+					ResourceID:     resourceID,
+					ResourceName:   resourceName,
+					RequestMethod:  method,
+					RequestPath:    path,
+					RequestBody:    bodyJSON,
+					ResponseStatus: &statusCode,
+					Changes:        changes,
+					Status:         status,
+					ErrorMessage:   errorMsg,
+					CreatedAt:      startTime,
+				}
+				if err := repo.Create(ctx, auditLog); err != nil {
+					zap.L().Error("审计日志写入失败", zap.Error(err))
+				}
 			}
 		}()
 	}
@@ -156,10 +202,17 @@ func AuditMiddleware() gin.HandlerFunc {
 
 // ==================== 操作和资源类型推断 ====================
 
+// isPlatformRoute 判断是否是平台级路由
+func isPlatformRoute(path string) bool {
+	return strings.HasPrefix(path, "/api/v1/platform/")
+}
+
 // inferActionAndResource 从 HTTP 方法和路径推断操作类型和资源类型
 func inferActionAndResource(method, path string) (action, resourceType string) {
 	// 去掉 /api/v1/ 前缀
 	trimmed := strings.TrimPrefix(path, "/api/v1/")
+	// 去掉 platform/ 前缀（平台级路由），使得资源类型推断正确
+	trimmed = strings.TrimPrefix(trimmed, "platform/")
 	parts := strings.Split(trimmed, "/")
 
 	// 获取资源类型 — 处理嵌套路径（如 healing/rules → healing-rules）
@@ -296,6 +349,31 @@ func extractResourceID(path string) *uuid.UUID {
 	return nil
 }
 
+// extractResourceKey 从 URL 路径中提取字符串资源键
+// 用于 platform/settings 等使用非 UUID 主键的资源
+// 路径如 /api/v1/platform/settings/site_message.retention_days → "site_message.retention_days"
+func extractResourceKey(path string) string {
+	info := matchTableInfo(path)
+	if info == nil || info.primaryKey == "" {
+		return ""
+	}
+	// 提取路径中最后一个非空片段作为 key
+	trimmed := strings.TrimPrefix(path, "/api/v1/")
+	parts := strings.Split(trimmed, "/")
+	for i := len(parts) - 1; i >= 0; i-- {
+		if parts[i] != "" {
+			// 确保不是路由前缀段
+			if _, err := uuid.Parse(parts[i]); err != nil {
+				// 跳过已知的路由段名
+				if parts[i] != "platform" && parts[i] != "settings" {
+					return parts[i]
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // ==================== 错误信息提取 ====================
 
 // extractErrorMessage 从响应体中提取错误信息
@@ -327,17 +405,31 @@ var sensitiveFields = map[string]bool{
 }
 
 // captureOldState 在修改前获取资源的当前状态
-func captureOldState(path string, resourceID *uuid.UUID) map[string]interface{} {
-	if resourceID == nil {
-		return nil
-	}
+// 支持 UUID 主键和字符串主键两种资源类型
+// 对平台级资源不使用 tenant_id 过滤
+func captureOldState(path string, resourceID *uuid.UUID, resourceKey string, tenantID uuid.UUID) map[string]interface{} {
 	info := matchTableInfo(path)
 	if info == nil {
 		return nil
 	}
 
-	query := fmt.Sprintf("SELECT * FROM %s WHERE id = $1 LIMIT 1", info.table)
-	rows, err := database.DB.Raw(query, *resourceID).Rows()
+	var rows *sql.Rows
+	var err error
+
+	if info.primaryKey != "" && resourceKey != "" {
+		// 字符串主键（如 platform_settings 的 key 列）
+		query := fmt.Sprintf("SELECT * FROM %s WHERE %s = $1 LIMIT 1", info.table, info.primaryKey)
+		rows, err = database.DB.Raw(query, resourceKey).Rows()
+	} else if resourceID != nil && info.isPlatform {
+		// 平台级表没有 tenant_id 字段
+		query := fmt.Sprintf("SELECT * FROM %s WHERE id = $1 LIMIT 1", info.table)
+		rows, err = database.DB.Raw(query, *resourceID).Rows()
+	} else if resourceID != nil {
+		query := fmt.Sprintf("SELECT * FROM %s WHERE id = $1 AND tenant_id = $2 LIMIT 1", info.table)
+		rows, err = database.DB.Raw(query, *resourceID, tenantID).Rows()
+	} else {
+		return nil
+	}
 	if err != nil {
 		return nil
 	}
@@ -440,9 +532,25 @@ func computeChanges(method string, oldState map[string]interface{}, requestBody 
 }
 
 // formatForCompare 将值序列化为可比较的字符串
+// 对于字符串类型的值，先尝试解析为 JSON 再序列化，以规范化 JSONB 字段的字段顺序，
+// 避免数据库返回的 JSON 字符串与请求体 JSON 对象因字段顺序不同被误判为变更。
 func formatForCompare(v interface{}) string {
 	if v == nil {
 		return "null"
+	}
+	// 如果是字符串，尝试解析为 JSON 结构再序列化（规范化字段顺序）
+	if s, ok := v.(string); ok {
+		var parsed interface{}
+		if json.Unmarshal([]byte(s), &parsed) == nil {
+			if b, err := json.Marshal(parsed); err == nil {
+				return string(b)
+			}
+		}
+		// 不是 JSON 字符串，直接用带引号的形式
+		if b, err := json.Marshal(s); err == nil {
+			return string(b)
+		}
+		return s
 	}
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -490,19 +598,54 @@ func NormalizeIP(ip string) string {
 // ==================== 路由跳过 ====================
 
 // shouldSkipAudit 判断路由是否应跳过审计记录
+//
+// 排除原则：
+//   - 安全事件（登录/登出/密码/密钥）→ 必须审计
+//   - 资源增删改、状态变更、审批/触发 → 必须审计
+//   - 个人偏好/阅读行为/界面配置 → 跳过（低价值噪音）
+//   - 测试/校验/预览/模拟操作 → 跳过（不影响系统状态）
+//     注意：密钥连接测试（/secrets-sources/*/test*）因安全敏感性保留审计
 func shouldSkipAudit(path string) bool {
+	// === 1. 前缀匹配 — 整类路由跳过 ===
 	skipPrefixes := []string{
-		"/api/v1/auth/login",       // 登录由 auth handler 自行记录
-		"/api/v1/auth/refresh",     // Token 刷新无需审计
-		"/api/v1/user/recents",     // 最近访问记录（导航自动触发）
-		"/api/v1/user/favorites",   // 收藏操作（低价值）
-		"/api/v1/user/preferences", // 用户偏好设置
+		"/api/v1/auth/login",             // 登录由 auth handler 自行记录
+		"/api/v1/auth/refresh",           // Token 刷新无需审计
+		"/api/v1/user/recents",           // 最近访问记录（导航自动触发）
+		"/api/v1/user/favorites",         // 收藏操作（低价值）
+		"/api/v1/user/preferences",       // 用户偏好设置
+		"/api/v1/site-messages/read",     // 标记消息已读 / 全部已读（用户阅读行为）
+		"/api/v1/site-messages/settings", // 站内信个人通知偏好
+		"/api/v1/dashboard/config",       // Dashboard 布局配置（个人偏好，自动保存触发）
 	}
 	for _, prefix := range skipPrefixes {
 		if strings.HasPrefix(path, prefix) {
 			return true
 		}
 	}
+
+	// === 2. 后缀匹配 — 测试/校验/预览/模拟类操作（不影响系统状态） ===
+	// 注意：密钥连接测试（secrets-sources）因安全敏感性，不在此排除
+	skipSuffixes := []string{
+		"/test-connection",       // CMDB 连接测试
+		"/batch-test-connection", // CMDB 批量连接测试
+		"/test-query",            // 密钥查询测试（非连接测试）— 无状态变更
+		"/validate",              // Git 仓库校验
+		"/preview",               // 通知模板预览
+		"/dry-run",               // 自愈流程模拟执行
+		"/dry-run-stream",        // 自愈流程模拟执行（SSE）
+	}
+	for _, suffix := range skipSuffixes {
+		if strings.HasSuffix(path, suffix) {
+			return true
+		}
+	}
+
+	// 通知渠道测试（/channels/:id/test）— 不影响系统状态
+	// 但排除密钥连接测试（/secrets-sources/:id/test）— 安全敏感
+	if strings.HasSuffix(path, "/test") && !strings.Contains(path, "/secrets-sources/") {
+		return true
+	}
+
 	return false
 }
 
@@ -510,49 +653,69 @@ func shouldSkipAudit(path string) bool {
 
 // tableInfo 表名和 name 列的映射
 type tableInfo struct {
-	table  string
-	column string
+	table      string
+	column     string
+	isPlatform bool   // 平台级表（无 tenant_id 字段）
+	primaryKey string // 非空时表示使用该列作为主键（而非默认的 "id"）
 }
 
 // pathSegmentToTable 根据 URL 路径段映射到数据库表和名称列
 var pathSegmentToTable = map[string]tableInfo{
-	"plugins":             {"plugins", "name"},
-	"users":               {"users", "username"},
-	"roles":               {"roles", "name"},
-	"channels":            {"notification_channels", "name"},
-	"templates":           {"notification_templates", "name"},
-	"execution-tasks":     {"execution_tasks", "name"},
-	"execution-schedules": {"execution_schedules", "name"},
-	"execution-runs":      {"execution_runs", "name"},
-	"cmdb":                {"cmdb_items", "name"},
-	"secrets-sources":     {"secrets_sources", "name"},
-	"git-repos":           {"git_repositories", "name"},
-	"playbooks":           {"playbook_templates", "name"},
-	"incidents":           {"incidents", "title"},
-	"healing/flows":       {"healing_flows", "name"},
-	"healing/rules":       {"healing_rules", "name"},
-	"healing/instances":   {"flow_instances", "flow_name"},
-	// 站内信
-	"site-messages": {"site_messages", "title"},
+	// === 租户级资源 ===
+	"plugins":             {table: "plugins", column: "name"},
+	"users":               {table: "users", column: "username"},
+	"roles":               {table: "roles", column: "name"},
+	"channels":            {table: "notification_channels", column: "name"},
+	"templates":           {table: "notification_templates", column: "name"},
+	"execution-tasks":     {table: "execution_tasks", column: "name"},
+	"execution-schedules": {table: "execution_schedules", column: "name"},
+	"execution-runs":      {table: "execution_runs", column: "name"},
+	"cmdb":                {table: "cmdb_items", column: "name"},
+	"secrets-sources":     {table: "secrets_sources", column: "name"},
+	"git-repos":           {table: "git_repositories", column: "name"},
+	"playbooks":           {table: "playbook_templates", column: "name"},
+	"incidents":           {table: "incidents", column: "title"},
+	"healing/flows":       {table: "healing_flows", column: "name"},
+	"healing/rules":       {table: "healing_rules", column: "name"},
+	"healing/instances":   {table: "flow_instances", column: "flow_name"},
+	"site-messages":       {table: "site_messages", column: "title"},
+	// === 平台级资源（无 tenant_id）===
+	"platform/tenants":  {table: "tenants", column: "name", isPlatform: true},
+	"platform/users":    {table: "users", column: "username", isPlatform: true},
+	"platform/roles":    {table: "roles", column: "name", isPlatform: true},
+	"platform/settings": {table: "platform_settings", column: "label", isPlatform: true, primaryKey: "key"},
 }
 
 // resolveResourceName 根据 URL 路径和资源 ID 查询资源名称
-func resolveResourceName(path string, resourceID *uuid.UUID, bodyJSON model.JSON) string {
-	// 1. 如果有资源 ID，尝试从数据库查找
-	if resourceID != nil {
-		if info := matchTableInfo(path); info != nil {
-			var name string
-			err := database.DB.Table(info.table).
+// 对平台级资源不使用 tenant_id 过滤
+func resolveResourceName(path string, resourceID *uuid.UUID, resourceKey string, bodyJSON model.JSON, tenantID uuid.UUID) string {
+	if info := matchTableInfo(path); info != nil {
+		var name string
+		var err error
+
+		if info.primaryKey != "" && resourceKey != "" {
+			// 字符串主键（如 platform_settings 的 key 列查 label）
+			err = database.DB.Table(info.table).
+				Select(info.column).
+				Where(fmt.Sprintf("%s = ?", info.primaryKey), resourceKey).
+				Scan(&name).Error
+		} else if resourceID != nil && info.isPlatform {
+			err = database.DB.Table(info.table).
 				Select(info.column).
 				Where("id = ?", *resourceID).
 				Scan(&name).Error
-			if err == nil && name != "" {
-				return name
-			}
+		} else if resourceID != nil {
+			err = database.DB.Table(info.table).
+				Select(info.column).
+				Where("id = ? AND tenant_id = ?", *resourceID, tenantID).
+				Scan(&name).Error
+		}
+		if err == nil && name != "" {
+			return name
 		}
 	}
 
-	// 2. 后备：从请求体的 name/title/username 字段提取
+	// 后备：从请求体的 name/title/username 字段提取
 	if bodyJSON != nil {
 		var body map[string]interface{}
 		raw, _ := json.Marshal(bodyJSON)

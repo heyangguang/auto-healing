@@ -9,6 +9,7 @@ import (
 // Plugin 插件模型
 type Plugin struct {
 	ID                  uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID            *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	Name                string     `json:"name" gorm:"type:varchar(100);not null;uniqueIndex"`
 	Type                string     `json:"type" gorm:"type:varchar(50);not null"` // itsm, cmdb
 	Description         string     `json:"description,omitempty" gorm:"type:text"`
@@ -40,6 +41,7 @@ func (Plugin) TableName() string {
 // PluginSyncLog 插件同步日志
 type PluginSyncLog struct {
 	ID               uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID         *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	PluginID         uuid.UUID  `json:"plugin_id" gorm:"type:uuid;not null"`
 	SyncType         string     `json:"sync_type" gorm:"type:varchar(20);not null"` // scheduled, manual, webhook
 	Status           string     `json:"status" gorm:"type:varchar(20);not null"`    // running, success, failed
@@ -66,6 +68,7 @@ func (PluginSyncLog) TableName() string {
 // Incident 工单/事件模型
 type Incident struct {
 	ID                 uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID           *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	PluginID           *uuid.UUID `json:"plugin_id" gorm:"type:uuid"`                  // 可空，插件删除后为 NULL
 	SourcePluginName   string     `json:"source_plugin_name" gorm:"type:varchar(100)"` // 插件名称（插件删除后保留）
 	ExternalID         string     `json:"external_id" gorm:"type:varchar(200);not null"`

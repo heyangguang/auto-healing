@@ -15,6 +15,8 @@ const (
 	UsernameKey         = "username"
 	RolesKey            = "roles"
 	PermissionsKey      = "permissions"
+	TenantIDsKey        = "tenant_ids"        // 用户所属的租户列表
+	DefaultTenantIDKey  = "default_tenant_id" // 用户的默认租户
 )
 
 // JWTAuth JWT认证中间件
@@ -77,6 +79,9 @@ func JWTAuth(jwtService *jwt.Service) gin.HandlerFunc {
 		c.Set(UsernameKey, claims.Username)
 		c.Set(RolesKey, claims.Roles)
 		c.Set(PermissionsKey, claims.Permissions)
+		c.Set(IsPlatformAdminKey, claims.IsPlatformAdmin)
+		c.Set(TenantIDsKey, claims.TenantIDs)
+		c.Set(DefaultTenantIDKey, claims.DefaultTenantID)
 
 		c.Next()
 	}

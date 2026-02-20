@@ -9,6 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // PlaybookRepository Playbook 仓库
@@ -23,13 +24,17 @@ func NewPlaybookRepository() *PlaybookRepository {
 
 // Create 创建 Playbook
 func (r *PlaybookRepository) Create(ctx context.Context, playbook *model.Playbook) error {
+	if playbook.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		playbook.TenantID = &tenantID
+	}
 	return database.DB.WithContext(ctx).Create(playbook).Error
 }
 
 // GetByID 根据 ID 获取 Playbook
 func (r *PlaybookRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Playbook, error) {
 	var playbook model.Playbook
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Preload("Repository").
 		First(&playbook, "id = ?", id).Error
 	if err != nil {
@@ -82,7 +87,7 @@ func (r *PlaybookRepository) ListWithOptions(ctx context.Context, opts *Playbook
 	var playbooks []model.Playbook
 	var total int64
 
-	query := database.DB.WithContext(ctx).Model(&model.Playbook{})
+	query := TenantDB(database.DB, ctx).Model(&model.Playbook{})
 
 	// 全文搜索（name + description + file_path）
 	if opts.Search != "" {
@@ -148,7 +153,7 @@ func (r *PlaybookRepository) ListWithOptions(ctx context.Context, opts *Playbook
 	}
 
 	// 计数
-	query.Count(&total)
+	query.Session(&gorm.Session{}).Count(&total)
 
 	// 排序
 	allowedSortFields := map[string]bool{
@@ -177,7 +182,7 @@ func (r *PlaybookRepository) ListWithOptions(ctx context.Context, opts *Playbook
 // ListByRepositoryID 根据仓库 ID 列出 Playbooks
 func (r *PlaybookRepository) ListByRepositoryID(ctx context.Context, repositoryID uuid.UUID) ([]model.Playbook, error) {
 	var playbooks []model.Playbook
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Where("repository_id = ?", repositoryID).
 		Find(&playbooks).Error
 	return playbooks, err
@@ -187,7 +192,7 @@ func (r *PlaybookRepository) ListByRepositoryID(ctx context.Context, repositoryI
 func (r *PlaybookRepository) Update(ctx context.Context, playbook *model.Playbook) error {
 	playbook.UpdatedAt = time.Now()
 	// 使用 Select 明确指定要更新的列，避免 GORM 忽略外键字段
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(playbook).
 		Select("name", "file_path", "repository_id", "status", "config_mode", "variables", "scanned_variables", "default_extra_vars", "default_timeout_minutes", "tags", "updated_at").
 		Updates(playbook).Error
@@ -195,7 +200,7 @@ func (r *PlaybookRepository) Update(ctx context.Context, playbook *model.Playboo
 
 // UpdateStatus 更新 Playbook 状态
 func (r *PlaybookRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(&model.Playbook{}).
 		Where("id = ?", id).
 		Updates(map[string]any{
@@ -207,7 +212,7 @@ func (r *PlaybookRepository) UpdateStatus(ctx context.Context, id uuid.UUID, sta
 // UpdateVariables 更新 Playbook 变量
 func (r *PlaybookRepository) UpdateVariables(ctx context.Context, id uuid.UUID, variables model.JSONArray, scannedVariables model.JSONArray) error {
 	now := time.Now()
-	return database.DB.WithContext(ctx).
+	return TenantDB(database.DB, ctx).
 		Model(&model.Playbook{}).
 		Where("id = ?", id).
 		Updates(map[string]any{
@@ -220,13 +225,13 @@ func (r *PlaybookRepository) UpdateVariables(ctx context.Context, id uuid.UUID, 
 
 // Delete 删除 Playbook
 func (r *PlaybookRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return database.DB.WithContext(ctx).Delete(&model.Playbook{}, "id = ?", id).Error
+	return TenantDB(database.DB, ctx).Delete(&model.Playbook{}, "id = ?", id).Error
 }
 
 // CountByRepositoryID 统计仓库关联的 Playbook 数量
 func (r *PlaybookRepository) CountByRepositoryID(ctx context.Context, repositoryID uuid.UUID) (int64, error) {
 	var count int64
-	err := database.DB.WithContext(ctx).
+	err := TenantDB(database.DB, ctx).
 		Model(&model.Playbook{}).
 		Where("repository_id = ?", repositoryID).
 		Count(&count).Error
@@ -237,6 +242,10 @@ func (r *PlaybookRepository) CountByRepositoryID(ctx context.Context, repository
 
 // CreateScanLog 创建扫描日志
 func (r *PlaybookRepository) CreateScanLog(ctx context.Context, log *model.PlaybookScanLog) error {
+	if log.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		log.TenantID = &tenantID
+	}
 	return database.DB.WithContext(ctx).Create(log).Error
 }
 
@@ -245,8 +254,8 @@ func (r *PlaybookRepository) ListScanLogs(ctx context.Context, playbookID uuid.U
 	var logs []model.PlaybookScanLog
 	var total int64
 
-	query := database.DB.WithContext(ctx).Model(&model.PlaybookScanLog{}).Where("playbook_id = ?", playbookID)
-	query.Count(&total)
+	query := TenantDB(database.DB, ctx).Model(&model.PlaybookScanLog{}).Where("playbook_id = ?", playbookID)
+	query.Session(&gorm.Session{}).Count(&total)
 
 	offset := (page - 1) * pageSize
 	err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&logs).Error
@@ -261,7 +270,9 @@ func (r *PlaybookRepository) GetStats(ctx context.Context) (map[string]interface
 
 	// 总数
 	var total int64
-	if err := database.DB.WithContext(ctx).Model(&model.Playbook{}).Count(&total).Error; err != nil {
+	// 每次查询使用新的 TenantDB 实例，避免 GORM session WHERE 条件累积
+	newDB := func() *gorm.DB { return TenantDB(database.DB, ctx) }
+	if err := newDB().Model(&model.Playbook{}).Count(&total).Error; err != nil {
 		return nil, err
 	}
 	stats["total"] = total
@@ -272,7 +283,7 @@ func (r *PlaybookRepository) GetStats(ctx context.Context) (map[string]interface
 		Count  int64  `json:"count"`
 	}
 	var statusCounts []StatusCount
-	database.DB.WithContext(ctx).Model(&model.Playbook{}).
+	newDB().Model(&model.Playbook{}).
 		Select("status, count(*) as count").
 		Group("status").
 		Scan(&statusCounts)
@@ -284,7 +295,7 @@ func (r *PlaybookRepository) GetStats(ctx context.Context) (map[string]interface
 		Count      int64  `json:"count"`
 	}
 	var configModeCounts []ConfigModeCount
-	database.DB.WithContext(ctx).Model(&model.Playbook{}).
+	newDB().Model(&model.Playbook{}).
 		Select("config_mode, count(*) as count").
 		Group("config_mode").
 		Scan(&configModeCounts)

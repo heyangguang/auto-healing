@@ -9,6 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // UserActivityRepository 用户活动数据仓库（收藏 + 最近访问）
@@ -26,30 +27,34 @@ func NewUserActivityRepository() *UserActivityRepository {
 // ListFavorites 获取用户收藏列表（按创建时间倒序）
 func (r *UserActivityRepository) ListFavorites(ctx context.Context, userID uuid.UUID) ([]model.UserFavorite, error) {
 	var favorites []model.UserFavorite
-	err := r.db.WithContext(ctx).
+	err := TenantDB(r.db, ctx).
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Find(&favorites).Error
 	return favorites, err
 }
 
-// AddFavorite 添加收藏
+// AddFavorite 添加收藏（使用 ON CONFLICT DO NOTHING 避免先查后写竞态）
 func (r *UserActivityRepository) AddFavorite(ctx context.Context, fav *model.UserFavorite) error {
-	// 检查是否已存在
-	var count int64
-	r.db.WithContext(ctx).Model(&model.UserFavorite{}).
-		Where("user_id = ? AND menu_key = ?", fav.UserID, fav.MenuKey).
-		Count(&count)
-	if count > 0 {
+	// 设置租户 ID
+	tenantID := TenantIDFromContext(ctx)
+	fav.TenantID = &tenantID
+
+	// idx_user_favorite 是 (user_id, menu_key, tenant_id) 的联合唯一约束
+	// ON CONFLICT DO NOTHING 原子性地处理重复添加，彻底消除先 COUNT 后 CREATE 竞态
+	result := TenantDB(r.db, ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(fav)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
 		return errors.New("该菜单项已收藏")
 	}
-
-	return r.db.WithContext(ctx).Create(fav).Error
+	return nil
 }
 
 // RemoveFavorite 取消收藏
 func (r *UserActivityRepository) RemoveFavorite(ctx context.Context, userID uuid.UUID, menuKey string) error {
-	result := r.db.WithContext(ctx).
+	result := TenantDB(r.db, ctx).
 		Where("user_id = ? AND menu_key = ?", userID, menuKey).
 		Delete(&model.UserFavorite{})
 	if result.Error != nil {
@@ -66,7 +71,7 @@ func (r *UserActivityRepository) RemoveFavorite(ctx context.Context, userID uuid
 // ListRecents 获取最近访问列表（按访问时间倒序，最多 10 条）
 func (r *UserActivityRepository) ListRecents(ctx context.Context, userID uuid.UUID) ([]model.UserRecent, error) {
 	var recents []model.UserRecent
-	err := r.db.WithContext(ctx).
+	err := TenantDB(r.db, ctx).
 		Where("user_id = ?", userID).
 		Order("accessed_at DESC").
 		Limit(10).
@@ -76,7 +81,11 @@ func (r *UserActivityRepository) ListRecents(ctx context.Context, userID uuid.UU
 
 // UpsertRecent 记录最近访问（已存在则更新访问时间，超过 10 条淘汰最旧的）
 func (r *UserActivityRepository) UpsertRecent(ctx context.Context, recent *model.UserRecent) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	// 设置租户 ID
+	tenantID := TenantIDFromContext(ctx)
+	recent.TenantID = &tenantID
+
+	return TenantDB(r.db, ctx).Transaction(func(tx *gorm.DB) error {
 		// 尝试查找已有记录
 		var existing model.UserRecent
 		err := tx.Where("user_id = ? AND menu_key = ?", recent.UserID, recent.MenuKey).First(&existing).Error

@@ -25,6 +25,7 @@ const (
 // 支持两种调度模式：cron（循环）和 once（单次）
 type ExecutionSchedule struct {
 	ID           uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID     *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	Name         string     `json:"name" gorm:"type:varchar(200);not null"`               // 调度名称
 	TaskID       uuid.UUID  `json:"task_id" gorm:"type:uuid;not null"`                    // 关联的任务模板
 	ScheduleType string     `json:"schedule_type" gorm:"type:varchar(10);default:'cron'"` // 调度类型：cron/once

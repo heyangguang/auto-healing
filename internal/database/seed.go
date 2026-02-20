@@ -26,6 +26,7 @@ type RoleSeed struct {
 	DisplayName string
 	Description string
 	IsSystem    bool
+	Scope       string   // platform=平台级, tenant=租户级
 	Permissions []string // 权限码列表
 }
 
@@ -115,22 +116,115 @@ var AllPermissions = []PermissionSeed{
 
 	// ==================== 站内信 ====================
 	{Code: "site-message:create", Name: "创建站内信", Module: "site-message", Resource: "site-message", Action: "create"},
+
+	// ==================== 平台管理 ====================
+	{Code: "platform:settings:manage", Name: "管理平台设置", Module: "platform", Resource: "settings", Action: "manage"},
+	{Code: "platform:tenants:manage", Name: "管理租户", Module: "platform", Resource: "tenants", Action: "manage"},
+	{Code: "platform:tenants:list", Name: "查看租户列表", Module: "platform", Resource: "tenants", Action: "read"},
+	{Code: "platform:users:list", Name: "查看平台用户", Module: "platform", Resource: "users", Action: "read"},
+	{Code: "platform:users:create", Name: "创建平台用户", Module: "platform", Resource: "users", Action: "create"},
+	{Code: "platform:users:update", Name: "更新平台用户", Module: "platform", Resource: "users", Action: "update"},
+	{Code: "platform:users:delete", Name: "删除平台用户", Module: "platform", Resource: "users", Action: "delete"},
+	{Code: "platform:users:reset_password", Name: "重置平台用户密码", Module: "platform", Resource: "users", Action: "manage"},
+	{Code: "platform:roles:list", Name: "查看平台角色", Module: "platform", Resource: "roles", Action: "read"},
+	{Code: "platform:roles:manage", Name: "管理平台角色", Module: "platform", Resource: "roles", Action: "manage"},
+	{Code: "platform:audit:list", Name: "查看平台审计日志", Module: "platform", Resource: "audit", Action: "read"},
+	{Code: "platform:audit:export", Name: "导出平台审计日志", Module: "platform", Resource: "audit", Action: "export"},
+	{Code: "platform:messages:send", Name: "发送平台站内信", Module: "platform", Resource: "messages", Action: "create"},
 }
 
 // SystemRoles 系统预置角色及其默认权限
 var SystemRoles = []RoleSeed{
+
 	{
-		Name:        "super_admin",
-		DisplayName: "超级管理员",
-		Description: "拥有系统所有权限，可管理所有资源",
+		Name:        "platform_admin",
+		DisplayName: "平台超级管理员",
+		Description: "拥有平台所有权限，可管理租户、用户、角色、设置等一切平台资源",
 		IsSystem:    true,
-		Permissions: nil, // super_admin 通过 * 通配符获得所有权限，无需逐个分配
+		Scope:       "platform",
+		Permissions: []string{
+			// 平台超级管理员拥有所有平台权限（代码层面还会赋 "*" 通配符）
+			"platform:tenants:manage", "platform:tenants:list",
+			"platform:settings:manage",
+			"platform:users:list", "platform:users:create", "platform:users:update", "platform:users:delete", "platform:users:reset_password",
+			"platform:roles:list", "platform:roles:manage",
+			"platform:audit:list", "platform:audit:export",
+			"platform:messages:send",
+		},
+	},
+	{
+		Name:        "platform_ops",
+		DisplayName: "平台运维",
+		Description: "管理平台设置和平台角色，不能查看租户和用户数据",
+		IsSystem:    true,
+		Scope:       "platform",
+		Permissions: []string{
+			"platform:settings:manage",
+			"platform:roles:list", "platform:roles:manage",
+		},
+	},
+	{
+		Name:        "platform_tenant_admin",
+		DisplayName: "租户运营",
+		Description: "管理租户的创建、编辑和成员配置，不能修改平台设置",
+		IsSystem:    true,
+		Scope:       "platform",
+		Permissions: []string{
+			"platform:tenants:manage", "platform:tenants:list",
+			"platform:users:list", // 查看用户列表（用于分配租户成员）
+		},
+	},
+	{
+		Name:        "platform_user_admin",
+		DisplayName: "用户运营",
+		Description: "管理平台用户账号和角色分配",
+		IsSystem:    true,
+		Scope:       "platform",
+		Permissions: []string{
+			"platform:users:list", "platform:users:create", "platform:users:update", "platform:users:delete", "platform:users:reset_password",
+			"platform:roles:list", "platform:roles:manage",
+		},
+	},
+	{
+		Name:        "platform_messenger",
+		DisplayName: "消息运营",
+		Description: "发送平台级站内信，查看租户列表（选择发送范围）",
+		IsSystem:    true,
+		Scope:       "platform",
+		Permissions: []string{
+			"platform:messages:send",
+			"platform:tenants:list", // 发送消息时需要选择目标租户
+		},
+	},
+	{
+		Name:        "platform_auditor",
+		DisplayName: "平台审计员",
+		Description: "查看和导出平台级审计日志，纯只读",
+		IsSystem:    true,
+		Scope:       "platform",
+		Permissions: []string{
+			"platform:audit:list", "platform:audit:export",
+		},
+	},
+	{
+		Name:        "platform_viewer",
+		DisplayName: "平台只读",
+		Description: "所有平台页面的只读权限，不能执行任何修改操作",
+		IsSystem:    true,
+		Scope:       "platform",
+		Permissions: []string{
+			"platform:tenants:list",
+			"platform:users:list",
+			"platform:roles:list",
+			"platform:audit:list",
+		},
 	},
 	{
 		Name:        "admin",
 		DisplayName: "管理员",
 		Description: "可管理用户、角色、插件、执行任务等核心资源",
 		IsSystem:    true,
+		Scope:       "tenant",
 		Permissions: []string{
 			// 用户管理（完整）
 			"user:list", "user:create", "user:update", "user:delete", "user:reset_password",
@@ -156,6 +250,10 @@ var SystemRoles = []RoleSeed{
 			"dashboard:workspace:manage",
 			// 站内信
 			"site-message:create",
+			// 平台设置
+			"platform:settings:manage",
+			// 租户管理
+			"platform:tenants:manage",
 			// 审计日志（只读）
 			"audit:list",
 		},
@@ -165,6 +263,7 @@ var SystemRoles = []RoleSeed{
 		DisplayName: "运维人员",
 		Description: "可执行运维操作、管理自愈流程和查看系统信息",
 		IsSystem:    true,
+		Scope:       "tenant",
 		Permissions: []string{
 			// 插件管理（操作类）
 			"plugin:list", "plugin:detail", "plugin:sync", "plugin:test",
@@ -189,6 +288,7 @@ var SystemRoles = []RoleSeed{
 		DisplayName: "只读用户",
 		Description: "只能查看系统信息，不能进行任何修改操作",
 		IsSystem:    true,
+		Scope:       "tenant",
 		Permissions: []string{
 			// 插件（只读）
 			"plugin:list", "plugin:detail",
@@ -259,20 +359,30 @@ func SyncPermissionsAndRoles() error {
 			var role model.Role
 			result := tx.Where("name = ?", roleSeed.Name).First(&role)
 			if result.Error == gorm.ErrRecordNotFound {
+				scope := roleSeed.Scope
+				if scope == "" {
+					scope = "tenant"
+				}
 				role = model.Role{
 					Name:        roleSeed.Name,
 					DisplayName: roleSeed.DisplayName,
 					Description: roleSeed.Description,
 					IsSystem:    roleSeed.IsSystem,
+					Scope:       scope,
 				}
 				if err := tx.Create(&role).Error; err != nil {
 					return err
 				}
 			} else if result.Error == nil {
-				// 更新描述（不覆盖 display_name，用户可能已修改）
+				// 更新描述和 scope（不覆盖 display_name，用户可能已修改）
+				updateScope := roleSeed.Scope
+				if updateScope == "" {
+					updateScope = "tenant"
+				}
 				tx.Model(&role).Updates(map[string]interface{}{
 					"description": roleSeed.Description,
 					"is_system":   roleSeed.IsSystem,
+					"scope":       updateScope,
 				})
 			}
 
@@ -304,20 +414,7 @@ func SyncPermissionsAndRoles() error {
 				}
 			}
 
-			// super_admin: 分配所有权限
-			if roleSeed.Name == "super_admin" {
-				var existingCount int64
-				tx.Model(&model.RolePermission{}).Where("role_id = ?", role.ID).Count(&existingCount)
-				if int(existingCount) < len(allPerms) {
-					for _, perm := range allPerms {
-						rp := model.RolePermission{
-							RoleID:       role.ID,
-							PermissionID: perm.ID,
-						}
-						tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&rp)
-					}
-				}
-			}
+			// 平台管理员通过显式权限列表管理，无需通配符
 		}
 
 		logger.Info("角色权限同步完成")

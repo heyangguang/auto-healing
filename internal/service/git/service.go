@@ -362,6 +362,13 @@ func (s *Service) SyncRepoWithTrigger(ctx context.Context, id uuid.UUID, trigger
 
 // checkPlaybooksAfterSync 同步后检查并自动扫描关联的 Playbooks
 func (s *Service) checkPlaybooksAfterSync(repositoryID uuid.UUID) {
+	// panic 保护
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Sync_("GIT").Error("checkPlaybooksAfterSync panic: %v", rec)
+		}
+	}()
+
 	ctx := context.Background()
 
 	// 获取关联的 Playbooks

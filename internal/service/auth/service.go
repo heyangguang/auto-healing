@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
@@ -24,19 +25,21 @@ var (
 
 // Service 认证服务
 type Service struct {
-	userRepo *repository.UserRepository
-	roleRepo *repository.RoleRepository
-	permRepo *repository.PermissionRepository
-	jwtSvc   *jwt.Service
+	userRepo   *repository.UserRepository
+	roleRepo   *repository.RoleRepository
+	permRepo   *repository.PermissionRepository
+	tenantRepo *repository.TenantRepository
+	jwtSvc     *jwt.Service
 }
 
 // NewService 创建认证服务
 func NewService(jwtSvc *jwt.Service) *Service {
 	return &Service{
-		userRepo: repository.NewUserRepository(),
-		roleRepo: repository.NewRoleRepository(),
-		permRepo: repository.NewPermissionRepository(),
-		jwtSvc:   jwtSvc,
+		userRepo:   repository.NewUserRepository(),
+		roleRepo:   repository.NewRoleRepository(),
+		permRepo:   repository.NewPermissionRepository(),
+		tenantRepo: repository.NewTenantRepository(),
+		jwtSvc:     jwtSvc,
 	}
 }
 
@@ -48,21 +51,31 @@ type LoginRequest struct {
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	AccessToken  string   `json:"access_token"`
-	RefreshToken string   `json:"refresh_token"`
-	TokenType    string   `json:"token_type"`
-	ExpiresIn    int64    `json:"expires_in"`
-	User         UserInfo `json:"user"`
+	AccessToken     string        `json:"access_token"`
+	RefreshToken    string        `json:"refresh_token"`
+	TokenType       string        `json:"token_type"`
+	ExpiresIn       int64         `json:"expires_in"`
+	User            UserInfo      `json:"user"`
+	Tenants         []TenantBrief `json:"tenants"`           // 用户所属的租户列表
+	CurrentTenantID string        `json:"current_tenant_id"` // 当前默认租户 ID
 }
 
 // UserInfo 用户信息
 type UserInfo struct {
-	ID          uuid.UUID `json:"id"`
-	Username    string    `json:"username"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	Roles       []string  `json:"roles"`
-	Permissions []string  `json:"permissions"`
+	ID              uuid.UUID `json:"id"`
+	Username        string    `json:"username"`
+	Email           string    `json:"email"`
+	DisplayName     string    `json:"display_name"`
+	Roles           []string  `json:"roles"`
+	Permissions     []string  `json:"permissions"`
+	IsPlatformAdmin bool      `json:"is_platform_admin"`
+}
+
+// TenantBrief 租户简要信息
+type TenantBrief struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Code string `json:"code"`
 }
 
 // Login 用户登录
@@ -81,6 +94,12 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, clientIP string)
 		if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
 			return nil, ErrUserLocked
 		}
+		if user.LockedUntil == nil {
+			// 永久锁定（管理员手动锁定的情况）
+			return nil, ErrUserLocked
+		}
+		// 锁定已过期 → 自动解锁并重置计数
+		_ = s.userRepo.UpdateLoginInfo(ctx, user.ID, "")
 	}
 	if user.Status == "inactive" {
 		return nil, ErrUserInactive
@@ -107,16 +126,60 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, clientIP string)
 		return nil, err
 	}
 
-	// 检查是否是超级管理员
+	// 检测平台角色：所有 platform_ 前缀角色都标记为平台用户，但只有 platform_admin 赋予 "*" 通配符
+	isPlatformAdmin := false
 	for _, role := range roles {
-		if role == "super_admin" {
-			permissions = []string{"*"}
+		if strings.HasPrefix(role, "platform_") {
+			isPlatformAdmin = true
+			if role == "platform_admin" {
+				permissions = []string{"*"}
+			}
 			break
 		}
 	}
 
-	// 生成 Token
-	tokenPair, err := s.jwtSvc.GenerateTokenPair(user.ID.String(), user.Username, roles, permissions)
+	// 生成 Token（携带 IsPlatformAdmin 标志 + 租户信息）
+	var tokenOpts []func(*jwt.Claims)
+	if isPlatformAdmin {
+		tokenOpts = append(tokenOpts, func(c *jwt.Claims) {
+			c.IsPlatformAdmin = true
+		})
+	}
+
+	// 查询租户列表：platform_admin 获取所有租户，普通用户获取自己加入的租户
+	var tenants []model.Tenant
+	if isPlatformAdmin {
+		tenants, _, err = s.tenantRepo.List(ctx, "", 1, 1000)
+	} else {
+		tenants, err = s.tenantRepo.GetUserTenants(ctx, user.ID, "")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	tenantBriefs := make([]TenantBrief, len(tenants))
+	tenantIDs := make([]string, len(tenants))
+	for i, tenant := range tenants {
+		tenantBriefs[i] = TenantBrief{
+			ID:   tenant.ID.String(),
+			Name: tenant.Name,
+			Code: tenant.Code,
+		}
+		tenantIDs[i] = tenant.ID.String()
+	}
+
+	defaultTenantID := ""
+	if len(tenants) > 0 {
+		defaultTenantID = tenants[0].ID.String()
+	}
+
+	// 将租户信息注入 JWT
+	tokenOpts = append(tokenOpts, func(c *jwt.Claims) {
+		c.TenantIDs = tenantIDs
+		c.DefaultTenantID = defaultTenantID
+	})
+
+	tokenPair, err := s.jwtSvc.GenerateTokenPair(user.ID.String(), user.Username, roles, permissions, tokenOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -127,13 +190,16 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, clientIP string)
 		TokenType:    tokenPair.TokenType,
 		ExpiresIn:    tokenPair.ExpiresIn,
 		User: UserInfo{
-			ID:          user.ID,
-			Username:    user.Username,
-			Email:       user.Email,
-			DisplayName: user.DisplayName,
-			Roles:       roles,
-			Permissions: permissions,
+			ID:              user.ID,
+			Username:        user.Username,
+			Email:           user.Email,
+			DisplayName:     user.DisplayName,
+			Roles:           roles,
+			Permissions:     permissions,
+			IsPlatformAdmin: isPlatformAdmin,
 		},
+		Tenants:         tenantBriefs,
+		CurrentTenantID: defaultTenantID,
 	}, nil
 }
 
@@ -145,6 +211,7 @@ type RegisterRequest struct {
 	DisplayName string      `json:"display_name"`
 	Phone       string      `json:"phone"`
 	RoleIDs     []uuid.UUID `json:"role_ids"`
+	TenantID    *uuid.UUID  `json:"tenant_id,omitempty"` // 可选：指定用户所属租户
 }
 
 // Register 用户注册 (管理员创建用户)
@@ -201,6 +268,22 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*model.Us
 	if len(req.RoleIDs) > 0 {
 		if err := s.userRepo.AssignRoles(ctx, user.ID, req.RoleIDs); err != nil {
 			return nil, fmt.Errorf("分配角色失败: %w", err)
+		}
+	}
+
+	// 如果指定了租户，建立用户-租户关联
+	if req.TenantID != nil {
+		// 动态查找 viewer 角色（不使用硬编码 UUID）
+		viewerRole, err := s.roleRepo.GetByName(ctx, "viewer")
+		if err != nil {
+			// 回退：尝试 operator 角色
+			viewerRole, err = s.roleRepo.GetByName(ctx, "operator")
+			if err != nil {
+				return nil, fmt.Errorf("未找到可分配的默认角色（viewer/operator）")
+			}
+		}
+		if err := s.tenantRepo.AddMember(ctx, user.ID, *req.TenantID, viewerRole.ID); err != nil {
+			return nil, fmt.Errorf("关联租户失败: %w", err)
 		}
 	}
 
@@ -261,21 +344,26 @@ func (s *Service) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*UserIn
 		return nil, err
 	}
 
-	// 检查超级管理员
+	// 检测平台角色
+	isPlatformAdmin := false
 	for _, role := range roles {
-		if role == "super_admin" {
-			permissions = []string{"*"}
+		if strings.HasPrefix(role, "platform_") {
+			isPlatformAdmin = true
+			if role == "platform_admin" {
+				permissions = []string{"*"}
+			}
 			break
 		}
 	}
 
 	return &UserInfo{
-		ID:          user.ID,
-		Username:    user.Username,
-		Email:       user.Email,
-		DisplayName: user.DisplayName,
-		Roles:       roles,
-		Permissions: permissions,
+		ID:              user.ID,
+		Username:        user.Username,
+		Email:           user.Email,
+		DisplayName:     user.DisplayName,
+		Roles:           roles,
+		Permissions:     permissions,
+		IsPlatformAdmin: isPlatformAdmin,
 	}, nil
 }
 
@@ -294,6 +382,7 @@ type UserProfile struct {
 	CreatedAt         time.Time    `json:"created_at"`
 	Roles             []RoleDetail `json:"roles"`
 	Permissions       []string     `json:"permissions"`
+	IsPlatformAdmin   bool         `json:"is_platform_admin"`
 }
 
 // RoleDetail 角色详情
@@ -328,9 +417,14 @@ func (s *Service) GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserPr
 		return nil, err
 	}
 
+	// 检测平台角色
+	isPlatformAdmin2 := false
 	for _, role := range roleNames {
-		if role == "super_admin" {
-			permissions = []string{"*"}
+		if strings.HasPrefix(role, "platform_") {
+			isPlatformAdmin2 = true
+			if role == "platform_admin" {
+				permissions = []string{"*"}
+			}
 			break
 		}
 	}
@@ -342,14 +436,16 @@ func (s *Service) GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserPr
 		DisplayName:       user.DisplayName,
 		Phone:             user.Phone,
 		AvatarURL:         user.AvatarURL,
-		Status:            user.Status,
+		Status:            string(user.Status),
 		LastLoginAt:       user.LastLoginAt,
 		LastLoginIP:       user.LastLoginIP,
 		PasswordChangedAt: user.PasswordChangedAt,
 		CreatedAt:         user.CreatedAt,
 		Roles:             roleDetails,
 		Permissions:       permissions,
+		IsPlatformAdmin:   isPlatformAdmin2,
 	}, nil
+
 }
 
 // UpdateProfile 更新个人信息
