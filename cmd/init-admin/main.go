@@ -68,9 +68,10 @@ func main() {
 	}
 
 	// 分配超级管理员角色
-	userRole := model.UserRole{
-		UserID: admin.ID,
-		RoleID: superAdminRole.ID,
+	userRole := model.UserTenantRole{
+		UserID:   admin.ID,
+		TenantID: model.DefaultTenantID,
+		RoleID:   superAdminRole.ID,
 	}
 	if err := database.DB.Create(&userRole).Error; err != nil {
 		log.Fatalf("分配角色失败: %v", err)
