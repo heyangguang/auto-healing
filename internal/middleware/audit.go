@@ -67,11 +67,21 @@ func AuditMiddleware() gin.HandlerFunc {
 		tenantID := repository.TenantIDFromContext(c.Request.Context())
 		// 提取用户身份 — 决定审计日志写入平台表还是租户表
 		isPlatformAdmin := IsPlatformAdmin(c)
+		// 对 /auth/profile 路由，使用当前用户 ID 作为资源 ID
+		if strings.HasSuffix(path, "/auth/profile") {
+			if userIDStr := GetUserID(c); userIDStr != "" {
+				if uid, err := uuid.Parse(userIDStr); err == nil {
+					resourceID = &uid
+				}
+			}
+		}
 		var oldState map[string]interface{}
 		if method == "PUT" || method == "PATCH" || method == "DELETE" {
-			if isPlatformAdmin || isPlatformRoute(path) {
+			if isPlatformRoute(path) {
+				// 平台路由操作的是平台级资源，不需要 tenant_id 过滤
 				oldState = captureOldState(path, resourceID, resourceKey, uuid.Nil)
 			} else {
+				// 非平台路由（包括平台管理员操作租户资源），使用实际的 tenant_id
 				oldState = captureOldState(path, resourceID, resourceKey, tenantID)
 			}
 		}
@@ -130,7 +140,7 @@ func AuditMiddleware() gin.HandlerFunc {
 
 			// 解析资源名称
 			var resourceNameTenantID uuid.UUID
-			if !isPlatformAdmin && !isPlatformRoute(path) {
+			if !isPlatformRoute(path) {
 				resourceNameTenantID = tenantID
 			}
 			resourceName := resolveResourceName(path, resourceID, resourceKey, bodyJSON, resourceNameTenantID)
@@ -138,7 +148,7 @@ func AuditMiddleware() gin.HandlerFunc {
 			// 计算变更记录（PUT/PATCH/DELETE）
 			var changes model.JSON
 			if status == "success" {
-				changes = computeChanges(method, oldState, bodyJSON)
+				changes = computeChanges(method, action, oldState, bodyJSON)
 			}
 
 			// 根据用户身份判断是平台级还是租户级，写入对应的表
@@ -252,6 +262,8 @@ func inferActionAndResource(method, path string) (action, resourceType string) {
 				action = "reset_password"
 			case "trigger":
 				action = "trigger"
+			case "dismiss":
+				action = "dismiss"
 			case "confirm-review":
 				action = "confirm_review"
 			case "dry-run", "dry-run-stream":
@@ -287,7 +299,7 @@ func inferActionAndResource(method, path string) (action, resourceType string) {
 		if len(parts) >= 3 {
 			lastPart := parts[len(parts)-1]
 			switch lastPart {
-			case "roles":
+			case "roles", "role":
 				action = "assign_role"
 			case "permissions":
 				action = "assign_permission"
@@ -317,8 +329,10 @@ func inferResourceType(parts []string) string {
 
 	// 已知的嵌套资源前缀 — 第一段是父级，第二段是子资源
 	nestedPrefixes := map[string]bool{
-		"healing": true, // healing/flows, healing/rules, healing/instances, healing/approvals
-		"auth":    true, // auth/login, auth/logout
+		"healing":  true, // healing/flows, healing/rules, healing/instances, healing/approvals
+		"auth":     true, // auth/login, auth/logout, auth/profile
+		"tenant":   true, // tenant/users, tenant/roles
+		"platform": true, // platform/tenants, platform/users, platform/roles
 	}
 
 	first := parts[0]
@@ -336,17 +350,30 @@ func inferResourceType(parts []string) string {
 }
 
 // extractResourceID 从 URL 路径中提取资源 ID
+// 对于嵌套路由如 /tenants/:id/members/:userId/role，需要根据末端操作判断提取哪个 UUID
 func extractResourceID(path string) *uuid.UUID {
 	trimmed := strings.TrimPrefix(path, "/api/v1/")
 	parts := strings.Split(trimmed, "/")
 
-	// 遍历路径片段，查找 UUID
+	// 收集所有 UUID
+	var uuids []uuid.UUID
 	for _, part := range parts {
 		if uid, err := uuid.Parse(part); err == nil {
-			return &uid
+			uuids = append(uuids, uid)
 		}
 	}
-	return nil
+
+	if len(uuids) == 0 {
+		return nil
+	}
+
+	// 如果路径包含 members/和 /role（如 tenants/:id/members/:userId/role），
+	// 取第二个 UUID（目标用户），因为我们要查询的是用户的状态
+	if len(uuids) >= 2 && strings.Contains(path, "/members/") {
+		return &uuids[1]
+	}
+
+	return &uuids[0]
 }
 
 // extractResourceKey 从 URL 路径中提取字符串资源键
@@ -468,25 +495,32 @@ func captureOldState(path string, resourceID *uuid.UUID, resourceKey string, ten
 	return result
 }
 
-// computeChanges 比较旧状态和请求体，生成变更记录
-func computeChanges(method string, oldState map[string]interface{}, requestBody model.JSON) model.JSON {
-	if oldState == nil {
-		return nil
-	}
+// relationshipActions 关联操作 — 这些操作修改的是多对多关系，而非单行的列值
+// 无法通过 oldState 和 requestBody 的列级 diff 来计算变更
+// 对这些操作，直接将请求体记录为 changes 的 assigned 字段
+var relationshipActions = map[string]bool{
+	"assign_role":       true,
+	"assign_permission": true,
+	"assign_workspace":  true,
+}
 
+// computeChanges 比较旧状态和请求体，生成变更记录
+func computeChanges(method string, action string, oldState map[string]interface{}, requestBody model.JSON) model.JSON {
 	changes := make(map[string]interface{})
 
 	if method == "DELETE" {
-		// 删除操作：记录被删除资源的关键信息
-		deleteInfo := map[string]interface{}{}
+		if oldState == nil {
+			return nil
+		}
+		// 删除操作：记录被删除资源的关键信息，统一 old/new 格式（new 为 null）
 		infoFields := []string{"name", "username", "title", "hostname", "flow_name", "description", "status"}
 		for _, key := range infoFields {
 			if v, ok := oldState[key]; ok && v != nil && fmt.Sprintf("%v", v) != "" {
-				deleteInfo[key] = v
+				changes[key] = map[string]interface{}{
+					"old": formatForDisplay(v),
+					"new": nil,
+				}
 			}
-		}
-		if len(deleteInfo) > 0 {
-			changes["deleted"] = deleteInfo
 		}
 		if len(changes) == 0 {
 			return nil
@@ -501,6 +535,40 @@ func computeChanges(method string, oldState map[string]interface{}, requestBody 
 	var reqBody map[string]interface{}
 	raw, _ := json.Marshal(requestBody)
 	if json.Unmarshal(raw, &reqBody) != nil {
+		return nil
+	}
+
+	// 关联操作（分配角色/权限/工作区）— 请求体包含的是关系数据而非直接列值
+	// 无法获取旧的关联关系，所以 old 为 null，new 记录新分配的值
+	if relationshipActions[action] {
+		for k, v := range reqBody {
+			if !sensitiveFields[k] {
+				changes[k] = map[string]interface{}{
+					"old": nil,
+					"new": v,
+				}
+			}
+		}
+		if len(changes) > 0 {
+			return model.JSON(changes)
+		}
+		return nil
+	}
+
+	// 标准行级 diff — 对比 oldState 和 requestBody
+	if oldState == nil {
+		// 无旧状态但有请求体 — 记录为 old=null, new=实际值
+		for k, v := range reqBody {
+			if !sensitiveFields[k] {
+				changes[k] = map[string]interface{}{
+					"old": nil,
+					"new": formatForDisplay(v),
+				}
+			}
+		}
+		if len(changes) > 0 {
+			return model.JSON(changes)
+		}
 		return nil
 	}
 
@@ -616,6 +684,7 @@ func shouldSkipAudit(path string) bool {
 		"/api/v1/site-messages/read",     // 标记消息已读 / 全部已读（用户阅读行为）
 		"/api/v1/site-messages/settings", // 站内信个人通知偏好
 		"/api/v1/dashboard/config",       // Dashboard 布局配置（个人偏好，自动保存触发）
+		"/api/v1/workbench/favorites",    // 工作台收藏（低价值，个人偏好）
 	}
 	for _, prefix := range skipPrefixes {
 		if strings.HasPrefix(path, prefix) {
@@ -663,7 +732,7 @@ type tableInfo struct {
 var pathSegmentToTable = map[string]tableInfo{
 	// === 租户级资源 ===
 	"plugins":             {table: "plugins", column: "name"},
-	"users":               {table: "users", column: "username"},
+	"users":               {table: "users", column: "username", isPlatform: true}, // users 表无 tenant_id
 	"roles":               {table: "roles", column: "name"},
 	"channels":            {table: "notification_channels", column: "name"},
 	"templates":           {table: "notification_templates", column: "name"},
@@ -679,6 +748,9 @@ var pathSegmentToTable = map[string]tableInfo{
 	"healing/rules":       {table: "healing_rules", column: "name"},
 	"healing/instances":   {table: "flow_instances", column: "flow_name"},
 	"site-messages":       {table: "site_messages", column: "title"},
+	"tenant/users":        {table: "users", column: "username", isPlatform: true}, // users 表无 tenant_id
+	"tenant/roles":        {table: "roles", column: "name"},                       // roles 表有 tenant_id
+	"auth":                {table: "users", column: "username", isPlatform: true}, // /auth/profile → 用户表
 	// === 平台级资源（无 tenant_id）===
 	"platform/tenants":  {table: "tenants", column: "name", isPlatform: true},
 	"platform/users":    {table: "users", column: "username", isPlatform: true},
@@ -742,7 +814,14 @@ func matchTableInfo(path string) *tableInfo {
 		return nil
 	}
 
-	// 先尝试二段匹配（如 healing/flows）
+	// 特殊处理：嵌套成员路由（如 platform/tenants/:id/members/:userId/role）
+	// 这类路由操作的是用户的角色，需要映射到 users 表
+	if strings.Contains(path, "/members/") {
+		usersInfo := tableInfo{table: "users", column: "username", isPlatform: true}
+		return &usersInfo
+	}
+
+	// 先尝试二段匹配（如 healing/flows、platform/tenants）
 	if len(parts) >= 2 {
 		key2 := fmt.Sprintf("%s/%s", parts[0], parts[1])
 		if info, ok := pathSegmentToTable[key2]; ok {
