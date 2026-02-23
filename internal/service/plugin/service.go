@@ -674,8 +674,8 @@ func (s *IncidentService) GetIncident(ctx context.Context, id uuid.UUID) (*model
 
 // ListIncidents 获取工单列表（支持查询已删除插件的工单）
 // hasPlugin: nil=不筛选, true=只有关联插件, false=只无关联插件
-func (s *IncidentService) ListIncidents(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity, sourcePluginName, search string, hasPlugin *bool, sortBy, sortOrder string) ([]model.Incident, int64, error) {
-	return s.incidentRepo.List(ctx, page, pageSize, pluginID, status, healingStatus, severity, sourcePluginName, search, hasPlugin, sortBy, sortOrder)
+func (s *IncidentService) ListIncidents(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity, sourcePluginName, search string, hasPlugin *bool, sortBy, sortOrder string, externalID string) ([]model.Incident, int64, error) {
+	return s.incidentRepo.List(ctx, page, pageSize, pluginID, status, healingStatus, severity, sourcePluginName, search, hasPlugin, sortBy, sortOrder, externalID)
 }
 
 // CloseIncidentResponse 关闭工单响应
@@ -714,16 +714,13 @@ func (s *IncidentService) CloseIncident(ctx context.Context, id uuid.UUID, resol
 				}
 				if err := s.httpClient.CloseIncident(ctx, plugin.Config, closeReq); err != nil {
 					// 回写失败只记录日志，不阻断流程
-					logger.Sync_("PLUGIN").Warn("回写工单到源系统失败",
-						"incident_id", id,
-						"external_id", incident.ExternalID,
-						"error", err.Error(),
+					logger.Sync_("PLUGIN").Warn("回写工单到源系统失败: incident_id=%s, external_id=%s, error=%s",
+						id, incident.ExternalID, err.Error(),
 					)
 				} else {
 					sourceUpdated = true
-					logger.Sync_("PLUGIN").Info("成功回写工单到源系统",
-						"incident_id", id,
-						"external_id", incident.ExternalID,
+					logger.Sync_("PLUGIN").Info("成功回写工单到源系统: incident_id=%s, external_id=%s",
+						id, incident.ExternalID,
 					)
 				}
 			}

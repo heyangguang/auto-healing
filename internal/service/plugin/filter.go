@@ -60,12 +60,6 @@ func ApplyFilterWithReason(filter *FilterCondition, data map[string]interface{})
 	return evaluateConditionWithReason(filter, data)
 }
 
-// evaluateCondition 递归评估条件
-func evaluateCondition(cond *FilterCondition, data map[string]interface{}) bool {
-	matched, _ := evaluateConditionWithReason(cond, data)
-	return matched
-}
-
 // evaluateConditionWithReason 递归评估条件并返回原因
 func evaluateConditionWithReason(cond *FilterCondition, data map[string]interface{}) (bool, string) {
 	// 组合条件
@@ -98,12 +92,6 @@ func evaluateConditionWithReason(cond *FilterCondition, data map[string]interfac
 	}
 
 	return true, "" // 空条件放行
-}
-
-// evaluateRule 评估单个规则
-func evaluateRule(field, operator string, value interface{}, data map[string]interface{}) bool {
-	matched, _ := evaluateRuleWithReason(field, operator, value, data)
-	return matched
 }
 
 // evaluateRuleWithReason 评估单个规则并返回原因

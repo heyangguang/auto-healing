@@ -11,7 +11,6 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	pluginService "github.com/company/auto-healing/internal/service/plugin"
-	"github.com/google/uuid"
 )
 
 // Scheduler 定时调度器
@@ -250,12 +249,4 @@ func (s *Scheduler) syncPlugin(ctx context.Context, plugin model.Plugin) {
 			nextSyncAt.Format("15:04:05"),
 		)
 	}
-}
-
-// updateNextSyncTime 更新下次同步时间
-func (s *Scheduler) updateNextSyncTime(ctx context.Context, pluginID uuid.UUID, nextSyncAt time.Time) error {
-	return database.DB.WithContext(ctx).
-		Model(&model.Plugin{}).
-		Where("id = ?", pluginID).
-		Update("next_sync_at", nextSyncAt).Error
 }

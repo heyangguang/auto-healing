@@ -253,7 +253,7 @@ func (r *IncidentRepository) Update(ctx context.Context, incident *model.Inciden
 
 // List 获取工单列表（支持查询已删除插件的工单）
 // hasPlugin: nil=不筛选, true=只有关联插件, false=只无关联插件
-func (r *IncidentRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity, sourcePluginName, search string, hasPlugin *bool, sortBy, sortOrder string) ([]model.Incident, int64, error) {
+func (r *IncidentRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity, sourcePluginName, search string, hasPlugin *bool, sortBy, sortOrder string, externalID string) ([]model.Incident, int64, error) {
 	var incidents []model.Incident
 	var total int64
 
@@ -284,7 +284,11 @@ func (r *IncidentRepository) List(ctx context.Context, page, pageSize int, plugi
 		query = query.Where("severity = ?", severity)
 	}
 	if search != "" {
-		query = query.Where("title ILIKE ?", "%"+search+"%")
+		pattern := "%" + search + "%"
+		query = query.Where("(title ILIKE ? OR external_id ILIKE ? OR description ILIKE ?)", pattern, pattern, pattern)
+	}
+	if externalID != "" {
+		query = query.Where("external_id = ?", externalID)
 	}
 
 	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
@@ -357,7 +361,8 @@ func (r *IncidentRepository) ListPendingTrigger(ctx context.Context, page, pageS
 	query := TenantDB(r.db, ctx).Model(&model.Incident{}).
 		Where("scanned = ?", true).
 		Where("matched_rule_id IS NOT NULL").
-		Where("healing_flow_instance_id IS NULL")
+		Where("healing_flow_instance_id IS NULL").
+		Where("healing_status NOT IN ?", []string{"skipped", "dismissed"})
 
 	// 模糊搜索：title, external_id, affected_ci
 	if search != "" {
@@ -393,6 +398,55 @@ func (r *IncidentRepository) ListPendingTrigger(ctx context.Context, page, pageS
 	return incidents, total, err
 }
 
+// ListDismissedTrigger 获取已忽略的手动触发工单列表
+// 用于待办中心的"已忽略"标签页
+func (r *IncidentRepository) ListDismissedTrigger(ctx context.Context, page, pageSize int, search, severity, dateFrom, dateTo string) ([]model.Incident, int64, error) {
+	var incidents []model.Incident
+	var total int64
+
+	// 筛选条件：
+	// 1. scanned = true (已扫描)
+	// 2. matched_rule_id IS NOT NULL (匹配了规则)
+	// 3. healing_status = 'skipped' (已忽略)
+	query := TenantDB(r.db, ctx).Model(&model.Incident{}).
+		Where("scanned = ?", true).
+		Where("matched_rule_id IS NOT NULL").
+		Where("healing_status = ?", "dismissed")
+
+	// 模糊搜索：title, external_id, affected_ci
+	if search != "" {
+		searchPattern := "%" + search + "%"
+		query = query.Where("(title ILIKE ? OR external_id ILIKE ? OR affected_ci ILIKE ?)", searchPattern, searchPattern, searchPattern)
+	}
+
+	// 严重级别过滤
+	if severity != "" {
+		query = query.Where("severity = ?", severity)
+	}
+
+	// 日期范围过滤
+	if dateFrom != "" {
+		query = query.Where("created_at >= ?", dateFrom+" 00:00:00")
+	}
+	if dateTo != "" {
+		query = query.Where("created_at <= ?", dateTo+" 23:59:59")
+	}
+
+	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := query.
+		Preload("Plugin").
+		Offset(offset).
+		Limit(pageSize).
+		Order("updated_at DESC").
+		Find(&incidents).Error
+
+	return incidents, total, err
+}
+
 // MarkScanned 标记工单为已扫描
 func (r *IncidentRepository) MarkScanned(ctx context.Context, id uuid.UUID, matchedRuleID *uuid.UUID, flowInstanceID *uuid.UUID) error {
 	updates := map[string]interface{}{
@@ -413,6 +467,7 @@ func (r *IncidentRepository) ResetScan(ctx context.Context, id uuid.UUID) error 
 		"scanned":                  false,
 		"matched_rule_id":          nil,
 		"healing_flow_instance_id": nil,
+		"healing_status":           "pending",
 	}).Error
 }
 
@@ -435,6 +490,7 @@ func (r *IncidentRepository) BatchResetScan(ctx context.Context, ids []uuid.UUID
 		"scanned":                  false,
 		"matched_rule_id":          nil,
 		"healing_flow_instance_id": nil,
+		"healing_status":           "pending",
 	})
 
 	return result.RowsAffected, result.Error
@@ -451,6 +507,7 @@ type IncidentStats struct {
 	Healed     int64 `json:"healed"`
 	Failed     int64 `json:"failed"`
 	Skipped    int64 `json:"skipped"`
+	Dismissed  int64 `json:"dismissed"`
 }
 
 // GetStats 获取工单统计数据
@@ -492,6 +549,9 @@ func (r *IncidentRepository) GetStats(ctx context.Context) (*IncidentStats, erro
 		return nil, err
 	}
 	if err := newDB().Model(&model.Incident{}).Where("healing_status = ?", "skipped").Count(&stats.Skipped).Error; err != nil {
+		return nil, err
+	}
+	if err := newDB().Model(&model.Incident{}).Where("healing_status = ?", "dismissed").Count(&stats.Dismissed).Error; err != nil {
 		return nil, err
 	}
 

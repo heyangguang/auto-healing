@@ -83,7 +83,7 @@ type Incident struct {
 	Assignee           string     `json:"assignee" gorm:"type:varchar(200)"`
 	Reporter           string     `json:"reporter" gorm:"type:varchar(200)"`
 	RawData            JSON       `json:"raw_data" gorm:"type:jsonb;not null"`
-	HealingStatus      string     `json:"healing_status" gorm:"type:varchar(50);default:'pending'"` // pending, processing, healed, failed, skipped
+	HealingStatus      string     `json:"healing_status" gorm:"type:varchar(50);default:'pending'"` // pending, processing, healed, failed, skipped(无匹配规则), dismissed(人工忽略)
 	WorkflowInstanceID *uuid.UUID `json:"workflow_instance_id" gorm:"type:uuid"`
 	// 自愈引擎相关字段
 	Scanned               bool       `json:"scanned" gorm:"default:false"`                              // 是否已被扫描

@@ -248,8 +248,10 @@ func (h *PluginHandler) ListIncidents(c *gin.Context) {
 		hp := hpStr == "true"
 		hasPlugin = &hp
 	}
+	// 外部ID精确搜索 — 如果提供了 external_id，将其作为精确搜索条件
+	externalID := c.Query("external_id")
 
-	incidents, total, err := h.incidentSvc.ListIncidents(c.Request.Context(), page, pageSize, pluginID, status, healingStatus, severity, sourcePluginName, search, hasPlugin, sortBy, sortOrder)
+	incidents, total, err := h.incidentSvc.ListIncidents(c.Request.Context(), page, pageSize, pluginID, status, healingStatus, severity, sourcePluginName, search, hasPlugin, sortBy, sortOrder, externalID)
 	if err != nil {
 		response.InternalError(c, "获取工单列表失败")
 		return
