@@ -794,7 +794,7 @@ func (vs *VariableScanner) scanIncludes(data interface{}, currentFile string) {
 }
 
 // scanRole 扫描 role（扫描所有 Ansible 官方标准目录）
-func (vs *VariableScanner) scanRole(role interface{}, currentFile string) {
+func (vs *VariableScanner) scanRole(role interface{}, _ string) {
 	var roleName string
 
 	switch r := role.(type) {

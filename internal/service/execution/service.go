@@ -811,16 +811,6 @@ func (s *Service) appendLog(ctx context.Context, runID uuid.UUID, level, stage, 
 	s.repo.AppendLog(ctx, log)
 }
 
-// calculateNextRun 计算下次执行时间
-func calculateNextRun(scheduleExpr string) time.Time {
-	// 简单实现：支持 "30s", "1m", "5m", "1h" 格式
-	duration, err := time.ParseDuration(scheduleExpr)
-	if err != nil {
-		duration = time.Hour
-	}
-	return time.Now().Add(duration)
-}
-
 // getStatusFromExitCode 根据退出码获取状态
 func getStatusFromExitCode(exitCode int) string {
 	if exitCode == 0 {

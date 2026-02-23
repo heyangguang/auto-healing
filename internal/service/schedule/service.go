@@ -111,10 +111,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req *model.Execution
 	if req.ScheduleType != "" && req.ScheduleType != schedule.ScheduleType {
 		// 类型发生变化，清空另一种模式的字段
 		schedule.ScheduleType = req.ScheduleType
-		if req.ScheduleType == model.ScheduleTypeCron {
+		switch req.ScheduleType {
+		case model.ScheduleTypeCron:
 			// 切换到 cron 模式，清空 scheduled_at
 			schedule.ScheduledAt = nil
-		} else if req.ScheduleType == model.ScheduleTypeOnce {
+		case model.ScheduleTypeOnce:
 			// 切换到 once 模式，清空 schedule_expr
 			schedule.ScheduleExpr = nil
 		}
