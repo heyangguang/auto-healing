@@ -329,6 +329,147 @@ var SystemRoles = []RoleSeed{
 			"workflow:list", "workflow:detail",
 		},
 	},
+
+	// ==================== 细分职能角色 ====================
+	{
+		Name:        "healing_engineer",
+		DisplayName: "自愈工程师",
+		Description: "专注自愈流程的设计和运维，可管理流程、规则、审批和触发，其他模块只读",
+		IsSystem:    true,
+		Scope:       "tenant",
+		Permissions: []string{
+			// 自愈引擎（完整）
+			"healing:flows:view", "healing:flows:create", "healing:flows:update", "healing:flows:delete",
+			"healing:rules:view", "healing:rules:create", "healing:rules:update", "healing:rules:delete",
+			"healing:instances:view",
+			"healing:approvals:view", "healing:approvals:approve",
+			"healing:trigger:view", "healing:trigger:execute",
+			// 执行（只读 + 执行 Playbook）
+			"task:list", "task:detail",
+			"repository:list",
+			"playbook:list", "playbook:execute",
+			// 插件（只读 + 操作）
+			"plugin:list", "plugin:detail", "plugin:sync", "plugin:test",
+			// 通知（只读）
+			"channel:list", "template:list", "notification:list",
+			// Dashboard（只读）
+			"dashboard:view",
+			// 站内信（只读）
+			"site-message:list",
+			// 审计日志（只读）
+			"audit:list",
+			// 工作流（只读）
+			"workflow:list", "workflow:detail",
+		},
+	},
+	{
+		Name:        "devops_engineer",
+		DisplayName: "运维工程师",
+		Description: "专注任务执行和自动化运维，可管理执行任务、Playbook和Git仓库，其他模块只读",
+		IsSystem:    true,
+		Scope:       "tenant",
+		Permissions: []string{
+			// 执行管理（完整）
+			"task:list", "task:detail", "task:create", "task:update", "task:delete", "task:cancel",
+			"repository:list", "repository:create", "repository:update", "repository:delete", "repository:sync",
+			"playbook:list", "playbook:execute",
+			// 插件（只读 + 操作）
+			"plugin:list", "plugin:detail", "plugin:sync", "plugin:test",
+			// 自愈（只读 + 手动触发）
+			"healing:flows:view", "healing:rules:view", "healing:instances:view",
+			"healing:approvals:view", "healing:trigger:view", "healing:trigger:execute",
+			// 通知（只读）
+			"channel:list", "template:list", "notification:list",
+			// Dashboard（只读）
+			"dashboard:view",
+			// 站内信（只读）
+			"site-message:list",
+			// 审计日志（只读）
+			"audit:list",
+			// 工作流（操作类）
+			"workflow:list", "workflow:detail", "workflow:update", "workflow:activate", "workflow:run",
+		},
+	},
+	{
+		Name:        "notification_manager",
+		DisplayName: "通知管理员",
+		Description: "管理通知渠道、模板和站内信，可创建和发送通知，其他模块只读",
+		IsSystem:    true,
+		Scope:       "tenant",
+		Permissions: []string{
+			// 通知管理（完整）
+			"channel:list", "channel:create", "channel:update", "channel:delete",
+			"template:list", "template:create", "template:update", "template:delete",
+			"notification:list", "notification:send",
+			// 站内信（完整）
+			"site-message:list", "site-message:create", "site-message:settings:view", "site-message:settings:manage",
+			// 插件（只读）
+			"plugin:list", "plugin:detail",
+			// 执行（只读）
+			"task:list", "task:detail", "repository:list", "playbook:list",
+			// 自愈（只读）
+			"healing:flows:view", "healing:rules:view", "healing:instances:view",
+			"healing:approvals:view", "healing:trigger:view",
+			// Dashboard（只读）
+			"dashboard:view",
+			// 审计日志（只读）
+			"audit:list",
+			// 工作流（只读）
+			"workflow:list", "workflow:detail",
+		},
+	},
+	{
+		Name:        "monitor_admin",
+		DisplayName: "监控管理员",
+		Description: "管理监控插件和Dashboard面板，可配置数据源和面板布局，其他模块只读",
+		IsSystem:    true,
+		Scope:       "tenant",
+		Permissions: []string{
+			// 插件管理（完整）
+			"plugin:list", "plugin:detail", "plugin:create", "plugin:update", "plugin:delete", "plugin:sync", "plugin:test",
+			// Dashboard（完整）
+			"dashboard:view", "dashboard:config:manage", "dashboard:workspace:manage",
+			// 执行（只读）
+			"task:list", "task:detail", "repository:list", "playbook:list",
+			// 通知（只读）
+			"channel:list", "template:list", "notification:list",
+			// 自愈（只读）
+			"healing:flows:view", "healing:rules:view", "healing:instances:view",
+			"healing:approvals:view", "healing:trigger:view",
+			// 站内信（只读）
+			"site-message:list",
+			// 审计日志（只读）
+			"audit:list",
+			// 工作流（只读）
+			"workflow:list", "workflow:detail",
+		},
+	},
+	{
+		Name:        "auditor",
+		DisplayName: "审计员",
+		Description: "租户安全审计，可查看和导出审计日志，所有业务模块只读",
+		IsSystem:    true,
+		Scope:       "tenant",
+		Permissions: []string{
+			// 审计日志（完整）
+			"audit:list", "audit:export",
+			// 插件（只读）
+			"plugin:list", "plugin:detail",
+			// 执行（只读）
+			"task:list", "task:detail", "repository:list", "playbook:list",
+			// 通知（只读）
+			"channel:list", "template:list", "notification:list",
+			// 自愈（只读）
+			"healing:flows:view", "healing:rules:view", "healing:instances:view",
+			"healing:approvals:view", "healing:trigger:view",
+			// Dashboard（只读）
+			"dashboard:view",
+			// 站内信（只读）
+			"site-message:list",
+			// 工作流（只读）
+			"workflow:list", "workflow:detail",
+		},
+	},
 }
 
 // SyncPermissionsAndRoles 同步预置权限和角色（启动时调用）
