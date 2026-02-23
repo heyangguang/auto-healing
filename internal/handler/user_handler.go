@@ -36,10 +36,9 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 		Page:         getQueryInt(c, "page", 1),
 		PageSize:     getQueryInt(c, "page_size", 20),
 		Status:       c.Query("status"),
-		Search:       c.Query("search"),
-		Username:     c.Query("username"),
-		Email:        c.Query("email"),
-		DisplayName:  c.Query("display_name"),
+		Username:     GetStringFilter(c, "username"),
+		Email:        GetStringFilter(c, "email"),
+		DisplayName:  GetStringFilter(c, "display_name"),
 		CreatedFrom:  c.Query("created_from"),
 		CreatedTo:    c.Query("created_to"),
 		SortField:    c.Query("sort_field"),
@@ -58,10 +57,10 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 
 // ListSimpleUsers 获取简要用户列表（轻量接口，用于下拉选择）
 func (h *UserHandler) ListSimpleUsers(c *gin.Context) {
-	search := c.Query("search")
+	name := c.Query("name")
 	status := c.DefaultQuery("status", "active") // 默认只返回活跃用户
 
-	users, err := h.userRepo.ListSimple(c.Request.Context(), search, status)
+	users, err := h.userRepo.ListSimple(c.Request.Context(), name, status)
 	if err != nil {
 		response.InternalError(c, "获取用户列表失败")
 		return
@@ -300,8 +299,8 @@ func NewRoleHandler() *RoleHandler {
 // ListRoles 平台级：获取所有角色列表（含统计信息）
 func (h *RoleHandler) ListRoles(c *gin.Context) {
 	filter := repository.RoleFilter{
-		Search: c.Query("search"),
-		Scope:  "platform",
+		Name:  c.Query("name"),
+		Scope: "platform",
 	}
 
 	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), filter)
@@ -317,7 +316,7 @@ func (h *RoleHandler) ListRoles(c *gin.Context) {
 func (h *RoleHandler) ListTenantRoles(c *gin.Context) {
 	tenantID := repository.TenantIDFromContext(c.Request.Context())
 	filter := repository.RoleFilter{
-		Search:   c.Query("search"),
+		Name:     c.Query("name"),
 		Scope:    "tenant",
 		TenantID: tenantID,
 	}
@@ -508,7 +507,7 @@ func (h *RoleHandler) GetRoleUsers(c *gin.Context) {
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	search := c.Query("search")
+	name := c.Query("name")
 
 	if page < 1 {
 		page = 1
@@ -517,7 +516,7 @@ func (h *RoleHandler) GetRoleUsers(c *gin.Context) {
 		pageSize = 20
 	}
 
-	users, total, err := h.roleRepo.GetRoleUsers(c.Request.Context(), id, page, pageSize, search)
+	users, total, err := h.roleRepo.GetRoleUsers(c.Request.Context(), id, page, pageSize, name)
 	if err != nil {
 		response.InternalError(c, "获取角色用户失败")
 		return
@@ -537,7 +536,7 @@ func (h *RoleHandler) GetTenantRoleUsers(c *gin.Context) {
 	tenantID := repository.TenantIDFromContext(c.Request.Context())
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	search := c.Query("search")
+	name := c.Query("name")
 
 	if page < 1 {
 		page = 1
@@ -546,7 +545,7 @@ func (h *RoleHandler) GetTenantRoleUsers(c *gin.Context) {
 		pageSize = 20
 	}
 
-	users, total, err := h.roleRepo.GetTenantRoleUsers(c.Request.Context(), id, tenantID, page, pageSize, search)
+	users, total, err := h.roleRepo.GetTenantRoleUsers(c.Request.Context(), id, tenantID, page, pageSize, name)
 	if err != nil {
 		response.InternalError(c, "获取角色用户失败")
 		return
@@ -570,7 +569,6 @@ func NewPermissionHandler() *PermissionHandler {
 // ListPermissions 获取权限列表
 func (h *PermissionHandler) ListPermissions(c *gin.Context) {
 	filter := repository.PermissionFilter{
-		Search: c.Query("search"),
 		Module: c.Query("module"),
 		Name:   c.Query("name"),
 		Code:   c.Query("code"),
