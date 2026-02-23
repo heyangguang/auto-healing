@@ -122,24 +122,31 @@ func (r *WorkspaceRepository) GetWorkspacesByUserRoles(ctx context.Context, user
 	var workspaces []model.SystemWorkspace
 	// 查询角色关联的工作区 OR 默认工作区（is_default=true 对所有用户可见）
 	tenantID := TenantIDFromContext(ctx)
-	// Raw SQL 需手动添加 tenant_id 过滤（仅 system_workspaces 有 tenant_id）
+	// 合并 user_platform_roles + user_tenant_roles 的角色
 	err := r.db.WithContext(ctx).
 		Raw(`SELECT DISTINCT sw.* FROM system_workspaces sw
 			LEFT JOIN role_workspaces rw ON rw.workspace_id = sw.id
-			LEFT JOIN user_roles ur ON ur.role_id = rw.role_id
-			WHERE (ur.user_id = ? OR sw.is_default = true) AND sw.tenant_id = ?
-			ORDER BY sw.is_default DESC, sw.created_at ASC`, userID, tenantID).
+			WHERE (
+				rw.role_id IN (
+					SELECT role_id FROM user_platform_roles WHERE user_id = ?
+					UNION
+					SELECT role_id FROM user_tenant_roles WHERE user_id = ?
+				)
+				OR sw.is_default = true
+			) AND sw.tenant_id = ?
+			ORDER BY sw.is_default DESC, sw.created_at ASC`, userID, userID, tenantID).
 		Scan(&workspaces).Error
 	return workspaces, err
 }
 
-// GetUserRoleIDs 获取用户的所有角色 ID
+// GetUserRoleIDs 获取用户的所有角色 ID（合并平台角色 + 租户角色）
 func (r *WorkspaceRepository) GetUserRoleIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
 	var roleIDs []uuid.UUID
-	// user_roles 表无 tenant_id，不使用 TenantDB
+	// 合并 user_platform_roles + user_tenant_roles
 	err := r.db.WithContext(ctx).
-		Table("user_roles").
-		Where("user_id = ?", userID).
+		Raw(`SELECT role_id FROM user_platform_roles WHERE user_id = ?
+			UNION
+			SELECT role_id FROM user_tenant_roles WHERE user_id = ?`, userID, userID).
 		Pluck("role_id", &roleIDs).Error
 	return roleIDs, err
 }

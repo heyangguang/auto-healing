@@ -56,12 +56,15 @@ func (r *SearchRepository) GlobalSearch(ctx context.Context, keyword string, lim
 	// 定义所有搜索分类
 	categories := []searchCategoryDef{
 		{"hosts", "主机资产", r.searchHosts},
+		{"incidents", "工单", r.searchIncidents},
 		{"rules", "自愈规则", r.searchRules},
 		{"flows", "自愈流程", r.searchFlows},
 		{"instances", "自愈实例", r.searchInstances},
 		{"playbooks", "剧本", r.searchPlaybooks},
 		{"templates", "任务模板", r.searchTemplates},
 		{"schedules", "定时任务", r.searchSchedules},
+		{"execution_runs", "执行记录", r.searchExecutionRuns},
+		{"git_repos", "Git 仓库", r.searchGitRepos},
 		{"secrets", "密钥", r.searchSecrets},
 		{"plugins", "插件", r.searchPlugins},
 		{"notification_templates", "通知模板", r.searchNotificationTemplates},
@@ -508,6 +511,122 @@ func (r *SearchRepository) searchNotificationChannels(ctx context.Context, db *g
 			Extra: map[string]interface{}{
 				"type":       item.Type,
 				"is_enabled": item.IsActive,
+			},
+		})
+	}
+	return results, total, nil
+}
+
+func (r *SearchRepository) searchIncidents(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
+	var total int64
+	db.Model(&model.Incident{}).
+		Where("title ILIKE ? OR external_id ILIKE ? OR description ILIKE ?", like, like, like).
+		Count(&total)
+
+	if total == 0 {
+		return nil, 0, nil
+	}
+
+	var items []model.Incident
+	err := db.Model(&model.Incident{}).
+		Select("id, title, external_id, severity, status, healing_status").
+		Where("title ILIKE ? OR external_id ILIKE ? OR description ILIKE ?", like, like, like).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&items).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	results := make([]SearchResultItem, 0, len(items))
+	for _, item := range items {
+		results = append(results, SearchResultItem{
+			ID:          item.ID,
+			Title:       item.Title,
+			Description: item.ExternalID,
+			Path:        "/resources/incidents",
+			Extra: map[string]interface{}{
+				"severity":       item.Severity,
+				"status":         item.Status,
+				"healing_status": item.HealingStatus,
+			},
+		})
+	}
+	return results, total, nil
+}
+
+func (r *SearchRepository) searchExecutionRuns(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
+	var total int64
+	db.Model(&model.ExecutionRun{}).
+		Where("triggered_by ILIKE ? OR status ILIKE ? OR id::text ILIKE ?", like, like, like).
+		Count(&total)
+
+	if total == 0 {
+		return nil, 0, nil
+	}
+
+	var items []model.ExecutionRun
+	err := db.Model(&model.ExecutionRun{}).
+		Select("id, task_id, status, triggered_by, created_at").
+		Where("triggered_by ILIKE ? OR status ILIKE ? OR id::text ILIKE ?", like, like, like).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&items).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	results := make([]SearchResultItem, 0, len(items))
+	for _, item := range items {
+		title := item.TriggeredBy
+		if title == "" {
+			title = item.ID.String()[:8]
+		}
+		results = append(results, SearchResultItem{
+			ID:          item.ID,
+			Title:       title,
+			Description: item.Status,
+			Path:        fmt.Sprintf("/execution/runs/%s", item.ID.String()),
+			Extra: map[string]interface{}{
+				"status":     item.Status,
+				"created_at": item.CreatedAt,
+			},
+		})
+	}
+	return results, total, nil
+}
+
+func (r *SearchRepository) searchGitRepos(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
+	var total int64
+	db.Model(&model.GitRepository{}).
+		Where("name ILIKE ? OR url ILIKE ?", like, like).
+		Count(&total)
+
+	if total == 0 {
+		return nil, 0, nil
+	}
+
+	var items []model.GitRepository
+	err := db.Model(&model.GitRepository{}).
+		Select("id, name, url, status, default_branch").
+		Where("name ILIKE ? OR url ILIKE ?", like, like).
+		Order("name").
+		Limit(limit).
+		Find(&items).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	results := make([]SearchResultItem, 0, len(items))
+	for _, item := range items {
+		results = append(results, SearchResultItem{
+			ID:          item.ID,
+			Title:       item.Name,
+			Description: item.URL,
+			Path:        "/execution/git-repos",
+			Extra: map[string]interface{}{
+				"status":         item.Status,
+				"default_branch": item.DefaultBranch,
 			},
 		})
 	}

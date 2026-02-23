@@ -27,7 +27,7 @@ func NewUserActivityRepository() *UserActivityRepository {
 // ListFavorites 获取用户收藏列表（按创建时间倒序）
 func (r *UserActivityRepository) ListFavorites(ctx context.Context, userID uuid.UUID) ([]model.UserFavorite, error) {
 	var favorites []model.UserFavorite
-	err := TenantDB(r.db, ctx).
+	err := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Find(&favorites).Error
@@ -40,9 +40,9 @@ func (r *UserActivityRepository) AddFavorite(ctx context.Context, fav *model.Use
 	tenantID := TenantIDFromContext(ctx)
 	fav.TenantID = &tenantID
 
-	// idx_user_favorite 是 (user_id, menu_key, tenant_id) 的联合唯一约束
+	// idx_user_favorite 是 (user_id, menu_key) 的联合唯一约束
 	// ON CONFLICT DO NOTHING 原子性地处理重复添加，彻底消除先 COUNT 后 CREATE 竞态
-	result := TenantDB(r.db, ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(fav)
+	result := r.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(fav)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -54,7 +54,7 @@ func (r *UserActivityRepository) AddFavorite(ctx context.Context, fav *model.Use
 
 // RemoveFavorite 取消收藏
 func (r *UserActivityRepository) RemoveFavorite(ctx context.Context, userID uuid.UUID, menuKey string) error {
-	result := TenantDB(r.db, ctx).
+	result := r.db.WithContext(ctx).
 		Where("user_id = ? AND menu_key = ?", userID, menuKey).
 		Delete(&model.UserFavorite{})
 	if result.Error != nil {
@@ -71,7 +71,7 @@ func (r *UserActivityRepository) RemoveFavorite(ctx context.Context, userID uuid
 // ListRecents 获取最近访问列表（按访问时间倒序，最多 10 条）
 func (r *UserActivityRepository) ListRecents(ctx context.Context, userID uuid.UUID) ([]model.UserRecent, error) {
 	var recents []model.UserRecent
-	err := TenantDB(r.db, ctx).
+	err := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Order("accessed_at DESC").
 		Limit(10).
@@ -85,7 +85,7 @@ func (r *UserActivityRepository) UpsertRecent(ctx context.Context, recent *model
 	tenantID := TenantIDFromContext(ctx)
 	recent.TenantID = &tenantID
 
-	return TenantDB(r.db, ctx).Transaction(func(tx *gorm.DB) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 尝试查找已有记录
 		var existing model.UserRecent
 		err := tx.Where("user_id = ? AND menu_key = ?", recent.UserID, recent.MenuKey).First(&existing).Error

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -45,12 +44,4 @@ func TenantScope(tenantID uuid.UUID) func(db *gorm.DB) *gorm.DB {
 func TenantDB(db *gorm.DB, ctx context.Context) *gorm.DB {
 	tenantID := TenantIDFromContext(ctx)
 	return db.WithContext(ctx).Where("tenant_id = ?", tenantID)
-}
-
-// isUniqueViolation 检查错误是否为 PostgreSQL 唯一约束冲突（SQLSTATE 23505）
-func isUniqueViolation(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), "23505") || strings.Contains(err.Error(), "duplicate key")
 }
