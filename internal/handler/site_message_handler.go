@@ -97,12 +97,14 @@ func (h *SiteMessageHandler) ListMessages(c *gin.Context) {
 	keyword := c.Query("keyword")
 	category := c.Query("category")
 	isRead := c.Query("is_read")
+	dateFrom := c.Query("date_from")
+	dateTo := c.Query("date_to")
 	sortField := c.Query("sort")
 	order := c.Query("order")
 
 	tenantID := middleware.GetTenantUUID(c)
 	userCreatedAt := h.getUserCreatedAt(c, userID)
-	messages, total, err := h.repo.List(c.Request.Context(), userID, &tenantID, userCreatedAt, page, pageSize, keyword, category, isRead, sortField, order)
+	messages, total, err := h.repo.List(c.Request.Context(), userID, &tenantID, userCreatedAt, page, pageSize, keyword, category, isRead, dateFrom, dateTo, sortField, order)
 	if err != nil {
 		response.InternalError(c, "查询站内信失败")
 		return

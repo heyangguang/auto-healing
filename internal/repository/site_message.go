@@ -28,7 +28,7 @@ func NewSiteMessageRepository() *SiteMessageRepository {
 
 // List 分页查询站内信（带已读状态），支持 keyword、category、is_read 筛选和排序
 // tenantID: 当前用户所属租户，用于过滤目标租户（NULL=广播 或 target_tenant_id=tenantID）
-func (r *SiteMessageRepository) List(ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID, userCreatedAt time.Time, page, pageSize int, keyword, category, isRead, sortField, order string) ([]model.SiteMessageWithReadStatus, int64, error) {
+func (r *SiteMessageRepository) List(ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID, userCreatedAt time.Time, page, pageSize int, keyword, category, isRead, dateFrom, dateTo, sortField, order string) ([]model.SiteMessageWithReadStatus, int64, error) {
 	var total int64
 	var results []model.SiteMessageWithReadStatus
 
@@ -51,6 +51,18 @@ func (r *SiteMessageRepository) List(ctx context.Context, userID uuid.UUID, tena
 	}
 	if category != "" {
 		baseQuery = baseQuery.Where("sm.category = ?", category)
+	}
+
+	// 日期过滤
+	if dateFrom != "" {
+		if t, err := time.Parse("2006-01-02", dateFrom); err == nil {
+			baseQuery = baseQuery.Where("sm.created_at >= ?", t)
+		}
+	}
+	if dateTo != "" {
+		if t, err := time.Parse("2006-01-02", dateTo); err == nil {
+			baseQuery = baseQuery.Where("sm.created_at < ?", t.AddDate(0, 0, 1))
+		}
 	}
 
 	// 已读状态过滤
