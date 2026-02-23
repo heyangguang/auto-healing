@@ -50,6 +50,7 @@ type Handlers struct {
 	PlatformSettings *PlatformSettingsHandler
 	Tenant           *TenantHandler
 	Workbench        *WorkbenchHandler
+	Dictionary       *DictionaryHandler
 }
 
 // NewHandlers 创建所有处理器
@@ -81,6 +82,7 @@ func NewHandlers(cfg *config.Config) *Handlers {
 		PlatformSettings: NewPlatformSettingsHandler(),
 		Tenant:           NewTenantHandler(authHandler.authSvc),
 		Workbench:        NewWorkbenchHandler(),
+		Dictionary:       NewDictionaryHandler(),
 	}
 }
 
@@ -518,5 +520,15 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 
 		// -------------------- 用户租户 --------------------
 		protected.GET("/user/tenants", h.Tenant.GetUserTenants)
+
+		// -------------------- 字典值管理 --------------------
+		dictionaries := protected.Group("/dictionaries")
+		{
+			dictionaries.GET("", h.Dictionary.ListDictionaries) // 批量查询
+			dictionaries.GET("/types", h.Dictionary.ListTypes)  // 类型列表
+			dictionaries.POST("", middleware.RequirePermission("platform:settings:manage"), h.Dictionary.CreateDictionary)
+			dictionaries.PUT("/:id", middleware.RequirePermission("platform:settings:manage"), h.Dictionary.UpdateDictionary)
+			dictionaries.DELETE("/:id", middleware.RequirePermission("platform:settings:manage"), h.Dictionary.DeleteDictionary)
+		}
 	}
 }

@@ -131,6 +131,8 @@ func AutoMigrate() error {
 		// 多租户
 		&model.Tenant{},
 		&model.UserTenantRole{},
+		// 字典值
+		&model.Dictionary{},
 	}
 
 	// 增量迁移：只迁移不存在的表，避免修改已有表导致约束名冲突

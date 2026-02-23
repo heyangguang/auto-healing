@@ -14,6 +14,7 @@ import (
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/scheduler"
+	"github.com/company/auto-healing/internal/service"
 	"github.com/company/auto-healing/internal/service/healing"
 	"github.com/gin-gonic/gin"
 )
@@ -57,6 +58,12 @@ func main() {
 	// 插入站内信种子数据
 	if err := database.SeedSiteMessages(); err != nil {
 		logger.Error("站内信种子数据插入失败: %v", err)
+	}
+
+	// 同步字典 Seed 数据
+	dictSvc := service.NewDictionaryService()
+	if err := dictSvc.SeedDictionaries(context.Background()); err != nil {
+		logger.Error("字典种子数据同步失败: %v", err)
 	}
 
 	// 清理过期站内信
