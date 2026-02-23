@@ -191,6 +191,9 @@ func (s *Service) UpdateRepo(ctx context.Context, id uuid.UUID, defaultBranch, a
 		return nil, err
 	}
 
+	// 记录旧分支，用于判断是否需要重新同步
+	oldBranch := repo.DefaultBranch
+
 	if defaultBranch != "" {
 		repo.DefaultBranch = defaultBranch
 	}
@@ -221,6 +224,12 @@ func (s *Service) UpdateRepo(ctx context.Context, id uuid.UUID, defaultBranch, a
 
 	if err := s.repo.Update(ctx, repo); err != nil {
 		return nil, err
+	}
+
+	// 分支变更时自动触发同步，确保代码切换到新分支
+	if defaultBranch != "" && defaultBranch != oldBranch {
+		logger.Info("仓库 %s 默认分支变更: %s → %s，触发自动同步", repo.Name, oldBranch, defaultBranch)
+		go s.SyncRepoWithTrigger(context.Background(), id, "branch_change")
 	}
 
 	return repo, nil
@@ -339,6 +348,12 @@ func (s *Service) SyncRepoWithTrigger(ctx context.Context, id uuid.UUID, trigger
 		repo.LastCommitID = commitID
 	}
 
+	// 同步成功后更新分支列表缓存
+	if branchList, branchErr := client.ListBranches(ctx); branchErr == nil && len(branchList) > 0 {
+		s.repo.UpdateBranches(ctx, id, branchList)
+		logger.Sync_("GIT").Info("更新分支缓存: %s | %d 个分支", repo.Name, len(branchList))
+	}
+
 	// 输出汇总日志
 	logger.Sync_("GIT").Info("完成: %s | 操作: %s | 分支: %s | Commit: %s | 耗时: %v", repo.Name, actionName, repo.DefaultBranch, repo.LastCommitID, duration)
 
@@ -451,18 +466,31 @@ func (s *Service) DetectBranches(ctx context.Context, id uuid.UUID) ([]string, e
 	return branches, nil
 }
 
-// GetBranches 获取已缓存的分支列表
+// GetBranches 获取分支列表（优先缓存，缓存为空时实时获取）
 func (s *Service) GetBranches(ctx context.Context, id uuid.UUID) ([]string, error) {
 	repo, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
+	// 1. 优先从缓存读取
 	var branches []string
 	if repo.Branches != nil {
 		for _, b := range repo.Branches {
 			if str, ok := b.(string); ok {
 				branches = append(branches, str)
+			}
+		}
+	}
+
+	// 2. 缓存为空时，实时从本地仓库获取并更新缓存
+	if len(branches) == 0 && repo.Status == "ready" {
+		client := gitclient.NewClient(repo, s.reposDir)
+		if client.Exists() {
+			if liveBranches, err := client.ListBranches(ctx); err == nil && len(liveBranches) > 0 {
+				branches = liveBranches
+				// 异步更新缓存
+				go s.repo.UpdateBranches(context.Background(), id, liveBranches)
 			}
 		}
 	}

@@ -279,3 +279,37 @@ func (h *GitRepoHandler) GetStats(c *gin.Context) {
 	}
 	response.Success(c, stats)
 }
+
+// GetBranches 获取已同步仓库的分支列表
+func (h *GitRepoHandler) GetBranches(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "无效的ID")
+		return
+	}
+
+	branches, err := h.svc.GetBranches(c.Request.Context(), id)
+	if err != nil {
+		response.InternalError(c, "获取分支列表失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, map[string]any{"branches": branches})
+}
+
+// DetectBranches 检测远程仓库分支（实时从远程拉取）
+func (h *GitRepoHandler) DetectBranches(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "无效的ID")
+		return
+	}
+
+	branches, err := h.svc.DetectBranches(c.Request.Context(), id)
+	if err != nil {
+		response.InternalError(c, "检测分支失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, map[string]any{"branches": branches})
+}
