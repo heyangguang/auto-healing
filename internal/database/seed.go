@@ -264,8 +264,12 @@ var SystemRoles = []RoleSeed{
 			"platform:settings:manage",
 			// 租户管理
 			"platform:tenants:manage",
-			// 审计日志（只读）
-			"audit:list",
+			// 审计日志
+			"audit:list", "audit:export",
+			// 系统设置
+			"system:settings",
+			// 工作流（完整）
+			"workflow:list", "workflow:detail", "workflow:create", "workflow:update", "workflow:delete", "workflow:activate", "workflow:run",
 		},
 	},
 	{
@@ -295,6 +299,8 @@ var SystemRoles = []RoleSeed{
 			"site-message:list",
 			// 审计日志（只读）
 			"audit:list",
+			// 工作流（操作类）
+			"workflow:list", "workflow:detail", "workflow:update", "workflow:activate", "workflow:run",
 		},
 	},
 	{
@@ -319,6 +325,8 @@ var SystemRoles = []RoleSeed{
 			"site-message:list",
 			// 审计日志（只读）
 			"audit:list",
+			// 工作流（只读）
+			"workflow:list", "workflow:detail",
 		},
 	},
 }
