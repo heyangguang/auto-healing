@@ -94,9 +94,9 @@ func (r *RoleRepository) ListWithFilter(ctx context.Context, f RoleFilter) ([]mo
 		query = query.Where("scope = ?", f.Scope)
 	}
 
-	// 租户级：只返回系统角色(tenant_id IS NULL) + 属于当前租户的自定义角色
+	// 租户级：只返回系统内置角色(is_system=true 且 tenant_id IS NULL) + 属于当前租户的自定义角色
 	if f.Scope == "tenant" && f.TenantID != uuid.Nil {
-		query = query.Where("tenant_id IS NULL OR tenant_id = ?", f.TenantID)
+		query = query.Where("(is_system = true AND tenant_id IS NULL) OR tenant_id = ?", f.TenantID)
 	}
 
 	var roles []model.Role
@@ -123,8 +123,8 @@ func (r *RoleRepository) GetRoleStats(ctx context.Context) (map[string]RoleStats
 	var userCounts []UserCountResult
 	r.db.WithContext(ctx).
 		Table("roles").
-		Select("roles.id as role_id, COUNT(DISTINCT user_roles.user_id) as user_count").
-		Joins("LEFT JOIN user_roles ON user_roles.role_id = roles.id").
+		Select("roles.id as role_id, COUNT(DISTINCT user_platform_roles.user_id) as user_count").
+		Joins("LEFT JOIN user_platform_roles ON user_platform_roles.role_id = roles.id").
 		Group("roles.id").
 		Find(&userCounts)
 
@@ -136,6 +136,53 @@ func (r *RoleRepository) GetRoleStats(ctx context.Context) (map[string]RoleStats
 	}
 
 	// 查询每个角色的权限数
+	type PermCountResult struct {
+		RoleID    string `gorm:"column:role_id"`
+		PermCount int64  `gorm:"column:perm_count"`
+	}
+	var permCounts []PermCountResult
+	r.db.WithContext(ctx).
+		Table("roles").
+		Select("roles.id as role_id, COUNT(DISTINCT role_permissions.permission_id) as perm_count").
+		Joins("LEFT JOIN role_permissions ON role_permissions.role_id = roles.id").
+		Group("roles.id").
+		Find(&permCounts)
+
+	for _, pc := range permCounts {
+		s := stats[pc.RoleID]
+		s.RoleID = pc.RoleID
+		s.PermissionCount = pc.PermCount
+		stats[pc.RoleID] = s
+	}
+
+	return stats, nil
+}
+
+// GetTenantRoleStats 获取角色统计信息（按租户隔离的用户数 + 权限数）
+func (r *RoleRepository) GetTenantRoleStats(ctx context.Context, tenantID uuid.UUID) (map[string]RoleStats, error) {
+	stats := make(map[string]RoleStats)
+
+	// 从 user_tenant_roles 统计当前租户下每个角色的用户数
+	type UserCountResult struct {
+		RoleID    string `gorm:"column:role_id"`
+		UserCount int64  `gorm:"column:user_count"`
+	}
+	var userCounts []UserCountResult
+	r.db.WithContext(ctx).
+		Table("roles").
+		Select("roles.id as role_id, COUNT(DISTINCT user_tenant_roles.user_id) as user_count").
+		Joins("LEFT JOIN user_tenant_roles ON user_tenant_roles.role_id = roles.id AND user_tenant_roles.tenant_id = ?", tenantID).
+		Group("roles.id").
+		Find(&userCounts)
+
+	for _, uc := range userCounts {
+		stats[uc.RoleID] = RoleStats{
+			RoleID:    uc.RoleID,
+			UserCount: uc.UserCount,
+		}
+	}
+
+	// 查询每个角色的权限数（权限不按租户隔离）
 	type PermCountResult struct {
 		RoleID    string `gorm:"column:role_id"`
 		PermCount int64  `gorm:"column:perm_count"`
@@ -193,8 +240,37 @@ type RoleUserInfo struct {
 func (r *RoleRepository) GetRoleUsers(ctx context.Context, roleID uuid.UUID, page, pageSize int, search string) ([]RoleUserInfo, int64, error) {
 	query := r.db.WithContext(ctx).
 		Table("users").
-		Joins("INNER JOIN user_roles ON user_roles.user_id = users.id").
-		Where("user_roles.role_id = ?", roleID)
+		Joins("INNER JOIN user_platform_roles ON user_platform_roles.user_id = users.id").
+		Where("user_platform_roles.role_id = ?", roleID)
+
+	if search != "" {
+		like := "%" + search + "%"
+		query = query.Where("users.username ILIKE ? OR users.display_name ILIKE ?", like, like)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var users []RoleUserInfo
+	offset := (page - 1) * pageSize
+	err := query.
+		Select("users.id, users.username, users.display_name, users.email, users.status").
+		Order("users.created_at DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&users).Error
+
+	return users, total, err
+}
+
+// GetTenantRoleUsers 获取租户下角色关联的用户（分页 + 搜索）
+func (r *RoleRepository) GetTenantRoleUsers(ctx context.Context, roleID, tenantID uuid.UUID, page, pageSize int, search string) ([]RoleUserInfo, int64, error) {
+	query := r.db.WithContext(ctx).
+		Table("users").
+		Joins("INNER JOIN user_tenant_roles ON user_tenant_roles.user_id = users.id").
+		Where("user_tenant_roles.role_id = ? AND user_tenant_roles.tenant_id = ?", roleID, tenantID)
 
 	if search != "" {
 		like := "%" + search + "%"
@@ -293,15 +369,18 @@ func (r *PermissionRepository) ListByModule(ctx context.Context, module string) 
 	return perms, err
 }
 
-// GetUserPermissions 获取用户的所有权限
+// GetUserPermissions 获取用户的所有权限（合并平台角色 + 租户角色）
 func (r *PermissionRepository) GetUserPermissions(ctx context.Context, userID uuid.UUID) ([]model.Permission, error) {
 	var perms []model.Permission
 	err := r.db.WithContext(ctx).
 		Distinct("permissions.*").
 		Table("permissions").
 		Joins("INNER JOIN role_permissions ON role_permissions.permission_id = permissions.id").
-		Joins("INNER JOIN user_roles ON user_roles.role_id = role_permissions.role_id").
-		Where("user_roles.user_id = ?", userID).
+		Where(`role_permissions.role_id IN (
+			SELECT role_id FROM user_platform_roles WHERE user_id = ?
+			UNION
+			SELECT role_id FROM user_tenant_roles WHERE user_id = ?
+		)`, userID, userID).
 		Find(&perms).Error
 	return perms, err
 }

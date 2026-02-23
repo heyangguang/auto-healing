@@ -124,12 +124,12 @@ func (r *UserRepository) List(ctx context.Context, params *UserListParams) ([]mo
 	if params.PlatformOnly {
 		// 只返回拥有平台管理员角色的用户
 		query = query.Where(`id IN (
-			SELECT ur.user_id FROM user_roles ur
+			SELECT ur.user_id FROM user_platform_roles ur
 			JOIN roles r ON r.id = ur.role_id
 			WHERE r.name = 'platform_admin'
 		)`)
 	} else if params.RoleID != "" {
-		query = query.Where("id IN (SELECT user_id FROM user_roles WHERE role_id = ?)", params.RoleID)
+		query = query.Where("id IN (SELECT user_id FROM user_platform_roles WHERE role_id = ?)", params.RoleID)
 	}
 
 	// 按创建时间范围过滤
@@ -185,13 +185,13 @@ func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 func (r *UserRepository) AssignRoles(ctx context.Context, userID uuid.UUID, roleIDs []uuid.UUID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 删除现有角色关联
-		if err := tx.Where("user_id = ?", userID).Delete(&model.UserRole{}).Error; err != nil {
+		if err := tx.Where("user_id = ?", userID).Delete(&model.UserPlatformRole{}).Error; err != nil {
 			return err
 		}
 
 		// 添加新角色关联
 		for _, roleID := range roleIDs {
-			userRole := model.UserRole{
+			userRole := model.UserPlatformRole{
 				UserID: userID,
 				RoleID: roleID,
 			}
@@ -271,7 +271,7 @@ func (r *UserRepository) ListSimple(ctx context.Context, search string, status s
 	query := r.db.WithContext(ctx).
 		Model(&model.User{}).
 		Select(`id, username, display_name, status,
-			EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+			EXISTS(SELECT 1 FROM user_platform_roles ur JOIN roles r ON r.id = ur.role_id
 				WHERE ur.user_id = users.id AND r.name = 'platform_admin'
 			) AS is_platform_admin`)
 

@@ -70,25 +70,48 @@ func (h *UserHandler) ListSimpleUsers(c *gin.Context) {
 	response.Success(c, users)
 }
 
-// CreateUser 创建平台管理员账号，并自动赋予 platform_admin 角色
+// CreateUser 创建平台用户，支持选择平台角色（不传则默认 platform_admin）
 func (h *UserHandler) CreateUser(c *gin.Context) {
-	var req authService.RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	// 扩展请求结构，支持 role_id
+	var body struct {
+		authService.RegisterRequest
+		RoleID *uuid.UUID `json:"role_id"` // 可选：指定平台角色 ID
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
 		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return
 	}
 
-	user, err := h.authSvc.Register(c.Request.Context(), &req)
+	user, err := h.authSvc.Register(c.Request.Context(), &body.RegisterRequest)
 	if err != nil {
 		response.BadRequest(c, ToBusinessError(err))
 		return
 	}
 
-	// 自动赋予 platform_admin 角色
-	platformAdminRole, err := h.roleRepo.GetByName(c.Request.Context(), "platform_admin")
-	if err == nil {
-		_ = h.userRepo.AssignRoles(c.Request.Context(), user.ID, []uuid.UUID{platformAdminRole.ID})
+	// 确定要分配的角色
+	var assignRoleID uuid.UUID
+	if body.RoleID != nil {
+		// 前端指定了角色，校验是否为 platform scope 角色
+		role, err := h.roleRepo.GetByID(c.Request.Context(), *body.RoleID)
+		if err != nil {
+			response.BadRequest(c, "指定的角色不存在")
+			return
+		}
+		if role.Scope != "platform" {
+			response.BadRequest(c, "只能分配平台级别角色")
+			return
+		}
+		assignRoleID = role.ID
+	} else {
+		// 默认分配 platform_admin
+		platformAdminRole, err := h.roleRepo.GetByName(c.Request.Context(), "platform_admin")
+		if err != nil {
+			response.InternalError(c, "获取默认角色失败")
+			return
+		}
+		assignRoleID = platformAdminRole.ID
 	}
+	_ = h.userRepo.AssignRoles(c.Request.Context(), user.ID, []uuid.UUID{assignRoleID})
 
 	// 返回完整用户信息（含角色）
 	userWithRoles, _ := h.userRepo.GetByID(c.Request.Context(), user.ID)
@@ -151,7 +174,30 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, user)
+	// 如果传了 role_id，变更用户角色
+	if req.RoleID != nil {
+		role, err := h.roleRepo.GetByID(c.Request.Context(), *req.RoleID)
+		if err != nil {
+			response.BadRequest(c, "指定的角色不存在")
+			return
+		}
+		if role.Scope != "platform" {
+			response.BadRequest(c, "只能分配平台级别角色")
+			return
+		}
+		if err := h.userRepo.AssignRoles(c.Request.Context(), user.ID, []uuid.UUID{role.ID}); err != nil {
+			response.InternalError(c, "角色变更失败")
+			return
+		}
+	}
+
+	// 返回含角色的完整信息
+	userWithRoles, _ := h.userRepo.GetByID(c.Request.Context(), user.ID)
+	if userWithRoles != nil {
+		response.Success(c, userWithRoles)
+	} else {
+		response.Success(c, user)
+	}
 }
 
 // DeleteUser 删除平台管理员账号
@@ -269,10 +315,11 @@ func (h *RoleHandler) ListRoles(c *gin.Context) {
 
 // ListTenantRoles 租户级：只返回租户可见角色，永远排除 platform_admin/super_admin
 func (h *RoleHandler) ListTenantRoles(c *gin.Context) {
+	tenantID := repository.TenantIDFromContext(c.Request.Context())
 	filter := repository.RoleFilter{
 		Search:   c.Query("search"),
 		Scope:    "tenant",
-		TenantID: repository.TenantIDFromContext(c.Request.Context()),
+		TenantID: tenantID,
 	}
 
 	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), filter)
@@ -281,7 +328,7 @@ func (h *RoleHandler) ListTenantRoles(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, h.buildRoleStats(c, roles))
+	response.Success(c, h.buildTenantRoleStats(c, roles, tenantID))
 }
 
 // RoleWithStats 角色+统计
@@ -291,9 +338,27 @@ type RoleWithStats struct {
 	PermissionCount int64 `json:"permission_count"`
 }
 
-// buildRoleStats 构建角色列表（含统计信息）
+// buildRoleStats 构建角色列表（含统计信息）— 平台级
 func (h *RoleHandler) buildRoleStats(c *gin.Context, roles []model.Role) []RoleWithStats {
 	stats, _ := h.roleRepo.GetRoleStats(c.Request.Context())
+
+	result := make([]RoleWithStats, len(roles))
+	for i, role := range roles {
+		rws := RoleWithStats{
+			Role:            role,
+			PermissionCount: int64(len(role.Permissions)),
+		}
+		if s, ok := stats[role.ID.String()]; ok {
+			rws.UserCount = s.UserCount
+		}
+		result[i] = rws
+	}
+	return result
+}
+
+// buildTenantRoleStats 构建角色列表（含统计信息）— 租户级
+func (h *RoleHandler) buildTenantRoleStats(c *gin.Context, roles []model.Role, tenantID uuid.UUID) []RoleWithStats {
+	stats, _ := h.roleRepo.GetTenantRoleStats(c.Request.Context(), tenantID)
 
 	result := make([]RoleWithStats, len(roles))
 	for i, role := range roles {
@@ -461,6 +526,35 @@ func (h *RoleHandler) GetRoleUsers(c *gin.Context) {
 	response.List(c, users, total, page, pageSize)
 }
 
+// GetTenantRoleUsers 获取租户下角色关联的用户
+func (h *RoleHandler) GetTenantRoleUsers(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "无效的角色 ID")
+		return
+	}
+
+	tenantID := repository.TenantIDFromContext(c.Request.Context())
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	search := c.Query("search")
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	users, total, err := h.roleRepo.GetTenantRoleUsers(c.Request.Context(), id, tenantID, page, pageSize, search)
+	if err != nil {
+		response.InternalError(c, "获取角色用户失败")
+		return
+	}
+
+	response.List(c, users, total, page, pageSize)
+}
+
 // PermissionHandler 权限处理器
 type PermissionHandler struct {
 	permRepo *repository.PermissionRepository
@@ -509,9 +603,10 @@ func (h *PermissionHandler) GetPermissionTree(c *gin.Context) {
 
 // 请求结构体
 type UpdateUserRequest struct {
-	DisplayName string `json:"display_name"`
-	Phone       string `json:"phone"`
-	Status      string `json:"status"`
+	DisplayName string     `json:"display_name"`
+	Phone       string     `json:"phone"`
+	Status      string     `json:"status"`
+	RoleID      *uuid.UUID `json:"role_id"` // 可选：变更平台角色
 }
 
 type ResetPasswordRequest struct {

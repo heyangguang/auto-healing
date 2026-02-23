@@ -141,6 +141,28 @@ func (r *TenantRepository) ListMembers(ctx context.Context, tenantID uuid.UUID) 
 	return members, nil
 }
 
+// ListSimpleMembers 获取租户下简要用户列表（轻量接口，用于下拉选择）
+func (r *TenantRepository) ListSimpleMembers(ctx context.Context, tenantID uuid.UUID, search string, status string) ([]SimpleUser, error) {
+	var users []SimpleUser
+
+	query := r.db.WithContext(ctx).
+		Table("users").
+		Select(`users.id, users.username, users.display_name, users.status`).
+		Joins("INNER JOIN user_tenant_roles ON user_tenant_roles.user_id = users.id").
+		Where("user_tenant_roles.tenant_id = ?", tenantID)
+
+	if status != "" {
+		query = query.Where("users.status = ?", status)
+	}
+	if search != "" {
+		like := "%" + search + "%"
+		query = query.Where("users.username ILIKE ? OR users.display_name ILIKE ?", like, like)
+	}
+
+	err := query.Order("users.username ASC").Limit(500).Scan(&users).Error
+	return users, err
+}
+
 // AddMember 添加成员到租户
 func (r *TenantRepository) AddMember(ctx context.Context, userID, tenantID, roleID uuid.UUID) error {
 	utr := model.UserTenantRole{
@@ -194,4 +216,16 @@ func (r *TenantRepository) GetUserTenants(ctx context.Context, userID uuid.UUID,
 
 	err := query.Group("tenants.id").Find(&tenants).Error
 	return tenants, err
+}
+
+// GetUserAllRoles 获取用户在所有租户中的角色（去重）
+func (r *TenantRepository) GetUserAllRoles(ctx context.Context, userID uuid.UUID) ([]model.Role, error) {
+	var roles []model.Role
+	err := r.db.WithContext(ctx).
+		Distinct("roles.*").
+		Table("roles").
+		Joins("INNER JOIN user_tenant_roles ON user_tenant_roles.role_id = roles.id").
+		Where("user_tenant_roles.user_id = ?", userID).
+		Find(&roles).Error
+	return roles, err
 }

@@ -26,7 +26,7 @@ type User struct {
 	IsPlatformAdmin   bool       `json:"is_platform_admin" gorm:"default:false"` // 平台管理员标识
 
 	// 关联
-	Roles []Role `json:"roles,omitempty" gorm:"many2many:user_roles;"`
+	Roles []Role `json:"roles,omitempty" gorm:"many2many:user_platform_roles;"`
 }
 
 // TableName 表名
@@ -72,8 +72,8 @@ func (Permission) TableName() string {
 	return "permissions"
 }
 
-// UserRole 用户角色关联
-type UserRole struct {
+// UserPlatformRole 用户平台角色关联（平台级全局角色）
+type UserPlatformRole struct {
 	ID        uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	UserID    uuid.UUID `gorm:"type:uuid;not null"`
 	RoleID    uuid.UUID `gorm:"type:uuid;not null"`
@@ -81,8 +81,8 @@ type UserRole struct {
 }
 
 // TableName 表名
-func (UserRole) TableName() string {
-	return "user_roles"
+func (UserPlatformRole) TableName() string {
+	return "user_platform_roles"
 }
 
 // RolePermission 角色权限关联
