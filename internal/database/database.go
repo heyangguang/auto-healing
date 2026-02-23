@@ -81,7 +81,7 @@ func AutoMigrate() error {
 		&model.User{},
 		&model.Role{},
 		&model.Permission{},
-		&model.UserRole{},
+		&model.UserPlatformRole{},
 		&model.RolePermission{},
 		&model.TokenBlacklist{},
 		&model.RefreshToken{},

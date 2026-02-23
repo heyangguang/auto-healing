@@ -112,10 +112,15 @@ var AllPermissions = []PermissionSeed{
 	{Code: "system:settings", Name: "系统设置", Module: "system", Resource: "settings", Action: "manage"},
 
 	// ==================== Dashboard ====================
+	{Code: "dashboard:view", Name: "查看监控面板", Module: "dashboard", Resource: "dashboard", Action: "read"},
+	{Code: "dashboard:config:manage", Name: "管理面板配置", Module: "dashboard", Resource: "config", Action: "manage"},
 	{Code: "dashboard:workspace:manage", Name: "管理工作区", Module: "dashboard", Resource: "workspace", Action: "manage"},
 
 	// ==================== 站内信 ====================
+	{Code: "site-message:list", Name: "查看站内信", Module: "site-message", Resource: "site-message", Action: "read"},
 	{Code: "site-message:create", Name: "创建站内信", Module: "site-message", Resource: "site-message", Action: "create"},
+	{Code: "site-message:settings:view", Name: "查看站内信设置", Module: "site-message", Resource: "settings", Action: "read"},
+	{Code: "site-message:settings:manage", Name: "管理站内信设置", Module: "site-message", Resource: "settings", Action: "manage"},
 
 	// ==================== 平台管理 ====================
 	{Code: "platform:settings:manage", Name: "管理平台设置", Module: "platform", Resource: "settings", Action: "manage"},
@@ -128,6 +133,7 @@ var AllPermissions = []PermissionSeed{
 	{Code: "platform:users:reset_password", Name: "重置平台用户密码", Module: "platform", Resource: "users", Action: "manage"},
 	{Code: "platform:roles:list", Name: "查看平台角色", Module: "platform", Resource: "roles", Action: "read"},
 	{Code: "platform:roles:manage", Name: "管理平台角色", Module: "platform", Resource: "roles", Action: "manage"},
+	{Code: "platform:permissions:list", Name: "查看平台权限", Module: "platform", Resource: "permissions", Action: "read"},
 	{Code: "platform:audit:list", Name: "查看平台审计日志", Module: "platform", Resource: "audit", Action: "read"},
 	{Code: "platform:audit:export", Name: "导出平台审计日志", Module: "platform", Resource: "audit", Action: "export"},
 	{Code: "platform:messages:send", Name: "发送平台站内信", Module: "platform", Resource: "messages", Action: "create"},
@@ -148,6 +154,7 @@ var SystemRoles = []RoleSeed{
 			"platform:settings:manage",
 			"platform:users:list", "platform:users:create", "platform:users:update", "platform:users:delete", "platform:users:reset_password",
 			"platform:roles:list", "platform:roles:manage",
+			"platform:permissions:list",
 			"platform:audit:list", "platform:audit:export",
 			"platform:messages:send",
 		},
@@ -161,6 +168,7 @@ var SystemRoles = []RoleSeed{
 		Permissions: []string{
 			"platform:settings:manage",
 			"platform:roles:list", "platform:roles:manage",
+			"platform:permissions:list",
 		},
 	},
 	{
@@ -247,9 +255,11 @@ var SystemRoles = []RoleSeed{
 			"healing:approvals:view", "healing:approvals:approve",
 			"healing:trigger:view", "healing:trigger:execute",
 			// Dashboard
-			"dashboard:workspace:manage",
+			"dashboard:view", "dashboard:config:manage", "dashboard:workspace:manage",
 			// 站内信
-			"site-message:create",
+			"site-message:list", "site-message:create", "site-message:settings:view", "site-message:settings:manage",
+			// 平台权限查看
+			"platform:permissions:list",
 			// 平台设置
 			"platform:settings:manage",
 			// 租户管理
@@ -279,6 +289,10 @@ var SystemRoles = []RoleSeed{
 			"healing:instances:view",
 			"healing:approvals:view", "healing:approvals:approve",
 			"healing:trigger:view", "healing:trigger:execute",
+			// Dashboard（只读）
+			"dashboard:view",
+			// 站内信
+			"site-message:list",
 			// 审计日志（只读）
 			"audit:list",
 		},
@@ -299,6 +313,10 @@ var SystemRoles = []RoleSeed{
 			// 自愈（只读）
 			"healing:flows:view", "healing:rules:view", "healing:instances:view",
 			"healing:approvals:view", "healing:trigger:view",
+			// Dashboard（只读）
+			"dashboard:view",
+			// 站内信（只读）
+			"site-message:list",
 			// 审计日志（只读）
 			"audit:list",
 		},
