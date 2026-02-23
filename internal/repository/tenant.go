@@ -2,10 +2,13 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -23,17 +26,22 @@ func NewTenantRepository() *TenantRepository {
 }
 
 // List 查询租户列表（支持搜索和分页）
-func (r *TenantRepository) List(ctx context.Context, keyword string, page, pageSize int) ([]model.Tenant, int64, error) {
+func (r *TenantRepository) List(ctx context.Context, keyword string, name, code query.StringFilter, status string, page, pageSize int) ([]model.Tenant, int64, error) {
 	var tenants []model.Tenant
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.Tenant{})
+	q := r.db.WithContext(ctx).Model(&model.Tenant{})
 
 	if keyword != "" {
-		query = query.Where("name ILIKE ? OR code ILIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+		q = q.Where("name ILIKE ? OR code ILIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+	q = query.ApplyStringFilter(q, "name", name)
+	q = query.ApplyStringFilter(q, "code", code)
+	if status != "" {
+		q = q.Where("status = ?", status)
 	}
 
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -48,7 +56,7 @@ func (r *TenantRepository) List(ctx context.Context, keyword string, page, pageS
 	}
 	var results []tenantWithCount
 
-	err := query.Select("tenants.*, (?) AS member_count", memberCountSubquery).
+	err := q.Select("tenants.*, (?) AS member_count", memberCountSubquery).
 		Order("created_at ASC").
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
@@ -228,4 +236,178 @@ func (r *TenantRepository) GetUserAllRoles(ctx context.Context, userID uuid.UUID
 		Where("user_tenant_roles.user_id = ?", userID).
 		Find(&roles).Error
 	return roles, err
+}
+
+// GetUserTenantRoles 获取用户在指定租户中的角色
+func (r *TenantRepository) GetUserTenantRoles(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]model.Role, error) {
+	var roles []model.Role
+	err := r.db.WithContext(ctx).
+		Distinct("roles.*").
+		Table("roles").
+		Joins("INNER JOIN user_tenant_roles ON user_tenant_roles.role_id = roles.id").
+		Where("user_tenant_roles.user_id = ? AND user_tenant_roles.tenant_id = ?", userID, tenantID).
+		Find(&roles).Error
+	return roles, err
+}
+
+// ==================== 租户运营统计 ====================
+
+// CountTenantMembers 统计某租户的成员数
+func (r *TenantRepository) CountTenantMembers(ctx context.Context, tenantID uuid.UUID) int64 {
+	var count int64
+	r.db.WithContext(ctx).
+		Model(&model.UserTenantRole{}).
+		Where("tenant_id = ?", tenantID).
+		Distinct("user_id").
+		Count(&count)
+	return count
+}
+
+// CountTenantTable 统计某租户在指定表中的记录数（通用方法）
+// 支持的表：healing_rules, healing_instances, task_templates, audit_logs 等
+func (r *TenantRepository) CountTenantTable(ctx context.Context, tenantID uuid.UUID, tableName string) int64 {
+	// 先检查表是否存在，避免对不存在的表查询产生 ERROR 日志
+	var exists bool
+	r.db.WithContext(ctx).Raw(
+		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = ?)", tableName,
+	).Scan(&exists)
+	if !exists {
+		return 0
+	}
+
+	var count int64
+	r.db.WithContext(ctx).
+		Table(tableName).
+		Where("tenant_id = ?", tenantID).
+		Count(&count)
+	return count
+}
+
+// GetTenantLastActivity 获取租户最近一条审计日志的时间
+func (r *TenantRepository) GetTenantLastActivity(ctx context.Context, tenantID uuid.UUID) *string {
+	var result sql.NullString
+	err := r.db.WithContext(ctx).
+		Table("audit_logs").
+		Select("to_char(MAX(created_at), 'YYYY-MM-DD HH24:MI:SS')").
+		Where("tenant_id = ?", tenantID).
+		Scan(&result).Error
+	if err != nil || !result.Valid {
+		return nil
+	}
+	return &result.String
+}
+
+// CountTenantTableWhere 统计某租户在指定表中满足额外条件的记录数
+// extraWhere 为原始 SQL 片段（仅内部使用，不接受用户输入）
+func (r *TenantRepository) CountTenantTableWhere(ctx context.Context, tenantID uuid.UUID, tableName string, extraWhere string) int64 {
+	var exists bool
+	r.db.WithContext(ctx).Raw(
+		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = ?)", tableName,
+	).Scan(&exists)
+	if !exists {
+		return 0
+	}
+
+	var count int64
+	r.db.WithContext(ctx).
+		Table(tableName).
+		Where("tenant_id = ?", tenantID).
+		Where(extraWhere).
+		Count(&count)
+	return count
+}
+
+// ==================== 平台趋势统计 ====================
+
+// trendRow 趋势查询中间结构
+type trendRow struct {
+	Date  string `gorm:"column:date"`
+	Count int64  `gorm:"column:cnt"`
+}
+
+// GetTrendByDay 按天统计某张表最近 N 天的记录数（跨所有租户）
+func (r *TenantRepository) GetTrendByDay(ctx context.Context, tableName string, days int) ([]string, []int64, error) {
+	var exists bool
+	r.db.WithContext(ctx).Raw(
+		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = ?)", tableName,
+	).Scan(&exists)
+	if !exists {
+		return fillEmptyTrend(days), fillZeroCounts(days), nil
+	}
+
+	var rows []trendRow
+	sql := fmt.Sprintf(
+		`SELECT TO_CHAR(DATE(created_at), 'MM/DD') AS date, COUNT(*) AS cnt
+		 FROM %s
+		 WHERE created_at >= NOW() - INTERVAL '%d days'
+		 GROUP BY DATE(created_at)
+		 ORDER BY DATE(created_at) ASC`, tableName, days)
+
+	if err := r.db.WithContext(ctx).Raw(sql).Scan(&rows).Error; err != nil {
+		return nil, nil, err
+	}
+
+	dates, counts := mergeTrendRows(rows, days)
+	return dates, counts, nil
+}
+
+// GetTrendByDayWhere 带条件按天统计（用于安全审计子集）
+func (r *TenantRepository) GetTrendByDayWhere(ctx context.Context, tableName string, days int, extraWhere string) ([]string, []int64, error) {
+	var exists bool
+	r.db.WithContext(ctx).Raw(
+		"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = ?)", tableName,
+	).Scan(&exists)
+	if !exists {
+		return fillEmptyTrend(days), fillZeroCounts(days), nil
+	}
+
+	var rows []trendRow
+	sql := fmt.Sprintf(
+		`SELECT TO_CHAR(DATE(created_at), 'MM/DD') AS date, COUNT(*) AS cnt
+		 FROM %s
+		 WHERE created_at >= NOW() - INTERVAL '%d days' AND (%s)
+		 GROUP BY DATE(created_at)
+		 ORDER BY DATE(created_at) ASC`, tableName, days, extraWhere)
+
+	if err := r.db.WithContext(ctx).Raw(sql).Scan(&rows).Error; err != nil {
+		return nil, nil, err
+	}
+
+	dates, counts := mergeTrendRows(rows, days)
+	return dates, counts, nil
+}
+
+// mergeTrendRows 将数据库返回的稀疏日期数据补全为连续 N 天
+func mergeTrendRows(rows []trendRow, days int) ([]string, []int64) {
+	dateMap := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		dateMap[r.Date] = r.Count
+	}
+
+	dates := make([]string, days)
+	counts := make([]int64, days)
+	now := time.Now()
+	for i := 0; i < days; i++ {
+		d := now.AddDate(0, 0, -(days - 1 - i))
+		label := fmt.Sprintf("%02d/%02d", d.Month(), d.Day())
+		dates[i] = label
+		counts[i] = dateMap[label]
+	}
+	return dates, counts
+}
+
+// fillEmptyTrend 生成空的 N 天日期标签
+func fillEmptyTrend(days int) []string {
+	dates := make([]string, days)
+	now := time.Now()
+	for i := 0; i < days; i++ {
+		d := now.AddDate(0, 0, -(days - 1 - i))
+		dates[i] = fmt.Sprintf("%02d/%02d", d.Month(), d.Day())
+	}
+	return dates
+}
+
+// fillZeroCounts 生成 N 个 0 的计数
+func fillZeroCounts(days int) []int64 {
+	return make([]int64, days)
 }

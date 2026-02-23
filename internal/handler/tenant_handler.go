@@ -6,6 +6,7 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	authService "github.com/company/auto-healing/internal/service/auth"
@@ -61,9 +62,12 @@ type updateTenantRequest struct {
 // ==================== 租户 CRUD ====================
 
 // ListTenants 租户列表
-// GET /api/v1/platform/tenants?keyword=xxx&page=1&page_size=10
+// GET /api/v1/platform/tenants?keyword=xxx&name=xxx&code=xxx&status=active&page=1&page_size=10
 func (h *TenantHandler) ListTenants(c *gin.Context) {
 	keyword := c.Query("keyword")
+	name := GetStringFilter(c, "name")
+	code := GetStringFilter(c, "code")
+	status := c.Query("status")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	if page < 1 {
@@ -73,7 +77,7 @@ func (h *TenantHandler) ListTenants(c *gin.Context) {
 		pageSize = 20
 	}
 
-	tenants, total, err := h.repo.List(c.Request.Context(), keyword, page, pageSize)
+	tenants, total, err := h.repo.List(c.Request.Context(), keyword, name, code, status, page, pageSize)
 	if err != nil {
 		response.InternalError(c, "查询租户列表失败")
 		return
@@ -415,11 +419,11 @@ func (h *TenantHandler) CreateTenantUser(c *gin.Context) {
 // 支持可选查询参数 search，对 name/code 做模糊匹配
 // GET /api/v1/user/tenants?search=xxx
 func (h *TenantHandler) GetUserTenants(c *gin.Context) {
-	search := c.Query("search")
+	name := c.Query("name")
 
 	// 平台管理员直接返回所有租户
 	if middleware.IsPlatformAdmin(c) {
-		tenants, _, err := h.repo.List(c.Request.Context(), search, 1, 1000)
+		tenants, _, err := h.repo.List(c.Request.Context(), name, query.StringFilter{}, query.StringFilter{}, "", 1, 1000)
 		if err != nil {
 			response.InternalError(c, "查询租户列表失败")
 			return
@@ -435,11 +439,166 @@ func (h *TenantHandler) GetUserTenants(c *gin.Context) {
 		return
 	}
 
-	tenants, err := h.repo.GetUserTenants(c.Request.Context(), userID, search)
+	tenants, err := h.repo.GetUserTenants(c.Request.Context(), userID, name)
 	if err != nil {
 		response.InternalError(c, "查询用户租户失败")
 		return
 	}
 
 	response.Success(c, tenants)
+}
+
+// ==================== 租户运营总览 ====================
+
+// TenantStatsItem 单个租户的统计数据
+type TenantStatsItem struct {
+	ID             uuid.UUID `json:"id"`
+	Name           string    `json:"name"`
+	Code           string    `json:"code"`
+	Status         string    `json:"status"`
+	Icon           string    `json:"icon"`
+	MemberCount    int64     `json:"member_count"`
+	RuleCount      int64     `json:"rule_count"`
+	InstanceCount  int64     `json:"instance_count"`
+	TemplateCount  int64     `json:"template_count"`
+	AuditLogCount  int64     `json:"audit_log_count"`
+	LastActivityAt *string   `json:"last_activity_at"`
+	// 新增资源维度
+	CmdbCount                 int64 `json:"cmdb_count"`
+	GitCount                  int64 `json:"git_count"`
+	PlaybookCount             int64 `json:"playbook_count"`
+	SecretCount               int64 `json:"secret_count"`
+	PluginCount               int64 `json:"plugin_count"`
+	IncidentCount             int64 `json:"incident_count"`
+	FlowCount                 int64 `json:"flow_count"`
+	ScheduleCount             int64 `json:"schedule_count"`
+	NotificationChannelCount  int64 `json:"notification_channel_count"`
+	NotificationTemplateCount int64 `json:"notification_template_count"`
+	// 自愈与工单覆盖
+	HealingSuccessCount  int64 `json:"healing_success_count"`
+	HealingTotalCount    int64 `json:"healing_total_count"`
+	IncidentCoveredCount int64 `json:"incident_covered_count"`
+}
+
+// TenantStatsSummary 聚合统计总览
+type TenantStatsSummary struct {
+	TotalTenants    int64 `json:"total_tenants"`
+	ActiveTenants   int64 `json:"active_tenants"`
+	DisabledTenants int64 `json:"disabled_tenants"`
+	TotalUsers      int64 `json:"total_users"`
+	TotalRules      int64 `json:"total_rules"`
+	TotalInstances  int64 `json:"total_instances"`
+	TotalTemplates  int64 `json:"total_templates"`
+}
+
+// GetTenantStats 获取租户运营总览统计
+// GET /api/v1/platform/tenants/stats
+func (h *TenantHandler) GetTenantStats(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// 获取所有租户列表
+	tenants, _, err := h.repo.List(ctx, "", query.StringFilter{}, query.StringFilter{}, "", 1, 1000)
+	if err != nil {
+		response.InternalError(c, "查询租户列表失败")
+		return
+	}
+
+	stats := make([]TenantStatsItem, 0, len(tenants))
+	summary := TenantStatsSummary{
+		TotalTenants: int64(len(tenants)),
+	}
+
+	for _, tenant := range tenants {
+		if tenant.Status == model.TenantStatusActive {
+			summary.ActiveTenants++
+		} else {
+			summary.DisabledTenants++
+		}
+
+		item := TenantStatsItem{
+			ID:     tenant.ID,
+			Name:   tenant.Name,
+			Code:   tenant.Code,
+			Status: tenant.Status,
+			Icon:   tenant.Icon,
+		}
+
+		// 聚合各维度数据
+		item.MemberCount = h.repo.CountTenantMembers(ctx, tenant.ID)
+		item.RuleCount = h.repo.CountTenantTable(ctx, tenant.ID, "healing_rules")
+		item.InstanceCount = h.repo.CountTenantTable(ctx, tenant.ID, "flow_instances")
+		item.TemplateCount = h.repo.CountTenantTable(ctx, tenant.ID, "execution_tasks")
+		item.AuditLogCount = h.repo.CountTenantTable(ctx, tenant.ID, "audit_logs")
+		item.LastActivityAt = h.repo.GetTenantLastActivity(ctx, tenant.ID)
+
+		// 新增资源维度
+		item.CmdbCount = h.repo.CountTenantTable(ctx, tenant.ID, "cmdb_items")
+		item.GitCount = h.repo.CountTenantTable(ctx, tenant.ID, "git_repositories")
+		item.PlaybookCount = h.repo.CountTenantTable(ctx, tenant.ID, "playbooks")
+		item.SecretCount = h.repo.CountTenantTable(ctx, tenant.ID, "secrets_sources")
+		item.PluginCount = h.repo.CountTenantTable(ctx, tenant.ID, "plugins")
+		item.IncidentCount = h.repo.CountTenantTable(ctx, tenant.ID, "incidents")
+		item.FlowCount = h.repo.CountTenantTable(ctx, tenant.ID, "healing_flows")
+		item.ScheduleCount = h.repo.CountTenantTable(ctx, tenant.ID, "execution_schedules")
+		item.NotificationChannelCount = h.repo.CountTenantTable(ctx, tenant.ID, "notification_channels")
+		item.NotificationTemplateCount = h.repo.CountTenantTable(ctx, tenant.ID, "notification_templates")
+
+		// 自愈与工单覆盖
+		item.HealingSuccessCount = h.repo.CountTenantTableWhere(ctx, tenant.ID, "flow_instances", "status = 'completed'")
+		item.HealingTotalCount = h.repo.CountTenantTable(ctx, tenant.ID, "flow_instances")
+		item.IncidentCoveredCount = h.repo.CountTenantTableWhere(ctx, tenant.ID, "incidents", "matched_rule_id IS NOT NULL")
+
+		summary.TotalUsers += item.MemberCount
+		summary.TotalRules += item.RuleCount
+		summary.TotalInstances += item.InstanceCount
+		summary.TotalTemplates += item.TemplateCount
+
+		stats = append(stats, item)
+	}
+
+	response.Success(c, gin.H{
+		"tenants": stats,
+		"summary": summary,
+	})
+}
+
+// ==================== 租户运营趋势 ====================
+
+// GetTenantTrends 获取平台运营趋势数据
+// GET /api/v1/platform/tenants/trends?days=7
+func (h *TenantHandler) GetTenantTrends(c *gin.Context) {
+	ctx := c.Request.Context()
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "7"))
+	if days < 1 || days > 90 {
+		days = 7
+	}
+
+	// 操作趋势：审计日志全量按天统计
+	opDates, opCounts, err := h.repo.GetTrendByDay(ctx, "audit_logs", days)
+	if err != nil {
+		response.InternalError(c, "查询操作趋势失败")
+		return
+	}
+
+	// 安全审计趋势：仅统计安全类操作（登录、登出、代操作等）
+	_, auditCounts, err := h.repo.GetTrendByDayWhere(ctx, "audit_logs", days,
+		"action IN ('login','logout','impersonation_enter','impersonation_exit','impersonation_terminate','approve')")
+	if err != nil {
+		response.InternalError(c, "查询审计趋势失败")
+		return
+	}
+
+	// 任务执行趋势
+	_, taskCounts, err := h.repo.GetTrendByDay(ctx, "execution_runs", days)
+	if err != nil {
+		response.InternalError(c, "查询任务执行趋势失败")
+		return
+	}
+
+	response.Success(c, gin.H{
+		"dates":           opDates,
+		"operations":      opCounts,
+		"audit_logs":      auditCounts,
+		"task_executions": taskCounts,
+	})
 }
