@@ -28,6 +28,7 @@ type Scheduler struct {
 	running  bool
 	stopChan chan struct{}
 	mu       sync.Mutex
+	sem      chan struct{} // 并发执行限制
 }
 
 // NewScheduler 创建调度器
@@ -42,8 +43,9 @@ func NewScheduler() *Scheduler {
 		matcher:  NewRuleMatcher(),
 		executor: NewFlowExecutor(),
 
-		interval: 10 * time.Second, // 默认 10 秒
+		interval: 10 * time.Second,
 		stopChan: make(chan struct{}),
+		sem:      make(chan struct{}, 10), // 最多 10 个并发流程执行
 	}
 }
 
@@ -66,6 +68,9 @@ func (s *Scheduler) Start() {
 	s.mu.Unlock()
 
 	logger.Sched("HEAL").Info("调度器启动，间隔: %v", s.interval)
+
+	// 启动时恢复孤儿实例（服务重启后遗留的 running 实例）
+	s.recoverOrphanedInstances()
 
 	go s.run()
 }
@@ -191,15 +196,37 @@ func (s *Scheduler) processIncident(ctx context.Context, incident *model.Inciden
 		// 更新规则最后运行时间
 		s.ruleRepo.UpdateLastRunAt(ctx, matchedRule.ID)
 
-		// 异步执行流程
-		go func(inst *model.FlowInstance) {
-			defer func() {
-				if r := recover(); r != nil {
-					logger.Sched("HEAL").Error("流程执行 panic [%s]: %v", inst.ID.String()[:8], fmt.Sprintf("%v", r))
-				}
-			}()
-			s.executor.Execute(ctx, inst)
-		}(instance)
+		// 异步执行流程（并发限制）
+		select {
+		case s.sem <- struct{}{}: // 获取令牌
+			go func(inst *model.FlowInstance) {
+				defer func() { <-s.sem }() // 释放令牌
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Sched("HEAL").Error("流程执行 panic [%s]: %v", inst.ID.String()[:8], fmt.Sprintf("%v", r))
+						s.instanceRepo.UpdateStatus(context.Background(), inst.ID,
+							model.FlowInstanceStatusFailed,
+							fmt.Sprintf("执行异常(panic): %v", r))
+					}
+				}()
+				s.executor.Execute(context.Background(), inst)
+			}(instance)
+		default:
+			logger.Sched("HEAL").Warn("并发执行达到上限，工单 %s 延迟执行", incident.ID)
+			go func(inst *model.FlowInstance) {
+				s.sem <- struct{}{} // 等待令牌
+				defer func() { <-s.sem }()
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Sched("HEAL").Error("流程执行 panic [%s]: %v", inst.ID.String()[:8], fmt.Sprintf("%v", r))
+						s.instanceRepo.UpdateStatus(context.Background(), inst.ID,
+							model.FlowInstanceStatusFailed,
+							fmt.Sprintf("执行异常(panic): %v", r))
+					}
+				}()
+				s.executor.Execute(context.Background(), inst)
+			}(instance)
+		}
 
 	case model.TriggerModeManual:
 		// 手动触发：只标记匹配，不创建流程实例
@@ -211,7 +238,7 @@ func (s *Scheduler) processIncident(ctx context.Context, incident *model.Inciden
 // createFlowInstance 创建流程实例（快照流程定义）
 func (s *Scheduler) createFlowInstance(ctx context.Context, incident *model.Incident, rule *model.HealingRule) (*model.FlowInstance, error) {
 	if rule.FlowID == nil {
-		return nil, nil
+		return nil, fmt.Errorf("规则 %s 未关联流程", rule.ID)
 	}
 
 	// 获取当前流程定义，用于快照
@@ -293,31 +320,28 @@ func incidentToMap(incident *model.Incident) map[string]interface{} {
 
 // processExpiredApprovals 处理超时的审批任务
 func (s *Scheduler) processExpiredApprovals(ctx context.Context) {
-	// 获取即将超时的审批任务，以便更新关联的 FlowInstance 和 Incident
-	var expiredTasks []model.ApprovalTask
-	database.DB.WithContext(ctx).
-		Where("status = ? AND timeout_at < NOW()", model.ApprovalTaskStatusPending).
-		Find(&expiredTasks)
-
-	if len(expiredTasks) == 0 {
-		return
-	}
-
-	// 标记审批任务为超时
+	// 直接执行超时更新，返回实际更新的数量
 	count, err := s.approvalRepo.ExpireTimedOut(ctx)
 	if err != nil {
 		logger.Sched("HEAL").Error("处理超时审批失败: %v", err)
 		return
 	}
+	if count == 0 {
+		return
+	}
+
+	// 查询已被标记为超时的任务（而不是先查后改）
+	var expiredTasks []model.ApprovalTask
+	database.DB.WithContext(ctx).
+		Where("status = ?", "expired").
+		Where("updated_at >= NOW() - INTERVAL '1 minute'").
+		Find(&expiredTasks)
 
 	// 更新关联的 FlowInstance 和 Incident 状态
 	for _, task := range expiredTasks {
-		// 更新 FlowInstance 状态为失败
 		s.instanceRepo.UpdateStatus(ctx, task.FlowInstanceID, model.FlowInstanceStatusFailed, "审批超时")
 
-		// 获取 FlowInstance 以获取关联的 IncidentID
 		if instance, err := s.instanceRepo.GetByID(ctx, task.FlowInstanceID); err == nil && instance.IncidentID != nil {
-			// 更新 Incident 状态为 failed
 			if incident, err := s.incidentRepo.GetByID(ctx, *instance.IncidentID); err == nil {
 				incident.HealingStatus = "failed"
 				s.incidentRepo.Update(ctx, incident)
@@ -352,15 +376,58 @@ func (s *Scheduler) TriggerManual(ctx context.Context, incidentID string, ruleID
 	// 更新工单
 	s.incidentRepo.MarkScanned(ctx, incident.ID, &rule.ID, &instance.ID)
 
-	// 异步执行流程（使用独立 context，避免 HTTP 请求结束后 context 被取消）
+	// 异步执行流程（使用独立 context，避免 HTTP 请求结束后 context 被取消，并发限制）
+	s.sem <- struct{}{} // 获取令牌
 	go func(inst *model.FlowInstance) {
+		defer func() { <-s.sem }() // 释放令牌
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Sched("HEAL").Error("手动触发流程 panic [%s]: %v", inst.ID.String()[:8], fmt.Sprintf("%v", r))
+				s.instanceRepo.UpdateStatus(context.Background(), inst.ID,
+					model.FlowInstanceStatusFailed,
+					fmt.Sprintf("执行异常(panic): %v", r))
 			}
 		}()
 		s.executor.Execute(context.Background(), inst)
 	}(instance)
 
 	return instance, nil
+}
+
+// recoverOrphanedInstances 恢复服务重启前遗留的 running/pending 实例
+// 查找 updated_at 超过 30 分钟的实例，标记为 failed
+func (s *Scheduler) recoverOrphanedInstances() {
+	ctx := context.Background()
+	staleThreshold := 30 * time.Minute
+
+	instances, err := s.instanceRepo.ListStaleRunning(ctx, staleThreshold)
+	if err != nil {
+		logger.Sched("HEAL").Error("查询停滞实例失败: %v", err)
+		return
+	}
+
+	if len(instances) == 0 {
+		return
+	}
+
+	logger.Sched("HEAL").Warn("发现 %d 个停滞的实例，开始恢复...", len(instances))
+
+	for _, inst := range instances {
+		errMsg := fmt.Sprintf("服务重启恢复: 实例已停滞超过 %v (上次更新: %s)",
+			staleThreshold, inst.UpdatedAt.Format("2006-01-02 15:04:05"))
+		if err := s.instanceRepo.UpdateStatus(ctx, inst.ID, model.FlowInstanceStatusFailed, errMsg); err != nil {
+			logger.Sched("HEAL").Error("恢复实例 %s 失败: %v", inst.ID.String()[:8], err)
+			continue
+		}
+
+		// 更新关联工单的自愈状态
+		if inst.IncidentID != nil {
+			if incident, err := s.incidentRepo.GetByID(ctx, *inst.IncidentID); err == nil {
+				incident.HealingStatus = "failed"
+				s.incidentRepo.Update(ctx, incident)
+			}
+		}
+
+		logger.Sched("HEAL").Warn("已恢复孤儿实例 %s (%s) -> failed", inst.ID.String()[:8], inst.FlowName)
+	}
 }

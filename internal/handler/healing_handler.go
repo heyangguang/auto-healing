@@ -3,12 +3,12 @@ package handler
 import (
 	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	healing "github.com/company/auto-healing/internal/service/healing"
@@ -790,17 +790,18 @@ func (h *HealingHandler) ListInstances(c *gin.Context) {
 	pageSize := getQueryInt(c, "page_size", 20)
 
 	opts := repository.FlowInstanceListOptions{
-		Page:          page,
-		PageSize:      pageSize,
-		Status:        c.Query("status"),
-		Search:        c.Query("search"),
-		FlowName:      c.Query("flow_name"),
-		RuleName:      c.Query("rule_name"),
-		IncidentTitle: c.Query("incident_title"),
-		CurrentNodeID: c.Query("current_node_id"),
-		ErrorMessage:  c.Query("error_message"),
-		SortBy:        c.Query("sort_by"),
-		SortOrder:     c.Query("sort_order"),
+		Page:           page,
+		PageSize:       pageSize,
+		Status:         c.Query("status"),
+		Search:         c.Query("search"),
+		FlowName:       c.Query("flow_name"),
+		RuleName:       c.Query("rule_name"),
+		IncidentTitle:  c.Query("incident_title"),
+		CurrentNodeID:  c.Query("current_node_id"),
+		ErrorMessage:   c.Query("error_message"),
+		SortBy:         c.Query("sort_by"),
+		SortOrder:      c.Query("sort_order"),
+		ApprovalStatus: c.Query("approval_status"),
 	}
 
 	// UUID 参数
@@ -908,10 +909,10 @@ func (h *HealingHandler) CancelInstance(c *gin.Context) {
 		return
 	}
 
-	// 更新关联的 Incident 状态为 skipped（用户主动取消视为跳过）
+	// 更新关联的 Incident 状态为 dismissed（用户主动取消）
 	if instance.IncidentID != nil {
 		if incident, err := h.incidentRepo.GetByID(c.Request.Context(), *instance.IncidentID); err == nil {
-			incident.HealingStatus = "skipped"
+			incident.HealingStatus = "dismissed"
 			h.incidentRepo.Update(c.Request.Context(), incident)
 		}
 	}
@@ -946,12 +947,12 @@ func (h *HealingHandler) RetryInstance(c *gin.Context) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("[RETRY] panic 恢复: %v", r)
+				logger.Exec("RETRY").Error("panic 恢复: %v", r)
 			}
 		}()
 		ctx := context.Background()
 		if err := h.executor.RetryFromNode(ctx, instance, req.FromNodeID); err != nil {
-			log.Printf("[RETRY] 重试失败: %v", err)
+			logger.Exec("RETRY").Error("重试失败: %v", err)
 		}
 	}()
 
@@ -1101,17 +1102,23 @@ func (h *HealingHandler) ApproveTask(c *gin.Context) {
 		return
 	}
 
-	// 执行审批
+	// 执行审批（WHERE status = 'pending' 防止重复审批）
 	if err := h.approvalRepo.Approve(c.Request.Context(), id, *userID, req.Comment); err != nil {
 		response.InternalError(c, "批准操作失败")
 		return
 	}
 
-	// 同步继续执行流程（使用新的 context）
-	if err := h.executor.ResumeAfterApproval(context.Background(), task.FlowInstanceID, true); err != nil {
-		log.Printf("[HealingHandler] 恢复流程执行失败: %v", err)
-		// 审批已成功，流程恢复失败不影响响应
-	}
+	// 异步继续执行流程，避免阻塞 HTTP 响应
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Exec("APPROVAL").Error("恢复流程 panic: %v", r)
+			}
+		}()
+		if err := h.executor.ResumeAfterApproval(context.Background(), task.FlowInstanceID, true); err != nil {
+			logger.Exec("APPROVAL").Error("审批通过后恢复流程失败: %v", err)
+		}
+	}()
 
 	response.Message(c, "审批已通过")
 }
@@ -1148,10 +1155,17 @@ func (h *HealingHandler) RejectTask(c *gin.Context) {
 		return
 	}
 
-	// 通过 executor 的统一审批路径处理拒绝（会更新 node_states）
-	if err := h.executor.ResumeAfterApproval(context.Background(), task.FlowInstanceID, false); err != nil {
-		log.Printf("[HealingHandler] 审批拒绝后恢复流程失败: %v", err)
-	}
+	// 异步通过 executor 的统一审批路径处理拒绝（会更新 node_states）
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Exec("APPROVAL").Error("拒绝后恢复流程 panic: %v", r)
+			}
+		}()
+		if err := h.executor.ResumeAfterApproval(context.Background(), task.FlowInstanceID, false); err != nil {
+			logger.Exec("APPROVAL").Error("审批拒绝后恢复流程失败: %v", err)
+		}
+	}()
 
 	response.Message(c, "审批已拒绝")
 }
@@ -1214,6 +1228,57 @@ func (h *HealingHandler) TriggerIncidentManually(c *gin.Context) {
 	}
 
 	response.Created(c, instance)
+}
+
+// DismissIncident 忽略待触发工单
+// 将工单 healing_status 从 pending 改为 skipped，使其不再出现在待触发列表中
+func (h *HealingHandler) DismissIncident(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "无效的工单ID")
+		return
+	}
+
+	// 获取工单
+	incident, err := h.incidentRepo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		response.NotFound(c, "工单不存在")
+		return
+	}
+
+	// 检查工单是否处于待触发状态
+	if incident.HealingStatus != "pending" {
+		response.BadRequest(c, "只能忽略待触发状态的工单")
+		return
+	}
+
+	// 更新状态为 dismissed（用户主动忽略）
+	incident.HealingStatus = "dismissed"
+	if err := h.incidentRepo.Update(c.Request.Context(), incident); err != nil {
+		response.InternalError(c, "忽略工单失败")
+		return
+	}
+
+	response.Message(c, "工单已忽略")
+}
+
+// ListDismissedTriggerIncidents 获取已忽略的待触发工单列表
+// 用于待办中心的"已忽略"标签页
+func (h *HealingHandler) ListDismissedTriggerIncidents(c *gin.Context) {
+	page := getQueryInt(c, "page", 1)
+	pageSize := getQueryInt(c, "page_size", 20)
+	search := c.Query("search")
+	severity := c.Query("severity")
+	dateFrom := c.Query("date_from")
+	dateTo := c.Query("date_to")
+
+	incidents, total, err := h.incidentRepo.ListDismissedTrigger(c.Request.Context(), page, pageSize, search, severity, dateFrom, dateTo)
+	if err != nil {
+		response.InternalError(c, "获取已忽略工单列表失败")
+		return
+	}
+
+	response.List(c, incidents, total, page, pageSize)
 }
 
 // ==================== 统计 ====================

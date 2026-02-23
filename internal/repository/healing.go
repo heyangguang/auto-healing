@@ -455,6 +455,7 @@ func (r *FlowInstanceRepository) Create(ctx context.Context, instance *model.Flo
 }
 
 // GetByID 根据 ID 获取流程实例
+// 如果实例的 flow_nodes/flow_edges 快照为空，自动从关联的流程定义中回填
 func (r *FlowInstanceRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.FlowInstance, error) {
 	var instance model.FlowInstance
 	err := TenantDB(r.db, ctx).
@@ -464,7 +465,27 @@ func (r *FlowInstanceRepository) GetByID(ctx context.Context, id uuid.UUID) (*mo
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrFlowInstanceNotFound
 	}
-	return &instance, err
+	if err != nil {
+		return nil, err
+	}
+
+	// 回填：如果快照的 flow_nodes/flow_edges 为空，从关联的流程定义中获取
+	if len(instance.FlowNodes) == 0 || len(instance.FlowEdges) == 0 {
+		var flow model.HealingFlow
+		if fetchErr := r.db.WithContext(ctx).First(&flow, "id = ?", instance.FlowID).Error; fetchErr == nil {
+			if len(instance.FlowNodes) == 0 {
+				instance.FlowNodes = flow.Nodes
+			}
+			if len(instance.FlowEdges) == 0 {
+				instance.FlowEdges = flow.Edges
+			}
+			if instance.FlowName == "" {
+				instance.FlowName = flow.Name
+			}
+		}
+	}
+
+	return &instance, nil
 }
 
 // Update 更新流程实例
@@ -489,6 +510,18 @@ func (r *FlowInstanceRepository) UpdateStatus(ctx context.Context, id uuid.UUID,
 // UpdateNodeStates 更新节点状态
 func (r *FlowInstanceRepository) UpdateNodeStates(ctx context.Context, id uuid.UUID, nodeStates model.JSON) error {
 	return TenantDB(r.db, ctx).Model(&model.FlowInstance{}).Where("id = ?", id).Update("node_states", nodeStates).Error
+}
+
+// ListStaleRunning 查询所有停滞的 running/pending 实例（跨租户）
+// 用于服务启动时恢复因进程终止而遗留的孤儿实例
+func (r *FlowInstanceRepository) ListStaleRunning(ctx context.Context, staleThreshold time.Duration) ([]model.FlowInstance, error) {
+	var instances []model.FlowInstance
+	cutoff := time.Now().Add(-staleThreshold)
+	err := r.db.WithContext(ctx).
+		Where("status IN ?", []string{model.FlowInstanceStatusRunning, model.FlowInstanceStatusPending}).
+		Where("updated_at < ?", cutoff).
+		Find(&instances).Error
+	return instances, err
 }
 
 // UpdateCurrentNodeAndStates 更新当前节点和节点状态
@@ -555,16 +588,17 @@ type FlowInstanceListOptions struct {
 	SortOrder string // asc / desc
 
 	// 精确/模糊过滤
-	Status        string     // 状态精确匹配
-	FlowID        *uuid.UUID // 流程 ID 精确
-	FlowName      string     // 流程名称模糊
-	RuleID        *uuid.UUID // 规则 ID 精确
-	RuleName      string     // 规则名称模糊
-	IncidentID    *uuid.UUID // 工单 ID 精确
-	IncidentTitle string     // 工单标题模糊
-	CurrentNodeID string     // 当前节点 ID
-	ErrorMessage  string     // 错误信息模糊
-	HasError      *bool      // 是否有错误
+	Status         string     // 状态精确匹配
+	FlowID         *uuid.UUID // 流程 ID 精确
+	FlowName       string     // 流程名称模糊
+	RuleID         *uuid.UUID // 规则 ID 精确
+	RuleName       string     // 规则名称模糊
+	IncidentID     *uuid.UUID // 工单 ID 精确
+	IncidentTitle  string     // 工单标题模糊
+	CurrentNodeID  string     // 当前节点 ID
+	ErrorMessage   string     // 错误信息模糊
+	HasError       *bool      // 是否有错误
+	ApprovalStatus string     // 包含对应审批结果的节点（approved 或 rejected）
 
 	// 时间范围
 	CreatedFrom   *time.Time
@@ -583,21 +617,22 @@ type FlowInstanceListOptions struct {
 
 // FlowInstanceSummary 列表接口的精简 DTO
 type FlowInstanceSummary struct {
-	ID              uuid.UUID  `json:"id"`
-	Status          string     `json:"status"`
-	FlowID          uuid.UUID  `json:"flow_id"`
-	FlowName        string     `json:"flow_name"`
-	RuleID          *uuid.UUID `json:"rule_id,omitempty"`
-	RuleName        *string    `json:"rule_name,omitempty"`
-	IncidentID      *uuid.UUID `json:"incident_id,omitempty"`
-	IncidentTitle   *string    `json:"incident_title,omitempty"`
-	CurrentNodeID   string     `json:"current_node_id,omitempty"`
-	ErrorMessage    string     `json:"error_message,omitempty"`
-	NodeCount       int        `json:"node_count"`
-	FailedNodeCount int        `json:"failed_node_count"`
-	StartedAt       *time.Time `json:"started_at,omitempty"`
-	CompletedAt     *time.Time `json:"completed_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID                uuid.UUID  `json:"id"`
+	Status            string     `json:"status"`
+	FlowID            uuid.UUID  `json:"flow_id"`
+	FlowName          string     `json:"flow_name"`
+	RuleID            *uuid.UUID `json:"rule_id,omitempty"`
+	RuleName          *string    `json:"rule_name,omitempty"`
+	IncidentID        *uuid.UUID `json:"incident_id,omitempty"`
+	IncidentTitle     *string    `json:"incident_title,omitempty"`
+	CurrentNodeID     string     `json:"current_node_id,omitempty"`
+	ErrorMessage      string     `json:"error_message,omitempty"`
+	NodeCount         int        `json:"node_count"`
+	FailedNodeCount   int        `json:"failed_node_count"`
+	RejectedNodeCount int        `json:"rejected_node_count"`
+	StartedAt         *time.Time `json:"started_at,omitempty"`
+	CompletedAt       *time.Time `json:"completed_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
 }
 
 // ListSummary 获取流程实例精简列表（瘦身版）
@@ -651,6 +686,7 @@ func (r *FlowInstanceRepository) ListSummary(ctx context.Context, page, pageSize
 			flow_instances.error_message,
 			COALESCE(jsonb_array_length(healing_flows.nodes), 0) AS node_count,
 			(SELECT COUNT(*) FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' IN ('failed', 'error')) AS failed_node_count,
+			(SELECT COUNT(*) FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' = 'rejected') AS rejected_node_count,
 			flow_instances.started_at,
 			flow_instances.completed_at,
 			flow_instances.created_at
@@ -731,6 +767,13 @@ func (r *FlowInstanceRepository) ListSummaryWithOptions(ctx context.Context, opt
 				q = q.Where("flow_instances.error_message IS NOT NULL AND flow_instances.error_message != ''")
 			} else {
 				q = q.Where("(flow_instances.error_message IS NULL OR flow_instances.error_message = '')")
+			}
+		}
+		if opts.ApprovalStatus != "" {
+			if opts.ApprovalStatus == "approved" {
+				q = q.Where("EXISTS (SELECT 1 FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' = 'approved')")
+			} else if opts.ApprovalStatus == "rejected" {
+				q = q.Where("EXISTS (SELECT 1 FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' = 'rejected')")
 			}
 		}
 		// 全文搜索
@@ -818,6 +861,7 @@ func (r *FlowInstanceRepository) ListSummaryWithOptions(ctx context.Context, opt
 			flow_instances.error_message,
 			COALESCE(jsonb_array_length(healing_flows.nodes), 0) AS node_count,
 			(SELECT COUNT(*) FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' IN ('failed', 'error')) AS failed_node_count,
+			(SELECT COUNT(*) FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' = 'rejected') AS rejected_node_count,
 			flow_instances.started_at,
 			flow_instances.completed_at,
 			flow_instances.created_at

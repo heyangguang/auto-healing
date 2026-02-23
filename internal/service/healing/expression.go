@@ -7,21 +7,14 @@ import (
 	"strings"
 
 	"github.com/expr-lang/expr"
-	"github.com/expr-lang/expr/vm"
 )
 
 // ExpressionEvaluator 表达式求值器
-// 使用 expr 库执行动态表达式，支持访问 context 中的数据
-type ExpressionEvaluator struct {
-	// 预编译的表达式缓存，提升性能
-	cache map[string]*vm.Program
-}
+type ExpressionEvaluator struct{}
 
 // NewExpressionEvaluator 创建表达式求值器
 func NewExpressionEvaluator() *ExpressionEvaluator {
-	return &ExpressionEvaluator{
-		cache: make(map[string]*vm.Program),
-	}
+	return &ExpressionEvaluator{}
 }
 
 // customFunctions 返回自定义函数列表
@@ -286,42 +279,6 @@ func joinArray(arr interface{}, sep string) string {
 		}
 	}
 	return strings.Join(parts, sep)
-}
-
-// firstElement 返回数组第一个元素
-func firstElement(arr interface{}) interface{} {
-	if arr == nil {
-		return nil
-	}
-
-	val := reflect.ValueOf(arr)
-	if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
-		return arr
-	}
-
-	if val.Len() == 0 {
-		return nil
-	}
-
-	return val.Index(0).Interface()
-}
-
-// lastElement 返回数组最后一个元素
-func lastElement(arr interface{}) interface{} {
-	if arr == nil {
-		return nil
-	}
-
-	val := reflect.ValueOf(arr)
-	if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
-		return arr
-	}
-
-	if val.Len() == 0 {
-		return nil
-	}
-
-	return val.Index(val.Len() - 1).Interface()
 }
 
 // pluckField 从数组中提取指定字段形成新数组

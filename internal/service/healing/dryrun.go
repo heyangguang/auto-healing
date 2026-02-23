@@ -132,10 +132,8 @@ func (e *DryRunExecutor) ExecuteWithCallback(ctx context.Context, flow *model.He
 	}
 
 	// 如果有初始上下文（重试场景），合并到 flowContext
-	if initialContext != nil {
-		for k, v := range initialContext {
-			flowContext[k] = v
-		}
+	for k, v := range initialContext {
+		flowContext[k] = v
 	}
 
 	// 确定起始节点
@@ -454,8 +452,8 @@ func (e *DryRunExecutor) executeNode(ctx context.Context, node *model.FlowNode, 
 		result.Output["hosts"] = hosts
 		// 更新上下文
 		outputKey := "hosts"
-		if ok, hasOk := config["output_key"].(string); hasOk && ok != "" {
-			outputKey = ok
+		if v, hasV := config["output_key"].(string); hasV && v != "" {
+			outputKey = v
 		}
 		flowContext[outputKey] = hosts
 		result.Process = append(result.Process, fmt.Sprintf("写入上下文 %s", outputKey))
@@ -837,8 +835,8 @@ func (e *DryRunExecutor) findNodeByID(nodes []model.FlowNode, id string) *model.
 
 func (e *DryRunExecutor) findNextNode(nodes []model.FlowNode, edges []model.FlowEdge, currentID string) *model.FlowNode {
 	for _, edge := range edges {
-		if edge.Source == currentID {
-			return e.findNodeByID(nodes, edge.Target)
+		if edge.GetFrom() == currentID {
+			return e.findNodeByID(nodes, edge.GetTo())
 		}
 	}
 	return nil
@@ -848,14 +846,14 @@ func (e *DryRunExecutor) findNextNode(nodes []model.FlowNode, edges []model.Flow
 func (e *DryRunExecutor) findNextNodeByHandle(nodes []model.FlowNode, edges []model.FlowEdge, currentID string, handle string) *model.FlowNode {
 	// 优先精确匹配
 	for _, edge := range edges {
-		if edge.Source == currentID && edge.SourceHandle == handle {
-			return e.findNodeByID(nodes, edge.Target)
+		if edge.GetFrom() == currentID && edge.GetSourceHandle() == handle {
+			return e.findNodeByID(nodes, edge.GetTo())
 		}
 	}
 	// 回退到无 handle 的边
 	for _, edge := range edges {
-		if edge.Source == currentID && edge.SourceHandle == "" {
-			return e.findNodeByID(nodes, edge.Target)
+		if edge.GetFrom() == currentID && edge.SourceHandle == "" {
+			return e.findNodeByID(nodes, edge.GetTo())
 		}
 	}
 	return nil
@@ -871,17 +869,17 @@ func (e *DryRunExecutor) getSkippedBranchNodes(nodes []model.FlowNode, edges []m
 	// 首先，收集选中分支会经过的所有节点（执行路径）
 	executionPathNodes := make(map[string]bool)
 	for _, edge := range edges {
-		if edge.Source == sourceID && edge.SourceHandle == chosenHandle {
+		if edge.GetFrom() == sourceID && edge.GetSourceHandle() == chosenHandle {
 			// 从选中分支开始，收集所有下游节点
-			e.collectAllDownstreamNodes(nodes, edges, edge.Target, executionPathNodes)
+			e.collectAllDownstreamNodes(nodes, edges, edge.GetTo(), executionPathNodes)
 		}
 	}
 
 	// 找出所有从 sourceID 出发但不是 chosenHandle 的边
 	for _, edge := range edges {
-		if edge.Source == sourceID && edge.SourceHandle != chosenHandle && edge.SourceHandle != "" {
+		if edge.GetFrom() == sourceID && edge.GetSourceHandle() != chosenHandle && edge.SourceHandle != "" {
 			// 递归收集这个分支的所有下游节点（排除执行路径节点）
-			e.collectSkippedNodes(nodes, edges, edge.Target, executedNodeIDs, executionPathNodes, &skippedNodeIDs)
+			e.collectSkippedNodes(nodes, edges, edge.GetTo(), executedNodeIDs, executionPathNodes, &skippedNodeIDs)
 		}
 	}
 
@@ -896,8 +894,8 @@ func (e *DryRunExecutor) collectAllDownstreamNodes(nodes []model.FlowNode, edges
 	result[startNodeID] = true
 
 	for _, edge := range edges {
-		if edge.Source == startNodeID {
-			e.collectAllDownstreamNodes(nodes, edges, edge.Target, result)
+		if edge.GetFrom() == startNodeID {
+			e.collectAllDownstreamNodes(nodes, edges, edge.GetTo(), result)
 		}
 	}
 }
@@ -924,31 +922,8 @@ func (e *DryRunExecutor) collectSkippedNodes(nodes []model.FlowNode, edges []mod
 
 	// 递归收集下游节点
 	for _, edge := range edges {
-		if edge.Source == startNodeID {
-			e.collectSkippedNodes(nodes, edges, edge.Target, executedNodeIDs, executionPathNodes, result)
-		}
-	}
-}
-
-// collectDownstreamNodes 递归收集从某节点开始的所有下游节点（保留兼容性）
-func (e *DryRunExecutor) collectDownstreamNodes(nodes []model.FlowNode, edges []model.FlowEdge, startNodeID string, executedNodeIDs map[string]bool, result *[]string) {
-	// 如果节点已执行或已收集，跳过
-	if executedNodeIDs[startNodeID] {
-		return
-	}
-	for _, id := range *result {
-		if id == startNodeID {
-			return
-		}
-	}
-
-	// 添加到结果
-	*result = append(*result, startNodeID)
-
-	// 递归收集下游节点
-	for _, edge := range edges {
-		if edge.Source == startNodeID {
-			e.collectDownstreamNodes(nodes, edges, edge.Target, executedNodeIDs, result)
+		if edge.GetFrom() == startNodeID {
+			e.collectSkippedNodes(nodes, edges, edge.GetTo(), executedNodeIDs, executionPathNodes, result)
 		}
 	}
 }

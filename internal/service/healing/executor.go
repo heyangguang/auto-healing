@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ type FlowExecutor struct {
 	cmdbRepo        *repository.CMDBItemRepository
 	gitRepoRepo     *repository.GitRepositoryRepository
 	executionRepo   *repository.ExecutionRepository
+	incidentRepo    *repository.IncidentRepository
 	executionSvc    *execution.Service // 执行服务
 	notificationSvc *notificationSvc.Service
 	ansibleExecutor ansible.Executor
@@ -47,20 +49,12 @@ func NewFlowExecutor() *FlowExecutor {
 		cmdbRepo:        repository.NewCMDBItemRepository(),
 		gitRepoRepo:     repository.NewGitRepositoryRepository(),
 		executionRepo:   repository.NewExecutionRepository(),
+		incidentRepo:    repository.NewIncidentRepository(),
 		executionSvc:    execution.NewService(),
 		notificationSvc: notificationSvc.NewService(database.DB, "Auto-Healing", "http://localhost:8080", "1.0.0"),
 		ansibleExecutor: ansible.NewLocalExecutor(),
 		eventBus:        GetEventBus(),
 	}
-}
-
-// getMapKeys 获取 map 的所有 key（用于调试日志）
-func getMapKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
 }
 
 // toFloat 将 interface{} 转换为 float64
@@ -77,6 +71,9 @@ func toFloat(v interface{}) float64 {
 	case int32:
 		return float64(val)
 	case string:
+		if f, err := strconv.ParseFloat(val, 64); err == nil {
+			return f
+		}
 		return 0
 	default:
 		return 0
@@ -239,12 +236,15 @@ func (e *FlowExecutor) executeNode(ctx context.Context, instance *model.FlowInst
 		e.setNodeState(ctx, instance, node.ID, "running", "")
 	}
 
+	// 为节点执行设置超时，防止永久挂起
+	nodeCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer cancel()
+
 	// 根据节点类型执行
 	var err error
 	switch node.Type {
 	case model.NodeTypeStart:
 		// 起始节点，记录日志并继续
-		// 构建结构化日志
 		logDetails := map[string]interface{}{
 			"input":   instance.Context,
 			"process": []string{"初始化流程上下文"},
@@ -255,7 +255,7 @@ func (e *FlowExecutor) executeNode(ctx context.Context, instance *model.FlowInst
 				logDetails["process"] = []string{"初始化流程上下文", "输出 incident 到下游"}
 			}
 		}
-		e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelInfo, "流程开始", logDetails)
+		e.logNode(nodeCtx, instance.ID, node.ID, node.Type, model.LogLevelInfo, "流程开始", logDetails)
 		err = nil
 
 	case model.NodeTypeEnd:
@@ -265,37 +265,37 @@ func (e *FlowExecutor) executeNode(ctx context.Context, instance *model.FlowInst
 			"process": []string{"流程执行完毕"},
 			"output":  nil,
 		}
-		e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelInfo, "流程结束", logDetails)
-		e.setNodeState(ctx, instance, node.ID, "completed", "")
+		e.logNode(nodeCtx, instance.ID, node.ID, node.Type, model.LogLevelInfo, "流程结束", logDetails)
+		e.setNodeState(nodeCtx, instance, node.ID, "completed", "")
 		e.eventBus.PublishNodeComplete(instance.ID, node.ID, node.Type, model.NodeStatusSuccess, nil, nil, nil, "")
-		return e.complete(ctx, instance)
+		return e.complete(nodeCtx, instance)
 
 	case model.NodeTypeHostExtractor:
-		err = e.executeHostExtractor(ctx, instance, node)
+		err = e.executeHostExtractor(nodeCtx, instance, node)
 
 	case model.NodeTypeCMDBValidator:
-		err = e.executeCMDBValidator(ctx, instance, node)
+		err = e.executeCMDBValidator(nodeCtx, instance, node)
 
 	case model.NodeTypeApproval:
 		// 审批节点需要等待，自己管理 node_states
-		return e.executeApproval(ctx, instance, node)
+		return e.executeApproval(nodeCtx, instance, node)
 
 	case model.NodeTypeExecution:
 		// 执行节点自己决定分支（success/partial/failed），自己管理 node_states
-		return e.executeExecutionWithBranch(ctx, instance, nodes, edges, node)
+		return e.executeExecutionWithBranch(nodeCtx, instance, nodes, edges, node)
 
 	case model.NodeTypeNotification:
-		err = e.executeNotification(ctx, instance, node)
+		err = e.executeNotification(nodeCtx, instance, node)
 
 	case model.NodeTypeCondition:
 		// 条件节点需要特殊处理，自己管理 node_states
-		return e.executeCondition(ctx, instance, nodes, edges, node)
+		return e.executeCondition(nodeCtx, instance, nodes, edges, node)
 
 	case model.NodeTypeSetVariable:
-		err = e.executeSetVariable(ctx, instance, node)
+		err = e.executeSetVariable(nodeCtx, instance, node)
 
 	case model.NodeTypeCompute:
-		err = e.executeCompute(ctx, instance, node)
+		err = e.executeCompute(nodeCtx, instance, node)
 
 	default:
 		logger.Exec("NODE").Warn("未知节点类型: %s", node.Type)
@@ -303,15 +303,15 @@ func (e *FlowExecutor) executeNode(ctx context.Context, instance *model.FlowInst
 
 	if err != nil {
 		// 记录节点失败状态
-		e.setNodeState(ctx, instance, node.ID, "failed", err.Error())
+		e.setNodeState(nodeCtx, instance, node.ID, "failed", err.Error())
 		// 发布失败事件
 		e.eventBus.PublishNodeComplete(instance.ID, node.ID, node.Type, model.NodeStatusFailed, nil, nil, nil, "")
-		e.fail(ctx, instance, "节点执行失败: "+err.Error())
+		e.fail(nodeCtx, instance, "节点执行失败: "+err.Error())
 		return err
 	}
 
 	// 记录节点成功状态
-	e.setNodeState(ctx, instance, node.ID, "completed", "")
+	e.setNodeState(nodeCtx, instance, node.ID, "completed", "")
 	// 发布成功事件
 	e.eventBus.PublishNodeComplete(instance.ID, node.ID, node.Type, model.NodeStatusSuccess, nil, nil, nil, "default")
 
@@ -427,10 +427,9 @@ func (e *FlowExecutor) complete(ctx context.Context, instance *model.FlowInstanc
 
 	// 更新关联工单的自愈状态为 healed
 	if instance.IncidentID != nil {
-		incidentRepo := repository.NewIncidentRepository()
-		if incident, err := incidentRepo.GetByID(ctx, *instance.IncidentID); err == nil {
+		if incident, err := e.incidentRepo.GetByID(ctx, *instance.IncidentID); err == nil {
 			incident.HealingStatus = "healed"
-			incidentRepo.Update(ctx, incident)
+			e.incidentRepo.Update(ctx, incident)
 			logger.Exec("FLOW").Info("[%s] 工单 %s 自愈状态已更新为 healed", instance.ID.String()[:8], incident.ID.String()[:8])
 		}
 	}
@@ -447,10 +446,9 @@ func (e *FlowExecutor) fail(ctx context.Context, instance *model.FlowInstance, e
 
 	// 更新关联工单的自愈状态为 failed
 	if instance.IncidentID != nil {
-		incidentRepo := repository.NewIncidentRepository()
-		if incident, err := incidentRepo.GetByID(ctx, *instance.IncidentID); err == nil {
+		if incident, err := e.incidentRepo.GetByID(ctx, *instance.IncidentID); err == nil {
 			incident.HealingStatus = "failed"
-			incidentRepo.Update(ctx, incident)
+			e.incidentRepo.Update(ctx, incident)
 			logger.Exec("FLOW").Info("[%s] 工单 %s 自愈状态已更新为 failed", instance.ID.String()[:8], incident.ID.String()[:8])
 		}
 	}
@@ -474,8 +472,8 @@ func (e *FlowExecutor) executeHostExtractor(ctx context.Context, instance *model
 		extractMode = em
 	}
 	outputKey := "hosts" // 默认输出 key
-	if ok, _ := config["output_key"].(string); ok != "" {
-		outputKey = ok
+	if v, _ := config["output_key"].(string); v != "" {
+		outputKey = v
 	}
 
 	// 从 incident 获取源字段值（支持嵌套字段如 raw_data.cmdb_ci）
@@ -658,6 +656,26 @@ func (e *FlowExecutor) executeHostExtractor(ctx context.Context, instance *model
 	}
 	e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelInfo, "主机提取成功", logDetails)
 
+	// 将提取结果写入 node_states，供前端展示
+	if instance.NodeStates == nil {
+		instance.NodeStates = make(model.JSON)
+	}
+	if existing, ok := instance.NodeStates[node.ID].(map[string]interface{}); ok {
+		existing["extracted_hosts"] = hosts
+		existing["source_field"] = sourceField
+		existing["extract_mode"] = extractMode
+		existing["host_count"] = len(hosts)
+		instance.NodeStates[node.ID] = existing
+	} else {
+		instance.NodeStates[node.ID] = map[string]interface{}{
+			"extracted_hosts": hosts,
+			"source_field":    sourceField,
+			"extract_mode":    extractMode,
+			"host_count":      len(hosts),
+		}
+	}
+	e.instanceRepo.UpdateNodeStates(ctx, instance.ID, instance.NodeStates)
+
 	logger.Exec("NODE").Info("[%s] 提取到 %d 个主机: %v", shortID(instance), len(hosts), hosts)
 	return nil
 }
@@ -714,6 +732,7 @@ func (e *FlowExecutor) executeCondition(ctx context.Context, instance *model.Flo
 
 	// 遍历条件，找到第一个匹配的
 	var matchedTarget string
+	var matchedExpression string
 	for _, cond := range conditions {
 		expression, _ := cond["expression"].(string)
 		target, _ := cond["target"].(string)
@@ -728,6 +747,7 @@ func (e *FlowExecutor) executeCondition(ctx context.Context, instance *model.Flo
 
 		if result {
 			matchedTarget = target
+			matchedExpression = expression
 			e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelInfo, "条件匹配", map[string]interface{}{
 				"expression":     expression,
 				"matched_target": target,
@@ -774,6 +794,16 @@ func (e *FlowExecutor) executeCondition(ctx context.Context, instance *model.Flo
 
 	// 标记条件节点为完成
 	e.setNodeState(ctx, instance, node.ID, "completed", "")
+
+	// 将分支决策结果写入 node_states
+	if existing, ok := instance.NodeStates[node.ID].(map[string]interface{}); ok {
+		existing["activated_branch"] = matchedTarget
+		if matchedExpression != "" {
+			existing["matched_expression"] = matchedExpression
+		}
+		instance.NodeStates[node.ID] = existing
+		e.instanceRepo.UpdateNodeStates(ctx, instance.ID, instance.NodeStates)
+	}
 
 	logger.Exec("NODE").Info("条件节点跳转到: %s", matchedTarget)
 
@@ -848,6 +878,16 @@ func (e *FlowExecutor) executeSetVariable(ctx context.Context, instance *model.F
 		"variables": setVars,
 	})
 
+	// 将设置的变量写入 node_states
+	if instance.NodeStates == nil {
+		instance.NodeStates = make(model.JSON)
+	}
+	if existing, ok := instance.NodeStates[node.ID].(map[string]interface{}); ok {
+		existing["variables_set"] = setVars
+		instance.NodeStates[node.ID] = existing
+		e.instanceRepo.UpdateNodeStates(ctx, instance.ID, instance.NodeStates)
+	}
+
 	return nil
 }
 
@@ -896,17 +936,24 @@ func (e *FlowExecutor) resolveValue(path string, context model.JSON, nodeStates 
 	if len(parts) > 0 {
 		// 检查 nodeStates 中的执行结果
 		if parts[0] == "execution_result" || parts[0] == "execution" {
-			// 从 nodeStates 查找 execution 节点的结果
+			// 从 context 的 execution_result 获取（优先，更可靠）
+			if execResult, ok := context["execution_result"].(map[string]interface{}); ok {
+				if len(parts) > 1 {
+					return e.getNestedValue(execResult, parts[1:])
+				}
+				return execResult
+			}
+			// 回退到 nodeStates 中查找类型为 execution 的节点（精确匹配节点类型，而非子串）
 			for nodeID, stateRaw := range nodeStates {
-				if strings.Contains(nodeID, "execution") {
-					if state, ok := stateRaw.(map[string]interface{}); ok {
-						return e.getNestedValue(state, parts[1:])
+				if state, ok := stateRaw.(map[string]interface{}); ok {
+					// 只匹配以 exec_ 开头的节点 ID 或精确匹配 execution
+					if strings.HasPrefix(nodeID, "exec_") || nodeID == "execution" {
+						if len(parts) > 1 {
+							return e.getNestedValue(state, parts[1:])
+						}
+						return state
 					}
 				}
-			}
-			// 也尝试从 context 的 execution_result 获取
-			if execResult, ok := context["execution_result"].(map[string]interface{}); ok {
-				return e.getNestedValue(execResult, parts[1:])
 			}
 		}
 
@@ -989,46 +1036,52 @@ func (e *FlowExecutor) parseRightValue(s string) interface{} {
 
 // compare 执行比较操作
 func (e *FlowExecutor) compare(left interface{}, op string, right interface{}) bool {
-	// 类型转换为 float64 进行数值比较
-	leftNum := toFloat(left)
-	rightNum := toFloat(right)
-
 	switch op {
 	case "==":
-		// 如果都是布尔值，直接比较
+		// 先尝试类型一致的比较
 		if lb, ok := left.(bool); ok {
 			if rb, ok := right.(bool); ok {
 				return lb == rb
 			}
 		}
-		// 如果都是字符串，直接比较
-		if ls, ok := left.(string); ok {
-			if rs, ok := right.(string); ok {
-				return ls == rs
-			}
+		// 统一转为字符串比较（解决类型不对称问题）
+		ls := fmt.Sprintf("%v", left)
+		rs := fmt.Sprintf("%v", right)
+		if ls == rs {
+			return true
 		}
-		// 数值比较
-		return leftNum == rightNum
+		// 回退到数值比较（仅当两边都能转为有意义的数字时）
+		leftNum := toFloat(left)
+		rightNum := toFloat(right)
+		if leftNum != 0 || rightNum != 0 {
+			return leftNum == rightNum
+		}
+		return false
 	case "!=":
 		if lb, ok := left.(bool); ok {
 			if rb, ok := right.(bool); ok {
 				return lb != rb
 			}
 		}
-		if ls, ok := left.(string); ok {
-			if rs, ok := right.(string); ok {
-				return ls != rs
-			}
+		ls := fmt.Sprintf("%v", left)
+		rs := fmt.Sprintf("%v", right)
+		if ls != rs {
+			return true
 		}
-		return leftNum != rightNum
+		leftNum := toFloat(left)
+		rightNum := toFloat(right)
+		if leftNum != 0 || rightNum != 0 {
+			return leftNum != rightNum
+		}
+		return false
 	case ">":
-		return leftNum > rightNum
+		return toFloat(left) > toFloat(right)
 	case "<":
-		return leftNum < rightNum
+		return toFloat(left) < toFloat(right)
 	case ">=":
-		return leftNum >= rightNum
+		return toFloat(left) >= toFloat(right)
 	case "<=":
-		return leftNum <= rightNum
+		return toFloat(left) <= toFloat(right)
 	}
 
 	return false
@@ -1217,6 +1270,22 @@ func (e *FlowExecutor) executeCMDBValidator(ctx context.Context, instance *model
 	}
 	e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelInfo, "CMDB 验证成功", logDetails)
 
+	// 将验证结果写入 node_states
+	if instance.NodeStates == nil {
+		instance.NodeStates = make(model.JSON)
+	}
+	if existing, ok := instance.NodeStates[node.ID].(map[string]interface{}); ok {
+		existing["validated_hosts"] = validatedHosts
+		existing["invalid_hosts"] = invalidHosts
+		existing["validation_summary"] = map[string]interface{}{
+			"total":   len(hosts),
+			"valid":   len(validatedHosts),
+			"invalid": len(invalidHosts),
+		}
+		instance.NodeStates[node.ID] = existing
+		e.instanceRepo.UpdateNodeStates(ctx, instance.ID, instance.NodeStates)
+	}
+
 	logger.Exec("NODE").Info("[%s] CMDB 验证完成: %d/%d 个主机通过", shortID(instance), len(validatedHosts), len(hosts))
 	return nil
 }
@@ -1255,7 +1324,7 @@ func (e *FlowExecutor) executeApproval(ctx context.Context, instance *model.Flow
 	}
 
 	// 获取审批标题和描述
-	title := fmt.Sprintf("流程实例 #%d 审批请求", instance.ID)
+	title := fmt.Sprintf("流程实例 %s 审批请求", instance.ID.String()[:8])
 	description := ""
 	if config != nil {
 		if t, ok := config["title"].(string); ok && t != "" {
@@ -1580,10 +1649,11 @@ func (e *FlowExecutor) executeExecution(ctx context.Context, instance *model.Flo
 				"exit_code": completedRun.ExitCode,
 				"stats":     completedRun.Stats,
 			}
-			if completedRun.Status == "failed" {
+			switch completedRun.Status {
+			case "failed":
 				executionStatus = "failed"
 				executionMessage = fmt.Sprintf("任务执行失败 (退出码: %d)", completedRun.ExitCode)
-			} else if completedRun.Status == "partial" {
+			case "partial":
 				executionStatus = "partial"
 				executionMessage = "任务部分成功（部分主机执行失败或不可达）"
 			}
@@ -1616,9 +1686,10 @@ func (e *FlowExecutor) executeExecution(ctx context.Context, instance *model.Flo
 	e.instanceRepo.Update(ctx, instance)
 
 	logLevel := model.LogLevelInfo
-	if executionStatus == "failed" {
+	switch executionStatus {
+	case "failed":
 		logLevel = model.LogLevelError
-	} else if executionStatus == "partial" {
+	case "partial":
 		logLevel = model.LogLevelWarn
 	}
 	e.logNode(ctx, instance.ID, node.ID, node.Type, logLevel, executionMessage, executionResult)
@@ -1696,21 +1767,41 @@ func (e *FlowExecutor) executeExecutionWithBranch(ctx context.Context, instance 
 	// 记录节点状态
 	nodeStateStatus := "completed"
 	var nodeErrMsg string
-	if outputHandle == "failed" {
+	switch outputHandle {
+	case "failed":
 		nodeStateStatus = "failed"
 		if err != nil {
 			nodeErrMsg = err.Error()
 		}
-	} else if outputHandle == "partial" {
+	case "partial":
 		nodeStateStatus = "partial"
 	}
 	e.setNodeState(ctx, instance, node.ID, nodeStateStatus, nodeErrMsg)
 
+	// 回写执行结果到 node_states（setNodeState 只写了状态元数据，把执行细节加回来）
+	if existing, ok := instance.NodeStates[node.ID].(map[string]interface{}); ok {
+		if execResult, ok := instance.Context["execution_result"].(map[string]interface{}); ok {
+			if run, ok := execResult["run"]; ok {
+				existing["run"] = run
+			}
+			if taskID, ok := execResult["task_id"]; ok {
+				existing["task_id"] = taskID
+			}
+			if targetHosts, ok := execResult["target_hosts"]; ok {
+				existing["target_hosts"] = targetHosts
+			}
+		}
+		existing["output_handle"] = outputHandle
+		instance.NodeStates[node.ID] = existing
+		e.instanceRepo.UpdateNodeStates(ctx, instance.ID, instance.NodeStates)
+	}
+
 	// 发布执行节点完成事件，包含分支信息
 	nodeStatus := model.NodeStatusSuccess
-	if outputHandle == "failed" {
+	switch outputHandle {
+	case "failed":
 		nodeStatus = model.NodeStatusFailed
-	} else if outputHandle == "partial" {
+	case "partial":
 		nodeStatus = model.NodeStatusPartial
 	}
 	e.eventBus.PublishNodeComplete(instance.ID, node.ID, node.Type, nodeStatus, nil, nil, nil, outputHandle)
@@ -2219,7 +2310,9 @@ func (e *FlowExecutor) executeNotification(ctx context.Context, instance *model.
 			}
 
 			payloadBytes, _ := json.Marshal(notificationPayload)
-			resp, err := http.Post(webhookURL, "application/json", bytes.NewReader(payloadBytes))
+			// 使用带超时的 HTTP 客户端，避免永久挂起
+			httpClient := &http.Client{Timeout: 30 * time.Second}
+			resp, err := httpClient.Post(webhookURL, "application/json", bytes.NewReader(payloadBytes))
 			if err != nil {
 				logger.Exec("NODE").Error("Webhook 通知发送失败: %v", err)
 				e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelError, "Webhook 通知发送失败", map[string]interface{}{
@@ -2227,8 +2320,8 @@ func (e *FlowExecutor) executeNotification(ctx context.Context, instance *model.
 					"webhook_url": webhookURL,
 				})
 			} else {
-				defer resp.Body.Close()
 				respBody, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
 				logger.Exec("NODE").Info("Webhook 通知发送成功: HTTP %d, 响应: %s", resp.StatusCode, string(respBody))
 				e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelInfo, "Webhook 通知发送成功", map[string]interface{}{
 					"status_code":    resp.StatusCode,
@@ -2254,10 +2347,9 @@ func (e *FlowExecutor) ResumeAfterApproval(ctx context.Context, instanceID uuid.
 	// 辅助函数：更新关联的 Incident 状态
 	updateIncidentStatus := func(status string) {
 		if instance.IncidentID != nil {
-			incidentRepo := repository.NewIncidentRepository()
-			if incident, err := incidentRepo.GetByID(ctx, *instance.IncidentID); err == nil {
+			if incident, err := e.incidentRepo.GetByID(ctx, *instance.IncidentID); err == nil {
 				incident.HealingStatus = status
-				incidentRepo.Update(ctx, incident)
+				e.incidentRepo.Update(ctx, incident)
 			}
 		}
 	}
@@ -2426,6 +2518,19 @@ func (e *FlowExecutor) executeCompute(ctx context.Context, instance *model.FlowI
 		message = fmt.Sprintf("计算完成: %d 成功, %d 失败", len(results), len(errors))
 	}
 	e.logNode(ctx, instance.ID, node.ID, node.Type, logLevel, message, logDetails)
+
+	// 将计算结果写入 node_states
+	if instance.NodeStates == nil {
+		instance.NodeStates = make(model.JSON)
+	}
+	if existing, ok := instance.NodeStates[node.ID].(map[string]interface{}); ok {
+		existing["computed_results"] = results
+		if len(errors) > 0 {
+			existing["errors"] = errors
+		}
+		instance.NodeStates[node.ID] = existing
+		e.instanceRepo.UpdateNodeStates(ctx, instance.ID, instance.NodeStates)
+	}
 
 	logger.Exec("NODE").Info("[%s] 计算节点完成: %d 个变量已写入 context", shortID(instance), len(results))
 	return nil

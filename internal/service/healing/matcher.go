@@ -3,14 +3,19 @@ package healing
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/company/auto-healing/internal/model"
 )
 
 // RuleMatcher 规则匹配器
-type RuleMatcher struct{}
+type RuleMatcher struct {
+	regexCache sync.Map // 正则表达式缓存 pattern -> *regexp.Regexp
+}
 
 // NewRuleMatcher 创建规则匹配器
 func NewRuleMatcher() *RuleMatcher {
@@ -190,14 +195,22 @@ func (m *RuleMatcher) in(fieldValue, condValue interface{}) bool {
 	return false
 }
 
-// regex 正则匹配
+// regex 正则匹配（带编译缓存）
 func (m *RuleMatcher) regex(fieldValue, condValue interface{}) bool {
 	fieldStr := toString(fieldValue)
 	pattern := toString(condValue)
 
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return false
+	// 从缓存获取或编译正则
+	var re *regexp.Regexp
+	if cached, ok := m.regexCache.Load(pattern); ok {
+		re = cached.(*regexp.Regexp)
+	} else {
+		compiled, err := regexp.Compile(pattern)
+		if err != nil {
+			return false
+		}
+		m.regexCache.Store(pattern, compiled)
+		re = compiled
 	}
 	return re.MatchString(fieldStr)
 }
@@ -239,11 +252,13 @@ func toString(v interface{}) string {
 	case string:
 		return val
 	case float64:
-		return strings.TrimRight(strings.TrimRight(
-			strings.Replace(
-				string(rune(int(val))),
-				"\x00", "", -1),
-			"0"), ".")
+		return strconv.FormatFloat(val, 'f', -1, 64)
+	case int:
+		return strconv.Itoa(val)
+	case int64:
+		return strconv.FormatInt(val, 10)
+	case bool:
+		return fmt.Sprintf("%v", val)
 	default:
 		data, _ := json.Marshal(val)
 		return string(data)

@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 )
 
@@ -87,7 +88,8 @@ func (eb *EventBus) Publish(instanceID uuid.UUID, event Event) {
 		select {
 		case ch <- event:
 		default:
-			// 缓冲区满，跳过（防止阻塞）
+			// 缓冲区满，记录警告（可能丢失关键事件）
+			logger.Exec("SSE").Warn("事件缓冲区已满，丢弃事件 type=%s instance=%s", event.Type, instanceID.String()[:8])
 		}
 	}
 }
