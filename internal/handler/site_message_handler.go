@@ -21,6 +21,7 @@ type SiteMessageHandler struct {
 	platformSettings *repository.PlatformSettingsRepository
 	eventBus         *MessageEventBus
 	tenantRepo       *repository.TenantRepository
+	userRepo         *repository.UserRepository
 }
 
 // NewSiteMessageHandler 创建站内信处理器
@@ -30,6 +31,7 @@ func NewSiteMessageHandler() *SiteMessageHandler {
 		platformSettings: repository.NewPlatformSettingsRepository(),
 		eventBus:         GetMessageEventBus(),
 		tenantRepo:       repository.NewTenantRepository(),
+		userRepo:         repository.NewUserRepository(),
 	}
 }
 
@@ -57,6 +59,18 @@ type updateSiteMessageSettingsRequest struct {
 type siteMessageSettingsResponse struct {
 	RetentionDays int    `json:"retention_days"`
 	UpdatedAt     string `json:"updated_at,omitempty"`
+}
+
+// ==================== 辅助方法 ====================
+
+// getUserCreatedAt 获取用户创建时间（用于过滤站内信：不显示用户注册之前的消息）
+func (h *SiteMessageHandler) getUserCreatedAt(c *gin.Context, userID uuid.UUID) time.Time {
+	user, err := h.userRepo.GetByID(c.Request.Context(), userID)
+	if err != nil {
+		logger.Warn("获取用户创建时间失败: userID=%s, err=%v", userID, err)
+		return time.Time{} // 返回零值，不做过滤
+	}
+	return user.CreatedAt
 }
 
 // ==================== 消息查询 ====================
@@ -87,7 +101,8 @@ func (h *SiteMessageHandler) ListMessages(c *gin.Context) {
 	order := c.Query("order")
 
 	tenantID := middleware.GetTenantUUID(c)
-	messages, total, err := h.repo.List(c.Request.Context(), userID, &tenantID, page, pageSize, keyword, category, isRead, sortField, order)
+	userCreatedAt := h.getUserCreatedAt(c, userID)
+	messages, total, err := h.repo.List(c.Request.Context(), userID, &tenantID, userCreatedAt, page, pageSize, keyword, category, isRead, sortField, order)
 	if err != nil {
 		response.InternalError(c, "查询站内信失败")
 		return
@@ -106,7 +121,8 @@ func (h *SiteMessageHandler) GetUnreadCount(c *gin.Context) {
 	}
 
 	tenantID := middleware.GetTenantUUID(c)
-	count, err := h.repo.GetUnreadCount(c.Request.Context(), userID, &tenantID)
+	userCreatedAt := h.getUserCreatedAt(c, userID)
+	count, err := h.repo.GetUnreadCount(c.Request.Context(), userID, &tenantID, userCreatedAt)
 	if err != nil {
 		response.InternalError(c, "获取未读数量失败")
 		return
@@ -166,7 +182,8 @@ func (h *SiteMessageHandler) MarkAllRead(c *gin.Context) {
 	}
 
 	tenantID := middleware.GetTenantUUID(c)
-	count, err := h.repo.MarkAllRead(c.Request.Context(), userID, &tenantID)
+	userCreatedAt := h.getUserCreatedAt(c, userID)
+	count, err := h.repo.MarkAllRead(c.Request.Context(), userID, &tenantID, userCreatedAt)
 	if err != nil {
 		response.InternalError(c, "全部标记已读失败")
 		return
@@ -356,7 +373,8 @@ func (h *SiteMessageHandler) Events(c *gin.Context) {
 
 	// 连接建立后立即推送当前未读数量
 	tenantID := middleware.GetTenantUUID(c)
-	if count, err := h.repo.GetUnreadCount(c.Request.Context(), userID, &tenantID); err == nil {
+	userCreatedAt := h.getUserCreatedAt(c, userID)
+	if count, err := h.repo.GetUnreadCount(c.Request.Context(), userID, &tenantID, userCreatedAt); err == nil {
 		data := fmt.Sprintf(`{"type":"init","unread_count":%d}`, count)
 		fmt.Fprintf(c.Writer, "event: init\ndata: %s\n\n", data)
 		flusher.Flush()

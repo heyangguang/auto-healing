@@ -28,13 +28,17 @@ func NewSiteMessageRepository() *SiteMessageRepository {
 
 // List 分页查询站内信（带已读状态），支持 keyword、category、is_read 筛选和排序
 // tenantID: 当前用户所属租户，用于过滤目标租户（NULL=广播 或 target_tenant_id=tenantID）
-func (r *SiteMessageRepository) List(ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID, page, pageSize int, keyword, category, isRead, sortField, order string) ([]model.SiteMessageWithReadStatus, int64, error) {
+func (r *SiteMessageRepository) List(ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID, userCreatedAt time.Time, page, pageSize int, keyword, category, isRead, sortField, order string) ([]model.SiteMessageWithReadStatus, int64, error) {
 	var total int64
 	var results []model.SiteMessageWithReadStatus
 
-	scopeTenantID := TenantIDFromContext(ctx)
-	baseQuery := r.db.WithContext(ctx).Where("sm.tenant_id = ?", scopeTenantID).Table("site_messages AS sm").
+	baseQuery := r.db.WithContext(ctx).Table("site_messages AS sm").
 		Where("(sm.expires_at IS NULL OR sm.expires_at > ?)", time.Now())
+
+	// 只显示用户创建时间之后的消息（新用户不看旧公告）
+	if !userCreatedAt.IsZero() {
+		baseQuery = baseQuery.Where("sm.created_at >= ?", userCreatedAt)
+	}
 
 	// 租户过滤：只看全局广播（target_tenant_id IS NULL）或定向到自己租户的消息
 	if tenantID != nil {
@@ -50,9 +54,10 @@ func (r *SiteMessageRepository) List(ctx context.Context, userID uuid.UUID, tena
 	}
 
 	// 已读状态过滤
-	if isRead == "true" {
+	switch isRead {
+	case "true":
 		baseQuery = baseQuery.Where("EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = ?)", userID)
-	} else if isRead == "false" {
+	case "false":
 		baseQuery = baseQuery.Where("NOT EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = ?)", userID)
 	}
 
@@ -87,12 +92,16 @@ func (r *SiteMessageRepository) List(ctx context.Context, userID uuid.UUID, tena
 
 // GetUnreadCount 获取当前用户的未读站内信数量（轻量查询）
 // tenantID: 当前用户所属租户，用于过滤目标租户
-func (r *SiteMessageRepository) GetUnreadCount(ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID) (int64, error) {
+func (r *SiteMessageRepository) GetUnreadCount(ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID, userCreatedAt time.Time) (int64, error) {
 	var count int64
-	scopeTenantID := TenantIDFromContext(ctx)
-	query := r.db.WithContext(ctx).Where("sm.tenant_id = ?", scopeTenantID).Table("site_messages AS sm").
+	query := r.db.WithContext(ctx).Table("site_messages AS sm").
 		Where("(sm.expires_at IS NULL OR sm.expires_at > ?)", time.Now()).
 		Where("NOT EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = ?)", userID)
+
+	// 只计算用户创建时间之后的消息
+	if !userCreatedAt.IsZero() {
+		query = query.Where("sm.created_at >= ?", userCreatedAt)
+	}
 
 	if tenantID != nil {
 		query = query.Where("(sm.target_tenant_id IS NULL OR sm.target_tenant_id = ?)", *tenantID)
@@ -111,8 +120,10 @@ func (r *SiteMessageRepository) MarkRead(ctx context.Context, userID uuid.UUID, 
 	tenantID := TenantIDFromContext(ctx)
 
 	// 先过滤出实际存在的消息 ID，避免外键约束错误
+	// 注意：不使用 TenantDB，因为广播消息的 tenant_id 是创建者租户，
+	// 在其他租户下标记已读时需要能找到这些消息
 	var existingIDs []uuid.UUID
-	if err := TenantDB(r.db, ctx).
+	if err := r.db.WithContext(ctx).
 		Model(&model.SiteMessage{}).
 		Where("id IN ?", messageIDs).
 		Pluck("id", &existingIDs).Error; err != nil {
@@ -122,7 +133,7 @@ func (r *SiteMessageRepository) MarkRead(ctx context.Context, userID uuid.UUID, 
 		return nil
 	}
 
-	return TenantDB(r.db, ctx).Transaction(func(tx *gorm.DB) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, msgID := range existingIDs {
 			read := model.SiteMessageRead{
 				TenantID:  &tenantID,
@@ -141,25 +152,43 @@ func (r *SiteMessageRepository) MarkRead(ctx context.Context, userID uuid.UUID, 
 
 // MarkAllRead 全部标记已读（将所有未读消息插入 reads 表）
 // tenantID: 当前用户所属租户，用于过滤目标租户
-func (r *SiteMessageRepository) MarkAllRead(ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID) (int64, error) {
+func (r *SiteMessageRepository) MarkAllRead(ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID, userCreatedAt time.Time) (int64, error) {
 	now := time.Now()
 	ctxTenantID := TenantIDFromContext(ctx)
+
+	// 构建用户创建时间过滤条件
+	userCreatedFilter := ""
+	args := []interface{}{}
+	if !userCreatedAt.IsZero() {
+		userCreatedFilter = " AND sm.created_at >= ?"
+	}
+
 	var result *gorm.DB
 	if tenantID != nil {
+		baseArgs := []interface{}{ctxTenantID, userID, now, now, *tenantID}
+		if !userCreatedAt.IsZero() {
+			baseArgs = append(baseArgs, userCreatedAt)
+		}
+		args = baseArgs
 		result = TenantDB(r.db, ctx).Exec(`
 			INSERT INTO site_message_reads (id, tenant_id, message_id, user_id, read_at)
 			SELECT gen_random_uuid(), ?, sm.id, ?, ? FROM site_messages sm
 			WHERE (sm.expires_at IS NULL OR sm.expires_at > ?)
 			AND (sm.target_tenant_id IS NULL OR sm.target_tenant_id = ?)
-			AND NOT EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = ?)
-		`, ctxTenantID, userID, now, now, *tenantID, userID)
+			AND NOT EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = $2)`+userCreatedFilter+`
+		`, args...)
 	} else {
+		baseArgs := []interface{}{ctxTenantID, userID, now, now}
+		if !userCreatedAt.IsZero() {
+			baseArgs = append(baseArgs, userCreatedAt)
+		}
+		args = baseArgs
 		result = TenantDB(r.db, ctx).Exec(`
 			INSERT INTO site_message_reads (id, tenant_id, message_id, user_id, read_at)
 			SELECT gen_random_uuid(), ?, sm.id, ?, ? FROM site_messages sm
 			WHERE (sm.expires_at IS NULL OR sm.expires_at > ?)
-			AND NOT EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = ?)
-		`, ctxTenantID, userID, now, now, userID)
+			AND NOT EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = $2)`+userCreatedFilter+`
+		`, args...)
 	}
 
 	return result.RowsAffected, result.Error

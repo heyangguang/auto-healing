@@ -14,6 +14,7 @@ const (
 	SiteMessageCategoryProductNews   = "product_news"   // 产品消息
 	SiteMessageCategoryActivity      = "activity"       // 活动通知
 	SiteMessageCategorySecurity      = "security"       // 安全公告
+	SiteMessageCategoryAnnouncement  = "announcement"   // 系统公告（工作台使用）
 )
 
 // SiteMessageCategoryInfo 分类信息
@@ -30,6 +31,7 @@ var AllSiteMessageCategories = []SiteMessageCategoryInfo{
 	{Value: SiteMessageCategoryProductNews, Label: "产品消息"},
 	{Value: SiteMessageCategoryActivity, Label: "活动通知"},
 	{Value: SiteMessageCategorySecurity, Label: "安全公告"},
+	{Value: SiteMessageCategoryAnnouncement, Label: "系统公告"},
 }
 
 // SiteMessage 站内信消息主表
