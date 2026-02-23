@@ -350,9 +350,10 @@ func (h *AuditHandler) ExportAuditLogs(c *gin.Context) {
 		}
 
 		status := log.Status
-		if status == "success" {
+		switch status {
+		case "success":
 			status = "成功"
-		} else if status == "failed" {
+		case "failed":
 			status = "失败"
 		}
 

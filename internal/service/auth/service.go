@@ -115,10 +115,21 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, clientIP string)
 	// 更新登录信息
 	_ = s.userRepo.UpdateLoginInfo(ctx, user.ID, clientIP)
 
-	// 获取用户角色和权限
-	roles := make([]string, len(user.Roles))
-	for i, role := range user.Roles {
-		roles[i] = role.Name
+	// 获取用户角色（合并平台角色 + 租户角色）
+	roleMap := make(map[string]bool)
+	for _, role := range user.Roles {
+		roleMap[role.Name] = true
+	}
+
+	// 查询租户级角色并合并
+	tenantRoles, _ := s.tenantRepo.GetUserAllRoles(ctx, user.ID)
+	for _, tr := range tenantRoles {
+		roleMap[tr.Name] = true
+	}
+
+	roles := make([]string, 0, len(roleMap))
+	for name := range roleMap {
+		roles = append(roles, name)
 	}
 
 	permissions, err := s.permRepo.GetPermissionCodes(ctx, user.ID)
@@ -334,9 +345,20 @@ func (s *Service) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*UserIn
 		return nil, err
 	}
 
-	roles := make([]string, len(user.Roles))
-	for i, role := range user.Roles {
-		roles[i] = role.Name
+	// 获取角色（合并平台角色 + 租户角色）
+	roleMap := make(map[string]bool)
+	for _, role := range user.Roles {
+		roleMap[role.Name] = true
+	}
+
+	tenantRoles, _ := s.tenantRepo.GetUserAllRoles(ctx, user.ID)
+	for _, tr := range tenantRoles {
+		roleMap[tr.Name] = true
+	}
+
+	roles := make([]string, 0, len(roleMap))
+	for name := range roleMap {
+		roles = append(roles, name)
 	}
 
 	permissions, err := s.permRepo.GetPermissionCodes(ctx, user.ID)
@@ -400,16 +422,35 @@ func (s *Service) GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserPr
 		return nil, err
 	}
 
-	roleDetails := make([]RoleDetail, len(user.Roles))
-	roleNames := make([]string, len(user.Roles))
-	for i, role := range user.Roles {
-		roleDetails[i] = RoleDetail{
+	// 获取角色（合并平台角色 + 租户角色）
+	roleDetails := make([]RoleDetail, 0, len(user.Roles))
+	roleNameSet := make(map[string]bool)
+	for _, role := range user.Roles {
+		roleDetails = append(roleDetails, RoleDetail{
 			ID:          role.ID,
 			Name:        role.Name,
 			DisplayName: role.DisplayName,
 			IsSystem:    role.IsSystem,
+		})
+		roleNameSet[role.Name] = true
+	}
+
+	tenantRoles, _ := s.tenantRepo.GetUserAllRoles(ctx, user.ID)
+	for _, tr := range tenantRoles {
+		if !roleNameSet[tr.Name] {
+			roleDetails = append(roleDetails, RoleDetail{
+				ID:          tr.ID,
+				Name:        tr.Name,
+				DisplayName: tr.DisplayName,
+				IsSystem:    tr.IsSystem,
+			})
+			roleNameSet[tr.Name] = true
 		}
-		roleNames[i] = role.Name
+	}
+
+	roleNames := make([]string, 0, len(roleNameSet))
+	for name := range roleNameSet {
+		roleNames = append(roleNames, name)
 	}
 
 	permissions, err := s.permRepo.GetPermissionCodes(ctx, user.ID)

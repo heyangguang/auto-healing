@@ -36,6 +36,7 @@ var HighRiskRules = []HighRiskRule{
 	{"execute", "execution-tasks", "执行指令/Playbook"},
 	// 自愈相关
 	{"trigger", "incidents", "手动触发自愈流程"},
+	{"dismiss", "incidents", "忽略待触发工单"},
 	{"approve", "healing", "审批通过自愈流程"},
 	{"reject", "healing", "审批拒绝自愈流程"},
 	{"dry_run", "healing", "自愈流程试运行"},
@@ -133,9 +134,10 @@ func (r *AuditLogRepository) List(ctx context.Context, opts *AuditLogListOptions
 	}
 
 	// 高危过滤
-	if opts.RiskLevel == "high" {
+	switch opts.RiskLevel {
+	case "high":
 		query = query.Where(buildHighRiskCondition())
-	} else if opts.RiskLevel == "normal" {
+	case "normal":
 		query = query.Where(fmt.Sprintf("NOT (%s)", buildHighRiskCondition()))
 	}
 

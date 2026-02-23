@@ -49,6 +49,7 @@ type Handlers struct {
 	SiteMessage      *SiteMessageHandler
 	PlatformSettings *PlatformSettingsHandler
 	Tenant           *TenantHandler
+	Workbench        *WorkbenchHandler
 }
 
 // NewHandlers 创建所有处理器
@@ -79,6 +80,7 @@ func NewHandlers(cfg *config.Config) *Handlers {
 		SiteMessage:      NewSiteMessageHandler(),
 		PlatformSettings: NewPlatformSettingsHandler(),
 		Tenant:           NewTenantHandler(authHandler.authSvc),
+		Workbench:        NewWorkbenchHandler(),
 	}
 }
 
@@ -115,7 +117,14 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		// -------------------- 租户级用户管理 --------------------
 		tenantUsers := protected.Group("/tenant/users")
 		{
-			tenantUsers.POST("", middleware.RequirePermission("user:create"), h.TenantUser.CreateTenantUser) // 租户级创建用户
+			tenantUsers.GET("", middleware.RequirePermission("user:list"), h.TenantUser.ListTenantUsers)               // 租户级用户列表
+			tenantUsers.GET("/simple", middleware.RequirePermission("user:list"), h.TenantUser.ListSimpleUsers)        // 租户级简要用户列表
+			tenantUsers.POST("", middleware.RequirePermission("user:create"), h.TenantUser.CreateTenantUser)           // 租户级创建用户
+			tenantUsers.GET("/:id", middleware.RequirePermission("user:list"), h.User.GetUser)                         // 租户级用户详情
+			tenantUsers.PUT("/:id", middleware.RequirePermission("user:update"), h.User.UpdateUser)                    // 租户级更新用户
+			tenantUsers.DELETE("/:id", middleware.RequirePermission("user:delete"), h.User.DeleteUser)                 // 租户级删除用户
+			tenantUsers.POST("/:id/reset-password", middleware.RequirePermission("user:create"), h.User.ResetPassword) // 租户级重置密码
+			tenantUsers.PUT("/:id/roles", middleware.RequirePermission("role:assign"), h.User.AssignUserRoles)         // 租户级分配角色
 		}
 
 		// -------------------- 租户级角色管理 --------------------
@@ -123,6 +132,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		{
 			tenantRoles.GET("", middleware.RequirePermission("role:list"), h.Role.ListTenantRoles)
 			tenantRoles.GET("/:id", middleware.RequirePermission("role:list"), h.Role.GetRole)
+			tenantRoles.GET("/:id/users", middleware.RequirePermission("role:list"), h.Role.GetTenantRoleUsers)
 			tenantRoles.POST("", middleware.RequirePermission("role:create"), h.Role.CreateRole)
 			tenantRoles.PUT("/:id", middleware.RequirePermission("role:update"), h.Role.UpdateRole)
 			tenantRoles.DELETE("/:id", middleware.RequirePermission("role:delete"), h.Role.DeleteRole)
@@ -167,60 +177,6 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			plugins.POST("/:id/sync", middleware.RequirePermission("plugin:sync"), h.Plugin.SyncPlugin)
 			plugins.GET("/:id/logs", middleware.RequirePermission("plugin:list"), h.Plugin.GetPluginSyncLogs)
 		}
-
-		// -------------------- 工作流管理 (待实现) --------------------
-		// workflows := protected.Group("/workflows")
-		// {
-		// 	workflows.GET("", middleware.RequirePermission("workflow:list"), ListWorkflows)
-		// 	workflows.POST("", middleware.RequirePermission("workflow:create"), CreateWorkflow)
-		// 	workflows.GET("/:id", middleware.RequirePermission("workflow:detail"), GetWorkflow)
-		// 	workflows.PUT("/:id", middleware.RequirePermission("workflow:update"), UpdateWorkflow)
-		// 	workflows.DELETE("/:id", middleware.RequirePermission("workflow:delete"), DeleteWorkflow)
-		// 	workflows.POST("/:id/activate", middleware.RequirePermission("workflow:activate"), ActivateWorkflow)
-		// 	workflows.POST("/:id/deactivate", middleware.RequirePermission("workflow:activate"), DeactivateWorkflow)
-		// 	workflows.POST("/:id/clone", middleware.RequirePermission("workflow:create"), CloneWorkflow)
-		// 	workflows.POST("/:id/run", middleware.RequirePermission("workflow:run"), RunWorkflow)
-		// 	workflows.POST("/:id/nodes", middleware.RequirePermission("workflow:update"), CreateNode)
-		// 	workflows.POST("/:id/edges", middleware.RequirePermission("workflow:update"), CreateEdge)
-		// }
-
-		// protected.PUT("/nodes/:id", middleware.RequirePermission("workflow:update"), UpdateNode)
-		// protected.DELETE("/nodes/:id", middleware.RequirePermission("workflow:update"), DeleteNode)
-		// protected.DELETE("/edges/:id", middleware.RequirePermission("workflow:update"), DeleteEdge)
-
-		// -------------------- 工作流实例 (待实现) --------------------
-		// instances := protected.Group("/instances")
-		// {
-		// 	instances.GET("", middleware.RequirePermission("workflow:list"), ListInstances)
-		// 	instances.GET("/:id", middleware.RequirePermission("workflow:list"), GetInstance)
-		// 	instances.POST("/:id/pause", middleware.RequirePermission("workflow:run"), PauseInstance)
-		// 	instances.POST("/:id/resume", middleware.RequirePermission("workflow:run"), ResumeInstance)
-		// 	instances.POST("/:id/cancel", middleware.RequirePermission("workflow:run"), CancelInstance)
-		// 	instances.POST("/:id/retry", middleware.RequirePermission("workflow:run"), RetryInstance)
-		// 	instances.GET("/:id/logs", middleware.RequirePermission("workflow:list"), GetInstanceLogs)
-		// 	instances.GET("/:id/logs/stream", middleware.RequirePermission("workflow:list"), StreamInstanceLogs)
-		// }
-
-		// -------------------- Git 仓库管理 (待实现, 使用 git-repos 替代) --------------------
-		// repositories := protected.Group("/repositories")
-		// {
-		// 	repositories.GET("", middleware.RequirePermission("repository:list"), ListRepositories)
-		// 	repositories.POST("", middleware.RequirePermission("repository:create"), CreateRepository)
-		// 	repositories.GET("/:id", middleware.RequirePermission("repository:list"), GetRepository)
-		// 	repositories.PUT("/:id", middleware.RequirePermission("repository:update"), UpdateRepository)
-		// 	repositories.DELETE("/:id", middleware.RequirePermission("repository:delete"), DeleteRepository)
-		// 	repositories.POST("/:id/sync", middleware.RequirePermission("repository:sync"), SyncRepository)
-		// 	repositories.POST("/:id/scan", middleware.RequirePermission("repository:sync"), ScanPlaybooks)
-		// }
-
-		// -------------------- Playbook 管理 (待实现) --------------------
-		// playbooks := protected.Group("/playbooks")
-		// {
-		// 	playbooks.GET("", middleware.RequirePermission("playbook:list"), ListPlaybooks)
-		// 	playbooks.GET("/:id", middleware.RequirePermission("playbook:list"), GetPlaybook)
-		// 	playbooks.PUT("/:id", middleware.RequirePermission("playbook:list"), UpdatePlaybook)
-		// 	playbooks.GET("/:id/content", middleware.RequirePermission("playbook:list"), GetPlaybookContent)
-		// }
 
 		// -------------------- 执行任务模板 --------------------
 		execTasks := protected.Group("/execution-tasks")
@@ -289,7 +245,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			templates.DELETE("/:id", middleware.RequirePermission("template:delete"), h.Notification.DeleteTemplate)
 			templates.POST("/:id/preview", middleware.RequirePermission("template:list"), h.Notification.PreviewTemplate)
 		}
-		protected.GET("/template-variables", h.Notification.GetAvailableVariables)
+		protected.GET("/template-variables", middleware.RequirePermission("template:list"), h.Notification.GetAvailableVariables)
 
 		// -------------------- 通知发送 --------------------
 		notifications := protected.Group("/notifications")
@@ -372,6 +328,8 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			gitRepos.GET("/:id/logs", middleware.RequirePermission("plugin:list"), h.GitRepo.GetSyncLogs)
 			gitRepos.GET("/:id/commits", middleware.RequirePermission("plugin:list"), h.GitRepo.GetCommits)
 			gitRepos.GET("/:id/files", middleware.RequirePermission("plugin:list"), h.GitRepo.GetFiles)
+			gitRepos.GET("/:id/branches", middleware.RequirePermission("plugin:list"), h.GitRepo.GetBranches)
+			gitRepos.POST("/:id/detect-branches", middleware.RequirePermission("plugin:list"), h.GitRepo.DetectBranches)
 		}
 
 		// -------------------- Playbook 模板 --------------------
@@ -443,27 +401,39 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		pendingCenter := protected.Group("/healing/pending")
 		{
 			pendingCenter.GET("/trigger", middleware.RequirePermission("healing:trigger:view"), h.Healing.ListPendingTriggerIncidents)
+			pendingCenter.GET("/dismissed", middleware.RequirePermission("healing:trigger:view"), h.Healing.ListDismissedTriggerIncidents)
 		}
 
 		// 工单手动触发（放在原有 incidents 组内更合理）
 		incidents.POST("/:id/trigger", middleware.RequirePermission("healing:trigger:execute"), h.Healing.TriggerIncidentManually)
+		incidents.POST("/:id/dismiss", middleware.RequirePermission("healing:trigger:execute"), h.Healing.DismissIncident)
 
 		// -------------------- Dashboard --------------------
 		dashboard := protected.Group("/dashboard")
 		{
-			dashboard.GET("/overview", h.Dashboard.GetOverview)
-			dashboard.GET("/config", h.Dashboard.GetConfig)
-			dashboard.PUT("/config", h.Dashboard.SaveConfig)
+			dashboard.GET("/overview", middleware.RequirePermission("dashboard:view"), h.Dashboard.GetOverview)
+			dashboard.GET("/config", middleware.RequirePermission("dashboard:view"), h.Dashboard.GetConfig)
+			dashboard.PUT("/config", middleware.RequirePermission("dashboard:config:manage"), h.Dashboard.SaveConfig)
 
 			// 系统工作区管理（需要管理员权限）
 			dashboard.POST("/workspaces", middleware.RequirePermission("dashboard:workspace:manage"), h.Dashboard.CreateSystemWorkspace)
-			dashboard.GET("/workspaces", h.Dashboard.ListSystemWorkspaces)
+			dashboard.GET("/workspaces", middleware.RequirePermission("dashboard:view"), h.Dashboard.ListSystemWorkspaces)
 			dashboard.PUT("/workspaces/:id", middleware.RequirePermission("dashboard:workspace:manage"), h.Dashboard.UpdateSystemWorkspace)
 			dashboard.DELETE("/workspaces/:id", middleware.RequirePermission("dashboard:workspace:manage"), h.Dashboard.DeleteSystemWorkspace)
 
 			// 角色-工作区关联
-			dashboard.GET("/roles/:roleId/workspaces", h.Dashboard.GetRoleWorkspaces)
+			dashboard.GET("/roles/:roleId/workspaces", middleware.RequirePermission("dashboard:view"), h.Dashboard.GetRoleWorkspaces)
 			dashboard.PUT("/roles/:roleId/workspaces", middleware.RequirePermission("dashboard:workspace:manage"), h.Dashboard.AssignRoleWorkspaces)
+		}
+
+		// -------------------- Workbench (工作台) --------------------
+		workbench := protected.Group("/workbench")
+		{
+			workbench.GET("/overview", h.Workbench.GetOverview)
+			workbench.GET("/activities", middleware.RequirePermission("audit:list"), h.Workbench.GetActivities)
+			workbench.GET("/schedule-calendar", middleware.RequirePermission("task:list"), h.Workbench.GetScheduleCalendar)
+			workbench.GET("/announcements", h.Workbench.GetAnnouncements)
+			workbench.GET("/favorites", h.Workbench.GetFavorites)
 		}
 
 		// -------------------- 站内信 --------------------
@@ -472,12 +442,12 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			// 固定路径必须在 /:id 之前注册
 			siteMessages.GET("/unread-count", h.SiteMessage.GetUnreadCount)
 			siteMessages.GET("/categories", h.SiteMessage.GetCategories)
-			siteMessages.GET("/settings", h.SiteMessage.GetSettings)
+			siteMessages.GET("/settings", middleware.RequirePermission("site-message:settings:view"), h.SiteMessage.GetSettings)
 			siteMessages.GET("/events", h.SiteMessage.Events) // SSE 实时推送
-			siteMessages.PUT("/settings", middleware.RequirePermission("site-message:create"), h.SiteMessage.UpdateSettings)
+			siteMessages.PUT("/settings", middleware.RequirePermission("site-message:settings:manage"), h.SiteMessage.UpdateSettings)
 			siteMessages.PUT("/read", h.SiteMessage.MarkRead)
 			siteMessages.PUT("/read-all", h.SiteMessage.MarkAllRead)
-			siteMessages.GET("", h.SiteMessage.ListMessages)
+			siteMessages.GET("", middleware.RequirePermission("site-message:list"), h.SiteMessage.ListMessages)
 		}
 
 		// ==================== 平台级管理接口（Platform） ====================
@@ -510,8 +480,8 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			}
 
 			// ---- 平台级权限 ----
-			platform.GET("/permissions", h.Permission.ListPermissions)
-			platform.GET("/permissions/tree", h.Permission.GetPermissionTree)
+			platform.GET("/permissions", middleware.RequirePermission("platform:permissions:list"), h.Permission.ListPermissions)
+			platform.GET("/permissions/tree", middleware.RequirePermission("platform:permissions:list"), h.Permission.GetPermissionTree)
 
 			// ---- 平台设置 ----
 			platform.GET("/settings", middleware.RequirePermission("platform:settings:manage"), h.PlatformSettings.ListSettings)
