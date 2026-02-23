@@ -1,0 +1,244 @@
+package handler
+
+import (
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/company/auto-healing/internal/middleware"
+	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/repository"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+)
+
+// WorkbenchHandler 工作台处理器
+type WorkbenchHandler struct {
+	repo         *repository.WorkbenchRepository
+	activityRepo *repository.UserActivityRepository
+	userRepo     *repository.UserRepository
+}
+
+// NewWorkbenchHandler 创建工作台处理器
+func NewWorkbenchHandler() *WorkbenchHandler {
+	return &WorkbenchHandler{
+		repo:         repository.NewWorkbenchRepository(),
+		activityRepo: repository.NewUserActivityRepository(),
+		userRepo:     repository.NewUserRepository(),
+	}
+}
+
+// GetOverview 获取工作台综合概览（按权限动态返回 section）
+// GET /api/v1/workbench/overview
+func (h *WorkbenchHandler) GetOverview(c *gin.Context) {
+	ctx := c.Request.Context()
+	permissions := middleware.GetPermissions(c)
+
+	// 并发查询有权限的 section
+	result := make(map[string]interface{})
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	var lastErr error
+
+	type section struct {
+		key string
+		fn  func() (interface{}, error)
+	}
+
+	// 动态构建需要查询的 sections（基于用户权限）
+	sections := []section{
+		// 系统健康：所有用户可见
+		{"system_health", func() (interface{}, error) { return h.repo.GetSystemHealth(ctx) }},
+	}
+
+	// 自愈统计：需要 healing:instances:view
+	if workbenchHasPermission(permissions, "healing:instances:view") {
+		sections = append(sections, section{"healing_stats", func() (interface{}, error) { return h.repo.GetHealingStats(ctx) }})
+	}
+
+	// 工单统计：需要 plugin:list
+	if workbenchHasPermission(permissions, "plugin:list") {
+		sections = append(sections, section{"incident_stats", func() (interface{}, error) { return h.repo.GetIncidentStats(ctx) }})
+	}
+
+	// 主机统计：需要 plugin:list
+	if workbenchHasPermission(permissions, "plugin:list") {
+		sections = append(sections, section{"host_stats", func() (interface{}, error) { return h.repo.GetHostStats(ctx) }})
+	}
+
+	// 资源概览：始终查询，但内部按权限过滤子项
+	sections = append(sections, section{"resource_overview", func() (interface{}, error) {
+		return h.repo.GetResourceOverview(ctx, permissions)
+	}})
+
+	for _, sec := range sections {
+		wg.Add(1)
+		go func(key string, fn func() (interface{}, error)) {
+			defer wg.Done()
+			defer func() {
+				if rec := recover(); rec != nil {
+					mu.Lock()
+					lastErr = nil // 静默处理 panic
+					mu.Unlock()
+				}
+			}()
+
+			data, err := fn()
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				lastErr = err
+				return
+			}
+			result[key] = data
+		}(sec.key, sec.fn)
+	}
+
+	wg.Wait()
+
+	if lastErr != nil {
+		response.InternalError(c, "获取工作台概览失败: "+lastErr.Error())
+		return
+	}
+
+	response.Success(c, result)
+}
+
+// GetActivities 获取活动动态
+// GET /api/v1/workbench/activities?limit=10
+func (h *WorkbenchHandler) GetActivities(c *gin.Context) {
+	limit := 10
+	if l := c.Query("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 {
+			limit = v
+		}
+	}
+
+	items, err := h.repo.GetRecentActivities(c.Request.Context(), limit)
+	if err != nil {
+		response.InternalError(c, "获取活动动态失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, map[string]interface{}{
+		"items": items,
+	})
+}
+
+// GetScheduleCalendar 获取定时任务日历
+// GET /api/v1/workbench/schedule-calendar?year=2026&month=2
+func (h *WorkbenchHandler) GetScheduleCalendar(c *gin.Context) {
+	yearStr := c.Query("year")
+	monthStr := c.Query("month")
+
+	if yearStr == "" || monthStr == "" {
+		response.BadRequest(c, "year 和 month 参数必填")
+		return
+	}
+
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		response.BadRequest(c, "无效的 year 参数")
+		return
+	}
+
+	month, err := strconv.Atoi(monthStr)
+	if err != nil || month < 1 || month > 12 {
+		response.BadRequest(c, "无效的 month 参数（1-12）")
+		return
+	}
+
+	dates, err := h.repo.GetScheduleCalendar(c.Request.Context(), year, month)
+	if err != nil {
+		response.InternalError(c, "获取定时任务日历失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, map[string]interface{}{
+		"dates": dates,
+	})
+}
+
+// GetAnnouncements 获取系统公告
+// GET /api/v1/workbench/announcements?limit=5
+func (h *WorkbenchHandler) GetAnnouncements(c *gin.Context) {
+	limit := 5
+	if l := c.Query("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 {
+			limit = v
+		}
+	}
+
+	// 获取用户创建时间，不显示注册前的公告
+	var userCreatedAt time.Time
+	if userID, err := uuid.Parse(middleware.GetUserID(c)); err == nil {
+		if user, err := h.userRepo.GetByID(c.Request.Context(), userID); err == nil {
+			userCreatedAt = user.CreatedAt
+		}
+	}
+
+	items, err := h.repo.GetAnnouncements(c.Request.Context(), limit, userCreatedAt)
+	if err != nil {
+		response.InternalError(c, "获取系统公告失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, map[string]interface{}{
+		"items": items,
+	})
+}
+
+// GetFavorites 获取用户收藏（复用 user_favorites 表，与侧边栏一致）
+// GET /api/v1/workbench/favorites
+func (h *WorkbenchHandler) GetFavorites(c *gin.Context) {
+	userID, err := uuid.Parse(middleware.GetUserID(c))
+	if err != nil {
+		response.BadRequest(c, "无效的用户ID")
+		return
+	}
+
+	favorites, err := h.activityRepo.ListFavorites(c.Request.Context(), userID)
+	if err != nil {
+		response.InternalError(c, "获取收藏失败: "+err.Error())
+		return
+	}
+
+	// 转换为工作台前端所需格式
+	items := make([]map[string]string, 0, len(favorites))
+	for _, f := range favorites {
+		items = append(items, map[string]string{
+			"key":   f.MenuKey,
+			"label": f.Name,
+			"path":  f.Path,
+		})
+	}
+
+	response.Success(c, map[string]interface{}{
+		"items": items,
+	})
+}
+
+// ==================== 权限辅助函数 ====================
+
+// workbenchHasPermission 检查用户是否有指定权限（含通配符匹配）
+func workbenchHasPermission(userPermissions []string, required string) bool {
+	for _, p := range userPermissions {
+		// 超级管理员通配符
+		if p == "*" {
+			return true
+		}
+		// 精确匹配
+		if p == required {
+			return true
+		}
+		// 模块级通配符 (e.g., "plugin:*" 匹配 "plugin:list")
+		if strings.HasSuffix(p, ":*") {
+			module := strings.TrimSuffix(p, ":*")
+			if strings.HasPrefix(required, module+":") {
+				return true
+			}
+		}
+	}
+	return false
+}
