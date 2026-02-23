@@ -1,0 +1,112 @@
+package service
+
+import "github.com/company/auto-healing/internal/model"
+
+// auditActionSeeds 审计操作类型 Seed（约35种）
+func auditActionSeeds() []model.Dictionary {
+	return []model.Dictionary{
+		d("audit_action", "create", "创建", "Create", "#52c41a", "green", "", "", "", 0),
+		d("audit_action", "update", "更新", "Update", "#1890ff", "blue", "", "", "", 1),
+		d("audit_action", "delete", "删除", "Delete", "#f5222d", "red", "", "", "", 2),
+		d("audit_action", "read", "查看", "Read", "#8c8c8c", "default", "", "", "", 3),
+		d("audit_action", "login", "登录", "Login", "#1890ff", "blue", "", "", "", 4),
+		d("audit_action", "logout", "登出", "Logout", "#8c8c8c", "default", "", "", "", 5),
+		d("audit_action", "execute", "执行", "Execute", "#722ed1", "purple", "", "", "", 6),
+		d("audit_action", "sync", "同步", "Sync", "#13c2c2", "cyan", "", "", "", 7),
+		d("audit_action", "test", "测试", "Test", "#fa8c16", "orange", "", "", "", 8),
+		d("audit_action", "activate", "启用", "Activate", "#52c41a", "green", "", "", "", 9),
+		d("audit_action", "deactivate", "停用", "Deactivate", "#8c8c8c", "default", "", "", "", 10),
+		d("audit_action", "approve", "审批通过", "Approve", "#52c41a", "green", "", "", "", 11),
+		d("audit_action", "reject", "审批拒绝", "Reject", "#f5222d", "red", "", "", "", 12),
+		d("audit_action", "export", "导出", "Export", "#1890ff", "blue", "", "", "", 13),
+		d("audit_action", "scan", "扫描", "Scan", "#13c2c2", "cyan", "", "", "", 14),
+		d("audit_action", "assign_role", "分配角色", "Assign Role", "#722ed1", "purple", "", "", "", 15),
+		d("audit_action", "reset_password", "重置密码", "Reset Password", "#fa8c16", "orange", "", "", "", 16),
+		d("audit_action", "enable", "启用", "Enable", "#52c41a", "green", "", "", "", 17),
+		d("audit_action", "disable", "禁用", "Disable", "#8c8c8c", "default", "", "", "", 18),
+		d("audit_action", "trigger", "触发", "Trigger", "#722ed1", "purple", "", "", "", 19),
+		d("audit_action", "dismiss", "忽略", "Dismiss", "#8c8c8c", "default", "", "", "", 20),
+		d("audit_action", "cancel", "取消", "Cancel", "#8c8c8c", "default", "", "", "", 21),
+		d("audit_action", "retry", "重试", "Retry", "#fa8c16", "orange", "", "", "", 22),
+		d("audit_action", "dry_run", "模拟执行", "Dry Run", "#13c2c2", "cyan", "", "", "", 23),
+		d("audit_action", "reset_status", "重置状态", "Reset Status", "#fa8c16", "orange", "", "", "", 24),
+		d("audit_action", "send", "发送", "Send", "#1890ff", "blue", "", "", "", 25),
+		d("audit_action", "offline", "下线", "Offline", "#8c8c8c", "default", "", "", "", 26),
+		d("audit_action", "patch", "部分更新", "Patch", "#1890ff", "blue", "", "", "", 27),
+		d("audit_action", "assign_workspace", "分配工作区", "Assign Workspace", "#722ed1", "purple", "", "", "", 28),
+		d("audit_action", "maintenance", "进入维护", "Maintenance", "#fa8c16", "orange", "", "", "", 29),
+		d("audit_action", "resume", "恢复服务", "Resume", "#52c41a", "green", "", "", "", 30),
+		d("audit_action", "close", "关闭", "Close", "#8c8c8c", "default", "", "", "", 31),
+		d("audit_action", "batch_reset_scan", "批量重置", "Batch Reset", "#fa8c16", "orange", "", "", "", 32),
+		d("audit_action", "confirm_review", "确认审核", "Confirm Review", "#52c41a", "green", "", "", "", 33),
+		d("audit_action", "ready", "设为就绪", "Ready", "#52c41a", "green", "", "", "", 34),
+	}
+}
+
+// auditResourceSeeds 审计资源类型 Seed
+func auditResourceSeeds() []model.Dictionary {
+	return []model.Dictionary{
+		// 租户级资源
+		d("audit_resource_tenant", "user", "用户", "User", "", "", "", "", "", 0),
+		d("audit_resource_tenant", "role", "角色", "Role", "", "", "", "", "", 1),
+		d("audit_resource_tenant", "plugin", "插件", "Plugin", "", "", "", "", "", 2),
+		d("audit_resource_tenant", "cmdb", "CMDB", "CMDB", "", "", "", "", "", 3),
+		d("audit_resource_tenant", "secrets-sources", "密钥源", "Secrets Source", "", "", "", "", "", 4),
+		d("audit_resource_tenant", "git-repos", "Git仓库", "Git Repository", "", "", "", "", "", 5),
+		d("audit_resource_tenant", "playbooks", "Playbook", "Playbook", "", "", "", "", "", 6),
+		d("audit_resource_tenant", "execution-tasks", "执行任务", "Execution Task", "", "", "", "", "", 7),
+		d("audit_resource_tenant", "execution-runs", "执行记录", "Execution Run", "", "", "", "", "", 8),
+		d("audit_resource_tenant", "execution-schedules", "定时任务", "Schedule", "", "", "", "", "", 9),
+		d("audit_resource_tenant", "channels", "通知渠道", "Channel", "", "", "", "", "", 10),
+		d("audit_resource_tenant", "templates", "通知模板", "Template", "", "", "", "", "", 11),
+		d("audit_resource_tenant", "notifications", "通知记录", "Notification", "", "", "", "", "", 12),
+		d("audit_resource_tenant", "healing-flows", "自愈流程", "Healing Flow", "", "", "", "", "", 13),
+		d("audit_resource_tenant", "healing-rules", "自愈规则", "Healing Rule", "", "", "", "", "", 14),
+		d("audit_resource_tenant", "healing-instances", "流程实例", "Instance", "", "", "", "", "", 15),
+		d("audit_resource_tenant", "healing-approvals", "审批任务", "Approval", "", "", "", "", "", 16),
+		d("audit_resource_tenant", "incidents", "工单/事件", "Incident", "", "", "", "", "", 17),
+		d("audit_resource_tenant", "dashboard", "仪表板", "Dashboard", "", "", "", "", "", 18),
+		// 平台级资源
+		d("audit_resource_platform", "platform-users", "平台用户", "Platform User", "", "", "", "", "", 0),
+		d("audit_resource_platform", "platform-roles", "平台角色", "Platform Role", "", "", "", "", "", 1),
+		d("audit_resource_platform", "platform-permissions", "平台权限", "Platform Permission", "", "", "", "", "", 2),
+		d("audit_resource_platform", "platform-settings", "平台设置", "Platform Settings", "", "", "", "", "", 3),
+		d("audit_resource_platform", "platform-tenants", "租户管理", "Tenant", "", "", "", "", "", 4),
+		d("audit_resource_platform", "platform-audit-logs", "平台审计", "Platform Audit", "", "", "", "", "", 5),
+		d("audit_resource_platform", "platform-site-messages", "平台站内信", "Platform Message", "", "", "", "", "", 6),
+		d("audit_resource_platform", "auth", "认证", "Auth", "", "", "", "", "", 7),
+		d("audit_resource_platform", "site-messages", "站内信", "Site Message", "", "", "", "", "", 8),
+		d("audit_resource_platform", "audit-logs", "审计日志", "Audit Log", "", "", "", "", "", 9),
+		d("audit_resource_platform", "search", "搜索", "Search", "", "", "", "", "", 10),
+		d("audit_resource_platform", "workbench", "工作台", "Workbench", "", "", "", "", "", 11),
+		d("audit_resource_platform", "user", "个人设置", "User Settings", "", "", "", "", "", 12),
+	}
+}
+
+// permissionModuleSeeds 权限模块 Seed
+func permissionModuleSeeds() []model.Dictionary {
+	return []model.Dictionary{
+		d("permission_module", "user", "用户管理", "User", "#1890ff", "", "", "", "", 0),
+		d("permission_module", "role", "角色权限", "Role", "#722ed1", "", "", "", "", 1),
+		d("permission_module", "plugin", "插件管理", "Plugin", "#13c2c2", "", "", "", "", 2),
+		d("permission_module", "execution", "执行管理", "Execution", "#fa8c16", "", "", "", "", 3),
+		d("permission_module", "notification", "通知管理", "Notification", "#eb2f96", "", "", "", "", 4),
+		d("permission_module", "healing", "自愈管理", "Healing", "#52c41a", "", "", "", "", 5),
+		d("permission_module", "workflow", "工作流", "Workflow", "#2f54eb", "", "", "", "", 6),
+		d("permission_module", "system", "系统管理", "System", "#595959", "", "", "", "", 7),
+		d("permission_module", "dashboard", "仪表板", "Dashboard", "#d48806", "", "", "", "", 8),
+		d("permission_module", "site-message", "站内信", "Site Message", "#389e0d", "", "", "", "", 9),
+		d("permission_module", "platform", "平台管理", "Platform", "#531dab", "", "", "", "", 10),
+	}
+}
+
+// httpMethodSeeds HTTP方法 Seed
+func httpMethodSeeds() []model.Dictionary {
+	return []model.Dictionary{
+		d("http_method", "GET", "GET", "GET", "#52c41a", "green", "", "", "", 0),
+		d("http_method", "POST", "POST", "POST", "#1890ff", "blue", "", "", "", 1),
+		d("http_method", "PUT", "PUT", "PUT", "#fa8c16", "orange", "", "", "", 2),
+		d("http_method", "DELETE", "DELETE", "DELETE", "#f5222d", "red", "", "", "", 3),
+		d("http_method", "PATCH", "PATCH", "PATCH", "#722ed1", "purple", "", "", "", 4),
+	}
+}
