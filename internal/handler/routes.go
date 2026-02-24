@@ -26,32 +26,34 @@ import (
 
 // Handlers 所有处理器集合
 type Handlers struct {
-	Auth             *AuthHandler
-	User             *UserHandler
-	TenantUser       *TenantUserHandler // 租户级用户管理
-	Role             *RoleHandler
-	Permission       *PermissionHandler
-	Plugin           *PluginHandler
-	CMDB             *CMDBHandler
-	Secrets          *SecretsHandler
-	GitRepo          *GitRepoHandler
-	Playbook         *PlaybookHandler
-	Execution        *ExecutionHandler
-	Schedule         *ScheduleHandler
-	Notification     *NotificationHandler
-	Healing          *HealingHandler
-	Dashboard        *DashboardHandler
-	Preference       *PreferenceHandler
-	Audit            *AuditHandler
-	PlatformAudit    *PlatformAuditHandler
-	Activity         *UserActivityHandler
-	Search           *SearchHandler
-	SiteMessage      *SiteMessageHandler
-	PlatformSettings *PlatformSettingsHandler
-	Tenant           *TenantHandler
-	Workbench        *WorkbenchHandler
-	Dictionary       *DictionaryHandler
-	Impersonation    *ImpersonationHandler
+	Auth               *AuthHandler
+	User               *UserHandler
+	TenantUser         *TenantUserHandler // 租户级用户管理
+	Role               *RoleHandler
+	Permission         *PermissionHandler
+	Plugin             *PluginHandler
+	CMDB               *CMDBHandler
+	Secrets            *SecretsHandler
+	GitRepo            *GitRepoHandler
+	Playbook           *PlaybookHandler
+	Execution          *ExecutionHandler
+	Schedule           *ScheduleHandler
+	Notification       *NotificationHandler
+	Healing            *HealingHandler
+	Dashboard          *DashboardHandler
+	Preference         *PreferenceHandler
+	Audit              *AuditHandler
+	PlatformAudit      *PlatformAuditHandler
+	Activity           *UserActivityHandler
+	Search             *SearchHandler
+	SiteMessage        *SiteMessageHandler
+	PlatformSettings   *PlatformSettingsHandler
+	Tenant             *TenantHandler
+	Workbench          *WorkbenchHandler
+	Dictionary         *DictionaryHandler
+	Impersonation      *ImpersonationHandler
+	CommandBlacklist   *CommandBlacklistHandler
+	BlacklistExemption *BlacklistExemptionHandler
 }
 
 // NewHandlers 创建所有处理器
@@ -59,32 +61,34 @@ func NewHandlers(cfg *config.Config) *Handlers {
 	authHandler := NewAuthHandler(cfg)
 
 	return &Handlers{
-		Auth:             authHandler,
-		User:             NewUserHandler(authHandler.authSvc),
-		TenantUser:       NewTenantUserHandler(authHandler.authSvc),
-		Role:             NewRoleHandler(),
-		Permission:       NewPermissionHandler(),
-		Plugin:           NewPluginHandler(),
-		CMDB:             NewCMDBHandler(),
-		Secrets:          NewSecretsHandler(),
-		GitRepo:          NewGitRepoHandler(),
-		Playbook:         NewPlaybookHandler(),
-		Execution:        NewExecutionHandler(),
-		Schedule:         NewScheduleHandler(),
-		Notification:     NewNotificationHandler(),
-		Healing:          NewHealingHandler(),
-		Dashboard:        NewDashboardHandler(),
-		Preference:       NewPreferenceHandler(),
-		Audit:            NewAuditHandler(),
-		PlatformAudit:    NewPlatformAuditHandler(),
-		Activity:         NewUserActivityHandler(),
-		Search:           NewSearchHandler(),
-		SiteMessage:      NewSiteMessageHandler(),
-		PlatformSettings: NewPlatformSettingsHandler(),
-		Tenant:           NewTenantHandler(authHandler.authSvc),
-		Workbench:        NewWorkbenchHandler(),
-		Dictionary:       NewDictionaryHandler(),
-		Impersonation:    NewImpersonationHandler(),
+		Auth:               authHandler,
+		User:               NewUserHandler(authHandler.authSvc),
+		TenantUser:         NewTenantUserHandler(authHandler.authSvc),
+		Role:               NewRoleHandler(),
+		Permission:         NewPermissionHandler(),
+		Plugin:             NewPluginHandler(),
+		CMDB:               NewCMDBHandler(),
+		Secrets:            NewSecretsHandler(),
+		GitRepo:            NewGitRepoHandler(),
+		Playbook:           NewPlaybookHandler(),
+		Execution:          NewExecutionHandler(),
+		Schedule:           NewScheduleHandler(),
+		Notification:       NewNotificationHandler(),
+		Healing:            NewHealingHandler(),
+		Dashboard:          NewDashboardHandler(),
+		Preference:         NewPreferenceHandler(),
+		Audit:              NewAuditHandler(),
+		PlatformAudit:      NewPlatformAuditHandler(),
+		Activity:           NewUserActivityHandler(),
+		Search:             NewSearchHandler(),
+		SiteMessage:        NewSiteMessageHandler(),
+		PlatformSettings:   NewPlatformSettingsHandler(),
+		Tenant:             NewTenantHandler(authHandler.authSvc),
+		Workbench:          NewWorkbenchHandler(),
+		Dictionary:         NewDictionaryHandler(),
+		Impersonation:      NewImpersonationHandler(),
+		CommandBlacklist:   NewCommandBlacklistHandler(),
+		BlacklistExemption: NewBlacklistExemptionHandler(),
 	}
 }
 
@@ -579,6 +583,32 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			dictionaries.POST("", middleware.RequirePermission("platform:settings:manage"), h.Dictionary.CreateDictionary)
 			dictionaries.PUT("/:id", middleware.RequirePermission("platform:settings:manage"), h.Dictionary.UpdateDictionary)
 			dictionaries.DELETE("/:id", middleware.RequirePermission("platform:settings:manage"), h.Dictionary.DeleteDictionary)
+		}
+
+		// -------------------- 高危指令黑名单 --------------------
+		blacklist := protected.Group("/command-blacklist")
+		{
+			blacklist.GET("", middleware.RequirePermission("security:blacklist:view"), h.CommandBlacklist.List)
+			blacklist.GET("/search-schema", middleware.RequirePermission("security:blacklist:view"), h.CommandBlacklist.GetSearchSchema)
+			blacklist.POST("", middleware.RequirePermission("security:blacklist:create"), h.CommandBlacklist.Create)
+			blacklist.POST("/batch-toggle", middleware.RequirePermission("security:blacklist:update"), h.CommandBlacklist.BatchToggle)
+			blacklist.POST("/simulate", middleware.RequirePermission("security:blacklist:view"), h.CommandBlacklist.Simulate)
+			blacklist.GET("/:id", middleware.RequirePermission("security:blacklist:view"), h.CommandBlacklist.Get)
+			blacklist.PUT("/:id", middleware.RequirePermission("security:blacklist:update"), h.CommandBlacklist.Update)
+			blacklist.DELETE("/:id", middleware.RequirePermission("security:blacklist:delete"), h.CommandBlacklist.Delete)
+			blacklist.POST("/:id/toggle", middleware.RequirePermission("security:blacklist:update"), h.CommandBlacklist.ToggleActive)
+		}
+
+		// ── 安全豁免 ──
+		exemption := protected.Group("/blacklist-exemptions")
+		{
+			exemption.GET("", middleware.RequirePermission("security:exemption:view"), h.BlacklistExemption.List)
+			exemption.GET("/search-schema", middleware.RequirePermission("security:exemption:view"), h.BlacklistExemption.GetSearchSchema)
+			exemption.GET("/pending", middleware.RequirePermission("security:exemption:approve"), h.BlacklistExemption.GetPending)
+			exemption.POST("", middleware.RequirePermission("security:exemption:create"), h.BlacklistExemption.Create)
+			exemption.GET("/:id", middleware.RequirePermission("security:exemption:view"), h.BlacklistExemption.Get)
+			exemption.POST("/:id/approve", middleware.RequirePermission("security:exemption:approve"), h.BlacklistExemption.Approve)
+			exemption.POST("/:id/reject", middleware.RequirePermission("security:exemption:approve"), h.BlacklistExemption.Reject)
 		}
 	}
 }
