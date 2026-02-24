@@ -141,6 +141,17 @@ var AllPermissions = []PermissionSeed{
 	// ==================== 提权审批（租户级） ====================
 	{Code: "tenant:impersonation:view", Name: "查看提权请求", Module: "tenant", Resource: "impersonation", Action: "read"},
 	{Code: "tenant:impersonation:approve", Name: "审批提权请求", Module: "tenant", Resource: "impersonation", Action: "execute"},
+
+	// ==================== 安全防护 ====================
+	{Code: "security:blacklist:view", Name: "查看指令黑名单", Module: "security", Resource: "blacklist", Action: "read"},
+	{Code: "security:blacklist:create", Name: "创建黑名单规则", Module: "security", Resource: "blacklist", Action: "create"},
+	{Code: "security:blacklist:update", Name: "更新黑名单规则", Module: "security", Resource: "blacklist", Action: "update"},
+	{Code: "security:blacklist:delete", Name: "删除黑名单规则", Module: "security", Resource: "blacklist", Action: "delete"},
+
+	// ==================== 安全豁免 ====================
+	{Code: "security:exemption:view", Name: "查看安全豁免", Module: "security", Resource: "exemption", Action: "read"},
+	{Code: "security:exemption:create", Name: "申请安全豁免", Module: "security", Resource: "exemption", Action: "create"},
+	{Code: "security:exemption:approve", Name: "审批安全豁免", Module: "security", Resource: "exemption", Action: "execute"},
 }
 
 // SystemRoles 系统预置角色及其默认权限
@@ -270,6 +281,10 @@ var SystemRoles = []RoleSeed{
 			"workflow:list", "workflow:detail", "workflow:create", "workflow:update", "workflow:delete", "workflow:activate", "workflow:run",
 			// ❌ 故意不包含 "tenant:impersonation:approve" — 提权用户不能审批自己的请求
 			// ❌ 故意不包含任何 "platform:*" 权限 — 提权进入租户后不需要平台管理功能
+			// 安全防护（完整）
+			"security:blacklist:view", "security:blacklist:create", "security:blacklist:update", "security:blacklist:delete",
+			// 安全豁免（完整）
+			"security:exemption:view", "security:exemption:create", "security:exemption:approve",
 		},
 	},
 	{
@@ -318,6 +333,10 @@ var SystemRoles = []RoleSeed{
 			// 提权审批
 			"tenant:impersonation:view",
 			"tenant:impersonation:approve",
+			// 安全防护（完整）
+			"security:blacklist:view", "security:blacklist:create", "security:blacklist:update", "security:blacklist:delete",
+			// 安全豁免（完整 — 管理员可审批）
+			"security:exemption:view", "security:exemption:create", "security:exemption:approve",
 		},
 	},
 	{
@@ -351,6 +370,10 @@ var SystemRoles = []RoleSeed{
 			"workflow:list", "workflow:detail", "workflow:update", "workflow:activate", "workflow:run",
 			// 提权审批（查看）
 			"tenant:impersonation:view",
+			// 安全防护（查看 + 管理）
+			"security:blacklist:view", "security:blacklist:update",
+			// 安全豁免（可申请）
+			"security:exemption:view", "security:exemption:create",
 		},
 	},
 	{
@@ -379,6 +402,10 @@ var SystemRoles = []RoleSeed{
 			"workflow:list", "workflow:detail",
 			// 提权审批（查看）
 			"tenant:impersonation:view",
+			// 安全防护（只读）
+			"security:blacklist:view",
+			// 安全豁免（只读）
+			"security:exemption:view",
 		},
 	},
 
