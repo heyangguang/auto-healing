@@ -1652,7 +1652,11 @@ func (e *FlowExecutor) executeExecution(ctx context.Context, instance *model.Flo
 			switch completedRun.Status {
 			case "failed":
 				executionStatus = "failed"
-				executionMessage = fmt.Sprintf("任务执行失败 (退出码: %d)", completedRun.ExitCode)
+				if completedRun.ExitCode != nil {
+					executionMessage = fmt.Sprintf("任务执行失败 (退出码: %d)", *completedRun.ExitCode)
+				} else {
+					executionMessage = "任务执行失败"
+				}
 			case "partial":
 				executionStatus = "partial"
 				executionMessage = "任务部分成功（部分主机执行失败或不可达）"
@@ -1978,7 +1982,7 @@ func (e *FlowExecutor) executeNotification(ctx context.Context, instance *model.
 
 	// ==================== execution.* (嵌套结构) ====================
 	executionMap := map[string]interface{}{
-		"run_id":           fmt.Sprintf("%d", instance.ID),
+		"run_id":           instance.ID.String(),
 		"status":           "",
 		"status_emoji":     "❓",
 		"exit_code":        "",
@@ -2008,6 +2012,17 @@ func (e *FlowExecutor) executeNotification(ctx context.Context, instance *model.
 				} else {
 					minutes := durationMs / 60000
 					seconds := (durationMs % 60000) / 1000
+					executionMap["duration"] = fmt.Sprintf("%dm %ds", minutes, seconds)
+				}
+			} else if durationMs, ok := result["duration_ms"].(float64); ok {
+				// JSONB 反序列化后数字类型为 float64（重试场景）
+				ms := int64(durationMs)
+				executionMap["duration_seconds"] = int(ms / 1000)
+				if ms < 60000 {
+					executionMap["duration"] = fmt.Sprintf("%ds", ms/1000)
+				} else {
+					minutes := ms / 60000
+					seconds := (ms % 60000) / 1000
 					executionMap["duration"] = fmt.Sprintf("%dm %ds", minutes, seconds)
 				}
 			} else if durationMs, ok := result["duration_ms"].(int); ok {
@@ -2108,8 +2123,8 @@ func (e *FlowExecutor) executeNotification(ctx context.Context, instance *model.
 
 	// ==================== task.* (嵌套结构) ====================
 	taskMap := map[string]interface{}{
-		"id":            fmt.Sprintf("%d", instance.ID),
-		"name":          fmt.Sprintf("流程实例 #%d", instance.ID),
+		"id":            instance.ID.String(),
+		"name":          fmt.Sprintf("流程实例 #%s", instance.ID.String()[:8]),
 		"target_hosts":  "",
 		"host_count":    0,
 		"executor_type": "local",
@@ -2204,15 +2219,15 @@ func (e *FlowExecutor) executeNotification(ctx context.Context, instance *model.
 	}
 
 	// 构建通知内容
-	subject := fmt.Sprintf("[自愈系统] 流程实例 #%d 执行完成", instance.ID)
-	body := fmt.Sprintf("流程实例 #%d 执行完成，状态：%s", instance.ID, instance.Status)
+	subject := fmt.Sprintf("[自愈系统] 流程实例 #%s 执行完成", instance.ID.String()[:8])
+	body := fmt.Sprintf("流程实例 #%s 执行完成，状态：%s", instance.ID.String()[:8], instance.Status)
 
 	if executor, ok := instance.Context["execution_result"].(map[string]interface{}); ok {
 		if status, ok := executor["status"].(string); ok {
 			if status == "completed" {
-				subject = fmt.Sprintf("[自愈系统] 流程实例 #%d 执行成功", instance.ID)
+				subject = fmt.Sprintf("[自愈系统] 流程实例 #%s 执行成功", instance.ID.String()[:8])
 			} else {
-				subject = fmt.Sprintf("[自愈系统] 流程实例 #%d 执行失败", instance.ID)
+				subject = fmt.Sprintf("[自愈系统] 流程实例 #%s 执行失败", instance.ID.String()[:8])
 			}
 		}
 		if message, ok := executor["message"].(string); ok {
