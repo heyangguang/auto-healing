@@ -771,12 +771,11 @@ func (r *FlowInstanceRepository) ListSummaryWithOptions(ctx context.Context, opt
 				q = q.Where("(flow_instances.error_message IS NULL OR flow_instances.error_message = '')")
 			}
 		}
-		if opts.ApprovalStatus != "" {
-			if opts.ApprovalStatus == "approved" {
-				q = q.Where("EXISTS (SELECT 1 FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' = 'approved')")
-			} else if opts.ApprovalStatus == "rejected" {
-				q = q.Where("EXISTS (SELECT 1 FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' = 'rejected')")
-			}
+		switch opts.ApprovalStatus {
+		case "approved":
+			q = q.Where("EXISTS (SELECT 1 FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' = 'approved')")
+		case "rejected":
+			q = q.Where("EXISTS (SELECT 1 FROM jsonb_each(flow_instances.node_states) AS ns(key, value) WHERE ns.value->>'status' = 'rejected')")
 		}
 		// 全文搜索
 		if !opts.Search.IsEmpty() {

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ type DictionaryHandler struct {
 func NewDictionaryHandler() *DictionaryHandler {
 	svc := service.NewDictionaryService()
 	// 启动时加载缓存
-	go svc.LoadCache(nil)
+	go svc.LoadCache(context.Background())
 	return &DictionaryHandler{svc: svc}
 }
 
