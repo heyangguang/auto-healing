@@ -529,7 +529,7 @@ func (r *SearchRepository) searchIncidents(ctx context.Context, db *gorm.DB, lik
 
 	var items []model.Incident
 	err := db.Model(&model.Incident{}).
-		Select("id, title, external_id, severity, status, healing_status").
+		Select("id, title, description, external_id, severity, status, healing_status").
 		Where("title ILIKE ? OR external_id ILIKE ? OR description ILIKE ?", like, like, like).
 		Order("created_at DESC").
 		Limit(limit).
@@ -540,9 +540,16 @@ func (r *SearchRepository) searchIncidents(ctx context.Context, db *gorm.DB, lik
 
 	results := make([]SearchResultItem, 0, len(items))
 	for _, item := range items {
+		title := item.Title
+		if title == "" {
+			title = item.Description
+		}
+		if title == "" {
+			title = item.ExternalID
+		}
 		results = append(results, SearchResultItem{
 			ID:          item.ID,
-			Title:       item.Title,
+			Title:       title,
 			Description: item.ExternalID,
 			Path:        "/resources/incidents",
 			Extra: map[string]interface{}{
