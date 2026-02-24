@@ -14,6 +14,7 @@ import (
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/secrets"
+	parentService "github.com/company/auto-healing/internal/service"
 	"github.com/google/uuid"
 )
 
@@ -27,7 +28,8 @@ type Service struct {
 	workspaceManager *ansible.WorkspaceManager
 	localExecutor    *ansible.LocalExecutor
 	dockerExecutor   *ansible.DockerExecutor
-	notificationSvc  *notification.Service // 通知服务
+	notificationSvc  *notification.Service                  // 通知服务
+	blacklistSvc     *parentService.CommandBlacklistService // 高危指令扫描
 
 	// 运行中的执行映射，用于取消操作
 	runningExecutions sync.Map // map[uuid.UUID]context.CancelFunc
@@ -45,6 +47,7 @@ func NewService() *Service {
 		localExecutor:    ansible.NewLocalExecutor(),
 		dockerExecutor:   ansible.NewDockerExecutor(),
 		notificationSvc:  notification.NewService(database.DB, "Auto-Healing", "", "1.0.0"),
+		blacklistSvc:     parentService.NewCommandBlacklistService(),
 	}
 }
 
@@ -364,6 +367,40 @@ func (s *Service) executeInBackground(runID uuid.UUID, task *model.ExecutionTask
 	defer cleanup()
 
 	s.appendLog(ctx, runID, "info", "prepare", fmt.Sprintf("工作空间已准备: %s", workDir), nil)
+
+	// ======= 高危指令扫描 =======
+	s.appendLog(ctx, runID, "info", "security", "开始安全扫描...", nil)
+	violations, scanErr := s.blacklistSvc.ScanWorkspace(ctx, workDir)
+	if scanErr != nil {
+		s.appendLog(ctx, runID, "warn", "security", fmt.Sprintf("安全扫描异常: %v", scanErr), nil)
+	}
+	if len(violations) > 0 {
+		// 构造违规详情
+		var violationList []map[string]interface{}
+		var msg strings.Builder
+		msg.WriteString(fmt.Sprintf("检测到 %d 个高危指令，执行已拦截:\n", len(violations)))
+		for i, v := range violations {
+			violationList = append(violationList, map[string]interface{}{
+				"file":      v.File,
+				"line":      v.Line,
+				"content":   v.Content,
+				"rule_name": v.RuleName,
+				"pattern":   v.Pattern,
+				"severity":  v.Severity,
+			})
+			msg.WriteString(fmt.Sprintf("  %d. [%s] %s (文件: %s, 行: %d)\n", i+1, v.Severity, v.RuleName, v.File, v.Line))
+		}
+		// 记录详细日志
+		s.appendLog(ctx, runID, "error", "security", msg.String(), model.JSON{
+			"violations": violationList,
+			"count":      len(violations),
+		})
+		// 拒绝执行，退出码 -2 标识安全拦截
+		s.repo.UpdateRunResult(ctx, runID, -2, "", fmt.Sprintf("安全拦截：检测到 %d 个高危指令", len(violations)), nil)
+		logger.Exec("SECURITY").Warn("[%s] 检测到 %d 个高危指令，执行已拦截", runID.String()[:8], len(violations))
+		return
+	}
+	s.appendLog(ctx, runID, "info", "security", "安全扫描通过", nil)
 
 	// 生成 inventory（带或不带认证）
 	var inventoryPath string
