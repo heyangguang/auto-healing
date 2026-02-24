@@ -66,6 +66,11 @@ func main() {
 		logger.Error("字典种子数据同步失败: %v", err)
 	}
 
+	// 同步高危指令黑名单种子数据
+	if err := database.SeedCommandBlacklist(); err != nil {
+		logger.Error("高危指令黑名单种子数据同步失败: %v", err)
+	}
+
 	// 清理过期站内信
 	siteMessageRepo := repository.NewSiteMessageRepository()
 	if _, err := siteMessageRepo.CleanExpired(context.Background()); err != nil {
@@ -119,6 +124,9 @@ func main() {
 
 	// 设置路由
 	handler.SetupRoutes(r, cfg)
+
+	// 启动时校验：审计资源类型字典完整性
+	middleware.ValidateAuditResourceTypes(r)
 
 	// 优雅关闭
 	go func() {
