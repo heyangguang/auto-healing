@@ -69,7 +69,7 @@ func (r *RoleRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 // RoleFilter 角色过滤参数
 type RoleFilter struct {
-	Search   string    // 模糊搜索 (name/display_name/description)
+	Name     string    // 模糊搜索 (name/display_name/description)
 	Scope    string    // platform=平台级, tenant=租户级, 空=全部
 	TenantID uuid.UUID // 租户 ID（Scope=tenant 时使用，用于返回租户自定义角色）
 }
@@ -84,8 +84,8 @@ func (r *RoleRepository) List(ctx context.Context) ([]model.Role, error) {
 // ListWithFilter 带过滤条件获取角色列表
 func (r *RoleRepository) ListWithFilter(ctx context.Context, f RoleFilter) ([]model.Role, error) {
 	query := r.db.WithContext(ctx).Preload("Permissions")
-	if f.Search != "" {
-		like := "%" + f.Search + "%"
+	if f.Name != "" {
+		like := "%" + f.Name + "%"
 		query = query.Where("name ILIKE ? OR display_name ILIKE ? OR description ILIKE ?", like, like, like)
 	}
 
@@ -237,14 +237,14 @@ type RoleUserInfo struct {
 }
 
 // GetRoleUsers 获取角色下的关联用户（分页 + 搜索）
-func (r *RoleRepository) GetRoleUsers(ctx context.Context, roleID uuid.UUID, page, pageSize int, search string) ([]RoleUserInfo, int64, error) {
+func (r *RoleRepository) GetRoleUsers(ctx context.Context, roleID uuid.UUID, page, pageSize int, name string) ([]RoleUserInfo, int64, error) {
 	query := r.db.WithContext(ctx).
 		Table("users").
 		Joins("INNER JOIN user_platform_roles ON user_platform_roles.user_id = users.id").
 		Where("user_platform_roles.role_id = ?", roleID)
 
-	if search != "" {
-		like := "%" + search + "%"
+	if name != "" {
+		like := "%" + name + "%"
 		query = query.Where("users.username ILIKE ? OR users.display_name ILIKE ?", like, like)
 	}
 
@@ -266,14 +266,14 @@ func (r *RoleRepository) GetRoleUsers(ctx context.Context, roleID uuid.UUID, pag
 }
 
 // GetTenantRoleUsers 获取租户下角色关联的用户（分页 + 搜索）
-func (r *RoleRepository) GetTenantRoleUsers(ctx context.Context, roleID, tenantID uuid.UUID, page, pageSize int, search string) ([]RoleUserInfo, int64, error) {
+func (r *RoleRepository) GetTenantRoleUsers(ctx context.Context, roleID, tenantID uuid.UUID, page, pageSize int, name string) ([]RoleUserInfo, int64, error) {
 	query := r.db.WithContext(ctx).
 		Table("users").
 		Joins("INNER JOIN user_tenant_roles ON user_tenant_roles.user_id = users.id").
 		Where("user_tenant_roles.role_id = ? AND user_tenant_roles.tenant_id = ?", roleID, tenantID)
 
-	if search != "" {
-		like := "%" + search + "%"
+	if name != "" {
+		like := "%" + name + "%"
 		query = query.Where("users.username ILIKE ? OR users.display_name ILIKE ?", like, like)
 	}
 
@@ -326,7 +326,6 @@ func (r *PermissionRepository) GetByCode(ctx context.Context, code string) (*mod
 
 // PermissionFilter 权限过滤参数
 type PermissionFilter struct {
-	Search string // 全文模糊搜索 (name/code/module)
 	Module string // 精确按模块过滤
 	Name   string // 模糊搜索 name
 	Code   string // 模糊搜索 code
@@ -343,10 +342,6 @@ func (r *PermissionRepository) List(ctx context.Context) ([]model.Permission, er
 func (r *PermissionRepository) ListWithFilter(ctx context.Context, f PermissionFilter) ([]model.Permission, error) {
 	query := r.db.WithContext(ctx)
 
-	if f.Search != "" {
-		like := "%" + f.Search + "%"
-		query = query.Where("name ILIKE ? OR code ILIKE ? OR module ILIKE ?", like, like, like)
-	}
 	if f.Module != "" {
 		query = query.Where("module = ?", f.Module)
 	}
@@ -385,9 +380,34 @@ func (r *PermissionRepository) GetUserPermissions(ctx context.Context, userID uu
 	return perms, err
 }
 
-// GetPermissionCodes 获取用户的权限码列表
+// GetPermissionCodes 获取用户的权限码列表（所有租户合并，用于向后兼容）
 func (r *PermissionRepository) GetPermissionCodes(ctx context.Context, userID uuid.UUID) ([]string, error) {
 	perms, err := r.GetUserPermissions(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	codes := make([]string, len(perms))
+	for i, p := range perms {
+		codes[i] = p.Code
+	}
+	return codes, nil
+}
+
+// GetTenantPermissionCodes 获取用户在指定租户下的权限码列表
+// 只合并 平台角色 + 指定租户的角色，不包含其他租户的权限
+func (r *PermissionRepository) GetTenantPermissionCodes(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) ([]string, error) {
+	var perms []model.Permission
+	err := r.db.WithContext(ctx).
+		Distinct("permissions.*").
+		Table("permissions").
+		Joins("INNER JOIN role_permissions ON role_permissions.permission_id = permissions.id").
+		Where(`role_permissions.role_id IN (
+			SELECT role_id FROM user_platform_roles WHERE user_id = ?
+			UNION
+			SELECT role_id FROM user_tenant_roles WHERE user_id = ? AND tenant_id = ?
+		)`, userID, userID, tenantID).
+		Find(&perms).Error
 	if err != nil {
 		return nil, err
 	}

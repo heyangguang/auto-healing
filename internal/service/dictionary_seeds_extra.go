@@ -40,20 +40,38 @@ func auditActionSeeds() []model.Dictionary {
 		d("audit_action", "batch_reset_scan", "批量重置", "Batch Reset", "#fa8c16", "orange", "", "", "", 32),
 		d("audit_action", "confirm_review", "确认审核", "Confirm Review", "#52c41a", "green", "", "", "", 33),
 		d("audit_action", "ready", "设为就绪", "Ready", "#52c41a", "green", "", "", "", 34),
+		d("audit_action", "impersonation_enter", "提权进入", "Impersonation Enter", "#722ed1", "purple", "", "", "", 35),
+		d("audit_action", "impersonation_exit", "提权退出", "Impersonation Exit", "#8c8c8c", "default", "", "", "", 36),
+	}
+}
+
+// auditRiskLevelSeeds 审计风险等级 Seed（4级）
+func auditRiskLevelSeeds() []model.Dictionary {
+	return []model.Dictionary{
+		d("audit_risk_level", "critical", "极高", "Critical", "#f5222d", "red", "", "", "", 0),
+		d("audit_risk_level", "high", "高危", "High", "#fa8c16", "orange", "", "", "", 1),
+		d("audit_risk_level", "medium", "中", "Medium", "#1890ff", "blue", "", "", "", 2),
+		d("audit_risk_level", "low", "低", "Low", "#8c8c8c", "default", "", "", "", 3),
 	}
 }
 
 // auditResourceSeeds 审计资源类型 Seed
+//
+// dict_key 必须与审计中间件 inferResourceType() 实际产出的 resource_type 一致。
+// 审计中间件在推断 resource_type 时会去掉 "platform/" 前缀（audit.go:260），
+// 所以平台路由 /api/v1/platform/users 的 resource_type 是 "users" 而非 "platform-users"。
+// 平台级 vs 租户级通过 dict_type 区分（audit_resource_platform / audit_resource_tenant），
+// 前端分别使用对应的 LABELS Map，不会混淆。
 func auditResourceSeeds() []model.Dictionary {
 	return []model.Dictionary{
-		// 租户级资源
+		// ==================== 租户级资源 ====================
 		d("audit_resource_tenant", "user", "用户", "User", "", "", "", "", "", 0),
 		d("audit_resource_tenant", "role", "角色", "Role", "", "", "", "", "", 1),
 		d("audit_resource_tenant", "plugin", "插件", "Plugin", "", "", "", "", "", 2),
-		d("audit_resource_tenant", "cmdb", "CMDB", "CMDB", "", "", "", "", "", 3),
-		d("audit_resource_tenant", "secrets-sources", "密钥源", "Secrets Source", "", "", "", "", "", 4),
-		d("audit_resource_tenant", "git-repos", "Git仓库", "Git Repository", "", "", "", "", "", 5),
-		d("audit_resource_tenant", "playbooks", "Playbook", "Playbook", "", "", "", "", "", 6),
+		d("audit_resource_tenant", "cmdb", "资产管理", "CMDB", "", "", "", "", "", 3),
+		d("audit_resource_tenant", "secrets-sources", "凭据管理", "Credential", "", "", "", "", "", 4),
+		d("audit_resource_tenant", "git-repos", "代码仓库", "Code Repository", "", "", "", "", "", 5),
+		d("audit_resource_tenant", "playbooks", "自动化剧本", "Playbook", "", "", "", "", "", 6),
 		d("audit_resource_tenant", "execution-tasks", "执行任务", "Execution Task", "", "", "", "", "", 7),
 		d("audit_resource_tenant", "execution-runs", "执行记录", "Execution Run", "", "", "", "", "", 8),
 		d("audit_resource_tenant", "execution-schedules", "定时任务", "Schedule", "", "", "", "", "", 9),
@@ -62,24 +80,38 @@ func auditResourceSeeds() []model.Dictionary {
 		d("audit_resource_tenant", "notifications", "通知记录", "Notification", "", "", "", "", "", 12),
 		d("audit_resource_tenant", "healing-flows", "自愈流程", "Healing Flow", "", "", "", "", "", 13),
 		d("audit_resource_tenant", "healing-rules", "自愈规则", "Healing Rule", "", "", "", "", "", 14),
-		d("audit_resource_tenant", "healing-instances", "流程实例", "Instance", "", "", "", "", "", 15),
+		d("audit_resource_tenant", "healing-instances", "自愈实例", "Healing Instance", "", "", "", "", "", 15),
 		d("audit_resource_tenant", "healing-approvals", "审批任务", "Approval", "", "", "", "", "", 16),
-		d("audit_resource_tenant", "incidents", "工单/事件", "Incident", "", "", "", "", "", 17),
-		d("audit_resource_tenant", "dashboard", "仪表板", "Dashboard", "", "", "", "", "", 18),
-		// 平台级资源
-		d("audit_resource_platform", "platform-users", "平台用户", "Platform User", "", "", "", "", "", 0),
-		d("audit_resource_platform", "platform-roles", "平台角色", "Platform Role", "", "", "", "", "", 1),
-		d("audit_resource_platform", "platform-permissions", "平台权限", "Platform Permission", "", "", "", "", "", 2),
-		d("audit_resource_platform", "platform-settings", "平台设置", "Platform Settings", "", "", "", "", "", 3),
-		d("audit_resource_platform", "platform-tenants", "租户管理", "Tenant", "", "", "", "", "", 4),
-		d("audit_resource_platform", "platform-audit-logs", "平台审计", "Platform Audit", "", "", "", "", "", 5),
-		d("audit_resource_platform", "platform-site-messages", "平台站内信", "Platform Message", "", "", "", "", "", 6),
-		d("audit_resource_platform", "auth", "认证", "Auth", "", "", "", "", "", 7),
-		d("audit_resource_platform", "site-messages", "站内信", "Site Message", "", "", "", "", "", 8),
-		d("audit_resource_platform", "audit-logs", "审计日志", "Audit Log", "", "", "", "", "", 9),
-		d("audit_resource_platform", "search", "搜索", "Search", "", "", "", "", "", 10),
-		d("audit_resource_platform", "workbench", "工作台", "Workbench", "", "", "", "", "", 11),
-		d("audit_resource_platform", "user", "个人设置", "User Settings", "", "", "", "", "", 12),
+		d("audit_resource_tenant", "incidents", "事件工单", "Incident", "", "", "", "", "", 17),
+		d("audit_resource_tenant", "dashboard", "监控面板", "Dashboard", "", "", "", "", "", 18),
+		d("audit_resource_tenant", "auth-logout", "登出", "Logout", "", "", "", "", "", 19),
+		d("audit_resource_tenant", "auth-profile", "个人资料", "Profile", "", "", "", "", "", 20),
+		d("audit_resource_tenant", "tenant-impersonation", "临时提权", "Impersonation", "", "", "", "", "", 21),
+		d("audit_resource_tenant", "site-messages", "站内信", "Site Message", "", "", "", "", "", 22),
+
+		// ==================== 平台级资源 ====================
+		// dict_key 与 inferResourceType 产出一致（无 platform- 前缀）
+		d("audit_resource_platform", "users", "用户管理", "User Management", "", "", "", "", "", 0),
+		d("audit_resource_platform", "roles", "角色管理", "Role Management", "", "", "", "", "", 1),
+		d("audit_resource_platform", "permissions", "权限管理", "Permission", "", "", "", "", "", 2),
+		d("audit_resource_platform", "settings", "平台设置", "Platform Settings", "", "", "", "", "", 3),
+		d("audit_resource_platform", "tenants", "租户管理", "Tenant Management", "", "", "", "", "", 4),
+		d("audit_resource_platform", "impersonation", "临时提权", "Impersonation", "", "", "", "", "", 5),
+		d("audit_resource_platform", "tenant-users", "租户用户", "Tenant User", "", "", "", "", "", 6),
+		d("audit_resource_platform", "tenant-impersonation", "临时提权", "Tenant Impersonation", "", "", "", "", "", 7),
+		d("audit_resource_platform", "auth", "认证", "Auth", "", "", "", "", "", 8),
+		d("audit_resource_platform", "auth-logout", "登出", "Logout", "", "", "", "", "", 9),
+		d("audit_resource_platform", "auth-profile", "个人资料", "Profile", "", "", "", "", "", 10),
+		d("audit_resource_platform", "site-messages", "站内信", "Site Message", "", "", "", "", "", 11),
+		d("audit_resource_platform", "incidents", "事件管理", "Incident", "", "", "", "", "", 12),
+		d("audit_resource_platform", "plugins", "插件管理", "Plugin", "", "", "", "", "", 13),
+		d("audit_resource_platform", "execution-tasks", "执行任务", "Execution Task", "", "", "", "", "", 14),
+		d("audit_resource_platform", "healing-approvals", "自愈审批", "Healing Approval", "", "", "", "", "", 15),
+		d("audit_resource_platform", "healing-flows", "自愈流程", "Healing Flow", "", "", "", "", "", 16),
+		d("audit_resource_platform", "healing-rules", "自愈规则", "Healing Rule", "", "", "", "", "", 17),
+		d("audit_resource_platform", "user", "个人设置", "User Settings", "", "", "", "", "", 18),
+		d("audit_resource_platform", "search", "搜索", "Search", "", "", "", "", "", 19),
+		d("audit_resource_platform", "workbench", "工作台", "Workbench", "", "", "", "", "", 20),
 	}
 }
 
@@ -97,6 +129,7 @@ func permissionModuleSeeds() []model.Dictionary {
 		d("permission_module", "dashboard", "仪表板", "Dashboard", "#d48806", "", "", "", "", 8),
 		d("permission_module", "site-message", "站内信", "Site Message", "#389e0d", "", "", "", "", 9),
 		d("permission_module", "platform", "平台管理", "Platform", "#531dab", "", "", "", "", 10),
+		d("permission_module", "tenant", "租户管理", "Tenant", "#08979c", "", "", "", "", 11),
 	}
 }
 

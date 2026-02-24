@@ -137,6 +137,10 @@ var AllPermissions = []PermissionSeed{
 	{Code: "platform:audit:list", Name: "查看平台审计日志", Module: "platform", Resource: "audit", Action: "read"},
 	{Code: "platform:audit:export", Name: "导出平台审计日志", Module: "platform", Resource: "audit", Action: "export"},
 	{Code: "platform:messages:send", Name: "发送平台站内信", Module: "platform", Resource: "messages", Action: "create"},
+
+	// ==================== 提权审批（租户级） ====================
+	{Code: "tenant:impersonation:view", Name: "查看提权请求", Module: "tenant", Resource: "impersonation", Action: "read"},
+	{Code: "tenant:impersonation:approve", Name: "审批提权请求", Module: "tenant", Resource: "impersonation", Action: "execute"},
 }
 
 // SystemRoles 系统预置角色及其默认权限
@@ -228,6 +232,47 @@ var SystemRoles = []RoleSeed{
 		},
 	},
 	{
+		Name:        "impersonation_accessor",
+		DisplayName: "提权访问者",
+		Description: "平台管理员通过 Impersonation 进入租户时使用的角色，拥有管理员大部分权限但不能审批提权请求",
+		IsSystem:    true,
+		Scope:       "tenant",
+		Permissions: []string{
+			// 用户管理（完整）
+			"user:list", "user:create", "user:update", "user:delete", "user:reset_password",
+			// 角色管理（完整）
+			"role:list", "role:create", "role:update", "role:delete", "role:assign",
+			// 插件管理（完整）
+			"plugin:list", "plugin:detail", "plugin:create", "plugin:update", "plugin:delete", "plugin:sync", "plugin:test",
+			// 执行管理（完整）
+			"repository:list", "repository:create", "repository:update", "repository:delete", "repository:sync",
+			"playbook:list", "playbook:execute",
+			"task:list", "task:detail", "task:create", "task:update", "task:delete", "task:cancel",
+			// 通知管理（完整）
+			"channel:list", "channel:create", "channel:update", "channel:delete",
+			"template:list", "template:create", "template:update", "template:delete",
+			"notification:list", "notification:send",
+			// 自愈引擎（完整）
+			"healing:flows:view", "healing:flows:create", "healing:flows:update", "healing:flows:delete",
+			"healing:rules:view", "healing:rules:create", "healing:rules:update", "healing:rules:delete",
+			"healing:instances:view",
+			"healing:approvals:view", "healing:approvals:approve",
+			"healing:trigger:view", "healing:trigger:execute",
+			// Dashboard
+			"dashboard:view", "dashboard:config:manage", "dashboard:workspace:manage",
+			// 站内信
+			"site-message:list", "site-message:create", "site-message:settings:view", "site-message:settings:manage",
+			// 审计日志
+			"audit:list", "audit:export",
+			// 系统设置
+			"system:settings",
+			// 工作流（完整）
+			"workflow:list", "workflow:detail", "workflow:create", "workflow:update", "workflow:delete", "workflow:activate", "workflow:run",
+			// ❌ 故意不包含 "tenant:impersonation:approve" — 提权用户不能审批自己的请求
+			// ❌ 故意不包含任何 "platform:*" 权限 — 提权进入租户后不需要平台管理功能
+		},
+	},
+	{
 		Name:        "admin",
 		DisplayName: "管理员",
 		Description: "可管理用户、角色、插件、执行任务等核心资源",
@@ -270,6 +315,9 @@ var SystemRoles = []RoleSeed{
 			"system:settings",
 			// 工作流（完整）
 			"workflow:list", "workflow:detail", "workflow:create", "workflow:update", "workflow:delete", "workflow:activate", "workflow:run",
+			// 提权审批
+			"tenant:impersonation:view",
+			"tenant:impersonation:approve",
 		},
 	},
 	{
@@ -301,6 +349,8 @@ var SystemRoles = []RoleSeed{
 			"audit:list",
 			// 工作流（操作类）
 			"workflow:list", "workflow:detail", "workflow:update", "workflow:activate", "workflow:run",
+			// 提权审批（查看）
+			"tenant:impersonation:view",
 		},
 	},
 	{
@@ -327,6 +377,8 @@ var SystemRoles = []RoleSeed{
 			"audit:list",
 			// 工作流（只读）
 			"workflow:list", "workflow:detail",
+			// 提权审批（查看）
+			"tenant:impersonation:view",
 		},
 	},
 

@@ -280,6 +280,7 @@ var AllDictionarySeeds = []model.Dictionary{
 // permission_module (52), http_method (53) 将在下方的 init() 中追加
 func init() {
 	AllDictionarySeeds = append(AllDictionarySeeds, auditActionSeeds()...)
+	AllDictionarySeeds = append(AllDictionarySeeds, auditRiskLevelSeeds()...)
 	AllDictionarySeeds = append(AllDictionarySeeds, auditResourceSeeds()...)
 	AllDictionarySeeds = append(AllDictionarySeeds, permissionModuleSeeds()...)
 	AllDictionarySeeds = append(AllDictionarySeeds, httpMethodSeeds()...)
