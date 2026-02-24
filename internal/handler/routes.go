@@ -51,6 +51,7 @@ type Handlers struct {
 	Tenant           *TenantHandler
 	Workbench        *WorkbenchHandler
 	Dictionary       *DictionaryHandler
+	Impersonation    *ImpersonationHandler
 }
 
 // NewHandlers 创建所有处理器
@@ -83,6 +84,7 @@ func NewHandlers(cfg *config.Config) *Handlers {
 		Tenant:           NewTenantHandler(authHandler.authSvc),
 		Workbench:        NewWorkbenchHandler(),
 		Dictionary:       NewDictionaryHandler(),
+		Impersonation:    NewImpersonationHandler(),
 	}
 }
 
@@ -98,11 +100,15 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 	{
 		auth.POST("/login", h.Auth.Login)
 		auth.POST("/refresh", h.Auth.RefreshToken)
+		// 邀请注册（公开接口，无需登录）
+		auth.GET("/invitation/:token", ValidateInvitation)
+		auth.POST("/register", RegisterByInvitation(h.Auth.GetAuthService()))
 	}
 
 	// ==================== 需要认证的路由 ====================
 	protected := api.Group("")
 	protected.Use(middleware.JWTAuth(h.Auth.GetJWTService()))
+	protected.Use(middleware.ImpersonationMiddleware()) // Impersonation 会话校验（在 Tenant 之前）
 	protected.Use(middleware.AuditMiddleware())
 	protected.Use(middleware.TenantMiddleware())
 	{
@@ -113,6 +119,8 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		protected.GET("/auth/me", h.Auth.GetCurrentUser)
 		protected.GET("/auth/profile", h.Auth.GetProfile)
 		protected.PUT("/auth/profile", h.Auth.UpdateProfile)
+		protected.GET("/auth/profile/login-history", h.Auth.GetLoginHistory)
+		protected.GET("/auth/profile/activities", h.Auth.GetProfileActivities)
 		protected.PUT("/auth/password", h.Auth.ChangePassword)
 		protected.POST("/auth/logout", h.Auth.Logout)
 
@@ -169,6 +177,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		{
 			plugins.GET("", middleware.RequirePermission("plugin:list"), h.Plugin.ListPlugins)
 			plugins.GET("/stats", middleware.RequirePermission("plugin:list"), h.Plugin.GetPluginStats)
+			plugins.GET("/search-schema", middleware.RequirePermission("plugin:list"), h.Plugin.GetPluginSearchSchema)
 			plugins.POST("", middleware.RequirePermission("plugin:create"), h.Plugin.CreatePlugin)
 			plugins.GET("/:id", middleware.RequirePermission("plugin:detail"), h.Plugin.GetPlugin)
 			plugins.PUT("/:id", middleware.RequirePermission("plugin:update"), h.Plugin.UpdatePlugin)
@@ -186,6 +195,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			execTasks.GET("", middleware.RequirePermission("task:list"), h.Execution.ListTasks)
 			execTasks.POST("", middleware.RequirePermission("playbook:execute"), h.Execution.CreateTask)
 			execTasks.GET("/stats", middleware.RequirePermission("task:list"), h.Execution.GetTaskStats)
+			execTasks.GET("/search-schema", middleware.RequirePermission("task:list"), h.Execution.GetTaskSearchSchema)
 			execTasks.POST("/batch-confirm-review", middleware.RequirePermission("task:update"), h.Execution.BatchConfirmReview)
 			execTasks.GET("/:id", middleware.RequirePermission("task:detail"), h.Execution.GetTask)
 			execTasks.PUT("/:id", middleware.RequirePermission("task:update"), h.Execution.UpdateTask)
@@ -201,6 +211,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			execRuns.GET("", middleware.RequirePermission("task:list"), h.Execution.ListAllRuns)
 			// 统计接口（必须在 /:id 之前注册，避免路径冲突）
 			execRuns.GET("/stats", middleware.RequirePermission("task:list"), h.Execution.GetRunStats)
+			execRuns.GET("/search-schema", middleware.RequirePermission("task:list"), h.Execution.GetRunSearchSchema)
 			execRuns.GET("/trend", middleware.RequirePermission("task:list"), h.Execution.GetRunTrend)
 			execRuns.GET("/trigger-distribution", middleware.RequirePermission("task:list"), h.Execution.GetTriggerDistribution)
 			execRuns.GET("/top-failed", middleware.RequirePermission("task:list"), h.Execution.GetTopFailedTasks)
@@ -276,6 +287,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		incidents := protected.Group("/incidents")
 		{
 			incidents.GET("/stats", middleware.RequirePermission("plugin:list"), h.Plugin.GetIncidentStats)
+			incidents.GET("/search-schema", middleware.RequirePermission("plugin:list"), h.Plugin.GetIncidentSearchSchema)
 			incidents.GET("", middleware.RequirePermission("plugin:list"), h.Plugin.ListIncidents)
 			incidents.POST("/batch-reset-scan", middleware.RequirePermission("plugin:sync"), h.Plugin.BatchResetIncidentScan) // 固定路径在 /:id 之前
 			incidents.GET("/:id", middleware.RequirePermission("plugin:list"), h.Plugin.GetIncident)
@@ -288,6 +300,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		{
 			cmdb.GET("", middleware.RequirePermission("plugin:list"), h.CMDB.ListCMDBItems)
 			cmdb.GET("/stats", middleware.RequirePermission("plugin:list"), h.CMDB.GetCMDBStats)
+			cmdb.GET("/search-schema", middleware.RequirePermission("plugin:list"), h.CMDB.GetCMDBSearchSchema)
 			cmdb.POST("/batch-test-connection", middleware.RequirePermission("plugin:sync"), h.CMDB.BatchTestConnection)
 			cmdb.POST("/batch/maintenance", middleware.RequirePermission("plugin:update"), h.CMDB.BatchEnterMaintenance)
 			cmdb.POST("/batch/resume", middleware.RequirePermission("plugin:update"), h.CMDB.BatchExitMaintenance)
@@ -322,6 +335,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			gitRepos.GET("", middleware.RequirePermission("plugin:list"), h.GitRepo.ListRepos)
 			gitRepos.POST("", middleware.RequirePermission("plugin:create"), h.GitRepo.CreateRepo)
 			gitRepos.GET("/stats", middleware.RequirePermission("plugin:list"), h.GitRepo.GetStats)
+			gitRepos.GET("/search-schema", middleware.RequirePermission("plugin:list"), h.GitRepo.GetSearchSchema)
 			gitRepos.GET("/:id", middleware.RequirePermission("plugin:list"), h.GitRepo.GetRepo)
 			gitRepos.PUT("/:id", middleware.RequirePermission("plugin:update"), h.GitRepo.UpdateRepo)
 			gitRepos.DELETE("/:id", middleware.RequirePermission("plugin:delete"), h.GitRepo.DeleteRepo)
@@ -330,8 +344,6 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			gitRepos.GET("/:id/logs", middleware.RequirePermission("plugin:list"), h.GitRepo.GetSyncLogs)
 			gitRepos.GET("/:id/commits", middleware.RequirePermission("plugin:list"), h.GitRepo.GetCommits)
 			gitRepos.GET("/:id/files", middleware.RequirePermission("plugin:list"), h.GitRepo.GetFiles)
-			gitRepos.GET("/:id/branches", middleware.RequirePermission("plugin:list"), h.GitRepo.GetBranches)
-			gitRepos.POST("/:id/detect-branches", middleware.RequirePermission("plugin:list"), h.GitRepo.DetectBranches)
 		}
 
 		// -------------------- Playbook 模板 --------------------
@@ -355,6 +367,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		healingFlows := protected.Group("/healing/flows")
 		{
 			healingFlows.GET("/node-schema", middleware.RequirePermission("healing:flows:view"), h.Healing.GetNodeSchema)
+			healingFlows.GET("/search-schema", middleware.RequirePermission("healing:flows:view"), h.Healing.GetFlowSearchSchema)
 			healingFlows.GET("", middleware.RequirePermission("healing:flows:view"), h.Healing.ListFlows)
 			healingFlows.POST("", middleware.RequirePermission("healing:flows:create"), h.Healing.CreateFlow)
 			healingFlows.GET("/stats", middleware.RequirePermission("healing:flows:view"), h.Healing.GetFlowStats)
@@ -368,6 +381,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		// -------------------- 自愈规则 --------------------
 		healingRules := protected.Group("/healing/rules")
 		{
+			healingRules.GET("/search-schema", middleware.RequirePermission("healing:rules:view"), h.Healing.GetRuleSearchSchema)
 			healingRules.GET("", middleware.RequirePermission("healing:rules:view"), h.Healing.ListRules)
 			healingRules.POST("", middleware.RequirePermission("healing:rules:create"), h.Healing.CreateRule)
 			healingRules.GET("/stats", middleware.RequirePermission("healing:rules:view"), h.Healing.GetRuleStats)
@@ -381,6 +395,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 		// -------------------- 流程实例 --------------------
 		flowInstances := protected.Group("/healing/instances")
 		{
+			flowInstances.GET("/search-schema", middleware.RequirePermission("healing:instances:view"), h.Healing.GetInstanceSearchSchema)
 			flowInstances.GET("", middleware.RequirePermission("healing:instances:view"), h.Healing.ListInstances)
 			flowInstances.GET("/stats", middleware.RequirePermission("healing:instances:view"), h.Healing.GetInstanceStats)
 			flowInstances.GET("/:id", middleware.RequirePermission("healing:instances:view"), h.Healing.GetInstance)
@@ -492,13 +507,20 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 			// ---- 租户管理 ----
 			platform.GET("/tenants", middleware.RequireAnyPermission("platform:tenants:manage", "platform:tenants:list"), h.Tenant.ListTenants)
 			platform.POST("/tenants", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.CreateTenant)
+			platform.GET("/tenants/stats", middleware.RequireAnyPermission("platform:tenants:manage", "platform:tenants:list"), h.Tenant.GetTenantStats)
+			platform.GET("/tenants/trends", middleware.RequireAnyPermission("platform:tenants:manage", "platform:tenants:list"), h.Tenant.GetTenantTrends)
 			platform.GET("/tenants/:id", middleware.RequireAnyPermission("platform:tenants:manage", "platform:tenants:list"), h.Tenant.GetTenant)
 			platform.PUT("/tenants/:id", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.UpdateTenant)
 			platform.DELETE("/tenants/:id", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.DeleteTenant)
-			platform.POST("/tenants/:id/users", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.CreateTenantUser)
+			// ---- 租户成员管理 ----
 			platform.GET("/tenants/:id/members", middleware.RequireAnyPermission("platform:tenants:manage", "platform:tenants:list"), h.Tenant.ListMembers)
-			platform.POST("/tenants/:id/admin", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.SetTenantAdmin)
+			platform.POST("/tenants/:id/members", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.AddMember)
+			platform.DELETE("/tenants/:id/members/:userId", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.RemoveMember)
 			platform.PUT("/tenants/:id/members/:userId/role", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.UpdateMemberRole)
+			// ---- 租户邀请管理 ----
+			platform.POST("/tenants/:id/invitations", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.InviteToTenant)
+			platform.GET("/tenants/:id/invitations", middleware.RequireAnyPermission("platform:tenants:manage", "platform:tenants:list"), h.Tenant.ListInvitations)
+			platform.DELETE("/tenants/:id/invitations/:invId", middleware.RequirePermission("platform:tenants:manage"), h.Tenant.CancelInvitation)
 
 			// ---- 平台级站内信管理 ----
 			platformSiteMessages := platform.Group("/site-messages")
@@ -516,10 +538,38 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 				platformAudit.GET("/high-risk", middleware.RequirePermission("platform:audit:list"), h.PlatformAudit.GetPlatformHighRiskLogs)
 				platformAudit.GET("/:id", middleware.RequirePermission("platform:audit:list"), h.PlatformAudit.GetPlatformAuditLog)
 			}
+
+			// ---- Impersonation 申请管理（平台管理员）----
+			impersonation := platform.Group("/impersonation")
+			{
+				impersonation.POST("/requests", middleware.RequirePlatformAdmin(), h.Impersonation.CreateRequest)
+				impersonation.GET("/requests", middleware.RequirePlatformAdmin(), h.Impersonation.ListMyRequests)
+				impersonation.GET("/requests/:id", middleware.RequirePlatformAdmin(), h.Impersonation.GetRequest)
+				impersonation.POST("/requests/:id/enter", middleware.RequirePlatformAdmin(), h.Impersonation.EnterTenant)
+				impersonation.POST("/requests/:id/exit", middleware.RequirePlatformAdmin(), h.Impersonation.ExitTenant)
+				impersonation.POST("/requests/:id/terminate", middleware.RequirePlatformAdmin(), h.Impersonation.TerminateSession)
+				impersonation.POST("/requests/:id/cancel", middleware.RequirePlatformAdmin(), h.Impersonation.CancelRequest)
+			}
 		}
 
 		// -------------------- 用户租户 --------------------
 		protected.GET("/user/tenants", h.Tenant.GetUserTenants)
+
+		// -------------------- Impersonation 审批（租户侧）--------------------
+		tenantImpersonation := protected.Group("/tenant/impersonation")
+		{
+			tenantImpersonation.GET("/pending", middleware.RequirePermission("tenant:impersonation:view"), h.Impersonation.ListPending)
+			tenantImpersonation.GET("/history", middleware.RequirePermission("tenant:impersonation:view"), h.Impersonation.ListHistory)
+			tenantImpersonation.POST("/:id/approve", middleware.RequirePermission("tenant:impersonation:approve"), h.Impersonation.Approve)
+			tenantImpersonation.POST("/:id/reject", middleware.RequirePermission("tenant:impersonation:approve"), h.Impersonation.Reject)
+		}
+
+		// -------------------- Impersonation 审批组配置 --------------------
+		tenantSettings := protected.Group("/tenant/settings")
+		{
+			tenantSettings.GET("/impersonation-approvers", middleware.RequirePermission("tenant:impersonation:approve"), h.Impersonation.GetApprovers)
+			tenantSettings.PUT("/impersonation-approvers", middleware.RequirePermission("tenant:impersonation:approve"), h.Impersonation.SetApprovers)
+		}
 
 		// -------------------- 字典值管理 --------------------
 		dictionaries := protected.Group("/dictionaries")
