@@ -7,6 +7,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -43,13 +44,14 @@ func (r *PlatformAuditLogRepository) GetByID(ctx context.Context, id uuid.UUID) 
 type PlatformAuditListOptions struct {
 	Page          int
 	PageSize      int
-	Search        string
+	Search        query.StringFilter
 	Category      string // login | operation
 	Action        string
 	ResourceType  string
-	Username      string
+	Username      query.StringFilter
 	UserID        *uuid.UUID
 	Status        string
+	RequestPath   query.StringFilter
 	CreatedAfter  *time.Time
 	CreatedBefore *time.Time
 	SortBy        string
@@ -61,41 +63,40 @@ func (r *PlatformAuditLogRepository) List(ctx context.Context, opts *PlatformAud
 	var logs []model.PlatformAuditLog
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.PlatformAuditLog{})
+	q := r.db.WithContext(ctx).Model(&model.PlatformAuditLog{})
 
 	if opts.Category != "" {
-		query = query.Where("category = ?", opts.Category)
+		q = q.Where("category = ?", opts.Category)
 	}
 	if opts.Action != "" {
-		query = query.Where("action = ?", opts.Action)
+		q = q.Where("action = ?", opts.Action)
 	}
 	if opts.ResourceType != "" {
-		query = query.Where("resource_type = ?", opts.ResourceType)
+		q = q.Where("resource_type = ?", opts.ResourceType)
 	}
-	if opts.Username != "" {
-		query = query.Where("username = ?", opts.Username)
+	if !opts.Username.IsEmpty() {
+		q = query.ApplyStringFilter(q, "username", opts.Username)
 	}
 	if opts.UserID != nil {
-		query = query.Where("user_id = ?", *opts.UserID)
+		q = q.Where("user_id = ?", *opts.UserID)
 	}
 	if opts.Status != "" {
-		query = query.Where("status = ?", opts.Status)
+		q = q.Where("status = ?", opts.Status)
 	}
 	if opts.CreatedAfter != nil {
-		query = query.Where("created_at >= ?", *opts.CreatedAfter)
+		q = q.Where("created_at >= ?", *opts.CreatedAfter)
 	}
 	if opts.CreatedBefore != nil {
-		query = query.Where("created_at <= ?", *opts.CreatedBefore)
+		q = q.Where("created_at <= ?", *opts.CreatedBefore)
 	}
-	if opts.Search != "" {
-		searchTerm := "%" + opts.Search + "%"
-		query = query.Where(
-			"username ILIKE ? OR resource_name ILIKE ? OR request_path ILIKE ?",
-			searchTerm, searchTerm, searchTerm,
-		)
+	if !opts.RequestPath.IsEmpty() {
+		q = query.ApplyStringFilter(q, "request_path", opts.RequestPath)
+	}
+	if !opts.Search.IsEmpty() {
+		q = query.ApplyMultiStringFilter(q, []string{"username", "resource_name", "request_path"}, opts.Search)
 	}
 
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -116,10 +117,10 @@ func (r *PlatformAuditLogRepository) List(ctx context.Context, opts *PlatformAud
 	if opts.SortOrder == "asc" || opts.SortOrder == "ASC" {
 		sortOrder = "ASC"
 	}
-	query = query.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
+	q = q.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
 
 	offset := (opts.Page - 1) * opts.PageSize
-	if err := query.Offset(offset).Limit(opts.PageSize).Find(&logs).Error; err != nil {
+	if err := q.Offset(offset).Limit(opts.PageSize).Find(&logs).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -253,4 +254,34 @@ func (r *PlatformAuditLogRepository) GetActionGrouping(ctx context.Context, acti
 
 	err := query.Group("action, resource_type, username").Order("count DESC").Scan(&items).Error
 	return items, err
+}
+
+// ==================== 用户个人中心查询 ====================
+
+// GetUserLoginHistory 获取指定用户的登录历史
+func (r *PlatformAuditLogRepository) GetUserLoginHistory(ctx context.Context, userID uuid.UUID, limit int) ([]model.PlatformAuditLog, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	var logs []model.PlatformAuditLog
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? AND category = ?", userID, "login").
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&logs).Error
+	return logs, err
+}
+
+// GetUserActivities 获取指定用户的操作记录（排除 login/logout）
+func (r *PlatformAuditLogRepository) GetUserActivities(ctx context.Context, userID uuid.UUID, limit int) ([]model.PlatformAuditLog, error) {
+	if limit <= 0 {
+		limit = 15
+	}
+	var logs []model.PlatformAuditLog
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? AND category = ?", userID, "operation").
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&logs).Error
+	return logs, err
 }

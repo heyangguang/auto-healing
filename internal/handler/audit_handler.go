@@ -34,13 +34,13 @@ func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 	opts := &repository.AuditLogListOptions{
 		Page:         page,
 		PageSize:     pageSize,
-		Search:       c.Query("search"),
 		Category:     c.Query("category"),
 		Action:       c.Query("action"),
 		ResourceType: c.Query("resource_type"),
-		Username:     c.Query("username"),
+		Username:     GetStringFilter(c, "username"),
 		Status:       c.Query("status"),
 		RiskLevel:    c.Query("risk_level"),
+		RequestPath:  GetStringFilter(c, "request_path"),
 		SortBy:       c.Query("sort_by"),
 		SortOrder:    c.Query("sort_order"),
 	}
@@ -81,13 +81,8 @@ func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 	// 为每条记录添加 risk_level 和 risk_reason
 	result := make([]gin.H, len(logs))
 	for i, log := range logs {
-		isRisk := repository.IsHighRisk(log.Action, log.ResourceType)
-		riskLevel := "normal"
-		riskReason := ""
-		if isRisk {
-			riskLevel = "high"
-			riskReason = repository.GetRiskReason(log.Action, log.ResourceType)
-		}
+		riskLevel := repository.GetRiskLevel(log.Action, log.ResourceType)
+		riskReason := repository.GetRiskReason(log.Action, log.ResourceType)
 
 		result[i] = gin.H{
 			"id":              log.ID,
@@ -137,13 +132,8 @@ func (h *AuditHandler) GetAuditLog(c *gin.Context) {
 	}
 
 	// 添加风险标记
-	isRisk := repository.IsHighRisk(log.Action, log.ResourceType)
-	riskLevel := "normal"
-	riskReason := ""
-	if isRisk {
-		riskLevel = "high"
-		riskReason = repository.GetRiskReason(log.Action, log.ResourceType)
-	}
+	riskLevel := repository.GetRiskLevel(log.Action, log.ResourceType)
+	riskReason := repository.GetRiskReason(log.Action, log.ResourceType)
 
 	response.Success(c, gin.H{
 		"id":              log.ID,
@@ -297,13 +287,13 @@ func (h *AuditHandler) ExportAuditLogs(c *gin.Context) {
 	opts := &repository.AuditLogListOptions{
 		Page:         1,
 		PageSize:     10000, // 最多导出 10000 条
-		Search:       c.Query("search"),
 		Category:     c.Query("category"),
 		Action:       c.Query("action"),
 		ResourceType: c.Query("resource_type"),
-		Username:     c.Query("username"),
+		Username:     GetStringFilter(c, "username"),
 		Status:       c.Query("status"),
 		RiskLevel:    c.Query("risk_level"),
+		RequestPath:  GetStringFilter(c, "request_path"),
 		SortBy:       "created_at",
 		SortOrder:    "desc",
 	}
@@ -343,10 +333,12 @@ func (h *AuditHandler) ExportAuditLogs(c *gin.Context) {
 	})
 
 	// 数据行
+	riskLevelLabels := map[string]string{"low": "低", "medium": "中", "high": "高危", "critical": "极高"}
 	for _, log := range logs {
-		riskLevel := "正常"
-		if repository.IsHighRisk(log.Action, log.ResourceType) {
-			riskLevel = "高危"
+		rl := repository.GetRiskLevel(log.Action, log.ResourceType)
+		riskLevel := riskLevelLabels[rl]
+		if riskLevel == "" {
+			riskLevel = "低"
 		}
 
 		status := log.Status

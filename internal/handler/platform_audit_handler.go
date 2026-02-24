@@ -31,12 +31,12 @@ func (h *PlatformAuditHandler) ListPlatformAuditLogs(c *gin.Context) {
 	opts := &repository.PlatformAuditListOptions{
 		Page:         page,
 		PageSize:     pageSize,
-		Search:       c.Query("search"),
 		Category:     c.Query("category"),
 		Action:       c.Query("action"),
 		ResourceType: c.Query("resource_type"),
-		Username:     c.Query("username"),
+		Username:     GetStringFilter(c, "username"),
 		Status:       c.Query("status"),
+		RequestPath:  GetStringFilter(c, "request_path"),
 		SortBy:       c.Query("sort_by"),
 		SortOrder:    c.Query("sort_order"),
 	}
@@ -66,13 +66,8 @@ func (h *PlatformAuditHandler) ListPlatformAuditLogs(c *gin.Context) {
 
 	result := make([]gin.H, len(logs))
 	for i, log := range logs {
-		isRisk := repository.IsHighRisk(log.Action, log.ResourceType)
-		riskLevel := "normal"
-		riskReason := ""
-		if isRisk {
-			riskLevel = "high"
-			riskReason = repository.GetRiskReason(log.Action, log.ResourceType)
-		}
+		riskLevel := repository.GetRiskLevel(log.Action, log.ResourceType)
+		riskReason := repository.GetRiskReason(log.Action, log.ResourceType)
 
 		result[i] = gin.H{
 			"id":              log.ID,
@@ -120,13 +115,8 @@ func (h *PlatformAuditHandler) GetPlatformAuditLog(c *gin.Context) {
 		return
 	}
 
-	isRisk := repository.IsHighRisk(log.Action, log.ResourceType)
-	riskLevel := "normal"
-	riskReason := ""
-	if isRisk {
-		riskLevel = "high"
-		riskReason = repository.GetRiskReason(log.Action, log.ResourceType)
-	}
+	riskLevel := repository.GetRiskLevel(log.Action, log.ResourceType)
+	riskReason := repository.GetRiskReason(log.Action, log.ResourceType)
 
 	response.Success(c, gin.H{
 		"id":              log.ID,

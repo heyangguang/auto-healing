@@ -105,6 +105,8 @@ func AuditMiddleware() gin.HandlerFunc {
 		userAgent := c.Request.UserAgent()
 		responseBody := bodyWriter.body.Bytes()
 		// isPlatformAdmin 已在上方提取，goroutine 中安全使用
+		// Impersonation 标记（goroutine 安全）
+		isImpersonating := IsImpersonating(c)
 
 		// ===== 异步记录审计日志 =====
 		go func() {
@@ -151,9 +153,13 @@ func AuditMiddleware() gin.HandlerFunc {
 				changes = computeChanges(method, action, oldState, bodyJSON)
 			}
 
-			// 根据用户身份判断是平台级还是租户级，写入对应的表
-			// 平台管理员的所有操作 → platform_audit_logs
-			// 租户用户的所有操作 → audit_logs
+			// 审计分类：Impersonation 操作归入 "operation"（用户名已标识 [Impersonation]）
+			category := "operation"
+
+			// 根据用户身份判断写入逻辑
+			// - 平台管理员（非 Impersonation） → platform_audit_logs
+			// - 平台管理员（Impersonation）     → platform_audit_logs + audit_logs（双写）
+			// - 租户用户                        → audit_logs
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
@@ -164,7 +170,7 @@ func AuditMiddleware() gin.HandlerFunc {
 					Username:       username,
 					IPAddress:      ipAddress,
 					UserAgent:      userAgent,
-					Category:       "operation",
+					Category:       category,
 					Action:         action,
 					ResourceType:   resourceType,
 					ResourceID:     resourceID,
@@ -181,6 +187,32 @@ func AuditMiddleware() gin.HandlerFunc {
 				if err := platformRepo.Create(ctx, platformLog); err != nil {
 					zap.L().Error("平台审计日志写入失败", zap.Error(err))
 				}
+
+				// Impersonation 操作 — 同时写入 audit_logs（租户侧也能看到）
+				if isImpersonating {
+					auditLog := &model.AuditLog{
+						UserID:         userID,
+						Username:       username + " [Impersonation]",
+						IPAddress:      ipAddress,
+						UserAgent:      userAgent,
+						Category:       category,
+						Action:         action,
+						ResourceType:   resourceType,
+						ResourceID:     resourceID,
+						ResourceName:   resourceName,
+						RequestMethod:  method,
+						RequestPath:    path,
+						RequestBody:    bodyJSON,
+						ResponseStatus: &statusCode,
+						Changes:        changes,
+						Status:         status,
+						ErrorMessage:   errorMsg,
+						CreatedAt:      startTime,
+					}
+					if err := repo.Create(ctx, auditLog); err != nil {
+						zap.L().Error("Impersonation 租户审计日志写入失败", zap.Error(err))
+					}
+				}
 			} else {
 				// 租户用户 — 写入 audit_logs
 				auditLog := &model.AuditLog{
@@ -188,7 +220,7 @@ func AuditMiddleware() gin.HandlerFunc {
 					Username:       username,
 					IPAddress:      ipAddress,
 					UserAgent:      userAgent,
-					Category:       "operation",
+					Category:       category,
 					Action:         action,
 					ResourceType:   resourceType,
 					ResourceID:     resourceID,
@@ -677,6 +709,7 @@ func shouldSkipAudit(path string) bool {
 	// === 1. 前缀匹配 — 整类路由跳过 ===
 	skipPrefixes := []string{
 		"/api/v1/auth/login",             // 登录由 auth handler 自行记录
+		"/api/v1/auth/logout",            // 登出由 auth handler 自行记录
 		"/api/v1/auth/refresh",           // Token 刷新无需审计
 		"/api/v1/user/recents",           // 最近访问记录（导航自动触发）
 		"/api/v1/user/favorites",         // 收藏操作（低价值）
@@ -756,6 +789,9 @@ var pathSegmentToTable = map[string]tableInfo{
 	"platform/users":    {table: "users", column: "username", isPlatform: true},
 	"platform/roles":    {table: "roles", column: "name", isPlatform: true},
 	"platform/settings": {table: "platform_settings", column: "label", isPlatform: true, primaryKey: "key"},
+	// === Impersonation ===
+	"platform/impersonation": {table: "impersonation_requests", column: "tenant_name", isPlatform: true},
+	"tenant/impersonation":   {table: "impersonation_requests", column: "tenant_name", isPlatform: true},
 }
 
 // resolveResourceName 根据 URL 路径和资源 ID 查询资源名称
@@ -796,6 +832,18 @@ func resolveResourceName(path string, resourceID *uuid.UUID, resourceKey string,
 				if v, ok := body[field]; ok {
 					if s, ok := v.(string); ok && s != "" {
 						return s
+					}
+				}
+			}
+			// 特殊处理：请求体含 tenant_id 时查租户名称（如 impersonation 创建请求）
+			if tid, ok := body["tenant_id"]; ok {
+				if tidStr, ok := tid.(string); ok && tidStr != "" {
+					if tenantUUID, err := uuid.Parse(tidStr); err == nil {
+						var tenantName string
+						if err := database.DB.Table("tenants").Select("name").
+							Where("id = ?", tenantUUID).Scan(&tenantName).Error; err == nil && tenantName != "" {
+							return tenantName
+						}
 					}
 				}
 			}

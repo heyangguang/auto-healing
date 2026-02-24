@@ -8,58 +8,86 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-// HighRiskRule 高危操作规则（action + resource_type 精确组合）
-type HighRiskRule struct {
+// 风险等级常量
+const (
+	RiskLevelLow      = "low"      // 低风险 — 查看、登录、导出等只读操作
+	RiskLevelMedium   = "medium"   // 中风险 — 创建、更新、同步等常规写操作
+	RiskLevelHigh     = "high"     // 高风险 — 删除、禁用、重置密码等危险操作
+	RiskLevelCritical = "critical" // 极高风险 — 提权、批量操作、角色变更等最高危操作
+)
+
+// RiskRule 操作风险规则（action + resource_type → level + reason）
+type RiskRule struct {
 	Action       string // 操作类型，"*" 表示任意
 	ResourceType string // 资源类型，"*" 表示任意
-	Reason       string // 高危原因
+	Level        string // 风险等级：low / medium / high / critical
+	Reason       string // 风险原因
 }
 
-// HighRiskRules 高危操作规则列表
-var HighRiskRules = []HighRiskRule{
-	// 删除操作 — 任意资源删除都是高危
-	{"delete", "*", "删除操作"},
-	// 取消执行 — 中断执行中的任务
-	{"cancel", "*", "取消执行中的任务"},
-	// 用户管理类高危操作
-	{"reset_password", "users", "管理员重置用户密码"},
-	{"assign_role", "users", "变更用户角色"},
+// RiskRules 操作风险规则列表（按优先级排列：精确匹配 > 通配符）
+var RiskRules = []RiskRule{
+	// ══════════ 极高风险 (critical) ══════════
+	// 提权操作
+	{"impersonation_enter", "impersonation", RiskLevelCritical, "提权进入租户"},
+	{"impersonation_exit", "impersonation", RiskLevelCritical, "提权退出租户"},
 	// 角色权限变更
-	{"assign_permission", "roles", "变更角色权限"},
-	// 插件停用
-	{"deactivate", "plugins", "停用插件"},
-	// 执行任务 — 核心业务高危
-	{"execute", "execution-tasks", "执行指令/Playbook"},
+	{"assign_role", "users", RiskLevelCritical, "变更用户角色"},
+	{"assign_permission", "roles", RiskLevelCritical, "变更角色权限"},
+
+	// ══════════ 高风险 (high) ══════════
+	// 删除操作 — 任意资源删除
+	{"delete", "*", RiskLevelHigh, "删除操作"},
+	// 用户管理
+	{"reset_password", "users", RiskLevelHigh, "管理员重置用户密码"},
+	{"disable", "*", RiskLevelHigh, "禁用资源"},
+	{"deactivate", "plugins", RiskLevelHigh, "停用插件"},
+	// 取消执行
+	{"cancel", "*", RiskLevelHigh, "取消执行中的任务"},
+
+	// ══════════ 中风险 (medium) ══════════
+	// 执行操作
+	{"execute", "execution-tasks", RiskLevelMedium, "执行指令/Playbook"},
 	// 自愈相关
-	{"trigger", "incidents", "手动触发自愈流程"},
-	{"dismiss", "incidents", "忽略待触发工单"},
-	{"approve", "healing", "审批通过自愈流程"},
-	{"reject", "healing", "审批拒绝自愈流程"},
-	{"dry_run", "healing", "自愈流程试运行"},
+	{"trigger", "incidents", RiskLevelMedium, "手动触发自愈流程"},
+	{"dismiss", "incidents", RiskLevelMedium, "忽略待触发工单"},
+	{"approve", "healing", RiskLevelMedium, "审批通过自愈流程"},
+	{"reject", "healing", RiskLevelMedium, "审批拒绝自愈流程"},
+	{"dry_run", "healing", RiskLevelMedium, "自愈流程试运行"},
+	// 创建、更新、同步操作（通配符 — 最低优先级）
+	{"create", "*", RiskLevelMedium, "创建资源"},
+	{"update", "*", RiskLevelMedium, "更新资源"},
+	{"sync", "*", RiskLevelMedium, "同步操作"},
 }
+
+// 保留旧名以兼容
+type HighRiskRule = RiskRule
+
+var HighRiskRules = RiskRules
 
 // AuditLogListOptions 审计日志查询选项
 type AuditLogListOptions struct {
 	Page                 int
 	PageSize             int
-	Search               string     // 模糊搜索（username/resource_name/request_path）
-	Category             string     // 过滤分类 (login/operation)
-	Action               string     // 过滤操作类型
-	ResourceType         string     // 过滤资源类型
-	ExcludeActions       []string   // 排除操作类型
-	ExcludeResourceTypes []string   // 排除资源类型
-	Username             string     // 过滤用户名
-	UserID               *uuid.UUID // 过滤用户 ID
-	Status               string     // 过滤状态 (success/failed)
-	RiskLevel            string     // 过滤风险等级 (high/normal)
-	CreatedAfter         *time.Time // 开始时间
-	CreatedBefore        *time.Time // 结束时间
-	SortBy               string     // 排序字段
-	SortOrder            string     // 排序方向 (asc/desc)
+	Search               query.StringFilter // 模糊搜索（username/resource_name/request_path）
+	Category             string             // 过滤分类 (login/operation)
+	Action               string             // 过滤操作类型
+	ResourceType         string             // 过滤资源类型
+	ExcludeActions       []string           // 排除操作类型
+	ExcludeResourceTypes []string           // 排除资源类型
+	Username             query.StringFilter // 过滤用户名
+	UserID               *uuid.UUID         // 过滤用户 ID
+	Status               string             // 过滤状态 (success/failed)
+	RiskLevel            string             // 过滤风险等级 (high/normal)
+	RequestPath          query.StringFilter // 过滤请求路径
+	CreatedAfter         *time.Time         // 开始时间
+	CreatedBefore        *time.Time         // 结束时间
+	SortBy               string             // 排序字段
+	SortOrder            string             // 排序方向 (asc/desc)
 }
 
 // AuditLogRepository 审计日志仓库
@@ -99,59 +127,58 @@ func (r *AuditLogRepository) List(ctx context.Context, opts *AuditLogListOptions
 	var logs []model.AuditLog
 	var total int64
 
-	query := TenantDB(r.db, ctx).Model(&model.AuditLog{})
+	q := TenantDB(r.db, ctx).Model(&model.AuditLog{})
 
 	// 过滤条件
 	if opts.Category != "" {
-		query = query.Where("category = ?", opts.Category)
+		q = q.Where("category = ?", opts.Category)
 	}
 	if opts.Action != "" {
-		query = query.Where("action = ?", opts.Action)
+		q = q.Where("action = ?", opts.Action)
 	}
 	if opts.ResourceType != "" {
-		query = query.Where("resource_type = ?", opts.ResourceType)
+		q = q.Where("resource_type = ?", opts.ResourceType)
 	}
 	if len(opts.ExcludeActions) > 0 {
-		query = query.Where("action NOT IN ?", opts.ExcludeActions)
+		q = q.Where("action NOT IN ?", opts.ExcludeActions)
 	}
 	if len(opts.ExcludeResourceTypes) > 0 {
-		query = query.Where("resource_type NOT IN ?", opts.ExcludeResourceTypes)
+		q = q.Where("resource_type NOT IN ?", opts.ExcludeResourceTypes)
 	}
-	if opts.Username != "" {
-		query = query.Where("username = ?", opts.Username)
+	if !opts.Username.IsEmpty() {
+		q = query.ApplyStringFilter(q, "username", opts.Username)
 	}
 	if opts.UserID != nil {
-		query = query.Where("user_id = ?", *opts.UserID)
+		q = q.Where("user_id = ?", *opts.UserID)
 	}
 	if opts.Status != "" {
-		query = query.Where("status = ?", opts.Status)
+		q = q.Where("status = ?", opts.Status)
 	}
 	if opts.CreatedAfter != nil {
-		query = query.Where("created_at >= ?", *opts.CreatedAfter)
+		q = q.Where("created_at >= ?", *opts.CreatedAfter)
 	}
 	if opts.CreatedBefore != nil {
-		query = query.Where("created_at <= ?", *opts.CreatedBefore)
+		q = q.Where("created_at <= ?", *opts.CreatedBefore)
+	}
+	if !opts.RequestPath.IsEmpty() {
+		q = query.ApplyStringFilter(q, "request_path", opts.RequestPath)
 	}
 
 	// 高危过滤
 	switch opts.RiskLevel {
 	case "high":
-		query = query.Where(buildHighRiskCondition())
+		q = q.Where(buildHighRiskCondition())
 	case "normal":
-		query = query.Where(fmt.Sprintf("NOT (%s)", buildHighRiskCondition()))
+		q = q.Where(fmt.Sprintf("NOT (%s)", buildHighRiskCondition()))
 	}
 
-	// 模糊搜索
-	if opts.Search != "" {
-		searchTerm := "%" + opts.Search + "%"
-		query = query.Where(
-			"username ILIKE ? OR resource_name ILIKE ? OR request_path ILIKE ?",
-			searchTerm, searchTerm, searchTerm,
-		)
+	// 搜索
+	if !opts.Search.IsEmpty() {
+		q = query.ApplyMultiStringFilter(q, []string{"username", "resource_name", "request_path"}, opts.Search)
 	}
 
 	// 计数
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -171,11 +198,11 @@ func (r *AuditLogRepository) List(ctx context.Context, opts *AuditLogListOptions
 	if opts.SortOrder == "asc" || opts.SortOrder == "ASC" {
 		sortOrder = "ASC"
 	}
-	query = query.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
+	q = q.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
 
 	// 分页
 	offset := (opts.Page - 1) * opts.PageSize
-	if err := query.Offset(offset).Limit(opts.PageSize).Preload("User").Find(&logs).Error; err != nil {
+	if err := q.Offset(offset).Limit(opts.PageSize).Preload("User").Find(&logs).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -371,20 +398,28 @@ func (r *AuditLogRepository) GetHighRiskLogs(ctx context.Context, page, pageSize
 	return logs, total, err
 }
 
-// IsHighRisk 判断一条审计日志是否属于高危
+// IsHighRisk 判断一条审计日志是否属于高危（high 或 critical）
+// 保留此函数以兼容已有调用
 func IsHighRisk(action, resourceType string) bool {
-	for _, rule := range HighRiskRules {
-		if (rule.Action == "*" || rule.Action == action) &&
-			(rule.ResourceType == "*" || rule.ResourceType == resourceType) {
-			return true
-		}
-	}
-	return false
+	level := GetRiskLevel(action, resourceType)
+	return level == RiskLevelHigh || level == RiskLevelCritical
 }
 
-// GetRiskReason 获取高危原因描述
+// GetRiskLevel 获取操作的风险等级（四级）
+// 返回 low / medium / high / critical
+func GetRiskLevel(action, resourceType string) string {
+	for _, rule := range RiskRules {
+		if (rule.Action == "*" || rule.Action == action) &&
+			(rule.ResourceType == "*" || rule.ResourceType == resourceType) {
+			return rule.Level
+		}
+	}
+	return RiskLevelLow // 默认低风险
+}
+
+// GetRiskReason 获取风险原因描述
 func GetRiskReason(action, resourceType string) string {
-	for _, rule := range HighRiskRules {
+	for _, rule := range RiskRules {
 		if (rule.Action == "*" || rule.Action == action) &&
 			(rule.ResourceType == "*" || rule.ResourceType == resourceType) {
 			return rule.Reason
@@ -393,12 +428,14 @@ func GetRiskReason(action, resourceType string) string {
 	return ""
 }
 
-// buildHighRiskCondition 构建高危操作的 SQL WHERE 条件
+// buildHighRiskCondition 构建高危操作的 SQL WHERE 条件（high + critical）
 func buildHighRiskCondition() string {
-	conditions := make([]string, 0, len(HighRiskRules))
-	for _, rule := range HighRiskRules {
+	conditions := make([]string, 0, len(RiskRules))
+	for _, rule := range RiskRules {
+		if rule.Level != RiskLevelHigh && rule.Level != RiskLevelCritical {
+			continue
+		}
 		if rule.Action == "*" && rule.ResourceType == "*" {
-			// 匹配所有 — 不太可能，但防御性处理
 			return "1=1"
 		} else if rule.Action == "*" {
 			conditions = append(conditions, fmt.Sprintf("resource_type = '%s'", rule.ResourceType))
@@ -408,5 +445,46 @@ func buildHighRiskCondition() string {
 			conditions = append(conditions, fmt.Sprintf("(action = '%s' AND resource_type = '%s')", rule.Action, rule.ResourceType))
 		}
 	}
+	if len(conditions) == 0 {
+		return "1=0" // 无规则匹配
+	}
 	return strings.Join(conditions, " OR ")
+}
+
+// ==================== 用户个人中心查询 ====================
+
+// GetUserLoginHistory 获取指定用户的登录历史
+// tenantID 非零时按租户过滤（租户用户场景）
+func (r *AuditLogRepository) GetUserLoginHistory(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, limit int) ([]model.AuditLog, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	var logs []model.AuditLog
+	q := r.db.WithContext(ctx).
+		Where("user_id = ? AND category = ?", userID, "login")
+	if tenantID != uuid.Nil {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
+	err := q.Order("created_at DESC").
+		Limit(limit).
+		Find(&logs).Error
+	return logs, err
+}
+
+// GetUserActivities 获取指定用户的操作记录（排除 login/logout）
+// tenantID 非零时按租户过滤（租户用户场景）
+func (r *AuditLogRepository) GetUserActivities(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID, limit int) ([]model.AuditLog, error) {
+	if limit <= 0 {
+		limit = 15
+	}
+	var logs []model.AuditLog
+	q := r.db.WithContext(ctx).
+		Where("user_id = ? AND category = ?", userID, "operation")
+	if tenantID != uuid.Nil {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
+	err := q.Order("created_at DESC").
+		Limit(limit).
+		Find(&logs).Error
+	return logs, err
 }
