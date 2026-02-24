@@ -136,6 +136,10 @@ func AutoMigrate() error {
 		&model.Dictionary{},
 		// 邀请
 		&model.TenantInvitation{},
+		// 高危指令黑名单
+		&model.CommandBlacklist{},
+		// 安全豁免
+		&model.BlacklistExemption{},
 	}
 
 	// 增量迁移：只迁移不存在的表，避免修改已有表导致约束名冲突
