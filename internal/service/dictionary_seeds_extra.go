@@ -88,6 +88,8 @@ func auditResourceSeeds() []model.Dictionary {
 		d("audit_resource_tenant", "auth-profile", "个人资料", "Profile", "", "", "", "", "", 20),
 		d("audit_resource_tenant", "tenant-impersonation", "临时提权", "Impersonation", "", "", "", "", "", 21),
 		d("audit_resource_tenant", "site-messages", "站内信", "Site Message", "", "", "", "", "", 22),
+		d("audit_resource_tenant", "command-blacklist", "命令黑名单", "Command Blacklist", "", "", "", "", "", 23),
+		d("audit_resource_tenant", "blacklist-exemptions", "豁免规则", "Blacklist Exemption", "", "", "", "", "", 24),
 
 		// ==================== 平台级资源 ====================
 		// dict_key 与 inferResourceType 产出一致（无 platform- 前缀）
@@ -112,6 +114,10 @@ func auditResourceSeeds() []model.Dictionary {
 		d("audit_resource_platform", "user", "个人设置", "User Settings", "", "", "", "", "", 18),
 		d("audit_resource_platform", "search", "搜索", "Search", "", "", "", "", "", 19),
 		d("audit_resource_platform", "workbench", "工作台", "Workbench", "", "", "", "", "", 20),
+		d("audit_resource_platform", "command-blacklist", "命令黑名单", "Command Blacklist", "", "", "", "", "", 21),
+		d("audit_resource_platform", "blacklist-exemptions", "豁免规则", "Blacklist Exemption", "", "", "", "", "", 22),
+		d("audit_resource_platform", "dictionaries", "字典管理", "Dictionary", "", "", "", "", "", 23),
+		d("audit_resource_platform", "tenant", "租户", "Tenant", "", "", "", "", "", 24),
 	}
 }
 
