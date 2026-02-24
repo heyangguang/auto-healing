@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	"github.com/company/auto-healing/internal/pkg/jwt"
+	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 const (
@@ -69,6 +71,20 @@ func JWTAuth(jwtService *jwt.Service) gin.HandlerFunc {
 				"error": gin.H{
 					"code":    "UNAUTHORIZED",
 					"message": "Token has been revoked",
+				},
+			})
+			return
+		}
+
+		// 🔒 实时验证用户状态（禁用用户立即失效，无需等待 JWT 过期）
+		userRepo := repository.NewUserRepository()
+		uid, _ := uuid.Parse(claims.Subject)
+		user, userErr := userRepo.GetByID(c.Request.Context(), uid)
+		if userErr != nil || user.Status != "active" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": gin.H{
+					"code":    "ACCOUNT_DISABLED",
+					"message": "账户已被禁用，请联系管理员",
 				},
 			})
 			return

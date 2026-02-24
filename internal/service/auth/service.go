@@ -157,10 +157,12 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, clientIP string)
 		})
 	}
 
-	// 查询租户列表：platform_admin 获取所有租户，普通用户获取自己加入的租户
+	// 查询租户列表：平台管理员不注入租户（必须通过 Impersonation 访问租户）
 	var tenants []model.Tenant
 	if isPlatformAdmin {
-		tenants, _, err = s.tenantRepo.List(ctx, "", 1, 1000)
+		// 平台管理员：不获取租户列表，不注入 JWT tenant_ids
+		// 必须通过 Impersonation 审批流程访问租户数据
+		tenants = []model.Tenant{}
 	} else {
 		tenants, err = s.tenantRepo.GetUserTenants(ctx, user.ID, "")
 	}
@@ -184,7 +186,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, clientIP string)
 		defaultTenantID = tenants[0].ID.String()
 	}
 
-	// 将租户信息注入 JWT
+	// 将租户信息注入 JWT（平台管理员为空）
 	tokenOpts = append(tokenOpts, func(c *jwt.Claims) {
 		c.TenantIDs = tenantIDs
 		c.DefaultTenantID = defaultTenantID
