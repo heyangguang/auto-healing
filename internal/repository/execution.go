@@ -6,6 +6,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	qf "github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -16,13 +17,14 @@ type ExecutionRepository struct{}
 // TaskListOptions 任务列表筛选选项
 type TaskListOptions struct {
 	PlaybookID     *uuid.UUID
-	Search         string // 模糊搜索（匹配 name、description、playbook.name）
-	ExecutorType   string // 执行器类型（local / docker）
-	Status         string // 状态（pending_review / ready）
-	NeedsReview    *bool  // 直接按 needs_review 布尔值过滤
-	TargetHosts    string // 目标主机模糊匹配
-	PlaybookName   string // Playbook 名称模糊匹配
-	RepositoryName string // Git 仓库名称模糊匹配
+	Name           qf.StringFilter // 独立字段：名称
+	Description    qf.StringFilter // 独立字段：描述
+	ExecutorType   string          // 执行器类型（local / docker）
+	Status         string          // 状态（pending_review / ready）
+	NeedsReview    *bool           // 直接按 needs_review 布尔值过滤
+	TargetHosts    string          // 目标主机模糊匹配
+	PlaybookName   string          // Playbook 名称模糊匹配
+	RepositoryName string          // Git 仓库名称模糊匹配
 	// 时间范围
 	CreatedFrom *time.Time // 创建时间范围起始
 	CreatedTo   *time.Time // 创建时间范围结束
@@ -40,11 +42,12 @@ type TaskListOptions struct {
 // RunListOptions 执行记录列表筛选选项
 type RunListOptions struct {
 	TaskID        *uuid.UUID
-	Search        string     // 全局搜索（匹配 ID、triggered_by、task.name）
-	Status        string     // 状态精确匹配
-	TriggeredBy   string     // 触发来源精确匹配
-	StartedAfter  *time.Time // 开始时间范围
-	StartedBefore *time.Time // 结束时间范围
+	RunID         string          // 执行记录 ID（支持完整 UUID 或前缀匹配）
+	TaskName      qf.StringFilter // 独立字段：任务名称
+	Status        string          // 状态精确匹配
+	TriggeredBy   string          // 触发来源精确匹配
+	StartedAfter  *time.Time      // 开始时间范围
+	StartedBefore *time.Time      // 结束时间范围
 	Page          int
 	PageSize      int
 }
@@ -98,8 +101,8 @@ func (r *ExecutionRepository) ListTasks(ctx context.Context, opts *TaskListOptio
 	query := database.DB.WithContext(ctx).Model(&model.ExecutionTask{}).
 		Where("execution_tasks.tenant_id = ?", TenantIDFromContext(ctx))
 
-	// 需要 JOIN 的筛选条件（search 也需要搜索 playbook.name）
-	needsPlaybookJoin := opts.PlaybookName != "" || opts.RepositoryName != "" || opts.Search != ""
+	// 需要 JOIN 的筛选条件
+	needsPlaybookJoin := opts.PlaybookName != "" || opts.RepositoryName != ""
 	if needsPlaybookJoin {
 		query = query.Joins("LEFT JOIN playbooks ON playbooks.id = execution_tasks.playbook_id")
 	}
@@ -112,10 +115,12 @@ func (r *ExecutionRepository) ListTasks(ctx context.Context, opts *TaskListOptio
 		query = query.Where("execution_tasks.playbook_id = ?", *opts.PlaybookID)
 	}
 
-	// 模糊搜索（匹配 name、description、playbook.name）
-	if opts.Search != "" {
-		searchPattern := "%" + opts.Search + "%"
-		query = query.Where("(execution_tasks.name ILIKE ? OR execution_tasks.description ILIKE ? OR playbooks.name ILIKE ?)", searchPattern, searchPattern, searchPattern)
+	// 独立字段查询
+	if !opts.Name.IsEmpty() {
+		query = qf.ApplyStringFilter(query, "execution_tasks.name", opts.Name)
+	}
+	if !opts.Description.IsEmpty() {
+		query = qf.ApplyStringFilter(query, "execution_tasks.description", opts.Description)
 	}
 
 	// 执行器类型筛选
@@ -440,17 +445,23 @@ func (r *ExecutionRepository) ListAllRuns(ctx context.Context, opts *RunListOpti
 	var runs []model.ExecutionRun
 	var total int64
 
-	query := TenantDB(database.DB, ctx).Model(&model.ExecutionRun{})
+	// 使用显式表前缀的 tenant_id 条件，避免 JOIN 后 ambiguous
+	query := database.DB.WithContext(ctx).Model(&model.ExecutionRun{}).
+		Where("execution_runs.tenant_id = ?", TenantIDFromContext(ctx))
 
-	// 全局搜索需要 JOIN task 表
-	if opts.Search != "" {
+	// 独立字段搜索需要 JOIN task 表
+	needsTaskJoin := !opts.TaskName.IsEmpty()
+	if needsTaskJoin {
 		query = query.Joins("LEFT JOIN execution_tasks ON execution_tasks.id = execution_runs.task_id")
-		searchPattern := "%" + opts.Search + "%"
-		// OR 匹配：ID、triggered_by、task.name
-		query = query.Where(
-			"execution_runs.id::text ILIKE ? OR execution_runs.triggered_by ILIKE ? OR execution_tasks.name ILIKE ?",
-			searchPattern, searchPattern, searchPattern,
-		)
+	}
+	// 独立字段：任务名称
+	if !opts.TaskName.IsEmpty() {
+		query = qf.ApplyStringFilter(query, "execution_tasks.name", opts.TaskName)
+	}
+
+	// Run ID 搜索（支持完整 UUID 或前缀匹配）
+	if opts.RunID != "" {
+		query = query.Where("execution_runs.id::text ILIKE ?", opts.RunID+"%")
 	}
 
 	// Task ID 筛选

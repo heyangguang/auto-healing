@@ -8,6 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/notification/provider"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -90,8 +91,8 @@ func (s *Service) GetChannel(ctx context.Context, id uuid.UUID) (*model.Notifica
 }
 
 // ListChannels 获取渠道列表
-func (s *Service) ListChannels(ctx context.Context, page, pageSize int, channelType string, search string) ([]model.NotificationChannel, int64, error) {
-	return s.repo.ListChannels(ctx, page, pageSize, channelType, search)
+func (s *Service) ListChannels(ctx context.Context, page, pageSize int, channelType string, name query.StringFilter) ([]model.NotificationChannel, int64, error) {
+	return s.repo.ListChannels(ctx, page, pageSize, channelType, name)
 }
 
 // UpdateChannelRequest 更新渠道请求

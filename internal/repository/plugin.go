@@ -8,6 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -98,23 +99,26 @@ func (r *PluginRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // List 获取插件列表
-func (r *PluginRepository) List(ctx context.Context, page, pageSize int, pluginType, status, search, sortBy, sortOrder string) ([]model.Plugin, int64, error) {
+func (r *PluginRepository) List(ctx context.Context, page, pageSize int, pluginType, status string, search query.StringFilter, sortBy, sortOrder string, scopes ...func(*gorm.DB) *gorm.DB) ([]model.Plugin, int64, error) {
 	var plugins []model.Plugin
 	var total int64
 
-	query := TenantDB(r.db, ctx).Model(&model.Plugin{})
+	q := TenantDB(r.db, ctx).Model(&model.Plugin{})
 
 	if pluginType != "" {
-		query = query.Where("type = ?", pluginType)
+		q = q.Where("type = ?", pluginType)
 	}
 	if status != "" {
-		query = query.Where("status = ?", status)
+		q = q.Where("status = ?", status)
 	}
-	if search != "" {
-		query = query.Where("name ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
+	if !search.IsEmpty() {
+		q = query.ApplyMultiStringFilter(q, []string{"name", "description"}, search)
+	}
+	for _, scope := range scopes {
+		q = scope(q)
 	}
 
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -133,7 +137,7 @@ func (r *PluginRepository) List(ctx context.Context, page, pageSize int, pluginT
 	}
 
 	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order(fmt.Sprintf("%s %s", sortField, order)).Find(&plugins).Error
+	err := q.Offset(offset).Limit(pageSize).Order(fmt.Sprintf("%s %s", sortField, order)).Find(&plugins).Error
 	return plugins, total, err
 }
 
@@ -253,45 +257,47 @@ func (r *IncidentRepository) Update(ctx context.Context, incident *model.Inciden
 
 // List 获取工单列表（支持查询已删除插件的工单）
 // hasPlugin: nil=不筛选, true=只有关联插件, false=只无关联插件
-func (r *IncidentRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity, sourcePluginName, search string, hasPlugin *bool, sortBy, sortOrder string, externalID string) ([]model.Incident, int64, error) {
+func (r *IncidentRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity string, sourcePluginName, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, externalID query.StringFilter, scopes ...func(*gorm.DB) *gorm.DB) ([]model.Incident, int64, error) {
 	var incidents []model.Incident
 	var total int64
 
-	query := TenantDB(r.db, ctx).Model(&model.Incident{})
+	q := TenantDB(r.db, ctx).Model(&model.Incident{})
 
 	if pluginID != nil {
-		query = query.Where("plugin_id = ?", *pluginID)
+		q = q.Where("plugin_id = ?", *pluginID)
 	}
 	// 筛选有/无关联插件的工单
 	if hasPlugin != nil {
 		if *hasPlugin {
-			query = query.Where("plugin_id IS NOT NULL")
+			q = q.Where("plugin_id IS NOT NULL")
 		} else {
-			query = query.Where("plugin_id IS NULL")
+			q = q.Where("plugin_id IS NULL")
 		}
 	}
-	// 支持查询已删除插件的工单（不区分大小写）
-	if sourcePluginName != "" {
-		query = query.Where("LOWER(source_plugin_name) LIKE LOWER(?)", "%"+sourcePluginName+"%")
+	// 来源插件名称过滤
+	if !sourcePluginName.IsEmpty() {
+		q = query.ApplyStringFilter(q, "source_plugin_name", sourcePluginName)
 	}
 	if status != "" {
-		query = query.Where("status = ?", status)
+		q = q.Where("status = ?", status)
 	}
 	if healingStatus != "" {
-		query = query.Where("healing_status = ?", healingStatus)
+		q = q.Where("healing_status = ?", healingStatus)
 	}
 	if severity != "" {
-		query = query.Where("severity = ?", severity)
+		q = q.Where("severity = ?", severity)
 	}
-	if search != "" {
-		pattern := "%" + search + "%"
-		query = query.Where("(title ILIKE ? OR external_id ILIKE ? OR description ILIKE ?)", pattern, pattern, pattern)
+	if !search.IsEmpty() {
+		q = query.ApplyMultiStringFilter(q, []string{"title", "external_id", "description"}, search)
 	}
-	if externalID != "" {
-		query = query.Where("external_id = ?", externalID)
+	if !externalID.IsEmpty() {
+		q = query.ApplyStringFilter(q, "external_id", externalID)
+	}
+	for _, scope := range scopes {
+		q = scope(q)
 	}
 
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -312,7 +318,7 @@ func (r *IncidentRepository) List(ctx context.Context, page, pageSize int, plugi
 	}
 
 	offset := (page - 1) * pageSize
-	err := query.Preload("Plugin").Offset(offset).Limit(pageSize).Order(fmt.Sprintf("%s %s", sortField, order)).Find(&incidents).Error
+	err := q.Preload("Plugin").Offset(offset).Limit(pageSize).Order(fmt.Sprintf("%s %s", sortField, order)).Find(&incidents).Error
 	return incidents, total, err
 }
 
@@ -349,8 +355,8 @@ func (r *IncidentRepository) ListUnscanned(ctx context.Context, limit int) ([]mo
 
 // ListPendingTrigger 获取待手动触发的工单列表（Manual规则匹配但未创建流程实例）
 // 用于待办中心的"待触发工单"标签页
-// 支持搜索和过滤：search（模糊匹配 title, external_id, affected_ci）、severity、dateFrom、dateTo
-func (r *IncidentRepository) ListPendingTrigger(ctx context.Context, page, pageSize int, search, severity, dateFrom, dateTo string) ([]model.Incident, int64, error) {
+// 支持搜索和过滤：title（模糊匹配 title, external_id, affected_ci）、severity、dateFrom、dateTo
+func (r *IncidentRepository) ListPendingTrigger(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string) ([]model.Incident, int64, error) {
 	var incidents []model.Incident
 	var total int64
 
@@ -365,8 +371,8 @@ func (r *IncidentRepository) ListPendingTrigger(ctx context.Context, page, pageS
 		Where("healing_status NOT IN ?", []string{"skipped", "dismissed"})
 
 	// 模糊搜索：title, external_id, affected_ci
-	if search != "" {
-		searchPattern := "%" + search + "%"
+	if title != "" {
+		searchPattern := "%" + title + "%"
 		query = query.Where("(title ILIKE ? OR external_id ILIKE ? OR affected_ci ILIKE ?)", searchPattern, searchPattern, searchPattern)
 	}
 
@@ -400,7 +406,7 @@ func (r *IncidentRepository) ListPendingTrigger(ctx context.Context, page, pageS
 
 // ListDismissedTrigger 获取已忽略的手动触发工单列表
 // 用于待办中心的"已忽略"标签页
-func (r *IncidentRepository) ListDismissedTrigger(ctx context.Context, page, pageSize int, search, severity, dateFrom, dateTo string) ([]model.Incident, int64, error) {
+func (r *IncidentRepository) ListDismissedTrigger(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string) ([]model.Incident, int64, error) {
 	var incidents []model.Incident
 	var total int64
 
@@ -414,8 +420,8 @@ func (r *IncidentRepository) ListDismissedTrigger(ctx context.Context, page, pag
 		Where("healing_status = ?", "dismissed")
 
 	// 模糊搜索：title, external_id, affected_ci
-	if search != "" {
-		searchPattern := "%" + search + "%"
+	if title != "" {
+		searchPattern := "%" + title + "%"
 		query = query.Where("(title ILIKE ? OR external_id ILIKE ? OR affected_ci ILIKE ?)", searchPattern, searchPattern, searchPattern)
 	}
 

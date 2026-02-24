@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // CMDBService CMDB 服务
@@ -28,8 +30,8 @@ func (s *CMDBService) GetCMDBItem(ctx context.Context, id uuid.UUID) (*model.CMD
 }
 
 // ListCMDBItems 获取配置项列表
-func (s *CMDBService) ListCMDBItems(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool, sortBy, sortOrder string) ([]model.CMDBItem, int64, error) {
-	return s.cmdbRepo.List(ctx, page, pageSize, pluginID, itemType, status, environment, sourcePluginName, hasPlugin, sortBy, sortOrder)
+func (s *CMDBService) ListCMDBItems(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, scopes ...func(*gorm.DB) *gorm.DB) ([]model.CMDBItem, int64, error) {
+	return s.cmdbRepo.List(ctx, page, pageSize, pluginID, itemType, status, environment, sourcePluginName, search, hasPlugin, sortBy, sortOrder, scopes...)
 }
 
 // ListCMDBItemIDs 获取符合筛选条件的配置项 ID 列表（轻量接口）

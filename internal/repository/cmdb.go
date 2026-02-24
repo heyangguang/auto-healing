@@ -8,6 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -99,14 +100,17 @@ var cmdbAllowedSortFields = map[string]bool{
 }
 
 // List 获取配置项列表（支持过滤和排序）
-func (r *CMDBItemRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool, sortBy, sortOrder string) ([]model.CMDBItem, int64, error) {
+func (r *CMDBItemRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, scopes ...func(*gorm.DB) *gorm.DB) ([]model.CMDBItem, int64, error) {
 	var items []model.CMDBItem
 	var total int64
 
-	query := TenantDB(r.db, ctx).Model(&model.CMDBItem{})
-	query = applyCMDBFilters(query, pluginID, itemType, status, environment, sourcePluginName, hasPlugin)
+	q := TenantDB(r.db, ctx).Model(&model.CMDBItem{})
+	q = applyCMDBFilters(q, pluginID, itemType, status, environment, sourcePluginName, search, hasPlugin)
+	for _, scope := range scopes {
+		q = scope(q)
+	}
 
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -121,7 +125,7 @@ func (r *CMDBItemRepository) List(ctx context.Context, page, pageSize int, plugi
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Order(fmt.Sprintf("%s %s", orderField, orderDir)).Offset(offset).Limit(pageSize).Find(&items).Error; err != nil {
+	if err := q.Order(fmt.Sprintf("%s %s", orderField, orderDir)).Offset(offset).Limit(pageSize).Find(&items).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -142,14 +146,14 @@ func (r *CMDBItemRepository) ListIDs(ctx context.Context, pluginID *uuid.UUID, i
 	var items []CMDBItemBasic
 	var total int64
 
-	query := TenantDB(r.db, ctx).Model(&model.CMDBItem{})
-	query = applyCMDBFilters(query, pluginID, itemType, status, environment, sourcePluginName, hasPlugin)
+	q := TenantDB(r.db, ctx).Model(&model.CMDBItem{})
+	q = applyCMDBFilters(q, pluginID, itemType, status, environment, sourcePluginName, query.StringFilter{}, hasPlugin)
 
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	if err := query.Select("id, name, hostname, ip_address, status").Order("updated_at DESC").Find(&items).Error; err != nil {
+	if err := q.Select("id, name, hostname, ip_address, status").Order("updated_at DESC").Find(&items).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -157,30 +161,33 @@ func (r *CMDBItemRepository) ListIDs(ctx context.Context, pluginID *uuid.UUID, i
 }
 
 // applyCMDBFilters 通用 CMDB 筛选条件（List 和 ListIDs 共用）
-func applyCMDBFilters(query *gorm.DB, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool) *gorm.DB {
+func applyCMDBFilters(q *gorm.DB, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, search query.StringFilter, hasPlugin *bool) *gorm.DB {
 	if pluginID != nil {
-		query = query.Where("plugin_id = ?", *pluginID)
+		q = q.Where("plugin_id = ?", *pluginID)
 	}
 	if hasPlugin != nil {
 		if *hasPlugin {
-			query = query.Where("plugin_id IS NOT NULL")
+			q = q.Where("plugin_id IS NOT NULL")
 		} else {
-			query = query.Where("plugin_id IS NULL")
+			q = q.Where("plugin_id IS NULL")
 		}
 	}
 	if itemType != "" {
-		query = query.Where("type = ?", itemType)
+		q = q.Where("type = ?", itemType)
 	}
 	if status != "" {
-		query = query.Where("status = ?", status)
+		q = q.Where("status = ?", status)
 	}
 	if environment != "" {
-		query = query.Where("environment = ?", environment)
+		q = q.Where("environment = ?", environment)
 	}
 	if sourcePluginName != "" {
-		query = query.Where("LOWER(source_plugin_name) LIKE LOWER(?)", "%"+sourcePluginName+"%")
+		q = q.Where("LOWER(source_plugin_name) LIKE LOWER(?)", "%"+sourcePluginName+"%")
 	}
-	return query
+	if !search.IsEmpty() {
+		q = query.ApplyMultiStringFilter(q, []string{"name", "hostname", "ip_address"}, search)
+	}
+	return q
 }
 
 // GetStats 获取统计信息

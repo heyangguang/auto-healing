@@ -7,6 +7,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -63,48 +64,47 @@ func (r *HealingFlowRepository) Delete(ctx context.Context, id uuid.UUID) error 
 
 // List 获取自愈流程列表
 // 支持排序（name/created_at/updated_at/nodes_count）、高级过滤（name精确/description模糊/node_type/nodes数量/时间范围）
-func (r *HealingFlowRepository) List(ctx context.Context, page, pageSize int, isActive *bool, search, name, description, nodeType string, minNodes, maxNodes *int, createdFrom, createdTo, updatedFrom, updatedTo, sortBy, sortOrder string) ([]model.HealingFlow, int64, error) {
+func (r *HealingFlowRepository) List(ctx context.Context, page, pageSize int, isActive *bool, search query.StringFilter, name, description query.StringFilter, nodeType string, minNodes, maxNodes *int, createdFrom, createdTo, updatedFrom, updatedTo, sortBy, sortOrder string) ([]model.HealingFlow, int64, error) {
 	var flows []model.HealingFlow
 	var total int64
 
-	query := TenantDB(r.db, ctx).Model(&model.HealingFlow{})
+	q := TenantDB(r.db, ctx).Model(&model.HealingFlow{})
 
 	if isActive != nil {
-		query = query.Where("is_active = ?", *isActive)
+		q = q.Where("is_active = ?", *isActive)
 	}
-	if search != "" {
-		pattern := "%" + search + "%"
-		query = query.Where("(name ILIKE ? OR description ILIKE ?)", pattern, pattern)
+	if !search.IsEmpty() {
+		q = query.ApplyMultiStringFilter(q, []string{"name", "description"}, search)
 	}
-	if name != "" {
-		query = query.Where("name ILIKE ?", "%"+name+"%")
+	if !name.IsEmpty() {
+		q = query.ApplyStringFilter(q, "name", name)
 	}
-	if description != "" {
-		query = query.Where("description ILIKE ?", "%"+description+"%")
+	if !description.IsEmpty() {
+		q = query.ApplyStringFilter(q, "description", description)
 	}
 	if nodeType != "" {
-		query = query.Where("nodes @> ?", `[{"type": "`+nodeType+`"}]`)
+		q = q.Where("nodes @> ?", `[{"type": "`+nodeType+`"}]`)
 	}
 	if minNodes != nil {
-		query = query.Where("jsonb_array_length(nodes) >= ?", *minNodes)
+		q = q.Where("jsonb_array_length(nodes) >= ?", *minNodes)
 	}
 	if maxNodes != nil {
-		query = query.Where("jsonb_array_length(nodes) <= ?", *maxNodes)
+		q = q.Where("jsonb_array_length(nodes) <= ?", *maxNodes)
 	}
 	if createdFrom != "" {
-		query = query.Where("created_at >= ?", createdFrom)
+		q = q.Where("created_at >= ?", createdFrom)
 	}
 	if createdTo != "" {
-		query = query.Where("created_at <= ?", createdTo)
+		q = q.Where("created_at <= ?", createdTo)
 	}
 	if updatedFrom != "" {
-		query = query.Where("updated_at >= ?", updatedFrom)
+		q = q.Where("updated_at >= ?", updatedFrom)
 	}
 	if updatedTo != "" {
-		query = query.Where("updated_at <= ?", updatedTo)
+		q = q.Where("updated_at <= ?", updatedTo)
 	}
 
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -129,7 +129,7 @@ func (r *HealingFlowRepository) List(ctx context.Context, page, pageSize int, is
 	}
 
 	offset := (page - 1) * pageSize
-	err := query.Preload("Creator").Offset(offset).Limit(pageSize).Order(orderClause).Find(&flows).Error
+	err := q.Preload("Creator").Offset(offset).Limit(pageSize).Order(orderClause).Find(&flows).Error
 	return flows, total, err
 }
 
@@ -297,46 +297,48 @@ func (r *HealingRuleRepository) Delete(ctx context.Context, id uuid.UUID, force 
 
 // List 获取自愈规则列表
 // 支持 triggerMode, priority, matchMode, hasFlow, createdFrom/To 过滤、sortBy/sortOrder 排序（含 conditions_count）
-func (r *HealingRuleRepository) List(ctx context.Context, page, pageSize int, isActive *bool, flowID *uuid.UUID, search, triggerMode, sortBy, sortOrder string, priority *int, matchMode string, hasFlow *bool, createdFrom, createdTo string) ([]model.HealingRule, int64, error) {
+func (r *HealingRuleRepository) List(ctx context.Context, page, pageSize int, isActive *bool, flowID *uuid.UUID, search query.StringFilter, triggerMode, sortBy, sortOrder string, priority *int, matchMode string, hasFlow *bool, createdFrom, createdTo string, scopes ...func(*gorm.DB) *gorm.DB) ([]model.HealingRule, int64, error) {
 	var rules []model.HealingRule
 	var total int64
 
-	query := TenantDB(r.db, ctx).Model(&model.HealingRule{})
+	q := TenantDB(r.db, ctx).Model(&model.HealingRule{})
 
 	if isActive != nil {
-		query = query.Where("is_active = ?", *isActive)
+		q = q.Where("is_active = ?", *isActive)
 	}
 	if flowID != nil {
-		query = query.Where("flow_id = ?", *flowID)
+		q = q.Where("flow_id = ?", *flowID)
 	}
-	if search != "" {
-		pattern := "%" + search + "%"
-		query = query.Where("(name ILIKE ? OR description ILIKE ?)", pattern, pattern)
+	if !search.IsEmpty() {
+		q = query.ApplyMultiStringFilter(q, []string{"name", "description"}, search)
+	}
+	for _, scope := range scopes {
+		q = scope(q)
 	}
 	if triggerMode != "" {
-		query = query.Where("trigger_mode = ?", triggerMode)
+		q = q.Where("trigger_mode = ?", triggerMode)
 	}
 	if priority != nil {
-		query = query.Where("priority = ?", *priority)
+		q = q.Where("priority = ?", *priority)
 	}
 	if matchMode != "" {
-		query = query.Where("match_mode = ?", matchMode)
+		q = q.Where("match_mode = ?", matchMode)
 	}
 	if hasFlow != nil {
 		if *hasFlow {
-			query = query.Where("flow_id IS NOT NULL")
+			q = q.Where("flow_id IS NOT NULL")
 		} else {
-			query = query.Where("flow_id IS NULL")
+			q = q.Where("flow_id IS NULL")
 		}
 	}
 	if createdFrom != "" {
-		query = query.Where("created_at >= ?", createdFrom)
+		q = q.Where("created_at >= ?", createdFrom)
 	}
 	if createdTo != "" {
-		query = query.Where("created_at <= ?", createdTo)
+		q = q.Where("created_at <= ?", createdTo)
 	}
 
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -363,7 +365,7 @@ func (r *HealingRuleRepository) List(ctx context.Context, page, pageSize int, is
 	}
 
 	offset := (page - 1) * pageSize
-	err := query.Preload("Flow").Preload("Creator").Offset(offset).Limit(pageSize).Order(orderClause).Find(&rules).Error
+	err := q.Preload("Flow").Preload("Creator").Offset(offset).Limit(pageSize).Order(orderClause).Find(&rules).Error
 	return rules, total, err
 }
 
@@ -581,24 +583,24 @@ type FlowInstanceListOptions struct {
 	PageSize int
 
 	// 搜索
-	Search string // 全文模糊搜索（流程名/规则名/工单标题/实例ID）
+	Search query.StringFilter // 全文模糊/精确搜索（流程名/规则名/工单标题/实例ID）
 
 	// 排序
 	SortBy    string // created_at, started_at, completed_at, status, flow_name, rule_name
 	SortOrder string // asc / desc
 
 	// 精确/模糊过滤
-	Status         string     // 状态精确匹配
-	FlowID         *uuid.UUID // 流程 ID 精确
-	FlowName       string     // 流程名称模糊
-	RuleID         *uuid.UUID // 规则 ID 精确
-	RuleName       string     // 规则名称模糊
-	IncidentID     *uuid.UUID // 工单 ID 精确
-	IncidentTitle  string     // 工单标题模糊
-	CurrentNodeID  string     // 当前节点 ID
-	ErrorMessage   string     // 错误信息模糊
-	HasError       *bool      // 是否有错误
-	ApprovalStatus string     // 包含对应审批结果的节点（approved 或 rejected）
+	Status         string             // 状态精确匹配
+	FlowID         *uuid.UUID         // 流程 ID 精确
+	FlowName       query.StringFilter // 流程名称
+	RuleID         *uuid.UUID         // 规则 ID 精确
+	RuleName       query.StringFilter // 规则名称
+	IncidentID     *uuid.UUID         // 工单 ID 精确
+	IncidentTitle  query.StringFilter // 工单标题
+	CurrentNodeID  string             // 当前节点 ID
+	ErrorMessage   query.StringFilter // 错误信息
+	HasError       *bool              // 是否有错误
+	ApprovalStatus string             // 包含对应审批结果的节点（approved 或 rejected）
 
 	// 时间范围
 	CreatedFrom   *time.Time
@@ -746,21 +748,21 @@ func (r *FlowInstanceRepository) ListSummaryWithOptions(ctx context.Context, opt
 		if opts.IncidentID != nil {
 			q = q.Where("flow_instances.incident_id = ?", *opts.IncidentID)
 		}
-		// 模糊搜索
-		if opts.FlowName != "" {
-			q = q.Where("COALESCE(flow_instances.flow_name, healing_flows.name, '') ILIKE ?", "%"+opts.FlowName+"%")
+		// 模糊/精确搜索
+		if !opts.FlowName.IsEmpty() {
+			q = query.ApplyStringFilter(q, "COALESCE(flow_instances.flow_name, healing_flows.name, '')", opts.FlowName)
 		}
-		if opts.RuleName != "" {
-			q = q.Where("healing_rules.name ILIKE ?", "%"+opts.RuleName+"%")
+		if !opts.RuleName.IsEmpty() {
+			q = query.ApplyStringFilter(q, "healing_rules.name", opts.RuleName)
 		}
-		if opts.IncidentTitle != "" {
-			q = q.Where("incidents.title ILIKE ?", "%"+opts.IncidentTitle+"%")
+		if !opts.IncidentTitle.IsEmpty() {
+			q = query.ApplyStringFilter(q, "incidents.title", opts.IncidentTitle)
 		}
 		if opts.CurrentNodeID != "" {
 			q = q.Where("flow_instances.current_node_id = ?", opts.CurrentNodeID)
 		}
-		if opts.ErrorMessage != "" {
-			q = q.Where("flow_instances.error_message ILIKE ?", "%"+opts.ErrorMessage+"%")
+		if !opts.ErrorMessage.IsEmpty() {
+			q = query.ApplyStringFilter(q, "flow_instances.error_message", opts.ErrorMessage)
 		}
 		if opts.HasError != nil {
 			if *opts.HasError {
@@ -777,10 +779,8 @@ func (r *FlowInstanceRepository) ListSummaryWithOptions(ctx context.Context, opt
 			}
 		}
 		// 全文搜索
-		if opts.Search != "" {
-			pattern := "%" + opts.Search + "%"
-			q = q.Where("(flow_instances.id::text ILIKE ? OR COALESCE(flow_instances.flow_name, healing_flows.name, '') ILIKE ? OR healing_rules.name ILIKE ? OR incidents.title ILIKE ?)",
-				pattern, pattern, pattern, pattern)
+		if !opts.Search.IsEmpty() {
+			q = query.ApplyMultiStringFilter(q, []string{"flow_instances.id::text", "COALESCE(flow_instances.flow_name, healing_flows.name, '')", "healing_rules.name", "incidents.title"}, opts.Search)
 		}
 		// 时间范围
 		if opts.CreatedFrom != nil {
@@ -809,7 +809,7 @@ func (r *FlowInstanceRepository) ListSummaryWithOptions(ctx context.Context, opt
 	tenantID := TenantIDFromContext(ctx)
 	countQuery := r.db.WithContext(ctx).Where("flow_instances.tenant_id = ?", tenantID).Model(&model.FlowInstance{})
 	// count 查询在存在 name 模糊搜索或全文搜索时才需要 join
-	needJoins := opts.FlowName != "" || opts.RuleName != "" || opts.IncidentTitle != "" || opts.Search != ""
+	needJoins := !opts.FlowName.IsEmpty() || !opts.RuleName.IsEmpty() || !opts.IncidentTitle.IsEmpty() || !opts.Search.IsEmpty()
 	countQuery = applyFilters(countQuery, needJoins)
 
 	// 数量范围需要子查询过滤
@@ -1018,16 +1018,16 @@ func (r *ApprovalTaskRepository) ExpireTimedOut(ctx context.Context) (int64, err
 }
 
 // ListPending 获取待审批列表
-// 支持搜索和过滤：search（模糊匹配 node_id, flow_instance_id）、dateFrom、dateTo
-func (r *ApprovalTaskRepository) ListPending(ctx context.Context, page, pageSize int, search, dateFrom, dateTo string) ([]model.ApprovalTask, int64, error) {
+// 支持搜索和过滤：nodeName（模糊匹配 node_id, flow_instance_id）、dateFrom、dateTo
+func (r *ApprovalTaskRepository) ListPending(ctx context.Context, page, pageSize int, nodeName, dateFrom, dateTo string) ([]model.ApprovalTask, int64, error) {
 	var tasks []model.ApprovalTask
 	var total int64
 
 	query := TenantDB(r.db, ctx).Model(&model.ApprovalTask{}).Where("status = ?", model.ApprovalTaskStatusPending)
 
 	// 模糊搜索：node_id 或 flow_instance_id
-	if search != "" {
-		searchPattern := "%" + search + "%"
+	if nodeName != "" {
+		searchPattern := "%" + nodeName + "%"
 		query = query.Where("(node_id ILIKE ? OR flow_instance_id::text ILIKE ?)", searchPattern, searchPattern)
 	}
 

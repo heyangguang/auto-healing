@@ -27,6 +27,45 @@ func NewExecutionHandler() *ExecutionHandler {
 	}
 }
 
+// ==================== Search Schema 声明 ====================
+
+var taskSearchSchema = []SearchableField{
+	{Key: "name", Label: "模板名称", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "输入模板名称", Column: "name"},
+	{Key: "description", Label: "任务描述", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "输入任务描述", Column: "description"},
+	{Key: "executor_type", Label: "执行器类型", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
+		{Label: "Ansible", Value: "ansible"}, {Label: "Shell", Value: "shell"},
+	}},
+	{Key: "status", Label: "模板状态", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
+		{Label: "就绪", Value: "ready"}, {Label: "草稿", Value: "draft"},
+		{Label: "待审核", Value: "pending_review"}, {Label: "已下线", Value: "offline"},
+	}},
+	{Key: "needs_review", Label: "需要审核", Type: "boolean", MatchModes: []string{"exact"}, DefaultMode: "exact"},
+	{Key: "has_runs", Label: "有执行记录", Type: "boolean", MatchModes: []string{"exact"}, DefaultMode: "exact"},
+}
+
+var runSearchSchema = []SearchableField{
+	{Key: "run_id", Label: "执行记录 ID", Type: "text", MatchModes: []string{"exact"}, DefaultMode: "exact", Placeholder: "输入完整 UUID 或前 8 位短 ID"},
+	{Key: "task_name", Label: "任务名称", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "输入任务名称"},
+	{Key: "status", Label: "执行状态", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
+		{Label: "运行中", Value: "running"}, {Label: "成功", Value: "success"},
+		{Label: "失败", Value: "failed"}, {Label: "已取消", Value: "cancelled"},
+	}},
+	{Key: "triggered_by", Label: "触发方式", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
+		{Label: "手动", Value: "manual"}, {Label: "定时", Value: "schedule"},
+		{Label: "自愈", Value: "healing"}, {Label: "API", Value: "api"},
+	}},
+}
+
+// GetTaskSearchSchema 返回任务模板搜索 schema
+func (h *ExecutionHandler) GetTaskSearchSchema(c *gin.Context) {
+	response.Success(c, gin.H{"fields": taskSearchSchema})
+}
+
+// GetRunSearchSchema 返回执行记录搜索 schema
+func (h *ExecutionHandler) GetRunSearchSchema(c *gin.Context) {
+	response.Success(c, gin.H{"fields": runSearchSchema})
+}
+
 // ==================== 任务模板接口 ====================
 
 // CreateTask 创建任务模板
@@ -52,7 +91,8 @@ func (h *ExecutionHandler) ListTasks(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
 	opts := &repository.TaskListOptions{
-		Search:         c.Query("search"),
+		Name:           GetStringFilter(c, "name"),
+		Description:    GetStringFilter(c, "description"),
 		ExecutorType:   c.Query("executor_type"),
 		Status:         c.Query("status"),
 		TargetHosts:    c.Query("target_hosts"),
@@ -249,7 +289,8 @@ func (h *ExecutionHandler) ListAllRuns(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
 	opts := &repository.RunListOptions{
-		Search:      c.Query("search"),
+		RunID:       c.Query("run_id"),
+		TaskName:    GetStringFilter(c, "task_name"),
 		Status:      c.Query("status"),
 		TriggeredBy: c.Query("triggered_by"),
 		Page:        page,

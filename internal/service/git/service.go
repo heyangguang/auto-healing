@@ -441,63 +441,6 @@ func (s *Service) GetSyncLogs(ctx context.Context, id uuid.UUID, page, pageSize 
 	return s.repo.ListSyncLogs(ctx, id, page, pageSize)
 }
 
-// DetectBranches 检测远程分支
-func (s *Service) DetectBranches(ctx context.Context, id uuid.UUID) ([]string, error) {
-	repo, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	client := gitclient.NewClient(repo, s.reposDir)
-
-	// 需要先有本地仓库
-	if !client.Exists() {
-		return nil, fmt.Errorf("请先同步仓库")
-	}
-
-	branches, err := client.ListBranches(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// 保存分支列表
-	s.repo.UpdateBranches(ctx, id, branches)
-
-	return branches, nil
-}
-
-// GetBranches 获取分支列表（优先缓存，缓存为空时实时获取）
-func (s *Service) GetBranches(ctx context.Context, id uuid.UUID) ([]string, error) {
-	repo, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	// 1. 优先从缓存读取
-	var branches []string
-	if repo.Branches != nil {
-		for _, b := range repo.Branches {
-			if str, ok := b.(string); ok {
-				branches = append(branches, str)
-			}
-		}
-	}
-
-	// 2. 缓存为空时，实时从本地仓库获取并更新缓存
-	if len(branches) == 0 && repo.Status == "ready" {
-		client := gitclient.NewClient(repo, s.reposDir)
-		if client.Exists() {
-			if liveBranches, err := client.ListBranches(ctx); err == nil && len(liveBranches) > 0 {
-				branches = liveBranches
-				// 异步更新缓存
-				go s.repo.UpdateBranches(context.Background(), id, liveBranches)
-			}
-		}
-	}
-
-	return branches, nil
-}
-
 // FileInfo 文件信息
 type FileInfo struct {
 	Name     string     `json:"name"`

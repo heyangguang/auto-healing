@@ -6,6 +6,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -17,12 +18,11 @@ type ScheduleRepository struct{}
 type ScheduleListOptions struct {
 	TaskID           *uuid.UUID
 	Enabled          *bool
-	Search           string  // 模糊搜索（匹配 name 或 description）
-	Name             string  // 名称精确模糊匹配（仅 name）
-	ScheduleType     *string // 调度类型：cron/once
-	Status           *string // 状态筛选
-	SkipNotification *bool   // 是否跳过通知
-	HasOverrides     *bool   // 是否有执行覆盖参数
+	Name             query.StringFilter // 名称搜索（支持精确/模糊匹配）
+	ScheduleType     *string            // 调度类型：cron/once
+	Status           *string            // 状态筛选
+	SkipNotification *bool              // 是否跳过通知
+	HasOverrides     *bool              // 是否有执行覆盖参数
 	// 时间范围
 	CreatedFrom *time.Time // 创建时间范围起始
 	CreatedTo   *time.Time // 创建时间范围结束
@@ -67,62 +67,60 @@ func (r *ScheduleRepository) List(ctx context.Context, opts *ScheduleListOptions
 	var schedules []model.ExecutionSchedule
 	var total int64
 
-	query := TenantDB(database.DB, ctx).Model(&model.ExecutionSchedule{})
+	q := TenantDB(database.DB, ctx).Model(&model.ExecutionSchedule{})
 
 	// 任务 ID 筛选
 	if opts.TaskID != nil {
-		query = query.Where("task_id = ?", *opts.TaskID)
+		q = q.Where("task_id = ?", *opts.TaskID)
 	}
 
 	// 启用状态筛选
 	if opts.Enabled != nil {
-		query = query.Where("enabled = ?", *opts.Enabled)
+		q = q.Where("enabled = ?", *opts.Enabled)
 	}
 
-	// 模糊搜索（匹配 name 或 description）
-	if opts.Search != "" {
-		searchPattern := "%" + opts.Search + "%"
-		query = query.Where("name ILIKE ? OR description ILIKE ?", searchPattern, searchPattern)
-	}
-
-	// 名称精确模糊匹配（仅 name）
-	if opts.Name != "" {
-		query = query.Where("name ILIKE ?", "%"+opts.Name+"%")
+	// 名称搜索（支持精确/模糊匹配）
+	if !opts.Name.IsEmpty() {
+		if opts.Name.Exact {
+			q = q.Where("name = ?", opts.Name.Value)
+		} else {
+			q = q.Where("name ILIKE ?", "%"+opts.Name.Value+"%")
+		}
 	}
 
 	// 调度类型筛选
 	if opts.ScheduleType != nil {
-		query = query.Where("schedule_type = ?", *opts.ScheduleType)
+		q = q.Where("schedule_type = ?", *opts.ScheduleType)
 	}
 
 	// 状态筛选
 	if opts.Status != nil {
-		query = query.Where("status = ?", *opts.Status)
+		q = q.Where("status = ?", *opts.Status)
 	}
 
 	// 跳过通知筛选
 	if opts.SkipNotification != nil {
-		query = query.Where("skip_notification = ?", *opts.SkipNotification)
+		q = q.Where("skip_notification = ?", *opts.SkipNotification)
 	}
 
 	// 是否有执行覆盖参数
 	if opts.HasOverrides != nil {
 		if *opts.HasOverrides {
-			query = query.Where("(target_hosts_override != '' AND target_hosts_override IS NOT NULL) OR (extra_vars_override IS NOT NULL AND extra_vars_override != '{}' AND extra_vars_override != 'null') OR (secrets_source_ids IS NOT NULL AND secrets_source_ids != '[]' AND secrets_source_ids != 'null')")
+			q = q.Where("(target_hosts_override != '' AND target_hosts_override IS NOT NULL) OR (extra_vars_override IS NOT NULL AND extra_vars_override != '{}' AND extra_vars_override != 'null') OR (secrets_source_ids IS NOT NULL AND secrets_source_ids != '[]' AND secrets_source_ids != 'null')")
 		} else {
-			query = query.Where("(target_hosts_override = '' OR target_hosts_override IS NULL) AND (extra_vars_override IS NULL OR extra_vars_override = '{}' OR extra_vars_override = 'null') AND (secrets_source_ids IS NULL OR secrets_source_ids = '[]' OR secrets_source_ids = 'null')")
+			q = q.Where("(target_hosts_override = '' OR target_hosts_override IS NULL) AND (extra_vars_override IS NULL OR extra_vars_override = '{}' OR extra_vars_override = 'null') AND (secrets_source_ids IS NULL OR secrets_source_ids = '[]' OR secrets_source_ids = 'null')")
 		}
 	}
 
 	// 创建时间范围过滤
 	if opts.CreatedFrom != nil {
-		query = query.Where("created_at >= ?", *opts.CreatedFrom)
+		q = q.Where("created_at >= ?", *opts.CreatedFrom)
 	}
 	if opts.CreatedTo != nil {
-		query = query.Where("created_at <= ?", *opts.CreatedTo)
+		q = q.Where("created_at <= ?", *opts.CreatedTo)
 	}
 
-	query.Session(&gorm.Session{}).Count(&total)
+	q.Session(&gorm.Session{}).Count(&total)
 
 	// 排序
 	orderClause := "created_at DESC" // 默认排序
@@ -144,7 +142,7 @@ func (r *ScheduleRepository) List(ctx context.Context, opts *ScheduleListOptions
 	}
 
 	offset := (opts.Page - 1) * opts.PageSize
-	err := query.
+	err := q.
 		Preload("Task").
 		Order(orderClause).
 		Offset(offset).

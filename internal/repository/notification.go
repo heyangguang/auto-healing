@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -49,25 +50,29 @@ func (r *NotificationRepository) GetChannelByName(ctx context.Context, name stri
 }
 
 // ListChannels 获取渠道列表
-func (r *NotificationRepository) ListChannels(ctx context.Context, page, pageSize int, channelType string, search string) ([]model.NotificationChannel, int64, error) {
+func (r *NotificationRepository) ListChannels(ctx context.Context, page, pageSize int, channelType string, name query.StringFilter) ([]model.NotificationChannel, int64, error) {
 	var channels []model.NotificationChannel
 	var total int64
 
-	query := TenantDB(r.db, ctx).Model(&model.NotificationChannel{})
+	q := TenantDB(r.db, ctx).Model(&model.NotificationChannel{})
 	if channelType != "" {
-		query = query.Where("type = ?", channelType)
+		q = q.Where("type = ?", channelType)
 	}
-	if search != "" {
-		pattern := "%" + search + "%"
-		query = query.Where("(name ILIKE ? OR description ILIKE ?)", pattern, pattern)
+	if !name.IsEmpty() {
+		if name.Exact {
+			q = q.Where("name = ?", name.Value)
+		} else {
+			pattern := "%" + name.Value + "%"
+			q = q.Where("(name ILIKE ? OR description ILIKE ?)", pattern, pattern)
+		}
 	}
 
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&channels).Error; err != nil {
+	if err := q.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&channels).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -165,13 +170,13 @@ func (r *NotificationRepository) GetTemplatesByIDs(ctx context.Context, ids []uu
 type TemplateListOptions struct {
 	Page             int
 	PageSize         int
-	Search           string // 模糊搜索模板名称
-	EventType        string // 事件类型筛选
-	IsActive         *bool  // 按启用状态筛选
-	Format           string // 按格式筛选
-	SupportedChannel string // 按支持渠道筛选
-	SortBy           string // 排序字段
-	SortOrder        string // 排序方向
+	Name             query.StringFilter // 模糊搜索模板名称
+	EventType        string             // 事件类型筛选
+	IsActive         *bool              // 按启用状态筛选
+	Format           string             // 按格式筛选
+	SupportedChannel string             // 按支持渠道筛选
+	SortBy           string             // 排序字段
+	SortOrder        string             // 排序方向
 }
 
 // ListTemplates 获取模板列表
@@ -179,34 +184,34 @@ func (r *NotificationRepository) ListTemplates(ctx context.Context, opts *Templa
 	var templates []model.NotificationTemplate
 	var total int64
 
-	query := TenantDB(r.db, ctx).Model(&model.NotificationTemplate{})
+	q := TenantDB(r.db, ctx).Model(&model.NotificationTemplate{})
 
-	// 模糊搜索模板名称
-	if opts.Search != "" {
-		query = query.Where("name ILIKE ?", "%"+opts.Search+"%")
+	// 搜索模板名称（支持精确/模糊匹配）
+	if !opts.Name.IsEmpty() {
+		q = query.ApplyStringFilter(q, "name", opts.Name)
 	}
 
 	// 事件类型筛选
 	if opts.EventType != "" {
-		query = query.Where("event_type = ?", opts.EventType)
+		q = q.Where("event_type = ?", opts.EventType)
 	}
 
 	// 按启用状态筛选
 	if opts.IsActive != nil {
-		query = query.Where("is_active = ?", *opts.IsActive)
+		q = q.Where("is_active = ?", *opts.IsActive)
 	}
 
 	// 按格式筛选
 	if opts.Format != "" {
-		query = query.Where("format = ?", opts.Format)
+		q = q.Where("format = ?", opts.Format)
 	}
 
 	// 按支持渠道筛选
 	if opts.SupportedChannel != "" {
-		query = query.Where("supported_channels @> ?", `["`+opts.SupportedChannel+`"]`)
+		q = q.Where("supported_channels @> ?", `["`+opts.SupportedChannel+`"]`)
 	}
 
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -227,7 +232,7 @@ func (r *NotificationRepository) ListTemplates(ctx context.Context, opts *Templa
 	}
 
 	offset := (opts.Page - 1) * opts.PageSize
-	if err := query.Offset(offset).Limit(opts.PageSize).Order(orderClause).Find(&templates).Error; err != nil {
+	if err := q.Offset(offset).Limit(opts.PageSize).Order(orderClause).Find(&templates).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -268,18 +273,18 @@ func (r *NotificationRepository) GetLogByID(ctx context.Context, id uuid.UUID) (
 type NotificationLogListOptions struct {
 	Page           int
 	PageSize       int
-	Status         string     // 状态筛选
-	ChannelID      *uuid.UUID // 渠道 ID
-	TemplateID     *uuid.UUID // 模板 ID
-	TaskID         *uuid.UUID // 任务模板 ID
-	TaskName       string     // 任务模板名称（模糊搜索）
-	TriggeredBy    string     // 触发类型: manual, scheduler:cron, scheduler:once, healing
-	ExecutionRunID *uuid.UUID // 执行记录 ID
-	Search         string     // 模糊搜索主题
-	CreatedAfter   *time.Time // 创建时间起始
-	CreatedBefore  *time.Time // 创建时间结束
-	SortBy         string     // 排序字段
-	SortOrder      string     // 排序方向
+	Status         string             // 状态筛选
+	ChannelID      *uuid.UUID         // 渠道 ID
+	TemplateID     *uuid.UUID         // 模板 ID
+	TaskID         *uuid.UUID         // 任务模板 ID
+	TaskName       query.StringFilter // 任务模板名称（搜索）
+	TriggeredBy    string             // 触发类型: manual, scheduler:cron, scheduler:once, healing
+	ExecutionRunID *uuid.UUID         // 执行记录 ID
+	Subject        query.StringFilter // 搜索主题
+	CreatedAfter   *time.Time         // 创建时间起始
+	CreatedBefore  *time.Time         // 创建时间结束
+	SortBy         string             // 排序字段
+	SortOrder      string             // 排序方向
 }
 
 // ListLogs 获取日志列表
@@ -288,59 +293,67 @@ func (r *NotificationRepository) ListLogs(ctx context.Context, opts *Notificatio
 	var total int64
 
 	tenantID := TenantIDFromContext(ctx)
-	query := r.db.WithContext(ctx).Where("notification_logs.tenant_id = ?", tenantID).Model(&model.NotificationLog{})
+	q := r.db.WithContext(ctx).Where("notification_logs.tenant_id = ?", tenantID).Model(&model.NotificationLog{})
 
 	// 状态筛选
 	if opts.Status != "" {
-		query = query.Where("notification_logs.status = ?", opts.Status)
+		q = q.Where("notification_logs.status = ?", opts.Status)
 	}
 
 	// 渠道筛选
 	if opts.ChannelID != nil {
-		query = query.Where("notification_logs.channel_id = ?", *opts.ChannelID)
+		q = q.Where("notification_logs.channel_id = ?", *opts.ChannelID)
 	}
 
 	// 模板筛选
 	if opts.TemplateID != nil {
-		query = query.Where("notification_logs.template_id = ?", *opts.TemplateID)
+		q = q.Where("notification_logs.template_id = ?", *opts.TemplateID)
 	}
 
 	// 执行记录筛选
 	if opts.ExecutionRunID != nil {
-		query = query.Where("notification_logs.execution_run_id = ?", *opts.ExecutionRunID)
+		q = q.Where("notification_logs.execution_run_id = ?", *opts.ExecutionRunID)
 	}
 
-	// 主题模糊搜索
-	if opts.Search != "" {
-		query = query.Where("notification_logs.subject ILIKE ?", "%"+opts.Search+"%")
+	// 主题搜索（支持精确/模糊匹配）
+	if !opts.Subject.IsEmpty() {
+		if opts.Subject.Exact {
+			q = q.Where("notification_logs.subject = ?", opts.Subject.Value)
+		} else {
+			q = q.Where("notification_logs.subject ILIKE ?", "%"+opts.Subject.Value+"%")
+		}
 	}
 
 	// 时间范围筛选
 	if opts.CreatedAfter != nil {
-		query = query.Where("notification_logs.created_at >= ?", *opts.CreatedAfter)
+		q = q.Where("notification_logs.created_at >= ?", *opts.CreatedAfter)
 	}
 	if opts.CreatedBefore != nil {
-		query = query.Where("notification_logs.created_at <= ?", *opts.CreatedBefore)
+		q = q.Where("notification_logs.created_at <= ?", *opts.CreatedBefore)
 	}
 
 	// 任务模板 ID / 名称 / 触发类型筛选（需要 JOIN execution_runs 和 execution_tasks）
-	needJoin := opts.TaskID != nil || opts.TaskName != "" || opts.TriggeredBy != ""
+	needJoin := opts.TaskID != nil || !opts.TaskName.IsEmpty() || opts.TriggeredBy != ""
 	if needJoin {
-		query = query.Joins("LEFT JOIN execution_runs ON notification_logs.execution_run_id = execution_runs.id")
-		query = query.Joins("LEFT JOIN execution_tasks ON execution_runs.task_id = execution_tasks.id")
+		q = q.Joins("LEFT JOIN execution_runs ON notification_logs.execution_run_id = execution_runs.id")
+		q = q.Joins("LEFT JOIN execution_tasks ON execution_runs.task_id = execution_tasks.id")
 
 		if opts.TaskID != nil {
-			query = query.Where("execution_runs.task_id = ?", *opts.TaskID)
+			q = q.Where("execution_runs.task_id = ?", *opts.TaskID)
 		}
-		if opts.TaskName != "" {
-			query = query.Where("execution_tasks.name ILIKE ?", "%"+opts.TaskName+"%")
+		if !opts.TaskName.IsEmpty() {
+			if opts.TaskName.Exact {
+				q = q.Where("execution_tasks.name = ?", opts.TaskName.Value)
+			} else {
+				q = q.Where("execution_tasks.name ILIKE ?", "%"+opts.TaskName.Value+"%")
+			}
 		}
 		if opts.TriggeredBy != "" {
-			query = query.Where("execution_runs.triggered_by = ?", opts.TriggeredBy)
+			q = q.Where("execution_runs.triggered_by = ?", opts.TriggeredBy)
 		}
 	}
 
-	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -364,7 +377,7 @@ func (r *NotificationRepository) ListLogs(ctx context.Context, opts *Notificatio
 	}
 
 	offset := (opts.Page - 1) * opts.PageSize
-	if err := query.Select("notification_logs.*").Preload("Template").Preload("Channel").Preload("ExecutionRun.Task").Offset(offset).Limit(opts.PageSize).Order(orderClause).Find(&logs).Error; err != nil {
+	if err := q.Select("notification_logs.*").Preload("Template").Preload("Channel").Preload("ExecutionRun.Task").Offset(offset).Limit(opts.PageSize).Order(orderClause).Find(&logs).Error; err != nil {
 		return nil, 0, err
 	}
 

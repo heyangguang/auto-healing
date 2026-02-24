@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/service/plugin"
 	"github.com/company/auto-healing/internal/service/secrets"
@@ -26,6 +27,33 @@ func NewCMDBHandler() *CMDBHandler {
 	return &CMDBHandler{
 		cmdbSvc: plugin.NewCMDBService(),
 	}
+}
+
+// ==================== Search Schema 声明 ====================
+
+var cmdbSearchSchema = []SearchableField{
+	{Key: "name", Label: "名称", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "资产名称", Column: "name"},
+	{Key: "hostname", Label: "主机名", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "主机名", Column: "hostname"},
+	{Key: "ip_address", Label: "IP 地址", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "IP 地址", Column: "ip_address"},
+	{Key: "source_plugin_name", Label: "来源插件", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "插件名称", Column: "source_plugin_name"},
+	{Key: "type", Label: "类型", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
+		{Label: "服务器", Value: "server"}, {Label: "虚拟机", Value: "vm"},
+		{Label: "网络设备", Value: "network"}, {Label: "容器", Value: "container"},
+	}},
+	{Key: "status", Label: "状态", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
+		{Label: "在线", Value: "online"}, {Label: "离线", Value: "offline"},
+		{Label: "维护中", Value: "maintenance"},
+	}},
+	{Key: "environment", Label: "环境", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
+		{Label: "生产", Value: "production"}, {Label: "预发布", Value: "staging"},
+		{Label: "测试", Value: "testing"}, {Label: "开发", Value: "development"},
+	}},
+	{Key: "has_plugin", Label: "关联插件", Type: "boolean", MatchModes: []string{"exact"}, DefaultMode: "exact"},
+}
+
+// GetCMDBSearchSchema 返回 CMDB 搜索 schema
+func (h *CMDBHandler) GetCMDBSearchSchema(c *gin.Context) {
+	response.Success(c, gin.H{"fields": cmdbSearchSchema})
 }
 
 // ListCMDBItems 获取 CMDB 列表
@@ -47,7 +75,6 @@ func (h *CMDBHandler) ListCMDBItems(c *gin.Context) {
 	itemType := c.Query("type")
 	status := c.Query("status")
 	environment := c.Query("environment")
-	sourcePluginName := c.Query("source_plugin_name")
 
 	// 新增 plugin_id 筛选
 	var pluginID *uuid.UUID
@@ -68,8 +95,10 @@ func (h *CMDBHandler) ListCMDBItems(c *gin.Context) {
 	// 排序参数
 	sortBy := c.Query("sort_by")
 	sortOrder := c.Query("sort_order")
+	// source_plugin_name 的模糊/精确匹配由 BuildSchemaScopes 统一处理
+	scopes := BuildSchemaScopes(c, cmdbSearchSchema)
 
-	items, total, err := h.cmdbSvc.ListCMDBItems(c.Request.Context(), page, pageSize, pluginID, itemType, status, environment, sourcePluginName, hasPlugin, sortBy, sortOrder)
+	items, total, err := h.cmdbSvc.ListCMDBItems(c.Request.Context(), page, pageSize, pluginID, itemType, status, environment, "", query.StringFilter{}, hasPlugin, sortBy, sortOrder, scopes...)
 	if err != nil {
 		response.InternalError(c, "获取 CMDB 列表失败: "+err.Error())
 		return

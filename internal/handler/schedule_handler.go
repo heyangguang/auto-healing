@@ -47,8 +47,7 @@ func (h *ScheduleHandler) List(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
 	opts := &repository.ScheduleListOptions{
-		Search:    c.Query("search"),
-		Name:      c.Query("name"),
+		Name:      GetStringFilter(c, "name"),
 		SortBy:    c.Query("sort_by"),
 		SortOrder: c.Query("sort_order"),
 		Page:      page,

@@ -51,9 +51,8 @@ func (h *PlaybookHandler) List(c *gin.Context) {
 	opts := &repository.PlaybookListOptions{
 		Page:       page,
 		PageSize:   pageSize,
-		Search:     c.Query("search"),
-		Name:       c.Query("name"),
-		FilePath:   c.Query("file_path"),
+		Name:       GetStringFilter(c, "name"),
+		FilePath:   GetStringFilter(c, "file_path"),
 		Status:     c.Query("status"),
 		ConfigMode: c.Query("config_mode"),
 		SortField:  c.Query("sort_by"),

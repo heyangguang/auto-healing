@@ -8,6 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/repository"
 )
 
@@ -128,7 +129,7 @@ func (e *NodeExecutors) ExecuteCMDBValidator(ctx context.Context, instance *mode
 	var validHosts []string
 	for _, host := range hosts {
 		// 查询 CMDB (使用 hostname 作为搜索条件)
-		items, _, err := e.cmdbRepo.List(ctx, 1, 10, nil, "", "", "", host, nil, "", "")
+		items, _, err := e.cmdbRepo.List(ctx, 1, 10, nil, "", "", "", host, query.StringFilter{}, nil, "", "")
 		if err != nil {
 			continue
 		}

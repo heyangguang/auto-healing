@@ -9,6 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	healing "github.com/company/auto-healing/internal/service/healing"
@@ -245,14 +246,56 @@ func (h *HealingHandler) GetNodeSchema(c *gin.Context) {
 	response.Success(c, schema)
 }
 
+// ========== Search Schema 声明 ==========
+
+var flowSearchSchema = []SearchableField{
+	{Key: "name", Label: "名称", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "流程名称", Column: "name"},
+	{Key: "description", Label: "描述", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "流程描述", Column: "description"},
+	{Key: "is_active", Label: "状态", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{{Label: "已启用", Value: "true"}, {Label: "已停用", Value: "false"}}},
+}
+
+var ruleSearchSchema = []SearchableField{
+	{Key: "name", Label: "名称", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "规则名称", Column: "name"},
+	{Key: "description", Label: "描述", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "规则描述", Column: "description"},
+	{Key: "trigger_mode", Label: "触发模式", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{{Label: "自动", Value: "auto"}, {Label: "手动", Value: "manual"}}},
+	{Key: "is_active", Label: "状态", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{{Label: "已启用", Value: "true"}, {Label: "已停用", Value: "false"}}},
+	{Key: "has_flow", Label: "关联流程", Type: "boolean", MatchModes: []string{"exact"}, DefaultMode: "exact"},
+}
+
+var instanceSearchSchema = []SearchableField{
+	{Key: "status", Label: "状态", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
+		{Label: "运行中", Value: "running"}, {Label: "已完成", Value: "completed"},
+		{Label: "失败", Value: "failed"}, {Label: "等待审批", Value: "waiting_approval"},
+		{Label: "已取消", Value: "cancelled"}, {Label: "已跳过", Value: "skipped"},
+	}},
+	{Key: "flow_name", Label: "流程名称", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy"},
+	{Key: "rule_name", Label: "规则名称", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy"},
+	{Key: "incident_title", Label: "工单标题", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy"},
+	{Key: "error_message", Label: "错误信息", Type: "text", MatchModes: []string{"fuzzy"}, DefaultMode: "fuzzy"},
+}
+
+// GetFlowSearchSchema 返回自愈流程搜索字段声明
+func (h *HealingHandler) GetFlowSearchSchema(c *gin.Context) {
+	response.Success(c, gin.H{"fields": flowSearchSchema})
+}
+
+// GetRuleSearchSchema 返回自愈规则搜索字段声明
+func (h *HealingHandler) GetRuleSearchSchema(c *gin.Context) {
+	response.Success(c, gin.H{"fields": ruleSearchSchema})
+}
+
+// GetInstanceSearchSchema 返回流程实例搜索字段声明
+func (h *HealingHandler) GetInstanceSearchSchema(c *gin.Context) {
+	response.Success(c, gin.H{"fields": instanceSearchSchema})
+}
+
 // ListFlows 获取自愈流程列表
 // 支持 Query 参数：search, is_active, name, description, node_type, min_nodes, max_nodes, created_from, created_to, updated_from, updated_to, sort_by, sort_order
 func (h *HealingHandler) ListFlows(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
-	search := c.Query("search")
-	name := c.Query("name")
-	description := c.Query("description")
+	name := GetStringFilter(c, "name")
+	description := GetStringFilter(c, "description")
 	nodeType := c.Query("node_type")
 	createdFrom := c.Query("created_from")
 	createdTo := c.Query("created_to")
@@ -281,7 +324,7 @@ func (h *HealingHandler) ListFlows(c *gin.Context) {
 		}
 	}
 
-	flows, total, err := h.flowRepo.List(c.Request.Context(), page, pageSize, isActive, search, name, description, nodeType, minNodes, maxNodes, createdFrom, createdTo, updatedFrom, updatedTo, sortBy, sortOrder)
+	flows, total, err := h.flowRepo.List(c.Request.Context(), page, pageSize, isActive, query.StringFilter{}, name, description, nodeType, minNodes, maxNodes, createdFrom, createdTo, updatedFrom, updatedTo, sortBy, sortOrder)
 	if err != nil {
 		response.InternalError(c, "获取自愈流程列表失败")
 		return
@@ -610,7 +653,6 @@ func (h *HealingHandler) DryRunFlowStream(c *gin.Context) {
 func (h *HealingHandler) ListRules(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
-	search := c.Query("search")
 	triggerMode := c.Query("trigger_mode")
 	matchMode := c.Query("match_mode")
 	sortBy := c.Query("sort_by")
@@ -644,7 +686,9 @@ func (h *HealingHandler) ListRules(c *gin.Context) {
 		hasFlow = &val
 	}
 
-	rules, total, err := h.ruleRepo.List(c.Request.Context(), page, pageSize, isActive, flowID, search, triggerMode, sortBy, sortOrder, priority, matchMode, hasFlow, createdFrom, createdTo)
+	scopes := BuildSchemaScopes(c, ruleSearchSchema)
+
+	rules, total, err := h.ruleRepo.List(c.Request.Context(), page, pageSize, isActive, flowID, query.StringFilter{}, triggerMode, sortBy, sortOrder, priority, matchMode, hasFlow, createdFrom, createdTo, scopes...)
 	if err != nil {
 		response.InternalError(c, "获取自愈规则列表失败")
 		return
@@ -793,12 +837,11 @@ func (h *HealingHandler) ListInstances(c *gin.Context) {
 		Page:           page,
 		PageSize:       pageSize,
 		Status:         c.Query("status"),
-		Search:         c.Query("search"),
-		FlowName:       c.Query("flow_name"),
-		RuleName:       c.Query("rule_name"),
-		IncidentTitle:  c.Query("incident_title"),
+		FlowName:       GetStringFilter(c, "flow_name"),
+		RuleName:       GetStringFilter(c, "rule_name"),
+		IncidentTitle:  GetStringFilter(c, "incident_title"),
 		CurrentNodeID:  c.Query("current_node_id"),
-		ErrorMessage:   c.Query("error_message"),
+		ErrorMessage:   GetStringFilter(c, "error_message"),
 		SortBy:         c.Query("sort_by"),
 		SortOrder:      c.Query("sort_order"),
 		ApprovalStatus: c.Query("approval_status"),
@@ -1040,15 +1083,15 @@ func (h *HealingHandler) ListApprovals(c *gin.Context) {
 }
 
 // ListPendingApprovals 获取待审批任务列表
-// 支持 Query 参数：search（模糊搜索 node_id, flow_instance_id）、date_from、date_to
+// 支持 Query 参数：node_name（模糊搜索 node_id）、date_from、date_to
 func (h *HealingHandler) ListPendingApprovals(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
-	search := c.Query("search")
+	nodeName := c.Query("node_name")
 	dateFrom := c.Query("date_from")
 	dateTo := c.Query("date_to")
 
-	tasks, total, err := h.approvalRepo.ListPending(c.Request.Context(), page, pageSize, search, dateFrom, dateTo)
+	tasks, total, err := h.approvalRepo.ListPending(c.Request.Context(), page, pageSize, nodeName, dateFrom, dateTo)
 	if err != nil {
 		response.InternalError(c, "获取待审批任务列表失败")
 		return
@@ -1174,16 +1217,16 @@ func (h *HealingHandler) RejectTask(c *gin.Context) {
 
 // ListPendingTriggerIncidents 获取待触发工单列表
 // 用于待办中心的"待触发工单"标签页
-// 支持 Query 参数：search（模糊搜索 title, external_id, affected_ci）、severity、date_from、date_to
+// 支持 Query 参数：title（模糊搜索 title, external_id, affected_ci）、severity、date_from、date_to
 func (h *HealingHandler) ListPendingTriggerIncidents(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
-	search := c.Query("search")
+	title := c.Query("title")
 	severity := c.Query("severity")
 	dateFrom := c.Query("date_from")
 	dateTo := c.Query("date_to")
 
-	incidents, total, err := h.incidentRepo.ListPendingTrigger(c.Request.Context(), page, pageSize, search, severity, dateFrom, dateTo)
+	incidents, total, err := h.incidentRepo.ListPendingTrigger(c.Request.Context(), page, pageSize, title, severity, dateFrom, dateTo)
 	if err != nil {
 		response.InternalError(c, "获取待触发工单列表失败")
 		return
@@ -1267,12 +1310,12 @@ func (h *HealingHandler) DismissIncident(c *gin.Context) {
 func (h *HealingHandler) ListDismissedTriggerIncidents(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
-	search := c.Query("search")
+	title := c.Query("title")
 	severity := c.Query("severity")
 	dateFrom := c.Query("date_from")
 	dateTo := c.Query("date_to")
 
-	incidents, total, err := h.incidentRepo.ListDismissedTrigger(c.Request.Context(), page, pageSize, search, severity, dateFrom, dateTo)
+	incidents, total, err := h.incidentRepo.ListDismissedTrigger(c.Request.Context(), page, pageSize, title, severity, dateFrom, dateTo)
 	if err != nil {
 		response.InternalError(c, "获取已忽略工单列表失败")
 		return

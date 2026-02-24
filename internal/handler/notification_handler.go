@@ -34,9 +34,9 @@ func (h *NotificationHandler) ListChannels(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	channelType := c.Query("type")
-	search := c.Query("search")
+	name := GetStringFilter(c, "name")
 
-	channels, total, err := h.svc.ListChannels(c.Request.Context(), page, pageSize, channelType, search)
+	channels, total, err := h.svc.ListChannels(c.Request.Context(), page, pageSize, channelType, name)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return
@@ -144,7 +144,7 @@ func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 	opts := &repository.TemplateListOptions{
 		Page:             page,
 		PageSize:         pageSize,
-		Search:           c.Query("search"),
+		Name:             GetStringFilter(c, "name"),
 		EventType:        c.Query("event_type"),
 		Format:           c.Query("format"),
 		SupportedChannel: c.Query("supported_channel"),
@@ -311,9 +311,9 @@ func (h *NotificationHandler) ListNotifications(c *gin.Context) {
 		Page:        page,
 		PageSize:    pageSize,
 		Status:      c.Query("status"),
-		TaskName:    c.Query("task_name"),
+		TaskName:    GetStringFilter(c, "task_name"),
 		TriggeredBy: c.Query("triggered_by"),
-		Search:      c.Query("search"),
+		Subject:     GetStringFilter(c, "subject"),
 		SortBy:      c.Query("sort_by"),
 		SortOrder:   c.Query("sort_order"),
 	}

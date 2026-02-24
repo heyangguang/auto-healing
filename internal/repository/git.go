@@ -8,6 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -69,10 +70,9 @@ type GitRepoListOptions struct {
 	Page     int
 	PageSize int
 
-	// 搜索
-	Search string // 全文搜索（匹配 name + url）
-	Name   string // 按名称模糊搜索
-	URL    string // 按 URL 模糊搜索
+	// 搜索（支持精确/模糊匹配）
+	Name query.StringFilter // 按名称搜索
+	URL  query.StringFilter // 按 URL 搜索
 
 	// 过滤
 	Status      string // ready / pending / error / syncing
@@ -101,49 +101,43 @@ func (r *GitRepositoryRepository) ListWithOptions(ctx context.Context, opts *Git
 	var repos []model.GitRepository
 	var total int64
 
-	query := TenantDB(r.db, ctx).Model(&model.GitRepository{})
+	q := TenantDB(r.db, ctx).Model(&model.GitRepository{})
 
-	// 全文搜索（name + url）
-	if opts.Search != "" {
-		search := "%" + strings.ToLower(opts.Search) + "%"
-		query = query.Where("LOWER(name) LIKE ? OR LOWER(url) LIKE ?", search, search)
+	// 按名称搜索（支持精确/模糊匹配）
+	if !opts.Name.IsEmpty() {
+		q = query.ApplyStringFilter(q, "name", opts.Name)
 	}
 
-	// 按名称模糊搜索
-	if opts.Name != "" {
-		query = query.Where("LOWER(name) LIKE ?", "%"+strings.ToLower(opts.Name)+"%")
-	}
-
-	// 按 URL 模糊搜索
-	if opts.URL != "" {
-		query = query.Where("LOWER(url) LIKE ?", "%"+strings.ToLower(opts.URL)+"%")
+	// 按 URL 搜索（支持精确/模糊匹配）
+	if !opts.URL.IsEmpty() {
+		q = query.ApplyStringFilter(q, "url", opts.URL)
 	}
 
 	// 状态过滤
 	if opts.Status != "" {
-		query = query.Where("status = ?", opts.Status)
+		q = q.Where("status = ?", opts.Status)
 	}
 
 	// 认证方式过滤
 	if opts.AuthType != "" {
-		query = query.Where("auth_type = ?", opts.AuthType)
+		q = q.Where("auth_type = ?", opts.AuthType)
 	}
 
 	// 定时同步过滤
 	if opts.SyncEnabled != nil {
-		query = query.Where("sync_enabled = ?", *opts.SyncEnabled)
+		q = q.Where("sync_enabled = ?", *opts.SyncEnabled)
 	}
 
 	// 时间范围
 	if opts.CreatedFrom != nil {
-		query = query.Where("created_at >= ?", *opts.CreatedFrom)
+		q = q.Where("created_at >= ?", *opts.CreatedFrom)
 	}
 	if opts.CreatedTo != nil {
-		query = query.Where("created_at <= ?", *opts.CreatedTo)
+		q = q.Where("created_at <= ?", *opts.CreatedTo)
 	}
 
 	// 计数
-	query.Session(&gorm.Session{}).Count(&total)
+	q.Session(&gorm.Session{}).Count(&total)
 
 	// 排序
 	allowedSortFields := map[string]bool{
@@ -155,17 +149,17 @@ func (r *GitRepositoryRepository) ListWithOptions(ctx context.Context, opts *Git
 		if strings.ToLower(opts.SortOrder) == "desc" {
 			order = "DESC"
 		}
-		query = query.Order(fmt.Sprintf("%s %s", opts.SortField, order))
+		q = q.Order(fmt.Sprintf("%s %s", opts.SortField, order))
 	} else {
-		query = query.Order("created_at DESC")
+		q = q.Order("created_at DESC")
 	}
 
 	// 分页
 	if opts.Page > 0 && opts.PageSize > 0 {
-		query = query.Offset((opts.Page - 1) * opts.PageSize).Limit(opts.PageSize)
+		q = q.Offset((opts.Page - 1) * opts.PageSize).Limit(opts.PageSize)
 	}
 
-	err := query.Find(&repos).Error
+	err := q.Find(&repos).Error
 	if err != nil {
 		return repos, total, err
 	}

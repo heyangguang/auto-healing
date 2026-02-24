@@ -118,10 +118,10 @@ func (h *TenantUserHandler) ListTenantUsers(c *gin.Context) {
 // ListSimpleUsers 获取租户下简要用户列表（轻量接口，用于下拉选择）
 func (h *TenantUserHandler) ListSimpleUsers(c *gin.Context) {
 	tenantID := repository.TenantIDFromContext(c.Request.Context())
-	search := c.Query("search")
+	name := c.Query("name")
 	status := c.DefaultQuery("status", "active") // 默认只返回活跃用户
 
-	users, err := h.tenantRepo.ListSimpleMembers(c.Request.Context(), tenantID, search, status)
+	users, err := h.tenantRepo.ListSimpleMembers(c.Request.Context(), tenantID, name, status)
 	if err != nil {
 		response.InternalError(c, "获取简要用户列表失败")
 		return

@@ -1,12 +1,32 @@
 package handler
 
 import (
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/service/plugin"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+// ══════ 插件搜索白名单 ══════
+var pluginSearchSchema = []SearchableField{
+	{Key: "name", Label: "名称", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "插件名称", Column: "name"},
+	{Key: "description", Label: "描述", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "插件描述", Column: "description"},
+	{Key: "type", Label: "类型", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{{"ITSM", "itsm"}, {"CMDB", "cmdb"}}},
+	{Key: "status", Label: "状态", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{{"活跃", "active"}, {"停用", "inactive"}, {"异常", "error"}}},
+}
+
+// ══════ 工单搜索白名单 ══════
+var incidentSearchSchema = []SearchableField{
+	{Key: "title", Label: "标题", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "事件标题", Column: "title"},
+	{Key: "source_plugin_name", Label: "来源插件", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Column: "source_plugin_name", Placeholder: "插件名称"},
+	{Key: "external_id", Label: "外部ID", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "exact", Column: "external_id", Placeholder: "外部工单ID"},
+	{Key: "status", Label: "状态", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{{"待处理", "open"}, {"已关闭", "closed"}}},
+	{Key: "healing_status", Label: "自愈状态", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{{"待处理", "pending"}, {"处理中", "processing"}, {"已修复", "healed"}, {"失败", "failed"}, {"已跳过", "skipped"}, {"已忽略", "dismissed"}}},
+	{Key: "severity", Label: "严重级别", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{{"严重", "critical"}, {"高", "high"}, {"中", "medium"}, {"低", "low"}}},
+	{Key: "has_plugin", Label: "关联插件", Type: "boolean", MatchModes: []string{"exact"}, DefaultMode: "exact"},
+}
 
 // PluginHandler 插件处理器
 type PluginHandler struct {
@@ -22,17 +42,27 @@ func NewPluginHandler() *PluginHandler {
 	}
 }
 
+// GetPluginSearchSchema 获取插件搜索字段定义
+func (h *PluginHandler) GetPluginSearchSchema(c *gin.Context) {
+	response.Success(c, gin.H{"fields": pluginSearchSchema})
+}
+
+// GetIncidentSearchSchema 获取工单搜索字段定义
+func (h *PluginHandler) GetIncidentSearchSchema(c *gin.Context) {
+	response.Success(c, gin.H{"fields": incidentSearchSchema})
+}
+
 // ListPlugins 获取插件列表
 func (h *PluginHandler) ListPlugins(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
 	pluginType := c.Query("type")
 	status := c.Query("status")
-	search := c.Query("search")
 	sortBy := c.Query("sort_by")
 	sortOrder := c.Query("sort_order")
+	scopes := BuildSchemaScopes(c, pluginSearchSchema)
 
-	plugins, total, err := h.pluginSvc.ListPlugins(c.Request.Context(), page, pageSize, pluginType, status, search, sortBy, sortOrder)
+	plugins, total, err := h.pluginSvc.ListPlugins(c.Request.Context(), page, pageSize, pluginType, status, query.StringFilter{}, sortBy, sortOrder, scopes...)
 	if err != nil {
 		response.InternalError(c, "获取插件列表失败")
 		return
@@ -230,8 +260,7 @@ func (h *PluginHandler) ListIncidents(c *gin.Context) {
 	status := c.Query("status")
 	healingStatus := c.Query("healing_status")
 	severity := c.Query("severity")
-	sourcePluginName := c.Query("source_plugin_name")
-	search := c.Query("search")
+	sourcePluginName := GetStringFilter(c, "source_plugin_name")
 	sortBy := c.Query("sort_by")
 	sortOrder := c.Query("sort_order")
 
@@ -248,10 +277,10 @@ func (h *PluginHandler) ListIncidents(c *gin.Context) {
 		hp := hpStr == "true"
 		hasPlugin = &hp
 	}
-	// 外部ID精确搜索 — 如果提供了 external_id，将其作为精确搜索条件
-	externalID := c.Query("external_id")
+	externalID := GetStringFilter(c, "external_id")
+	scopes := BuildSchemaScopes(c, incidentSearchSchema, "source_plugin_name", "external_id")
 
-	incidents, total, err := h.incidentSvc.ListIncidents(c.Request.Context(), page, pageSize, pluginID, status, healingStatus, severity, sourcePluginName, search, hasPlugin, sortBy, sortOrder, externalID)
+	incidents, total, err := h.incidentSvc.ListIncidents(c.Request.Context(), page, pageSize, pluginID, status, healingStatus, severity, sourcePluginName, query.StringFilter{}, hasPlugin, sortBy, sortOrder, externalID, scopes...)
 	if err != nil {
 		response.InternalError(c, "获取工单列表失败")
 		return

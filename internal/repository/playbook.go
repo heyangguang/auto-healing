@@ -8,6 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -49,10 +50,9 @@ type PlaybookListOptions struct {
 	Page     int
 	PageSize int
 
-	// 搜索
-	Search   string // 全文搜索（匹配 name + description + file_path）
-	Name     string // 按名称模糊搜索
-	FilePath string // 按入口文件路径模糊搜索
+	// 搜索（支持精确/模糊匹配）
+	Name     query.StringFilter // 按名称搜索
+	FilePath query.StringFilter // 按入口文件路径搜索
 
 	// 过滤
 	RepositoryID    *uuid.UUID // 按仓库 ID
@@ -87,73 +87,67 @@ func (r *PlaybookRepository) ListWithOptions(ctx context.Context, opts *Playbook
 	var playbooks []model.Playbook
 	var total int64
 
-	query := TenantDB(database.DB, ctx).Model(&model.Playbook{})
+	q := TenantDB(database.DB, ctx).Model(&model.Playbook{})
 
-	// 全文搜索（name + description + file_path）
-	if opts.Search != "" {
-		search := "%" + strings.ToLower(opts.Search) + "%"
-		query = query.Where("LOWER(name) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ? OR LOWER(file_path) LIKE ?", search, search, search)
+	// 按名称搜索（支持精确/模糊匹配）
+	if !opts.Name.IsEmpty() {
+		q = query.ApplyStringFilter(q, "name", opts.Name)
 	}
 
-	// 按名称模糊搜索
-	if opts.Name != "" {
-		query = query.Where("LOWER(name) LIKE ?", "%"+strings.ToLower(opts.Name)+"%")
-	}
-
-	// 按入口文件路径模糊搜索
-	if opts.FilePath != "" {
-		query = query.Where("LOWER(file_path) LIKE ?", "%"+strings.ToLower(opts.FilePath)+"%")
+	// 按入口文件路径搜索（支持精确/模糊匹配）
+	if !opts.FilePath.IsEmpty() {
+		q = query.ApplyStringFilter(q, "file_path", opts.FilePath)
 	}
 
 	// 仓库 ID 过滤
 	if opts.RepositoryID != nil {
-		query = query.Where("repository_id = ?", *opts.RepositoryID)
+		q = q.Where("repository_id = ?", *opts.RepositoryID)
 	}
 
 	// 状态过滤
 	if opts.Status != "" {
-		query = query.Where("status = ?", opts.Status)
+		q = q.Where("status = ?", opts.Status)
 	}
 
 	// 配置模式过滤
 	if opts.ConfigMode != "" {
-		query = query.Where("config_mode = ?", opts.ConfigMode)
+		q = q.Where("config_mode = ?", opts.ConfigMode)
 	}
 
 	// 变量数量过滤
 	if opts.HasVariables != nil {
 		if *opts.HasVariables {
-			query = query.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) > 0")
+			q = q.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) > 0")
 		} else {
-			query = query.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) = 0")
+			q = q.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) = 0")
 		}
 	}
 	if opts.MinVariables != nil {
-		query = query.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) >= ?", *opts.MinVariables)
+		q = q.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) >= ?", *opts.MinVariables)
 	}
 	if opts.MaxVariables != nil {
-		query = query.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) <= ?", *opts.MaxVariables)
+		q = q.Where("jsonb_array_length(COALESCE(variables, '[]'::jsonb)) <= ?", *opts.MaxVariables)
 	}
 
 	// 必填变量过滤
 	if opts.HasRequiredVars != nil {
 		if *opts.HasRequiredVars {
-			query = query.Where("EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(variables, '[]'::jsonb)) AS v WHERE (v->>'required')::boolean = true)")
+			q = q.Where("EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(variables, '[]'::jsonb)) AS v WHERE (v->>'required')::boolean = true)")
 		} else {
-			query = query.Where("NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(variables, '[]'::jsonb)) AS v WHERE (v->>'required')::boolean = true)")
+			q = q.Where("NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(variables, '[]'::jsonb)) AS v WHERE (v->>'required')::boolean = true)")
 		}
 	}
 
 	// 时间范围
 	if opts.CreatedFrom != nil {
-		query = query.Where("created_at >= ?", *opts.CreatedFrom)
+		q = q.Where("created_at >= ?", *opts.CreatedFrom)
 	}
 	if opts.CreatedTo != nil {
-		query = query.Where("created_at <= ?", *opts.CreatedTo)
+		q = q.Where("created_at <= ?", *opts.CreatedTo)
 	}
 
 	// 计数
-	query.Session(&gorm.Session{}).Count(&total)
+	q.Session(&gorm.Session{}).Count(&total)
 
 	// 排序
 	allowedSortFields := map[string]bool{
@@ -165,17 +159,17 @@ func (r *PlaybookRepository) ListWithOptions(ctx context.Context, opts *Playbook
 		if strings.ToLower(opts.SortOrder) == "desc" {
 			order = "DESC"
 		}
-		query = query.Order(fmt.Sprintf("%s %s", opts.SortField, order))
+		q = q.Order(fmt.Sprintf("%s %s", opts.SortField, order))
 	} else {
-		query = query.Order("created_at DESC")
+		q = q.Order("created_at DESC")
 	}
 
 	// 分页
 	if opts.Page > 0 && opts.PageSize > 0 {
-		query = query.Offset((opts.Page - 1) * opts.PageSize).Limit(opts.PageSize)
+		q = q.Offset((opts.Page - 1) * opts.PageSize).Limit(opts.PageSize)
 	}
 
-	err := query.Preload("Repository").Find(&playbooks).Error
+	err := q.Preload("Repository").Find(&playbooks).Error
 	return playbooks, total, err
 }
 

@@ -23,6 +23,27 @@ func NewGitRepoHandler() *GitRepoHandler {
 	}
 }
 
+// ==================== Search Schema 声明 ====================
+
+var gitRepoSearchSchema = []SearchableField{
+	{Key: "name", Label: "仓库名称", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "输入仓库名称", Column: "name"},
+	{Key: "url", Label: "仓库地址", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "输入仓库 URL", Column: "url"},
+	{Key: "status", Label: "仓库状态", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
+		{Label: "就绪", Value: "ready"}, {Label: "待同步", Value: "pending"},
+		{Label: "同步中", Value: "syncing"}, {Label: "错误", Value: "error"},
+	}},
+	{Key: "auth_type", Label: "认证方式", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
+		{Label: "公开", Value: "none"}, {Label: "Token", Value: "token"},
+		{Label: "密码", Value: "password"}, {Label: "SSH 密钥", Value: "ssh_key"},
+	}},
+	{Key: "sync_enabled", Label: "定时同步", Type: "boolean", MatchModes: []string{"exact"}, DefaultMode: "exact"},
+}
+
+// GetSearchSchema 返回 Git 仓库搜索 schema
+func (h *GitRepoHandler) GetSearchSchema(c *gin.Context) {
+	response.Success(c, gin.H{"fields": gitRepoSearchSchema})
+}
+
 // ListRepos 获取仓库列表
 func (h *GitRepoHandler) ListRepos(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -31,9 +52,8 @@ func (h *GitRepoHandler) ListRepos(c *gin.Context) {
 	opts := &repository.GitRepoListOptions{
 		Page:      page,
 		PageSize:  pageSize,
-		Search:    c.Query("search"),
-		Name:      c.Query("name"),
-		URL:       c.Query("url"),
+		Name:      GetStringFilter(c, "name"),
+		URL:       GetStringFilter(c, "url"),
 		Status:    c.Query("status"),
 		AuthType:  c.Query("auth_type"),
 		SortField: c.Query("sort_field"),
@@ -278,38 +298,4 @@ func (h *GitRepoHandler) GetStats(c *gin.Context) {
 		return
 	}
 	response.Success(c, stats)
-}
-
-// GetBranches 获取已同步仓库的分支列表
-func (h *GitRepoHandler) GetBranches(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		response.BadRequest(c, "无效的ID")
-		return
-	}
-
-	branches, err := h.svc.GetBranches(c.Request.Context(), id)
-	if err != nil {
-		response.InternalError(c, "获取分支列表失败: "+err.Error())
-		return
-	}
-
-	response.Success(c, map[string]any{"branches": branches})
-}
-
-// DetectBranches 检测远程仓库分支（实时从远程拉取）
-func (h *GitRepoHandler) DetectBranches(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		response.BadRequest(c, "无效的ID")
-		return
-	}
-
-	branches, err := h.svc.DetectBranches(c.Request.Context(), id)
-	if err != nil {
-		response.InternalError(c, "检测分支失败: "+err.Error())
-		return
-	}
-
-	response.Success(c, map[string]any{"branches": branches})
 }
