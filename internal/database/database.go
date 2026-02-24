@@ -38,6 +38,7 @@ func Init(cfg *config.Config) error {
 	}
 
 	DB, err = gorm.Open(postgres.Open(cfg.Database.DSN()), &gorm.Config{
+		DisableForeignKeyConstraintWhenMigrating: true, // 迁移时不创建/修改外键约束，避免关联表冲突
 		Logger: gormlogger.New(
 			log.New(os.Stderr, "\r\n", log.LstdFlags),
 			gormlogger.Config{
@@ -133,6 +134,8 @@ func AutoMigrate() error {
 		&model.UserTenantRole{},
 		// 字典值
 		&model.Dictionary{},
+		// 邀请
+		&model.TenantInvitation{},
 	}
 
 	// 增量迁移：只迁移不存在的表，避免修改已有表导致约束名冲突
