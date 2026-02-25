@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/repository"
@@ -16,9 +15,10 @@ const (
 )
 
 // TenantMiddleware 租户上下文中间件
+// 仅用于 /api/v1/tenant/* 路由组。
 // 从 X-Tenant-ID 请求头中读取租户 ID，并验证用户是否有权访问该租户。
 // 如果未提供，则使用用户的默认租户（第一个租户）。
-// 平台管理员可以访问任意租户。
+// 平台管理员必须通过 Impersonation 才能访问租户级路由。
 func TenantMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 获取用户的租户列表（来自 JWT Claims）
@@ -43,7 +43,7 @@ func TenantMiddleware() gin.HandlerFunc {
 
 		if isPlatformAdmin {
 			// ===== 平台管理员 =====
-			// 必须通过 Impersonation 才能访问租户级 API
+			// 租户级路由必须通过 Impersonation 才能访问
 			if IsImpersonating(c) {
 				// Impersonation 模式：使用申请单指定的租户 ID
 				impTenantIDStr, _ := c.Get(ImpersonationTenantIDKey)
@@ -63,25 +63,11 @@ func TenantMiddleware() gin.HandlerFunc {
 					return
 				}
 				tenantID = parsed
-			} else if tenantIDStr == "" {
-				// 平台管理员未指定租户 + 未 Impersonation
-				// 只允许访问不需要租户上下文的路由，其余一律拒绝
-				path := c.Request.URL.Path
-				if platformAdminAllowedWithoutTenant(path) {
-					c.Next()
-					return
-				}
-				// 租户级路由 — 必须通过 Impersonation 才能访问
+			} else {
+				// 平台管理员未 Impersonation → 拒绝访问租户级路由
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 					"code":    40300,
 					"message": "此接口为租户级资源，平台管理员需通过临时提权（Impersonation）后才能访问",
-				})
-				return
-			} else {
-				// 平台管理员指定了租户但未 Impersonation → 拒绝
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-					"code":    40300,
-					"message": "平台管理员需通过 Impersonation 审批后才能访问租户数据",
 				})
 				return
 			}
@@ -233,25 +219,6 @@ func contains(slice []string, item string) bool {
 func containsTenantByID(tenants []model.Tenant, targetID string) bool {
 	for _, t := range tenants {
 		if t.ID.String() == targetID {
-			return true
-		}
-	}
-	return false
-}
-
-// platformAdminAllowedWithoutTenant 判断平台管理员在未提权时是否可以访问该路由
-// 白名单：只有不需要租户上下文的通用接口才放行
-func platformAdminAllowedWithoutTenant(path string) bool {
-	allowedPrefixes := []string{
-		"/api/v1/auth/",        // 认证相关（me, profile, logout）
-		"/api/v1/user/",        // 用户偏好、收藏、最近访问、租户列表
-		"/api/v1/platform/",    // 平台管理接口
-		"/api/v1/dictionaries", // 字典查询（全局共享）
-		"/api/v1/search",       // 全局搜索
-		"/api/v1/workbench/",   // 工作台概览
-	}
-	for _, prefix := range allowedPrefixes {
-		if strings.HasPrefix(path, prefix) {
 			return true
 		}
 	}
