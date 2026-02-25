@@ -573,11 +573,12 @@ func SyncPermissionsAndRoles() error {
 
 			// Upsert: 按 code 查找，存在则更新名称等字段，不存在则创建
 			result := tx.Where("code = ?", seed.Code).First(&model.Permission{})
-			if result.Error == gorm.ErrRecordNotFound {
+			switch result.Error {
+			case gorm.ErrRecordNotFound:
 				if err := tx.Create(&perm).Error; err != nil {
 					return err
 				}
-			} else if result.Error == nil {
+			case nil:
 				tx.Model(&model.Permission{}).Where("code = ?", seed.Code).Updates(map[string]interface{}{
 					"name":        seed.Name,
 					"description": seed.Description,
@@ -604,7 +605,8 @@ func SyncPermissionsAndRoles() error {
 		for _, roleSeed := range SystemRoles {
 			var role model.Role
 			result := tx.Where("name = ?", roleSeed.Name).First(&role)
-			if result.Error == gorm.ErrRecordNotFound {
+			switch result.Error {
+			case gorm.ErrRecordNotFound:
 				scope := roleSeed.Scope
 				if scope == "" {
 					scope = "tenant"
@@ -619,7 +621,7 @@ func SyncPermissionsAndRoles() error {
 				if err := tx.Create(&role).Error; err != nil {
 					return err
 				}
-			} else if result.Error == nil {
+			case nil:
 				// 更新描述和 scope（不覆盖 display_name，用户可能已修改）
 				updateScope := roleSeed.Scope
 				if updateScope == "" {
