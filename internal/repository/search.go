@@ -538,6 +538,14 @@ func (r *SearchRepository) searchIncidents(ctx context.Context, db *gorm.DB, lik
 		return nil, 0, err
 	}
 
+	// 严重度中文映射
+	severityLabel := map[string]string{
+		"critical": "紧急",
+		"high":     "高",
+		"medium":   "中",
+		"low":      "低",
+	}
+
 	results := make([]SearchResultItem, 0, len(items))
 	for _, item := range items {
 		title := item.Title
@@ -545,12 +553,30 @@ func (r *SearchRepository) searchIncidents(ctx context.Context, db *gorm.DB, lik
 			title = item.Description
 		}
 		if title == "" {
-			title = item.ExternalID
+			// 生成可读标题：[严重度] 工单 #外部ID前8位
+			sl := severityLabel[item.Severity]
+			if sl == "" {
+				sl = item.Severity
+			}
+			eidShort := item.ExternalID
+			if len(eidShort) > 8 {
+				eidShort = eidShort[:8]
+			}
+			title = fmt.Sprintf("[%s] 工单 #%s", sl, eidShort)
+		}
+		desc := item.Description
+		if desc == "" {
+			// 描述为空时显示截断的 external_id
+			if len(item.ExternalID) > 12 {
+				desc = item.ExternalID[:12] + "..."
+			} else {
+				desc = item.ExternalID
+			}
 		}
 		results = append(results, SearchResultItem{
 			ID:          item.ID,
 			Title:       title,
-			Description: item.ExternalID,
+			Description: desc,
 			Path:        "/resources/incidents",
 			Extra: map[string]interface{}{
 				"severity":       item.Severity,
@@ -583,16 +609,42 @@ func (r *SearchRepository) searchExecutionRuns(ctx context.Context, db *gorm.DB,
 		return nil, 0, err
 	}
 
+	// 批量获取关联的任务名称
+	taskIDs := make([]uuid.UUID, 0, len(items))
+	for _, item := range items {
+		if item.TaskID != uuid.Nil {
+			taskIDs = append(taskIDs, item.TaskID)
+		}
+	}
+	taskNameMap := make(map[uuid.UUID]string)
+	if len(taskIDs) > 0 {
+		type taskInfo struct {
+			ID   uuid.UUID `gorm:"column:id"`
+			Name string    `gorm:"column:name"`
+		}
+		var tasks []taskInfo
+		database.DB.Model(&model.ExecutionTask{}).
+			Select("id, name").
+			Where("id IN ?", taskIDs).
+			Find(&tasks)
+		for _, t := range tasks {
+			taskNameMap[t.ID] = t.Name
+		}
+	}
+
 	results := make([]SearchResultItem, 0, len(items))
 	for _, item := range items {
-		title := item.TriggeredBy
+		title := taskNameMap[item.TaskID]
+		if title == "" {
+			title = item.TriggeredBy
+		}
 		if title == "" {
 			title = item.ID.String()[:8]
 		}
 		results = append(results, SearchResultItem{
 			ID:          item.ID,
 			Title:       title,
-			Description: item.Status,
+			Description: item.TriggeredBy,
 			Path:        fmt.Sprintf("/execution/runs/%s", item.ID.String()),
 			Extra: map[string]interface{}{
 				"status":     item.Status,
