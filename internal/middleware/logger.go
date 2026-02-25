@@ -14,7 +14,6 @@ const (
 	colorRed    = "\033[31m"
 	colorGreen  = "\033[32m"
 	colorYellow = "\033[33m"
-	colorCyan   = "\033[36m"
 )
 
 // Logger 日志中间件 - 使用统一日志格式
