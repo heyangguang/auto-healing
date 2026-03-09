@@ -1,0 +1,949 @@
+openapi: 3.0.3
+info:
+  title: Auto-Healing Platform API
+  description: |
+    Enterprise-grade Intelligent IT Operations Self-Healing Platform API.
+
+    ## Authentication
+    All API endpoints (except `/api/v1/auth/login` and `/api/v1/auth/refresh`) require a Bearer token.
+
+    ```
+    Authorization: Bearer <access_token>
+    ```
+
+    ## Route Groups
+    - **Auth** (`/api/v1/auth/*`) — Login, token refresh, user profile
+    - **Common** (`/api/v1/common/*`) — Shared endpoints (search, preferences, workbench)
+    - **Platform** (`/api/v1/platform/*`) — Platform admin operations (users, roles, tenants, settings)
+    - **Tenant** (`/api/v1/tenant/*`) — Tenant-scoped operations (plugins, CMDB, execution, healing, etc.)
+
+  version: 1.0.0
+  contact:
+    name: Auto-Healing Team
+    url: https://github.com/heyangguang/auto-healing
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: integer
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: admin123456
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/UserBasic'
+
+    UserBasic:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        display_name:
+          type: string
+        email:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+
+    Plugin:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [itsm, cmdb]
+        status:
+          type: string
+          enum: [active, inactive, error]
+        sync_interval_seconds:
+          type: integer
+        last_sync_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    CMDBItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ip_address:
+          type: string
+        hostname:
+          type: string
+        os:
+          type: string
+        status:
+          type: string
+          enum: [active, offline, maintenance]
+        environment:
+          type: string
+        department:
+          type: string
+
+    Incident:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        external_id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+        status:
+          type: string
+        plugin_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+    HealingRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        priority:
+          type: integer
+        trigger_mode:
+          type: string
+          enum: [auto, manual]
+        status:
+          type: string
+          enum: [active, inactive]
+        flow_id:
+          type: string
+          format: uuid
+        conditions:
+          type: object
+
+    HealingFlow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        nodes:
+          type: object
+          description: DAG node definitions (JSONB)
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    FlowInstance:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        flow_id:
+          type: string
+          format: uuid
+        incident_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, waiting_approval, completed, failed, cancelled]
+        node_states:
+          type: object
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    ExecutionTask:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        playbook_template_id:
+          type: string
+          format: uuid
+        target_hosts:
+          type: array
+          items:
+            type: string
+        variables:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+
+    ExecutionRun:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, success, partial_success, failed, cancelled]
+        trigger_type:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items: {}
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    PageSizeParam:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        default: 20
+    SearchParam:
+      name: search
+      in: query
+      schema:
+        type: string
+
+paths:
+  # ==================== Authentication ====================
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: User login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user info
+      responses:
+        '200':
+          description: Current user details
+
+  /auth/profile:
+    get:
+      tags: [Authentication]
+      summary: Get user profile
+      responses:
+        '200':
+          description: User profile
+    put:
+      tags: [Authentication]
+      summary: Update user profile
+      responses:
+        '200':
+          description: Profile updated
+
+  /auth/password:
+    put:
+      tags: [Authentication]
+      summary: Change password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                old_password:
+                  type: string
+                new_password:
+                  type: string
+      responses:
+        '200':
+          description: Password changed
+
+  # ==================== Tenant - Plugins ====================
+  /tenant/plugins:
+    get:
+      tags: [Plugins]
+      summary: List plugins
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - $ref: '#/components/parameters/SearchParam'
+      responses:
+        '200':
+          description: Plugin list
+    post:
+      tags: [Plugins]
+      summary: Create plugin
+      responses:
+        '201':
+          description: Plugin created
+
+  /tenant/plugins/{id}:
+    get:
+      tags: [Plugins]
+      summary: Get plugin details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Plugin details
+    put:
+      tags: [Plugins]
+      summary: Update plugin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Plugin updated
+    delete:
+      tags: [Plugins]
+      summary: Delete plugin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Plugin deleted
+
+  /tenant/plugins/{id}/sync:
+    post:
+      tags: [Plugins]
+      summary: Trigger plugin sync
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sync triggered
+
+  # ==================== Tenant - CMDB ====================
+  /tenant/cmdb:
+    get:
+      tags: [CMDB]
+      summary: List CMDB items
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, offline, maintenance]
+        - name: ip_address
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CMDB item list
+
+  /tenant/cmdb/{id}/maintenance:
+    post:
+      tags: [CMDB]
+      summary: Enter maintenance mode
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Entered maintenance
+
+  /tenant/cmdb/{id}/resume:
+    post:
+      tags: [CMDB]
+      summary: Exit maintenance mode
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Exited maintenance
+
+  # ==================== Tenant - Healing Flows ====================
+  /tenant/healing/flows:
+    get:
+      tags: [Healing Flows]
+      summary: List healing flows
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Flow list
+    post:
+      tags: [Healing Flows]
+      summary: Create healing flow
+      responses:
+        '201':
+          description: Flow created
+
+  /tenant/healing/flows/{id}:
+    get:
+      tags: [Healing Flows]
+      summary: Get healing flow details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Flow details
+    put:
+      tags: [Healing Flows]
+      summary: Update healing flow
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Flow updated
+    delete:
+      tags: [Healing Flows]
+      summary: Delete healing flow
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Flow deleted
+
+  /tenant/healing/flows/{id}/dry-run:
+    post:
+      tags: [Healing Flows]
+      summary: Dry-run a healing flow (simulate without side effects)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Dry-run result
+
+  # ==================== Tenant - Healing Rules ====================
+  /tenant/healing/rules:
+    get:
+      tags: [Healing Rules]
+      summary: List healing rules
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Rule list
+    post:
+      tags: [Healing Rules]
+      summary: Create healing rule
+      responses:
+        '201':
+          description: Rule created
+
+  /tenant/healing/rules/{id}:
+    get:
+      tags: [Healing Rules]
+      summary: Get healing rule details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Rule details
+
+  /tenant/healing/rules/{id}/activate:
+    post:
+      tags: [Healing Rules]
+      summary: Activate a healing rule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Rule activated
+
+  # ==================== Tenant - Flow Instances ====================
+  /tenant/healing/instances:
+    get:
+      tags: [Flow Instances]
+      summary: List flow instances
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, waiting_approval, completed, failed, cancelled]
+      responses:
+        '200':
+          description: Instance list
+
+  /tenant/healing/instances/{id}:
+    get:
+      tags: [Flow Instances]
+      summary: Get flow instance details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Instance details with node states
+
+  /tenant/healing/instances/{id}/events:
+    get:
+      tags: [Flow Instances]
+      summary: SSE event stream for flow instance
+      description: Server-Sent Events stream providing real-time updates for a running flow instance.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream: {}
+
+  # ==================== Tenant - Execution ====================
+  /tenant/execution-tasks:
+    get:
+      tags: [Execution]
+      summary: List execution task templates
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Task template list
+    post:
+      tags: [Execution]
+      summary: Create execution task template
+      responses:
+        '201':
+          description: Task template created
+
+  /tenant/execution-tasks/{id}/execute:
+    post:
+      tags: [Execution]
+      summary: Execute a task (manual trigger)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Execution started
+
+  /tenant/execution-runs:
+    get:
+      tags: [Execution]
+      summary: List all execution runs
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, success, partial_success, failed, cancelled]
+      responses:
+        '200':
+          description: Execution run list
+
+  /tenant/execution-runs/{id}/stream:
+    get:
+      tags: [Execution]
+      summary: SSE log stream for execution run
+      description: Server-Sent Events stream for real-time Ansible execution logs.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream: {}
+
+  # ==================== Tenant - Notifications ====================
+  /tenant/channels:
+    get:
+      tags: [Notifications]
+      summary: List notification channels
+      responses:
+        '200':
+          description: Channel list
+    post:
+      tags: [Notifications]
+      summary: Create notification channel
+      responses:
+        '201':
+          description: Channel created
+
+  /tenant/templates:
+    get:
+      tags: [Notifications]
+      summary: List notification templates
+      responses:
+        '200':
+          description: Template list
+    post:
+      tags: [Notifications]
+      summary: Create notification template
+      responses:
+        '201':
+          description: Template created
+
+  /tenant/notifications:
+    get:
+      tags: [Notifications]
+      summary: List notification logs
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Notification log list
+
+  # ==================== Tenant - Git & Playbooks ====================
+  /tenant/git-repos:
+    get:
+      tags: [Git & Playbooks]
+      summary: List Git repositories
+      responses:
+        '200':
+          description: Repository list
+    post:
+      tags: [Git & Playbooks]
+      summary: Register a Git repository
+      responses:
+        '201':
+          description: Repository registered
+
+  /tenant/git-repos/{id}/sync:
+    post:
+      tags: [Git & Playbooks]
+      summary: Trigger Git repository sync
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sync triggered
+
+  /tenant/playbooks:
+    get:
+      tags: [Git & Playbooks]
+      summary: List playbook templates
+      responses:
+        '200':
+          description: Playbook list
+
+  /tenant/playbooks/{id}/scan:
+    post:
+      tags: [Git & Playbooks]
+      summary: Scan playbook variables
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Variables scanned
+
+  # ==================== Tenant - Secrets ====================
+  /tenant/secrets-sources:
+    get:
+      tags: [Secrets]
+      summary: List secret sources
+      responses:
+        '200':
+          description: Secret source list
+    post:
+      tags: [Secrets]
+      summary: Create secret source
+      responses:
+        '201':
+          description: Secret source created
+
+  # ==================== Tenant - Approvals ====================
+  /tenant/healing/approvals:
+    get:
+      tags: [Approvals]
+      summary: List approval tasks
+      responses:
+        '200':
+          description: Approval list
+
+  /tenant/healing/approvals/{id}/approve:
+    post:
+      tags: [Approvals]
+      summary: Approve a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Task approved
+
+  /tenant/healing/approvals/{id}/reject:
+    post:
+      tags: [Approvals]
+      summary: Reject a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Task rejected
+
+  # ==================== Tenant - Dashboard ====================
+  /tenant/dashboard/overview:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard overview (KPIs, trends)
+      responses:
+        '200':
+          description: Dashboard overview data
+
+  # ==================== Platform - Users ====================
+  /platform/users:
+    get:
+      tags: [Platform Admin]
+      summary: List platform users
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: User list
+    post:
+      tags: [Platform Admin]
+      summary: Create platform user
+      responses:
+        '201':
+          description: User created
+
+  # ==================== Platform - Tenants ====================
+  /platform/tenants:
+    get:
+      tags: [Platform Admin]
+      summary: List tenants
+      responses:
+        '200':
+          description: Tenant list
+    post:
+      tags: [Platform Admin]
+      summary: Create tenant
+      responses:
+        '201':
+          description: Tenant created
+
+  # ==================== Health Check ====================
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
