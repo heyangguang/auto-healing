@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Build all platforms
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}"
+          
+          mkdir -p dist
+
+          # Build matrix
+          platforms=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+            "windows/arm64"
+          )
+
+          for platform in "${platforms[@]}"; do
+            GOOS="${platform%/*}"
+            GOARCH="${platform#*/}"
+            binary="auto-healing-${GOOS}-${GOARCH}"
+            
+            if [ "${GOOS}" = "windows" ]; then
+              binary="${binary}.exe"
+            fi
+
+            echo "📦 Building ${GOOS}/${GOARCH}..."
+            GOOS=${GOOS} GOARCH=${GOARCH} go build -trimpath \
+              -ldflags "${LDFLAGS}" \
+              -o "dist/${binary}" \
+              ./cmd/server
+
+            # Package
+            if [ "${GOOS}" = "windows" ]; then
+              cd dist && zip "auto-healing-${VERSION}-${GOOS}-${GOARCH}.zip" "${binary}" && cd ..
+            else
+              tar -czf "dist/auto-healing-${VERSION}-${GOOS}-${GOARCH}.tar.gz" -C dist "${binary}"
+            fi
+          done
+
+          # Generate checksums
+          cd dist
+          sha256sum *.tar.gz *.zip > checksums.txt
+          cat checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
