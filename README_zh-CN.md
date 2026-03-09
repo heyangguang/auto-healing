@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/images/image-2.png" alt="Auto-Healing Platform Logo" width="120" />
+  <img src="docs/images/pangolin-logo-full.png" alt="Pangolin - 自动自愈平台" width="400" />
 </p>
 
-<h1 align="center">Auto-Healing Platform</h1>
+<h1 align="center">Pangolin — 智能运维自愈平台</h1>
 
 <p align="center">
   <strong>企业级智能 IT 运维自愈平台</strong>

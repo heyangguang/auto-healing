@@ -1,0 +1,60 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Pango - 穿山甲守护者 Logo -->
+  <!-- 身体轮廓 -->
+  <ellipse cx="55" cy="68" rx="30" ry="24" fill="#3D9B8F"/>
+  <!-- 尾巴 -->
+  <path d="M28 80 Q15 95 25 105 Q32 108 38 100 Q42 92 35 82" fill="#3D9B8F"/>
+  <path d="M26 96 Q28 100 32 102" stroke="#2D7A70" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M24 92 Q26 96 30 98" stroke="#2D7A70" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <!-- 鳞片层 - 第1排 -->
+  <path d="M38 48 Q42 44 46 48 Q42 52 38 48Z" fill="#2D8B7A"/>
+  <path d="M46 46 Q50 42 54 46 Q50 50 46 46Z" fill="#2D8B7A"/>
+  <path d="M54 45 Q58 41 62 45 Q58 49 54 45Z" fill="#2D8B7A"/>
+  <path d="M62 46 Q66 42 70 46 Q66 50 62 46Z" fill="#2D8B7A"/>
+  <!-- 鳞片层 - 第2排 -->
+  <path d="M35 55 Q39 51 43 55 Q39 59 35 55Z" fill="#2D8B7A"/>
+  <path d="M43 53 Q47 49 51 53 Q47 57 43 53Z" fill="#2D8B7A"/>
+  <path d="M51 52 Q55 48 59 52 Q55 56 51 52Z" fill="#2D8B7A"/>
+  <path d="M59 53 Q63 49 67 53 Q63 57 59 53Z" fill="#2D8B7A"/>
+  <path d="M67 55 Q71 51 75 55 Q71 59 67 55Z" fill="#2D8B7A"/>
+  <!-- 鳞片层 - 第3排 -->
+  <path d="M33 63 Q37 59 41 63 Q37 67 33 63Z" fill="#2D8B7A"/>
+  <path d="M41 61 Q45 57 49 61 Q45 65 41 61Z" fill="#2D8B7A"/>
+  <path d="M49 60 Q53 56 57 60 Q53 64 49 60Z" fill="#2D8B7A"/>
+  <path d="M57 61 Q61 57 65 61 Q61 65 57 61Z" fill="#2D8B7A"/>
+  <path d="M65 63 Q69 59 73 63 Q69 67 65 63Z" fill="#2D8B7A"/>
+  <!-- 鳞片层 - 第4排 -->
+  <path d="M36 72 Q40 68 44 72 Q40 76 36 72Z" fill="#2D8B7A"/>
+  <path d="M44 70 Q48 66 52 70 Q48 74 44 70Z" fill="#2D8B7A"/>
+  <path d="M52 69 Q56 65 60 69 Q56 73 52 69Z" fill="#2D8B7A"/>
+  <path d="M60 70 Q64 66 68 70 Q64 74 60 70Z" fill="#2D8B7A"/>
+  <!-- 头部 -->
+  <ellipse cx="52" cy="40" rx="16" ry="14" fill="#5DB8A9"/>
+  <!-- 脸部浅色区域 -->
+  <ellipse cx="50" cy="42" rx="10" ry="9" fill="#7ECFC1"/>
+  <!-- 眼睛 -->
+  <circle cx="46" cy="38" r="4" fill="white"/>
+  <circle cx="46" cy="38" r="2.5" fill="#1A3A35"/>
+  <circle cx="44.5" cy="37" r="1" fill="white"/>
+  <circle cx="57" cy="38" r="3.5" fill="white"/>
+  <circle cx="57" cy="38" r="2" fill="#1A3A35"/>
+  <circle cx="55.8" cy="37" r="0.8" fill="white"/>
+  <!-- 鼻子 -->
+  <ellipse cx="50" cy="44" rx="1.5" ry="1" fill="#2D7A70"/>
+  <!-- 微笑 -->
+  <path d="M46 47 Q50 50 54 47" stroke="#2D7A70" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+  <!-- 头顶鳞片 -->
+  <path d="M40 30 Q44 26 48 30 Q44 34 40 30Z" fill="#2D8B7A"/>
+  <path d="M48 28 Q52 24 56 28 Q52 32 48 28Z" fill="#2D8B7A"/>
+  <path d="M56 30 Q60 26 64 30 Q60 34 56 30Z" fill="#2D8B7A"/>
+  <!-- 盾牌 -->
+  <path d="M82 42 L82 62 Q82 75 92 80 Q102 75 102 62 L102 42 Z" fill="#3DBDA8" stroke="#2D8B7A" stroke-width="2"/>
+  <path d="M87 52 L92 58 L100 48" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 红色方块 (基础设施块) -->
+  <rect x="88" y="18" width="8" height="8" rx="1.5" fill="#E8655A" transform="rotate(15 92 22)"/>
+  <rect x="100" y="30" width="6" height="6" rx="1" fill="#E8655A" transform="rotate(-10 103 33)" opacity="0.7"/>
+  <rect x="78" y="22" width="5" height="5" rx="1" fill="#E8655A" transform="rotate(25 80 24)" opacity="0.5"/>
+  <!-- 小爪子(简化短爪) -->
+  <ellipse cx="40" cy="85" rx="4" ry="3" fill="#5DB8A9"/>
+  <ellipse cx="65" cy="85" rx="4" ry="3" fill="#5DB8A9"/>
+</svg>
