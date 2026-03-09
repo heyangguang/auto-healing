@@ -319,6 +319,48 @@ GOOS=windows GOARCH=arm64 go build -o bin/auto-healing-windows-arm64.exe ./cmd/s
 
 ---
 
+## 🐳 Docker 镜像
+
+官方 Docker 镜像发布在 GitHub Container Registry：
+
+| 镜像 | 说明 |
+|------|------|
+| `ghcr.io/heyangguang/auto-healing` | **服务端** — 主 API 服务 + 自愈引擎 |
+| `ghcr.io/heyangguang/auto-healing-executor` | **执行器** — 隔离的 Ansible 执行环境 |
+
+### Docker 快速启动
+
+```bash
+# 拉取镜像
+docker pull ghcr.io/heyangguang/auto-healing:latest
+docker pull ghcr.io/heyangguang/auto-healing-executor:latest
+
+# 启动服务端（需要已运行 PostgreSQL 和 Redis）
+docker run -d --name auto-healing \
+  -p 8080:8080 \
+  -e AH_DATABASE_HOST=你的数据库地址 \
+  -e AH_REDIS_HOST=你的Redis地址 \
+  ghcr.io/heyangguang/auto-healing:latest
+```
+
+### 什么是 Executor（执行器）？
+
+平台支持 **两种执行模式** 来运行 Ansible Playbook：
+
+| 模式 | 工作原理 | 适用场景 |
+|------|---------|---------|
+| **Local（本地）** | 直接在服务端主机上运行 Ansible | 简单部署、开发测试 |
+| **Docker（容器）** | 在 `auto-healing-executor` 容器中运行 | 生产环境（隔离、可复现） |
+
+执行器镜像预装了：
+- `ansible-core 2.14.18`（支持 Python 3.6+ 目标机器）
+- `paramiko`、`sshpass`（SSH 连接工具）
+- `git`、`curl`（实用工具）
+
+> 💡 Docker 模式确保每次执行在干净的隔离环境中运行，避免依赖冲突、提升安全性。
+
+---
+
 ## 🔧 配置说明
 
 从模板创建本地配置文件：

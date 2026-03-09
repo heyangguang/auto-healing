@@ -326,6 +326,48 @@ GOOS=windows GOARCH=arm64 go build -o bin/auto-healing-windows-arm64.exe ./cmd/s
 
 ---
 
+## 🐳 Docker Images
+
+Official Docker images are available on GitHub Container Registry:
+
+| Image | Description |
+|-------|-------------|
+| `ghcr.io/heyangguang/auto-healing` | **Server** — Main API & healing engine |
+| `ghcr.io/heyangguang/auto-healing-executor` | **Executor** — Isolated Ansible execution environment |
+
+### Quick Start with Docker
+
+```bash
+# Pull images
+docker pull ghcr.io/heyangguang/auto-healing:latest
+docker pull ghcr.io/heyangguang/auto-healing-executor:latest
+
+# Run server (requires PostgreSQL & Redis)
+docker run -d --name auto-healing \
+  -p 8080:8080 \
+  -e AH_DATABASE_HOST=your-postgres-host \
+  -e AH_REDIS_HOST=your-redis-host \
+  ghcr.io/heyangguang/auto-healing:latest
+```
+
+### What is the Executor?
+
+The platform supports **two execution modes** for running Ansible Playbooks:
+
+| Mode | How it Works | Best For |
+|------|-------------|----------|
+| **Local** | Runs Ansible directly on the server host | Simple setups, development |
+| **Docker** | Runs Ansible inside `auto-healing-executor` container | Production (isolated, reproducible) |
+
+The Executor image comes pre-installed with:
+- `ansible-core 2.14.18` (supports Python 3.6+ targets)
+- `paramiko`, `sshpass` for SSH connectivity
+- `git`, `curl` for utilities
+
+> 💡 Docker mode ensures each execution runs in a clean, isolated environment — preventing dependency conflicts and improving security.
+
+---
+
 ## 🔧 Configuration
 
 Create `configs/config.yaml` from the template:

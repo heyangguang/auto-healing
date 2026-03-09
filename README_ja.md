@@ -222,6 +222,43 @@ GOOS=windows GOARCH=arm64 go build -o bin/auto-healing-windows-arm64.exe ./cmd/s
 
 ---
 
+## 🐳 Docker イメージ
+
+公式 Docker イメージは GitHub Container Registry で公開しています：
+
+| イメージ | 説明 |
+|---------|------|
+| `ghcr.io/heyangguang/auto-healing` | **サーバー** — メイン API + 修復エンジン |
+| `ghcr.io/heyangguang/auto-healing-executor` | **エグゼキューター** — 隔離された Ansible 実行環境 |
+
+### Docker クイックスタート
+
+```bash
+# イメージのプル
+docker pull ghcr.io/heyangguang/auto-healing:latest
+docker pull ghcr.io/heyangguang/auto-healing-executor:latest
+
+# サーバー起動（PostgreSQL と Redis が必要）
+docker run -d --name auto-healing \
+  -p 8080:8080 \
+  -e AH_DATABASE_HOST=your-postgres-host \
+  -e AH_REDIS_HOST=your-redis-host \
+  ghcr.io/heyangguang/auto-healing:latest
+```
+
+### エグゼキューターとは？
+
+プラットフォームは Ansible Playbook の実行に **2つのモード** を提供します：
+
+| モード | 動作方式 | 推奨用途 |
+|--------|---------|---------|
+| **Local** | サーバーホスト上で直接 Ansible を実行 | 開発、シンプルな構成 |
+| **Docker** | `auto-healing-executor` コンテナ内で実行 | 本番環境（隔離・再現性） |
+
+> 💡 Docker モードはクリーンな隔離環境で実行するため、依存関係の競合を防ぎ安全性を向上させます。
+
+---
+
 ## 🚢 デプロイ
 
 ### システム要件
