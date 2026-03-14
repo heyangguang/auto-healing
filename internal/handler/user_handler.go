@@ -158,6 +158,14 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
+	// 保护最后一个平台管理员：不允许禁用
+	if req.Status != "" && req.Status != "active" {
+		if h.isLastPlatformAdmin(c, id) {
+			response.BadRequest(c, "系统中必须保留至少一个可用的平台管理员，无法禁用")
+			return
+		}
+	}
+
 	if req.DisplayName != "" {
 		user.DisplayName = req.DisplayName
 	}
@@ -182,6 +190,11 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		}
 		if role.Scope != "platform" {
 			response.BadRequest(c, "只能分配平台级别角色")
+			return
+		}
+		// 保护最后一个平台管理员：不允许降级角色
+		if role.Name != "platform_admin" && h.isLastPlatformAdmin(c, id) {
+			response.BadRequest(c, "系统中必须保留至少一个平台管理员，无法变更角色")
 			return
 		}
 		if err := h.userRepo.AssignRoles(c.Request.Context(), user.ID, []uuid.UUID{role.ID}); err != nil {
@@ -273,6 +286,21 @@ func (h *UserHandler) AssignUserRoles(c *gin.Context) {
 		return
 	}
 
+	// 保护最后一个平台管理员：检查新角色列表是否仍包含 platform_admin
+	if h.isLastPlatformAdmin(c, id) {
+		hasPlatformAdmin := false
+		for _, roleID := range req.RoleIDs {
+			if role, err := h.roleRepo.GetByID(c.Request.Context(), roleID); err == nil && role.Name == "platform_admin" {
+				hasPlatformAdmin = true
+				break
+			}
+		}
+		if !hasPlatformAdmin {
+			response.BadRequest(c, "系统中必须保留至少一个平台管理员，无法移除 platform_admin 角色")
+			return
+		}
+	}
+
 	if err := h.userRepo.AssignRoles(c.Request.Context(), id, req.RoleIDs); err != nil {
 		response.InternalError(c, "分配角色失败")
 		return
@@ -280,6 +308,21 @@ func (h *UserHandler) AssignUserRoles(c *gin.Context) {
 
 	user, _ := h.userRepo.GetByID(c.Request.Context(), id)
 	response.Success(c, user)
+}
+
+// isLastPlatformAdmin 判断指定用户是否是最后一个平台管理员
+func (h *UserHandler) isLastPlatformAdmin(c *gin.Context, userID uuid.UUID) bool {
+	platformAdmins, _, err := h.userRepo.List(c.Request.Context(), &repository.UserListParams{
+		Page:         1,
+		PageSize:     2,
+		PlatformOnly: true,
+		Status:       "active",
+	})
+	if err != nil || len(platformAdmins) > 1 {
+		return false // 查询失败或有多个管理员，不阻止
+	}
+	// 只剩一个且就是目标用户
+	return len(platformAdmins) == 1 && platformAdmins[0].ID == userID
 }
 
 // RoleHandler 角色管理处理器
