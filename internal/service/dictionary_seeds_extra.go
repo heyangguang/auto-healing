@@ -42,6 +42,9 @@ func auditActionSeeds() []model.Dictionary {
 		d("audit_action", "ready", "设为就绪", "Ready", "#52c41a", "green", "", "", "", 34),
 		d("audit_action", "impersonation_enter", "提权进入", "Impersonation Enter", "#722ed1", "purple", "", "", "", 35),
 		d("audit_action", "impersonation_exit", "提权退出", "Impersonation Exit", "#8c8c8c", "default", "", "", "", 36),
+		d("audit_action", "impersonation_terminate", "提权终止", "Impersonation Terminate", "#f5222d", "red", "", "", "", 37),
+		d("audit_action", "batch_create", "批量创建", "Batch Create", "#52c41a", "green", "", "", "", 38),
+		d("audit_action", "update_variables", "更新变量", "Update Variables", "#1890ff", "blue", "", "", "", 39),
 	}
 }
 
@@ -90,10 +93,16 @@ func auditResourceSeeds() []model.Dictionary {
 		d("audit_resource_tenant", "tenant-command-blacklist", "命令黑名单", "Command Blacklist", "", "", "", "", "", 20),
 		d("audit_resource_tenant", "tenant-blacklist-exemptions", "豁免规则", "Blacklist Exemption", "", "", "", "", "", 21),
 		// auth / common 路由（任何角色都可能触发）
-		d("audit_resource_tenant", "auth-logout", "登出", "Logout", "", "", "", "", "", 22),
-		d("audit_resource_tenant", "auth-profile", "个人资料", "Profile", "", "", "", "", "", 23),
-		d("audit_resource_tenant", "auth-password", "密码修改", "Password", "", "", "", "", "", 24),
-		d("audit_resource_tenant", "common-user", "用户个人设置", "User Settings", "", "", "", "", "", 25),
+		d("audit_resource_tenant", "auth-logout", "登出", "Logout", "", "", "", "", "", 23),
+		d("audit_resource_tenant", "auth-profile", "个人资料", "Profile", "", "", "", "", "", 24),
+		d("audit_resource_tenant", "auth-password", "密码修改", "Password", "", "", "", "", "", 25),
+		d("audit_resource_tenant", "common-user", "用户个人设置", "User Settings", "", "", "", "", "", 26),
+		d("audit_resource_tenant", "common", "通用操作", "Common", "", "", "", "", "", 27),
+		d("audit_resource_tenant", "git-repos", "代码仓库", "Git Repository", "", "", "", "", "", 28),
+		d("audit_resource_tenant", "healing-flows", "自愈流程", "Healing Flow", "", "", "", "", "", 29),
+		d("audit_resource_tenant", "incidents", "事件工单", "Incident", "", "", "", "", "", 30),
+		d("audit_resource_tenant", "playbooks", "自动化剧本", "Playbook", "", "", "", "", "", 31),
+
 
 
 		// ==================== 平台级资源 ====================
@@ -118,6 +127,11 @@ func auditResourceSeeds() []model.Dictionary {
 		d("audit_resource_platform", "workbench", "工作台", "Workbench", "", "", "", "", "", 16),
 		d("audit_resource_platform", "command-blacklist", "命令黑名单", "Command Blacklist", "", "", "", "", "", 17),
 		d("audit_resource_platform", "blacklist-exemptions", "豁免规则", "Blacklist Exemption", "", "", "", "", "", 18),
+		d("audit_resource_platform", "common", "通用操作", "Common", "", "", "", "", "", 19),
+		d("audit_resource_platform", "git-repos", "代码仓库", "Git Repository", "", "", "", "", "", 21),
+		d("audit_resource_platform", "healing-flows", "自愈流程", "Healing Flow", "", "", "", "", "", 22),
+		d("audit_resource_platform", "incidents", "事件工单", "Incident", "", "", "", "", "", 23),
+		d("audit_resource_platform", "playbooks", "自动化剧本", "Playbook", "", "", "", "", "", 24),
 		// 平台管理员通过 Impersonation 操作租户资源时产出 tenant-X 格式
 		d("audit_resource_platform", "tenant-users", "租户用户管理", "Tenant User", "", "", "", "", "", 30),
 		d("audit_resource_platform", "tenant-roles", "租户角色管理", "Tenant Role", "", "", "", "", "", 31),
