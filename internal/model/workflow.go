@@ -32,8 +32,9 @@ func (Workflow) TableName() string {
 
 // WorkflowNode 工作流节点
 type WorkflowNode struct {
-	ID          uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	WorkflowID  uuid.UUID `json:"workflow_id" gorm:"type:uuid;not null"`
+	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID    *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	WorkflowID  uuid.UUID  `json:"workflow_id" gorm:"type:uuid;not null"`
 	NodeType    string    `json:"node_type" gorm:"type:varchar(50);not null"` // start, end, condition, approval, notification, execution, delay, parallel
 	Name        string    `json:"name" gorm:"type:varchar(200);not null"`
 	Description string    `json:"description,omitempty" gorm:"type:text"`
@@ -50,8 +51,9 @@ func (WorkflowNode) TableName() string {
 
 // WorkflowEdge 工作流边
 type WorkflowEdge struct {
-	ID                  uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	WorkflowID          uuid.UUID `json:"workflow_id" gorm:"type:uuid;not null"`
+	ID                  uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID            *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	WorkflowID          uuid.UUID  `json:"workflow_id" gorm:"type:uuid;not null"`
 	SourceNodeID        uuid.UUID `json:"source_node_id" gorm:"type:uuid;not null"`
 	TargetNodeID        uuid.UUID `json:"target_node_id" gorm:"type:uuid;not null"`
 	ConditionExpression string    `json:"condition_expression,omitempty" gorm:"type:text"`
@@ -72,6 +74,7 @@ func (WorkflowEdge) TableName() string {
 // WorkflowInstance 工作流实例
 type WorkflowInstance struct {
 	ID            uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID      *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	WorkflowID    uuid.UUID  `json:"workflow_id" gorm:"type:uuid;not null"`
 	IncidentID    *uuid.UUID `json:"incident_id,omitempty" gorm:"type:uuid"`
 	Status        string     `json:"status" gorm:"type:varchar(50);default:'running'"` // pending, running, paused, completed, failed, cancelled

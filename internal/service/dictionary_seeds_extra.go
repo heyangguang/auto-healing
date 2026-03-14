@@ -94,29 +94,7 @@ func auditResourceSeeds() []model.Dictionary {
 		d("audit_resource_tenant", "auth-profile", "个人资料", "Profile", "", "", "", "", "", 23),
 		d("audit_resource_tenant", "auth-password", "密码修改", "Password", "", "", "", "", "", 24),
 		d("audit_resource_tenant", "common-user", "用户个人设置", "User Settings", "", "", "", "", "", 25),
-		// 旧格式兼容（不再匹配，保留供前端展示已存在记录）
-		d("audit_resource_tenant", "user", "用户", "User", "", "", "", "", "", 100),
-		d("audit_resource_tenant", "role", "角色", "Role", "", "", "", "", "", 101),
-		d("audit_resource_tenant", "plugin", "插件", "Plugin", "", "", "", "", "", 102),
-		d("audit_resource_tenant", "cmdb", "资产管理", "CMDB", "", "", "", "", "", 103),
-		d("audit_resource_tenant", "secrets-sources", "凭据管理", "Credential", "", "", "", "", "", 104),
-		d("audit_resource_tenant", "git-repos", "代码仓库", "Code Repository", "", "", "", "", "", 105),
-		d("audit_resource_tenant", "playbooks", "自动化剧本", "Playbook", "", "", "", "", "", 106),
-		d("audit_resource_tenant", "execution-tasks", "执行任务", "Execution Task", "", "", "", "", "", 107),
-		d("audit_resource_tenant", "execution-runs", "执行记录", "Execution Run", "", "", "", "", "", 108),
-		d("audit_resource_tenant", "execution-schedules", "定时任务", "Schedule", "", "", "", "", "", 109),
-		d("audit_resource_tenant", "channels", "通知渠道", "Channel", "", "", "", "", "", 110),
-		d("audit_resource_tenant", "templates", "通知模板", "Template", "", "", "", "", "", 111),
-		d("audit_resource_tenant", "notifications", "通知记录", "Notification", "", "", "", "", "", 112),
-		d("audit_resource_tenant", "healing-flows", "自愈流程", "Healing Flow", "", "", "", "", "", 113),
-		d("audit_resource_tenant", "healing-rules", "自愈规则", "Healing Rule", "", "", "", "", "", 114),
-		d("audit_resource_tenant", "healing-instances", "自愈实例", "Healing Instance", "", "", "", "", "", 115),
-		d("audit_resource_tenant", "healing-approvals", "审批任务", "Approval", "", "", "", "", "", 116),
-		d("audit_resource_tenant", "incidents", "事件工单", "Incident", "", "", "", "", "", 117),
-		d("audit_resource_tenant", "dashboard", "监控面板", "Dashboard", "", "", "", "", "", 118),
-		d("audit_resource_tenant", "site-messages", "站内信", "Site Message", "", "", "", "", "", 119),
-		d("audit_resource_tenant", "command-blacklist", "命令黑名单", "Command Blacklist", "", "", "", "", "", 120),
-		d("audit_resource_tenant", "blacklist-exemptions", "豁免规则", "Blacklist Exemption", "", "", "", "", "", 121),
+
 
 		// ==================== 平台级资源 ====================
 		// 平台管理员操作 /platform/* 路由（已去掉 platform/ 前缀）
@@ -163,13 +141,7 @@ func auditResourceSeeds() []model.Dictionary {
 		d("audit_resource_platform", "tenant-settings", "租户设置", "Tenant Settings", "", "", "", "", "", 49),
 		d("audit_resource_platform", "tenant-command-blacklist", "命令黑名单", "Command Blacklist", "", "", "", "", "", 50),
 		d("audit_resource_platform", "tenant-blacklist-exemptions", "豁免规则", "Blacklist Exemption", "", "", "", "", "", 51),
-		// 旧格式兼容
-		d("audit_resource_platform", "plugins", "插件管理", "Plugin", "", "", "", "", "", 100),
-		d("audit_resource_platform", "execution-tasks", "执行任务", "Execution Task", "", "", "", "", "", 101),
-		d("audit_resource_platform", "healing-approvals", "自愈审批", "Healing Approval", "", "", "", "", "", 102),
-		d("audit_resource_platform", "healing-flows", "自愈流程", "Healing Flow", "", "", "", "", "", 103),
-		d("audit_resource_platform", "healing-rules", "自愈规则", "Healing Rule", "", "", "", "", "", 104),
-		d("audit_resource_platform", "incidents", "事件管理", "Incident", "", "", "", "", "", 105),
+
 	}
 }
 

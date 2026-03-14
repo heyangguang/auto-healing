@@ -84,8 +84,9 @@ func (SystemWorkspace) TableName() string {
 
 // RoleWorkspace 角色-工作区关联
 type RoleWorkspace struct {
-	ID          uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	RoleID      uuid.UUID `json:"role_id" gorm:"type:uuid;not null"`
+	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID    *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	RoleID      uuid.UUID  `json:"role_id" gorm:"type:uuid;not null"`
 	WorkspaceID uuid.UUID `json:"workspace_id" gorm:"type:uuid;not null"`
 	CreatedAt   time.Time `json:"created_at" gorm:"default:now()"`
 }

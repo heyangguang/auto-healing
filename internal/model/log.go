@@ -94,6 +94,7 @@ func (ExecutionLog) TableName() string {
 // WorkflowLog 工作流执行日志模型
 type WorkflowLog struct {
 	ID                 uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID           *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	WorkflowInstanceID uuid.UUID  `json:"workflow_instance_id" gorm:"type:uuid;not null"`
 	NodeID             *uuid.UUID `json:"node_id,omitempty" gorm:"type:uuid"`
 	LogLevel           string     `json:"log_level" gorm:"type:varchar(20);not null"`

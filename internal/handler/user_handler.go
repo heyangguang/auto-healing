@@ -306,8 +306,8 @@ func (h *UserHandler) AssignUserRoles(c *gin.Context) {
 		return
 	}
 
-	user, _ := h.userRepo.GetByID(c.Request.Context(), id)
-	response.Success(c, user)
+	userWithRoles, _ := h.userRepo.GetByID(c.Request.Context(), id)
+	response.Success(c, userWithRoles)
 }
 
 // isLastPlatformAdmin 判断指定用户是否是最后一个平台管理员
