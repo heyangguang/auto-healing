@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
@@ -137,16 +136,10 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, clientIP string)
 		return nil, err
 	}
 
-	// 检测平台角色：所有 platform_ 前缀角色都标记为平台用户，但只有 platform_admin 赋予 "*" 通配符
-	isPlatformAdmin := false
-	for _, role := range roles {
-		if strings.HasPrefix(role, "platform_") {
-			isPlatformAdmin = true
-			if role == "platform_admin" {
-				permissions = []string{"*"}
-			}
-			break
-		}
+	// 平台管理员由 DB 字段 is_platform_admin 决定，不依赖角色名
+	isPlatformAdmin := user.IsPlatformAdmin
+	if isPlatformAdmin {
+		permissions = []string{"*"}
 	}
 
 	// 生成 Token（携带 IsPlatformAdmin 标志 + 租户信息）
@@ -368,16 +361,10 @@ func (s *Service) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*UserIn
 		return nil, err
 	}
 
-	// 检测平台角色
-	isPlatformAdmin := false
-	for _, role := range roles {
-		if strings.HasPrefix(role, "platform_") {
-			isPlatformAdmin = true
-			if role == "platform_admin" {
-				permissions = []string{"*"}
-			}
-			break
-		}
+	// 平台管理员由 DB 字段 is_platform_admin 决定，不依赖角色名
+	isPlatformAdmin := user.IsPlatformAdmin
+	if isPlatformAdmin {
+		permissions = []string{"*"}
 	}
 
 	return &UserInfo{
@@ -460,16 +447,10 @@ func (s *Service) GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserPr
 		return nil, err
 	}
 
-	// 检测平台角色
-	isPlatformAdmin2 := false
-	for _, role := range roleNames {
-		if strings.HasPrefix(role, "platform_") {
-			isPlatformAdmin2 = true
-			if role == "platform_admin" {
-				permissions = []string{"*"}
-			}
-			break
-		}
+	// 平台管理员由 DB 字段 is_platform_admin 决定，不依赖角色名
+	isPlatformAdmin2 := user.IsPlatformAdmin
+	if isPlatformAdmin2 {
+		permissions = []string{"*"}
 	}
 
 	return &UserProfile{

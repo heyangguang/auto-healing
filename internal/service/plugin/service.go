@@ -236,8 +236,12 @@ func (s *Service) TriggerSync(ctx context.Context, id uuid.UUID) (*model.PluginS
 		return nil, err
 	}
 
-	// 启动异步真实同步任务
-	go s.performSync(context.Background(), plugin, syncLog)
+	// 启动异步真实同步任务（使用独立 context 避免 HTTP 请求取消，并注入插件租户 ID 确保数据写入正确租户）
+	asyncCtx := context.Background()
+	if plugin.TenantID != nil {
+		asyncCtx = repository.WithTenantID(asyncCtx, *plugin.TenantID)
+	}
+	go s.performSync(asyncCtx, plugin, syncLog)
 
 	return syncLog, nil
 }

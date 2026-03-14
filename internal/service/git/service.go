@@ -226,10 +226,14 @@ func (s *Service) UpdateRepo(ctx context.Context, id uuid.UUID, defaultBranch, a
 		return nil, err
 	}
 
-	// 分支变更时自动触发同步，确保代码切换到新分支
+	// 分支变更时自动触发同步，确保代码切换到新分支（注入仓库租户 ctx 避免同步日志写入错误租户）
 	if defaultBranch != "" && defaultBranch != oldBranch {
 		logger.Info("仓库 %s 默认分支变更: %s → %s，触发自动同步", repo.Name, oldBranch, defaultBranch)
-		go s.SyncRepoWithTrigger(context.Background(), id, "branch_change")
+		bgCtx := context.Background()
+		if repo.TenantID != nil {
+			bgCtx = repository.WithTenantID(bgCtx, *repo.TenantID)
+		}
+		go s.SyncRepoWithTrigger(bgCtx, id, "branch_change")
 	}
 
 	return repo, nil
@@ -368,15 +372,15 @@ func (s *Service) SyncRepoWithTrigger(ctx context.Context, id uuid.UUID, trigger
 		DurationMs:   durationMs,
 	})
 
-	// 检查关联的 Playbooks
-	go s.checkPlaybooksAfterSync(id)
+	// 检查关联的 Playbooks（传递仓库租户 ID，确保查询在正确租户范围内）
+	go s.checkPlaybooksAfterSync(id, repo.TenantID)
 
 	s.repo.Update(ctx, repo)
 	return nil
 }
 
 // checkPlaybooksAfterSync 同步后检查并自动扫描关联的 Playbooks
-func (s *Service) checkPlaybooksAfterSync(repositoryID uuid.UUID) {
+func (s *Service) checkPlaybooksAfterSync(repositoryID uuid.UUID, tenantID *uuid.UUID) {
 	// panic 保护
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -384,7 +388,11 @@ func (s *Service) checkPlaybooksAfterSync(repositoryID uuid.UUID) {
 		}
 	}()
 
+	// 注入仓库所属租户的 context，确保 Playbook 查询和更新在正确租户范围内
 	ctx := context.Background()
+	if tenantID != nil {
+		ctx = repository.WithTenantID(ctx, *tenantID)
+	}
 
 	// 获取关联的 Playbooks
 	playbooks, err := s.playbookRepo.ListByRepositoryID(ctx, repositoryID)

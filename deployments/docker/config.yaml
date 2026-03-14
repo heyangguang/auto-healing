@@ -1,0 +1,58 @@
+# 运维自愈系统 - 生产部署配置
+# server 以二进制运行在宿主机，postgres/redis 用 localhost（容器端口已映射到宿主机）
+
+app:
+  name: Auto-Healing
+  version: 1.0.0
+  url: http://localhost:8080
+  env: production
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  mode: release
+
+database:
+  host: localhost          # server 跑在宿主机，用 localhost 访问 postgres 容器
+  port: 5432
+  user: postgres
+  password: postgres      # 生产环境请修改密码
+  dbname: auto_healing
+  ssl_mode: disable
+  max_open_conns: 25
+  max_idle_conns: 5
+  max_lifetime_minutes: 5
+
+redis:
+  host: localhost          # server 跑在宿主机，用 localhost 访问 redis 容器
+  port: 6379
+  password: ""
+  db: 0
+
+jwt:
+  secret: your-super-secret-key-change-in-production  # ⚠️ 生产环境必须修改！
+  access_token_ttl_minutes: 60
+  refresh_token_ttl_hours: 168
+  issuer: auto-healing
+
+log:
+  level: info
+  console:
+    enabled: true
+    format: json
+    color: false
+  file:
+    enabled: true
+    path: /data/logs
+    filename: app.log
+    format: json
+    max_size: 100
+    max_backups: 10
+    max_age: 30
+    compress: true
+  db_level: warn
+
+ansible:
+  executor_image: auto-healing-executor:v1.0.0   # ← 升级执行器时改这里
+  workspace_dir: /data/workspace
+  timeout_minutes: 30

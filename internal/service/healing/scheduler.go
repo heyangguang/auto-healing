@@ -148,9 +148,14 @@ func (s *Scheduler) scan() {
 		return
 	}
 
-	// 4. 对每个工单尝试匹配规则
+	// 4. 对每个工单尝试匹配规则（使用该工单所属租户的 context）
 	for _, incident := range incidents {
-		s.processIncident(ctx, &incident, rules)
+		// 注入工单所属租户的 context，确保 MarkScanned/Update/UpdateLastRunAt 均在正确租户范围内操作
+		incCtx := ctx
+		if incident.TenantID != nil {
+			incCtx = repository.WithTenantID(ctx, *incident.TenantID)
+		}
+		s.processIncident(incCtx, &incident, rules)
 	}
 }
 
@@ -158,9 +163,13 @@ func (s *Scheduler) scan() {
 func (s *Scheduler) processIncident(ctx context.Context, incident *model.Incident, rules []model.HealingRule) {
 	var matchedRule *model.HealingRule
 
-	// 按优先级从高到低尝试匹配
+	// 按优先级从高到低尝试匹配（仅匹配与该工单同一租户的规则）
 	for i := range rules {
 		rule := &rules[i]
+		// 租户隔离：规则必须属于与工单相同的租户
+		if incident.TenantID != nil && rule.TenantID != nil && *rule.TenantID != *incident.TenantID {
+			continue
+		}
 		if s.matcher.Match(ctx, incident, rule) {
 			matchedRule = rule
 			break // 匹配成功，不再尝试后续规则
@@ -201,30 +210,40 @@ func (s *Scheduler) processIncident(ctx context.Context, incident *model.Inciden
 		case s.sem <- struct{}{}: // 获取令牌
 			go func(inst *model.FlowInstance) {
 				defer func() { <-s.sem }() // 释放令牌
+				// 注入该实例所属租户的 context，供流程节点（CMDB等）使用
+				execCtx := context.Background()
+				if inst.TenantID != nil {
+					execCtx = repository.WithTenantID(execCtx, *inst.TenantID)
+				}
 				defer func() {
 					if r := recover(); r != nil {
 						logger.Sched("HEAL").Error("流程执行 panic [%s]: %v", inst.ID.String()[:8], fmt.Sprintf("%v", r))
-						s.instanceRepo.UpdateStatus(context.Background(), inst.ID,
+						s.instanceRepo.UpdateStatus(execCtx, inst.ID,
 							model.FlowInstanceStatusFailed,
 							fmt.Sprintf("执行异常(panic): %v", r))
 					}
 				}()
-				s.executor.Execute(context.Background(), inst)
+				s.executor.Execute(execCtx, inst)
 			}(instance)
 		default:
 			logger.Sched("HEAL").Warn("并发执行达到上限，工单 %s 延迟执行", incident.ID)
 			go func(inst *model.FlowInstance) {
 				s.sem <- struct{}{} // 等待令牌
 				defer func() { <-s.sem }()
+				// 注入该实例所属租户的 context
+				execCtx := context.Background()
+				if inst.TenantID != nil {
+					execCtx = repository.WithTenantID(execCtx, *inst.TenantID)
+				}
 				defer func() {
 					if r := recover(); r != nil {
 						logger.Sched("HEAL").Error("流程执行 panic [%s]: %v", inst.ID.String()[:8], fmt.Sprintf("%v", r))
-						s.instanceRepo.UpdateStatus(context.Background(), inst.ID,
+						s.instanceRepo.UpdateStatus(execCtx, inst.ID,
 							model.FlowInstanceStatusFailed,
 							fmt.Sprintf("执行异常(panic): %v", r))
 					}
 				}()
-				s.executor.Execute(context.Background(), inst)
+				s.executor.Execute(execCtx, inst)
 			}(instance)
 		}
 
@@ -339,12 +358,17 @@ func (s *Scheduler) processExpiredApprovals(ctx context.Context) {
 
 	// 更新关联的 FlowInstance 和 Incident 状态
 	for _, task := range expiredTasks {
-		s.instanceRepo.UpdateStatus(ctx, task.FlowInstanceID, model.FlowInstanceStatusFailed, "审批超时")
+		// 注入该审批任务所属租户的 context，确保后续 DB 操作在正确租户范围内
+		taskCtx := ctx
+		if task.TenantID != nil {
+			taskCtx = repository.WithTenantID(ctx, *task.TenantID)
+		}
+		s.instanceRepo.UpdateStatus(taskCtx, task.FlowInstanceID, model.FlowInstanceStatusFailed, "审批超时")
 
-		if instance, err := s.instanceRepo.GetByID(ctx, task.FlowInstanceID); err == nil && instance.IncidentID != nil {
-			if incident, err := s.incidentRepo.GetByID(ctx, *instance.IncidentID); err == nil {
+		if instance, err := s.instanceRepo.GetByID(taskCtx, task.FlowInstanceID); err == nil && instance.IncidentID != nil {
+			if incident, err := s.incidentRepo.GetByID(taskCtx, *instance.IncidentID); err == nil {
 				incident.HealingStatus = "failed"
-				s.incidentRepo.Update(ctx, incident)
+				s.incidentRepo.Update(taskCtx, incident)
 				logger.Sched("HEAL").Info("审批超时，工单 %s 状态已更新为 failed", incident.ID.String()[:8])
 			}
 		}
@@ -377,18 +401,22 @@ func (s *Scheduler) TriggerManual(ctx context.Context, incidentID string, ruleID
 	s.incidentRepo.MarkScanned(ctx, incident.ID, &rule.ID, &instance.ID)
 
 	// 异步执行流程（使用独立 context，避免 HTTP 请求结束后 context 被取消，并发限制）
+	execCtx := context.Background()
+	if instance.TenantID != nil {
+		execCtx = repository.WithTenantID(execCtx, *instance.TenantID)
+	}
 	s.sem <- struct{}{} // 获取令牌
 	go func(inst *model.FlowInstance) {
 		defer func() { <-s.sem }() // 释放令牌
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Sched("HEAL").Error("手动触发流程 panic [%s]: %v", inst.ID.String()[:8], fmt.Sprintf("%v", r))
-				s.instanceRepo.UpdateStatus(context.Background(), inst.ID,
+				s.instanceRepo.UpdateStatus(execCtx, inst.ID,
 					model.FlowInstanceStatusFailed,
 					fmt.Sprintf("执行异常(panic): %v", r))
 			}
 		}()
-		s.executor.Execute(context.Background(), inst)
+		s.executor.Execute(execCtx, inst)
 	}(instance)
 
 	return instance, nil
@@ -415,16 +443,21 @@ func (s *Scheduler) recoverOrphanedInstances() {
 	for _, inst := range instances {
 		errMsg := fmt.Sprintf("服务重启恢复: 实例已停滞超过 %v (上次更新: %s)",
 			staleThreshold, inst.UpdatedAt.Format("2006-01-02 15:04:05"))
-		if err := s.instanceRepo.UpdateStatus(ctx, inst.ID, model.FlowInstanceStatusFailed, errMsg); err != nil {
+		// 注入该实例所属租户的 context
+		instCtx := ctx
+		if inst.TenantID != nil {
+			instCtx = repository.WithTenantID(ctx, *inst.TenantID)
+		}
+		if err := s.instanceRepo.UpdateStatus(instCtx, inst.ID, model.FlowInstanceStatusFailed, errMsg); err != nil {
 			logger.Sched("HEAL").Error("恢复实例 %s 失败: %v", inst.ID.String()[:8], err)
 			continue
 		}
 
 		// 更新关联工单的自愈状态
 		if inst.IncidentID != nil {
-			if incident, err := s.incidentRepo.GetByID(ctx, *inst.IncidentID); err == nil {
+			if incident, err := s.incidentRepo.GetByID(instCtx, *inst.IncidentID); err == nil {
 				incident.HealingStatus = "failed"
-				s.incidentRepo.Update(ctx, incident)
+				s.incidentRepo.Update(instCtx, incident)
 			}
 		}
 

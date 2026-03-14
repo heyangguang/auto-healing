@@ -252,7 +252,7 @@ func (r *WorkbenchRepository) GetResourceOverview(ctx context.Context, permissio
 		r.db.WithContext(ctx).Raw(`
 			SELECT COUNT(DISTINCT utr.user_id) FROM user_tenant_roles utr
 			JOIN roles r ON utr.role_id = r.id
-			WHERE utr.tenant_id = ? AND (r.name = 'admin' OR r.name = 'super_admin' OR r.name = 'platform_admin')
+			WHERE utr.tenant_id = ? AND (r.name = 'admin' OR r.name = 'super_admin')
 		`, tenantID).Count(&adminCount)
 		overview.Users.Admins = &adminCount
 	}

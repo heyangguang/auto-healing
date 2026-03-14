@@ -138,12 +138,27 @@ func (s *CommandBlacklistService) Delete(ctx context.Context, id uuid.UUID) erro
 	return s.repo.Delete(ctx, id)
 }
 
-// ToggleActive 启用/禁用
+// ToggleActive 启用/禁用规则
+// - 系统规则（is_system=true 或 tenant_id=nil）：写入当前租户的 override，不修改共享记录
+// - 租户自有规则：直接修改 is_active
 func (s *CommandBlacklistService) ToggleActive(ctx context.Context, id uuid.UUID) (*model.CommandBlacklist, error) {
 	rule, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
+	// 系统规则：通过 override 表独立控制，不修改共享记录
+	if rule.IsSystem || rule.TenantID == nil {
+		// 新的 is_active 是当前展示值的反转
+		newActive := !rule.IsActive
+		if err := s.repo.ToggleSystemRule(ctx, id, newActive); err != nil {
+			return nil, err
+		}
+		rule.IsActive = newActive
+		return rule, nil
+	}
+
+	// 租户自有规则：直接修改
 	rule.IsActive = !rule.IsActive
 	rule.UpdatedAt = time.Now()
 	if err := s.repo.Update(ctx, rule); err != nil {

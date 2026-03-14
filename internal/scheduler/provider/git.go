@@ -9,6 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	"github.com/company/auto-healing/internal/repository"
 	gitService "github.com/company/auto-healing/internal/service/git"
 )
 
@@ -103,7 +104,12 @@ func (s *GitScheduler) checkAndSync() {
 					logger.Sched("GIT").Error("[%s] syncRepo panic: %v", r.ID.String()[:8], rec)
 				}
 			}()
-			s.syncRepo(ctx, r)
+			// 注入仓库所属租户的 context，确保 GitSyncLog 和 Playbook 操作写入正确租户
+			repoCtx := context.Background()
+			if r.TenantID != nil {
+				repoCtx = repository.WithTenantID(repoCtx, *r.TenantID)
+			}
+			s.syncRepo(repoCtx, r)
 		}(repo)
 	}
 }

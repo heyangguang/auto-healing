@@ -369,10 +369,11 @@ func (r *HealingRuleRepository) List(ctx context.Context, page, pageSize int, is
 	return rules, total, err
 }
 
-// ListActiveByPriority 获取所有启用的规则，按优先级排序
+// ListActiveByPriority 获取所有启用的规则，按优先级排序（跨租户，调度器专用）
+// 注意：不使用 TenantDB，调度器需要处理所有租户的规则
 func (r *HealingRuleRepository) ListActiveByPriority(ctx context.Context) ([]model.HealingRule, error) {
 	var rules []model.HealingRule
-	err := TenantDB(r.db, ctx).
+	err := r.db.WithContext(ctx).
 		Where("is_active = ?", true).
 		Preload("Flow").
 		Order("priority DESC").
@@ -1005,9 +1006,10 @@ func (r *ApprovalTaskRepository) Reject(ctx context.Context, id uuid.UUID, decid
 		}).Error
 }
 
-// ExpireTimedOut 将超时的审批任务标记为过期
+// ExpireTimedOut 将超时的审批任务标记为过期（跨租户，调度器专用）
+// 注意：不使用 TenantDB，调度器需要处理所有租户的超时审批
 func (r *ApprovalTaskRepository) ExpireTimedOut(ctx context.Context) (int64, error) {
-	result := TenantDB(r.db, ctx).Model(&model.ApprovalTask{}).
+	result := r.db.WithContext(ctx).Model(&model.ApprovalTask{}).
 		Where("status = ? AND timeout_at < NOW()", model.ApprovalTaskStatusPending).
 		Updates(map[string]interface{}{
 			"status":     model.ApprovalTaskStatusExpired,

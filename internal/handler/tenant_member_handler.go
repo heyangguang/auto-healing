@@ -90,12 +90,10 @@ func (h *TenantHandler) AddMember(c *gin.Context) {
 		return
 	}
 
-	// 互斥校验：平台管理员不能加入租户
-	for _, role := range targetUser.Roles {
-		if role.Name == "platform_admin" {
-			response.BadRequest(c, "平台管理员不能加入租户，请选择其他用户")
-			return
-		}
+	// 互斥校验：平台管理员不能加入租户（使用 is_platform_admin 字段，而非角色名）
+	if targetUser.IsPlatformAdmin {
+		response.BadRequest(c, "平台管理员不能加入租户，请选择其他用户")
+		return
 	}
 
 	// 验证角色存在且为系统级租户角色

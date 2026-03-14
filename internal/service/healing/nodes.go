@@ -3,13 +3,17 @@ package healing
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 
+	appconf "github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/notification"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/repository"
+	"github.com/google/uuid"
 )
 
 // NodeExecutors 节点执行器集合
@@ -191,12 +195,55 @@ func (e *NodeExecutors) ExecuteNotification(ctx context.Context, instance *model
 		}
 	}
 
-	// TODO: 通过 notification handler 发送通知
-	// 这里简化处理，实际应调用通知服务的发送逻辑
-	_ = cfg
-	_ = variables
+	// 调用通知服务发送通知
+	cp := appconf.GetAppConfig()
+	notifSvc := notification.NewService(
+		database.DB,
+		cp.Name,
+		cp.URL,
+		cp.Version,
+	)
 
-	return nil
+	sendReq := notification.SendNotificationRequest{
+		Variables: make(map[string]interface{}),
+	}
+	for k, v := range variables {
+		sendReq.Variables[k] = v
+	}
+
+	// 解析 channel_ids（支持 UUID 数组或单个 channel_id）
+	var channelIDs []uuid.UUID
+	if idStrs, ok := config["channel_ids"].([]interface{}); ok {
+		for _, s := range idStrs {
+			if id, err := uuid.Parse(fmt.Sprint(s)); err == nil {
+				channelIDs = append(channelIDs, id)
+			}
+		}
+	} else if idStr, ok := config["channel_id"].(string); ok {
+		if id, err := uuid.Parse(idStr); err == nil {
+			channelIDs = append(channelIDs, id)
+		}
+	}
+	sendReq.ChannelIDs = channelIDs
+
+	// 解析 template_id
+	if tmplStr, ok := config["template_id"].(string); ok {
+		if id, err := uuid.Parse(tmplStr); err == nil {
+			sendReq.TemplateID = &id
+		}
+	}
+
+	// 直接指定 subject/body（无模板时使用）
+	if s, ok := config["subject"].(string); ok {
+		sendReq.Subject = s
+	}
+	if b, ok := config["body"].(string); ok {
+		sendReq.Body = b
+	}
+
+	_, err := notifSvc.Send(ctx, sendReq)
+	return err
+
 }
 
 // getIncidentFromContext 从实例上下文获取工单

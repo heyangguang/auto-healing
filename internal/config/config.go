@@ -42,6 +42,7 @@ type Config struct {
 	Redis    RedisConfig    `mapstructure:"redis"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	Log      LogConfig      `mapstructure:"log"`
+	Ansible  AnsibleConfig  `mapstructure:"ansible"`
 }
 
 // AppConfig 应用信息配置
@@ -57,6 +58,13 @@ type ServerConfig struct {
 	Host string `mapstructure:"host"`
 	Port string `mapstructure:"port"`
 	Mode string `mapstructure:"mode"` // debug, release, test
+}
+
+// AnsibleConfig Ansible 执行器配置
+type AnsibleConfig struct {
+	ExecutorImage  string `mapstructure:"executor_image"`  // Docker 镜像名（含版本）
+	WorkspaceDir   string `mapstructure:"workspace_dir"`   // 工作目录，宿主机路径
+	TimeoutMinutes int    `mapstructure:"timeout_minutes"` // 单次执行超时分钟数
 }
 
 // DatabaseConfig 数据库配置

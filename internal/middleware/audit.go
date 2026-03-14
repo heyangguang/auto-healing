@@ -160,7 +160,9 @@ func AuditMiddleware() gin.HandlerFunc {
 			// - 平台管理员（非 Impersonation） → platform_audit_logs
 			// - 平台管理员（Impersonation）     → platform_audit_logs + audit_logs（双写）
 			// - 租户用户                        → audit_logs
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			// 构建带租户 ID 的独立 context（避免请求取消影响审计写入，同时保留正确的租户作用域）
+			auditBaseCtx := repository.WithTenantID(context.Background(), tenantID)
+			ctx, cancel := context.WithTimeout(auditBaseCtx, 5*time.Second)
 			defer cancel()
 
 			if isPlatformAdmin {
@@ -365,6 +367,7 @@ func inferResourceType(parts []string) string {
 		"auth":     true, // auth/login, auth/logout, auth/profile
 		"tenant":   true, // tenant/users, tenant/roles
 		"platform": true, // platform/tenants, platform/users, platform/roles
+		"common":   true, // common/user/*, common/...（通用接口）
 	}
 
 	first := parts[0]
@@ -708,16 +711,16 @@ func NormalizeIP(ip string) string {
 func shouldSkipAudit(path string) bool {
 	// === 1. 前缀匹配 — 整类路由跳过 ===
 	skipPrefixes := []string{
-		"/api/v1/auth/login",             // 登录由 auth handler 自行记录
-		"/api/v1/auth/logout",            // 登出由 auth handler 自行记录
-		"/api/v1/auth/refresh",           // Token 刷新无需审计
-		"/api/v1/user/recents",           // 最近访问记录（导航自动触发）
-		"/api/v1/user/favorites",         // 收藏操作（低价值）
-		"/api/v1/user/preferences",       // 用户偏好设置
-		"/api/v1/site-messages/read",     // 标记消息已读 / 全部已读（用户阅读行为）
-		"/api/v1/site-messages/settings", // 站内信个人通知偏好
-		"/api/v1/dashboard/config",       // Dashboard 布局配置（个人偏好，自动保存触发）
-		"/api/v1/workbench/favorites",    // 工作台收藏（低价值，个人偏好）
+		"/api/v1/auth/login",                    // 登录由 auth handler 自行记录
+		"/api/v1/auth/logout",                   // 登出由 auth handler 自行记录
+		"/api/v1/auth/refresh",                  // Token 刷新无需审计
+		"/api/v1/common/user/recents",           // 最近访问记录（导航自动触发）
+		"/api/v1/common/user/favorites",         // 收藏操作（低价值）
+		"/api/v1/common/user/preferences",       // 用户偏好设置
+		"/api/v1/tenant/site-messages/read",     // 标记消息已读（用户阅读行为）
+		"/api/v1/tenant/site-messages/read-all", // 全部已读（用户阅读行为）
+		"/api/v1/tenant/dashboard/config",       // Dashboard 布局配置（个人偏好，自动保存触发）
+		"/api/v1/common/workbench/favorites",    // 工作台收藏（仅 GET，自动跳过，防御性保留）
 	}
 	for _, prefix := range skipPrefixes {
 		if strings.HasPrefix(path, prefix) {

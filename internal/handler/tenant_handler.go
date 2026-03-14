@@ -271,17 +271,15 @@ func (h *TenantHandler) SetTenantAdmin(c *gin.Context) {
 		return
 	}
 
-	// 互斥校验：platform_admin 不能兼任租户管理员
+	// 互斥校验：平台管理员不能兼任租户管理员（使用 is_platform_admin 字段，而非角色名）
 	targetUser, err := h.userRepo.GetByID(c.Request.Context(), userID)
 	if err != nil {
 		response.BadRequest(c, "用户不存在")
 		return
 	}
-	for _, role := range targetUser.Roles {
-		if role.Name == "platform_admin" {
-			response.BadRequest(c, "平台管理员不能设为租户管理员，请选择其他用户")
-			return
-		}
+	if targetUser.IsPlatformAdmin {
+		response.BadRequest(c, "平台管理员不能设为租户管理员，请选择其他用户")
+		return
 	}
 
 	// 查找 admin 系统角色

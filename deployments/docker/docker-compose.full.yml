@@ -1,0 +1,98 @@
+# 运维自愈系统 - 完整部署（含所有服务）
+# 使用方法:
+#   首次部署: docker compose -f docker-compose.full.yml up -d
+#   后续更新: docker compose -f docker-compose.full.yml up -d server ui
+#
+# 前置条件:
+#   1. 已构建镜像: ./build_docker.sh v1.0.0
+#   2. 或已加载镜像: gunzip -c auto-healing-v1.0.0.tar.gz | docker load
+#
+# 数据目录结构 (宿主机):
+#   /data/postgres/   - PostgreSQL 数据
+#   /data/redis/      - Redis 持久化数据
+#   /data/logs/       - 服务日志
+#   /data/config.yaml - 应用配置文件
+
+services:
+  # ─── PostgreSQL 数据库 ─────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: auto-healing-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auto_healing
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data:Z
+      - /data/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auto_healing"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auto-healing-network
+
+  # ─── Redis 缓存 ────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: auto-healing-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "6379:6379"
+    volumes:
+      - /data/redis:/data:Z
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auto-healing-network
+
+  # ─── 主服务 ────────────────────────────────────
+  server:
+    image: auto-healing:${VERSION:-dev}
+    container_name: auto-healing-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "8080:8080"
+    volumes:
+      # 挂载部署配置文件（覆盖镜像内默认配置）
+      - /data/config.yaml:/app/configs/config.yaml:ro,Z
+      # 日志持久化
+      - /data/logs:/app/logs:Z
+    networks:
+      auto-healing-network:
+        aliases:
+          - pangolin-server   # 前端 nginx 用此名称访问后端
+
+  # ─── 前端 UI ───────────────────────────────────
+  ui:
+    image: auto-healing-ui:${VERSION:-dev}
+    container_name: auto-healing-ui
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "8000:80"
+    networks:
+      - auto-healing-network
+
+networks:
+  auto-healing-network:
+    driver: bridge

@@ -105,7 +105,7 @@ func (s *CMDBService) GetMaintenanceLogs(ctx context.Context, id uuid.UUID, page
 	return s.cmdbRepo.ListMaintenanceLogs(ctx, id, page, pageSize)
 }
 
-// CheckExpiredMaintenance 检查并恢复到期的维护
+// CheckExpiredMaintenance 检查并恢复到期的维护（跨租户）
 func (s *CMDBService) CheckExpiredMaintenance(ctx context.Context) (int, error) {
 	items, err := s.cmdbRepo.GetExpiredMaintenanceItems(ctx)
 	if err != nil {
@@ -114,7 +114,12 @@ func (s *CMDBService) CheckExpiredMaintenance(ctx context.Context) (int, error) 
 
 	count := 0
 	for _, item := range items {
-		if err := s.ExitMaintenance(ctx, item.ID, "auto", "system"); err == nil {
+		// 注入该配置项所属租户的上下文，确保 ExitMaintenance 在正确租户范围内操作
+		itemCtx := ctx
+		if item.TenantID != nil {
+			itemCtx = repository.WithTenantID(ctx, *item.TenantID)
+		}
+		if err := s.ExitMaintenance(itemCtx, item.ID, "auto", "system"); err == nil {
 			count++
 		}
 	}

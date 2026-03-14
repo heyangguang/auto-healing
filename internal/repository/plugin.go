@@ -342,10 +342,11 @@ func (r *IncidentRepository) UpsertByExternalID(ctx context.Context, incident *m
 	return false, r.Update(ctx, incident)
 }
 
-// ListUnscanned 获取未扫描的工单列表（用于自愈引擎调度）
+// ListUnscanned 获取未扫描的工单列表（跨租户，自愈引擎调度器专用）
+// 注意：不使用 TenantDB，调度器需要处理所有租户的未扫描工单
 func (r *IncidentRepository) ListUnscanned(ctx context.Context, limit int) ([]model.Incident, error) {
 	var incidents []model.Incident
-	err := TenantDB(r.db, ctx).
+	err := r.db.WithContext(ctx).
 		Where("scanned = ?", false).
 		Order("created_at ASC").
 		Limit(limit).

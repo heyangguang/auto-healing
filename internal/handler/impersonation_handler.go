@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -24,6 +25,7 @@ type ImpersonationHandler struct {
 	tenantRepo        *repository.TenantRepository
 	auditRepo         *repository.AuditLogRepository
 	platformAuditRepo *repository.PlatformAuditLogRepository
+	siteMessageRepo   *repository.SiteMessageRepository
 }
 
 // NewImpersonationHandler 创建 Impersonation 处理器
@@ -33,6 +35,7 @@ func NewImpersonationHandler() *ImpersonationHandler {
 		tenantRepo:        repository.NewTenantRepository(),
 		auditRepo:         repository.NewAuditLogRepository(),
 		platformAuditRepo: repository.NewPlatformAuditLogRepository(),
+		siteMessageRepo:   repository.NewSiteMessageRepository(),
 	}
 }
 
@@ -101,7 +104,8 @@ func (h *ImpersonationHandler) CreateRequest(c *gin.Context) {
 		return
 	}
 
-	// TODO: 发送站内消息通知审批人
+	// 异步发送站内消息通知审批人
+	go h.notifyApproversNewRequest(c.Request.Context(), impReq)
 
 	response.Created(c, impReq)
 }
@@ -500,7 +504,8 @@ func (h *ImpersonationHandler) Approve(c *gin.Context) {
 		return
 	}
 
-	// TODO: 发送站内消息通知申请人
+	// 异步发送站内消息通知申请人（平台管理员）
+	go h.notifyRequesterDecision(c.Request.Context(), req, true, middleware.GetUsername(c))
 
 	response.Message(c, "已批准")
 }
@@ -543,7 +548,8 @@ func (h *ImpersonationHandler) Reject(c *gin.Context) {
 		return
 	}
 
-	// TODO: 发送站内消息通知申请人
+	// 异步发送站内消息通知申请人（平台管理员）
+	go h.notifyRequesterDecision(c.Request.Context(), req, false, middleware.GetUsername(c))
 
 	response.Message(c, "已拒绝")
 }
@@ -588,4 +594,74 @@ func (h *ImpersonationHandler) SetApprovers(c *gin.Context) {
 	}
 
 	response.Message(c, "审批人已更新")
+}
+
+// ==================== 站内消息通知辅助方法 ====================
+
+// notifyApproversNewRequest 异步向租户审批人发送站内消息：有新的提权申请待审批
+func (h *ImpersonationHandler) notifyApproversNewRequest(ctx context.Context, impReq *model.ImpersonationRequest) {
+	defer func() {
+		if r := recover(); r != nil {
+			zap.L().Error("notifyApproversNewRequest panic", zap.Any("error", r))
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	msg := &model.SiteMessage{
+		TenantID:       &impReq.TenantID,
+		TargetTenantID: &impReq.TenantID, // 只对该租户的用户可见
+		Category:       model.SiteMessageCategoryServiceNotice,
+		Title:          "新的临时提权申请待审批",
+		Content:        impReq.RequesterName + " 申请临时访问本租户（" + impReq.TenantName + "），申请时长 " + formatMinutes(impReq.DurationMinutes) + "，请及时处理。",
+	}
+	if err := h.siteMessageRepo.Create(ctx, msg); err != nil {
+		zap.L().Error("发送审批人站内消息失败", zap.Error(err))
+	}
+}
+
+// notifyRequesterDecision 异步向申请人（平台管理员）发送站内消息：审批结果
+func (h *ImpersonationHandler) notifyRequesterDecision(ctx context.Context, impReq *model.ImpersonationRequest, approved bool, approverName string) {
+	defer func() {
+		if r := recover(); r != nil {
+			zap.L().Error("notifyRequesterDecision panic", zap.Any("error", r))
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var title, content string
+	if approved {
+		title = "临时提权申请已批准"
+		content = "您申请访问租户「" + impReq.TenantName + "」的提权请求已由 " + approverName + " 批准，请在 " + formatMinutes(impReq.DurationMinutes) + " 内完成操作。"
+	} else {
+		title = "临时提权申请已拒绝"
+		content = "您申请访问租户「" + impReq.TenantName + "」的提权请求已由 " + approverName + " 拒绝。"
+	}
+
+	// TargetTenantID=nil 表示广播（平台管理员查询时 tenantID=nil 不过滤，可以看到所有消息）
+	// TenantID 设为申请单所属租户，避免 Create() 自动写入 DefaultTenantID
+	msg := &model.SiteMessage{
+		TenantID:       &impReq.TenantID,
+		TargetTenantID: nil, // nil = 全局广播，平台管理员可见
+		Category:       model.SiteMessageCategoryServiceNotice,
+		Title:          title,
+		Content:        content,
+	}
+	if err := h.siteMessageRepo.Create(ctx, msg); err != nil {
+		zap.L().Error("发送申请人站内消息失败", zap.Error(err))
+	}
+}
+
+// formatMinutes 将分钟转化为可读文本
+func formatMinutes(minutes int) string {
+	if minutes >= 60 {
+		h := minutes / 60
+		m := minutes % 60
+		if m == 0 {
+			return fmt.Sprintf("%d 小时", h)
+		}
+		return fmt.Sprintf("%d 小时 %d 分钟", h, m)
+	}
+	return fmt.Sprintf("%d 分钟", minutes)
 }

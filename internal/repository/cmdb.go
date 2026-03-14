@@ -273,10 +273,11 @@ func (r *CMDBItemRepository) ExitMaintenance(ctx context.Context, id uuid.UUID) 
 	return TenantDB(r.db, ctx).Model(&model.CMDBItem{}).Where("id = ?", id).Updates(updates).Error
 }
 
-// GetExpiredMaintenanceItems 获取维护到期的配置项
+// GetExpiredMaintenanceItems 获取维护到期的配置项（跨租户，调度器专用）
+// 注意：不使用 TenantDB，调度器需要处理所有租户的维护到期项
 func (r *CMDBItemRepository) GetExpiredMaintenanceItems(ctx context.Context) ([]model.CMDBItem, error) {
 	var items []model.CMDBItem
-	err := TenantDB(r.db, ctx).
+	err := r.db.WithContext(ctx).
 		Where("status = ? AND maintenance_end_at IS NOT NULL AND maintenance_end_at <= ?", "maintenance", time.Now()).
 		Find(&items).Error
 	return items, err

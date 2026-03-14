@@ -986,7 +986,7 @@ func (h *HealingHandler) RetryInstance(c *gin.Context) {
 		return
 	}
 
-	// 异步执行重试
+	// 异步执行重试（注入实例所属租户的 context，确保 executor 内部 DB 操作在正确租户范围内）
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -994,6 +994,9 @@ func (h *HealingHandler) RetryInstance(c *gin.Context) {
 			}
 		}()
 		ctx := context.Background()
+		if instance.TenantID != nil {
+			ctx = repository.WithTenantID(ctx, *instance.TenantID)
+		}
 		if err := h.executor.RetryFromNode(ctx, instance, req.FromNodeID); err != nil {
 			logger.Exec("RETRY").Error("重试失败: %v", err)
 		}
@@ -1151,14 +1154,18 @@ func (h *HealingHandler) ApproveTask(c *gin.Context) {
 		return
 	}
 
-	// 异步继续执行流程，避免阻塞 HTTP 响应
+	// 异步继续执行流程，避免阻塞 HTTP 响应（注入审批任务所属租户的 context）
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Exec("APPROVAL").Error("恢复流程 panic: %v", r)
 			}
 		}()
-		if err := h.executor.ResumeAfterApproval(context.Background(), task.FlowInstanceID, true); err != nil {
+		resumeCtx := context.Background()
+		if task.TenantID != nil {
+			resumeCtx = repository.WithTenantID(resumeCtx, *task.TenantID)
+		}
+		if err := h.executor.ResumeAfterApproval(resumeCtx, task.FlowInstanceID, true); err != nil {
 			logger.Exec("APPROVAL").Error("审批通过后恢复流程失败: %v", err)
 		}
 	}()
@@ -1198,14 +1205,18 @@ func (h *HealingHandler) RejectTask(c *gin.Context) {
 		return
 	}
 
-	// 异步通过 executor 的统一审批路径处理拒绝（会更新 node_states）
+	// 异步通过 executor 的统一审批路径处理拒绝（注入审批任务所属租户的 context）
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Exec("APPROVAL").Error("拒绝后恢复流程 panic: %v", r)
 			}
 		}()
-		if err := h.executor.ResumeAfterApproval(context.Background(), task.FlowInstanceID, false); err != nil {
+		resumeCtx := context.Background()
+		if task.TenantID != nil {
+			resumeCtx = repository.WithTenantID(resumeCtx, *task.TenantID)
+		}
+		if err := h.executor.ResumeAfterApproval(resumeCtx, task.FlowInstanceID, false); err != nil {
 			logger.Exec("APPROVAL").Error("审批拒绝后恢复流程失败: %v", err)
 		}
 	}()

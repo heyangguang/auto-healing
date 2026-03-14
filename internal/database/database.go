@@ -98,8 +98,12 @@ func AutoMigrate() error {
 		&model.NodeExecution{},
 		// 执行
 		&model.GitRepository{},
+		&model.GitSyncLog{},
 		&model.Playbook{},
+		&model.PlaybookScanLog{},
 		&model.ExecutionTask{},
+		&model.ExecutionRun{},
+		&model.ExecutionSchedule{},
 		// 通知
 		&model.NotificationChannel{},
 		&model.NotificationTemplate{},
@@ -140,6 +144,15 @@ func AutoMigrate() error {
 		&model.CommandBlacklist{},
 		// 安全豁免
 		&model.BlacklistExemption{},
+		&model.TenantBlacklistOverride{},
+		// CMDB
+		&model.CMDBItem{},
+		&model.CMDBMaintenanceLog{},
+		// 代提权申请
+		&model.ImpersonationRequest{},
+		&model.ImpersonationApprover{},
+		// 密钥管理
+		&model.SecretsSource{},
 	}
 
 	// 增量迁移：只迁移不存在的表，避免修改已有表导致约束名冲突
@@ -164,6 +177,46 @@ func AutoMigrate() error {
 	} else {
 		logger.Info("数据库表结构已是最新，无需迁移")
 	}
+	return nil
+}
+
+// SeedPlatformSettings 初始化平台设置默认值（幂等，使用 ON CONFLICT DO NOTHING）
+func SeedPlatformSettings() error {
+	type row struct {
+		Key          string
+		Value        string
+		Type         string
+		Module       string
+		Label        string
+		Description  string
+		DefaultValue string
+	}
+
+	defaults := []row{
+		// 邮件发送（SMTP）
+		{"email.smtp_host", "", "string", "email", "SMTP 服务器地址", "邮件发送服务器地址，如 smtp.example.com", ""},
+		{"email.smtp_port", "587", "int", "email", "SMTP 端口", "常用：587（STARTTLS）、465（SSL）、25（明文）", "587"},
+		{"email.username", "", "string", "email", "SMTP 账号", "SMTP 登录用户名", ""},
+		{"email.password", "", "string", "email", "SMTP 密码", "SMTP 登录密码", ""},
+		{"email.from_address", "", "string", "email", "发件人地址", "邮件发件人地址，如 no-reply@example.com", ""},
+		{"email.use_tls", "true", "bool", "email", "启用 TLS", "是否使用 TLS/SSL 加密连接（推荐开启）", "true"},
+		// 邀请
+		{"email.invitation_expire_days", "7", "int", "email", "邀请链接有效期（天）", "租户邀请链接的有效天数，超期自动失效", "7"},
+		// 站点
+		{"site.base_url", "", "string", "site", "站点访问地址", "平台对外访问的根地址，用于生成邀请链接等，如 https://example.com", ""},
+		// 站内信
+		{"site_message.retention_days", "90", "int", "site_message", "站内信保留天数", "站内消息超过该天数后将被自动清理", "90"},
+	}
+
+	for _, d := range defaults {
+		sql := `INSERT INTO platform_settings (key, value, type, module, label, description, default_value, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+			ON CONFLICT (key) DO NOTHING`
+		if err := DB.Exec(sql, d.Key, d.Value, d.Type, d.Module, d.Label, d.Description, d.DefaultValue).Error; err != nil {
+			return fmt.Errorf("初始化平台设置 %s 失败: %w", d.Key, err)
+		}
+	}
+	logger.Info("平台设置默认值初始化完成（%d 项）", len(defaults))
 	return nil
 }
 

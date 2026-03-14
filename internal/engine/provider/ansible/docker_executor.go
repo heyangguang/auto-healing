@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	appconfig "github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/pkg/logger"
 )
 
@@ -28,17 +29,32 @@ type DockerExecutor struct {
 }
 
 // NewDockerExecutor 创建 Docker 执行器
+// 配置优先级：config.yaml > 环境变量 > 默认值
 func NewDockerExecutor() *DockerExecutor {
-	image := os.Getenv("ANSIBLE_EXECUTOR_IMAGE")
-	if image == "" {
-		image = DefaultDockerImage
+	image := ""
+	timeout := DefaultDockerTimeout
+
+	// 1. 从全局配置读取（config.yaml 里的 ansible 节）
+	if cfg := appconfig.GetConfig(); cfg != nil && cfg.Ansible.ExecutorImage != "" {
+		image = cfg.Ansible.ExecutorImage
+		if cfg.Ansible.TimeoutMinutes > 0 {
+			timeout = time.Duration(cfg.Ansible.TimeoutMinutes) * time.Minute
+		}
 	}
 
-	timeout := DefaultDockerTimeout
+	// 2. 环境变量覆盖（向前兼容）
+	if envImage := os.Getenv("ANSIBLE_EXECUTOR_IMAGE"); envImage != "" {
+		image = envImage
+	}
 	if timeoutStr := os.Getenv("ANSIBLE_EXECUTOR_TIMEOUT"); timeoutStr != "" {
 		if parsed, err := time.ParseDuration(timeoutStr); err == nil {
 			timeout = parsed
 		}
+	}
+
+	// 3. 最终默认值
+	if image == "" {
+		image = DefaultDockerImage
 	}
 
 	return &DockerExecutor{

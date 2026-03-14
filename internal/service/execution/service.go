@@ -303,8 +303,8 @@ func (s *Service) ExecuteTask(ctx context.Context, taskID uuid.UUID, opts *Execu
 		skipNotification: opts.SkipNotification,
 	}
 
-	// 后台异步执行
-	go s.executeInBackground(run.ID, task, playbook, gitRepo, execOpts)
+	// 后台异步执行（传入任务的租户ID，确保 secrets/CMDB 等在正确租户下查询）
+	go s.executeInBackground(run.ID, task, playbook, gitRepo, execOpts, task.TenantID)
 
 	// 立即返回执行记录
 	return run, nil
@@ -319,9 +319,14 @@ type executeParams struct {
 }
 
 // executeInBackground 后台执行任务
-func (s *Service) executeInBackground(runID uuid.UUID, task *model.ExecutionTask, playbook *model.Playbook, gitRepo *model.GitRepository, params *executeParams) {
-	// 创建可取消的 context
-	ctx, cancel := context.WithCancel(context.Background())
+func (s *Service) executeInBackground(runID uuid.UUID, task *model.ExecutionTask, playbook *model.Playbook, gitRepo *model.GitRepository, params *executeParams, taskTenantID *uuid.UUID) {
+	// 创建带租户上下文的可取消 context
+	// 注入任务的 TenantID，确保 secrets/CMDB/日志写入均在正确租户范围内操作
+	baseCtx := context.Background()
+	if taskTenantID != nil {
+		baseCtx = repository.WithTenantID(baseCtx, *taskTenantID)
+	}
+	ctx, cancel := context.WithCancel(baseCtx)
 
 	// 注册取消函数，用于取消操作
 	s.runningExecutions.Store(runID, cancel)

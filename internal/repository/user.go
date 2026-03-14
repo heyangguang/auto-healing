@@ -108,12 +108,7 @@ func (r *UserRepository) List(ctx context.Context, params *UserListParams) ([]mo
 
 	// 按角色过滤
 	if params.PlatformOnly {
-		// 只返回拥有平台管理员角色的用户
-		q = q.Where(`id IN (
-			SELECT ur.user_id FROM user_platform_roles ur
-			JOIN roles r ON r.id = ur.role_id
-			WHERE r.name = 'platform_admin'
-		)`)
+		q = q.Where("is_platform_admin = true")
 	} else if params.RoleID != "" {
 		q = q.Where("id IN (SELECT user_id FROM user_platform_roles WHERE role_id = ?)", params.RoleID)
 	}
@@ -255,10 +250,7 @@ func (r *UserRepository) ListSimple(ctx context.Context, name string, status str
 
 	query := r.db.WithContext(ctx).
 		Model(&model.User{}).
-		Select(`id, username, display_name, status,
-			EXISTS(SELECT 1 FROM user_platform_roles ur JOIN roles r ON r.id = ur.role_id
-				WHERE ur.user_id = users.id AND r.name = 'platform_admin'
-			) AS is_platform_admin`)
+		Select(`id, username, display_name, status, is_platform_admin`)
 
 	if status != "" {
 		query = query.Where("status = ?", status)

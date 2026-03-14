@@ -1,8 +1,10 @@
-# 运维自愈系统 - 基础设施部署
-# 使用方法: docker compose up -d
+# 运维自愈系统 - 基础设施 + UI
+# server 直接以二进制运行在宿主机，见 start.sh
+#
+# 启动:    ./start.sh
+# 只重启:  ./start.sh ui
 
 services:
-  # PostgreSQL 数据库
   postgres:
     image: postgres:15-alpine
     container_name: auto-healing-postgres
@@ -15,9 +17,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      # 初始化脚本 - 启动时自动执行迁移
-      - ../../migrations:/docker-entrypoint-initdb.d:ro
+      - /data/postgres:/var/lib/postgresql/data:Z
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d auto_healing"]
       interval: 10s
@@ -26,7 +26,6 @@ services:
     networks:
       - auto-healing-network
 
-  # Redis 缓存和消息队列
   redis:
     image: redis:7-alpine
     container_name: auto-healing-redis
@@ -37,7 +36,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      - /data/redis:/data:Z
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -46,11 +45,16 @@ services:
     networks:
       - auto-healing-network
 
-volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
+  ui:
+    image: ghcr.io/heyangguang/auto-healing-ui:${UI_VERSION:-v1.0.0}
+    container_name: auto-healing-ui
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    extra_hosts:
+      - "pangolin-server:host-gateway"   # server 二进制跑在宿主机，通过 host-gateway 访问
+    networks:
+      - auto-healing-network
 
 networks:
   auto-healing-network:

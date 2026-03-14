@@ -10,6 +10,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	"github.com/company/auto-healing/internal/repository"
 	pluginService "github.com/company/auto-healing/internal/service/plugin"
 )
 
@@ -113,7 +114,12 @@ func (s *Scheduler) checkAndSync() {
 					logger.Sched("SYNC").Error("[%s] syncPlugin panic: %v", p.ID.String()[:8], rec)
 				}
 			}()
-			s.syncPlugin(ctx, p)
+			// 注入插件所属租户的 context，确保工单/CMDB 数据写入正确租户
+			plugCtx := context.Background()
+			if p.TenantID != nil {
+				plugCtx = repository.WithTenantID(plugCtx, *p.TenantID)
+			}
+			s.syncPlugin(plugCtx, p)
 		}(plugin)
 	}
 }

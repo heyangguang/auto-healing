@@ -40,8 +40,13 @@ func NewScheduleRepository() *ScheduleRepository {
 
 // Create 创建定时任务调度
 func (r *ScheduleRepository) Create(ctx context.Context, schedule *model.ExecutionSchedule) error {
+	// 自动填充租户 ID
+	if schedule.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		schedule.TenantID = &tenantID
+	}
 	return database.DB.WithContext(ctx).
-		Select("id", "name", "task_id", "schedule_type", "schedule_expr", "scheduled_at", "status",
+		Select("id", "tenant_id", "name", "task_id", "schedule_type", "schedule_expr", "scheduled_at", "status",
 			"next_run_at", "last_run_at", "enabled", "description",
 			"max_failures", "consecutive_failures", "pause_reason",
 			"target_hosts_override", "extra_vars_override", "secrets_source_ids",
@@ -169,10 +174,11 @@ func (r *ScheduleRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return TenantDB(database.DB, ctx).Delete(&model.ExecutionSchedule{}, "id = ?", id).Error
 }
 
-// GetDueSchedules 获取到期需要执行的调度
+// GetDueSchedules 获取到期需要执行的调度（跨租户，调度器专用）
+// 注意：此函数不使用 TenantDB，因为调度器需要处理所有租户的调度
 func (r *ScheduleRepository) GetDueSchedules(ctx context.Context) ([]model.ExecutionSchedule, error) {
 	var schedules []model.ExecutionSchedule
-	err := TenantDB(database.DB, ctx).
+	err := database.DB.WithContext(ctx).
 		Preload("Task").
 		Preload("Task.Playbook").
 		Where("enabled = ? AND next_run_at <= ?", true, time.Now()).

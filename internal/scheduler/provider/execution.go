@@ -116,6 +116,12 @@ func (s *ExecutionScheduler) checkAndExecute() {
 			}()
 			logger.Sched("TASK").Info("[%s] 开始执行定时任务: %s", sched.ID.String()[:8], sched.Name)
 
+			// 注入该调度所属租户的上下文，确保 ExecuteTask 及后续操作在正确租户范围内运行
+			tenantCtx := ctx
+			if sched.TenantID != nil {
+				tenantCtx = repository.WithTenantID(ctx, *sched.TenantID)
+			}
+
 			// 构建执行选项，传递调度中的覆盖参数
 			opts := &executionService.ExecuteOptions{
 				TriggeredBy: func() string {
@@ -139,7 +145,7 @@ func (s *ExecutionScheduler) checkAndExecute() {
 			}
 
 			shortID := sched.ID.String()[:8]
-			_, err := s.execSvc.ExecuteTask(ctx, sched.TaskID, opts)
+			_, err := s.execSvc.ExecuteTask(tenantCtx, sched.TaskID, opts)
 
 			if err != nil {
 				// 连续失败计数 +1
@@ -184,17 +190,17 @@ func (s *ExecutionScheduler) checkAndExecute() {
 			}
 
 			// 更新上次执行时间
-			s.scheduleRepo.UpdateLastRunAt(ctx, sched.ID)
+			s.scheduleRepo.UpdateLastRunAt(tenantCtx, sched.ID)
 
 			// 更新下次执行时间（仅 Cron 模式且未被自动暂停）或标记完成（Once 模式）
 			if sched.IsCron() {
 				// 如果已经被自动暂停，不再计算下次时间
 				if !(sched.MaxFailures > 0 && err != nil && sched.ConsecutiveFailures+1 >= sched.MaxFailures) {
-					s.scheduleSvc.UpdateNextRunAt(ctx, sched.ID, *sched.ScheduleExpr)
+					s.scheduleSvc.UpdateNextRunAt(tenantCtx, sched.ID, *sched.ScheduleExpr)
 				}
 			} else {
 				// Once 模式执行后标记为已完成
-				s.scheduleSvc.MarkCompleted(ctx, sched.ID)
+				s.scheduleSvc.MarkCompleted(tenantCtx, sched.ID)
 			}
 		}(schedule)
 	}

@@ -71,6 +71,11 @@ func main() {
 		logger.Error("高危指令黑名单种子数据同步失败: %v", err)
 	}
 
+	// 初始化平台设置默认值（幂等）
+	if err := database.SeedPlatformSettings(); err != nil {
+		logger.Error("平台设置默认值初始化失败: %v", err)
+	}
+
 	// 清理过期站内信
 	siteMessageRepo := repository.NewSiteMessageRepository()
 	if _, err := siteMessageRepo.CleanExpired(context.Background()); err != nil {

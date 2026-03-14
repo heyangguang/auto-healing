@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/pkg/response"
@@ -198,7 +199,7 @@ func (h *CMDBHandler) EnterMaintenance(c *gin.Context) {
 		endAt = &t
 	}
 
-	operator := "admin" // TODO: 从 JWT 获取
+	operator := middleware.GetUsername(c) // 从 JWT 获取当前用户
 	if err := h.cmdbSvc.EnterMaintenance(c.Request.Context(), id, req.Reason, endAt, operator); err != nil {
 		response.InternalError(c, "进入维护模式失败: "+err.Error())
 		return
@@ -215,7 +216,7 @@ func (h *CMDBHandler) ExitMaintenance(c *gin.Context) {
 		return
 	}
 
-	operator := "admin" // TODO: 从 JWT 获取
+	operator := middleware.GetUsername(c) // 从 JWT 获取当前用户
 	if err := h.cmdbSvc.ExitMaintenance(c.Request.Context(), id, "manual", operator); err != nil {
 		response.InternalError(c, "退出维护模式失败: "+err.Error())
 		return
@@ -283,7 +284,7 @@ func (h *CMDBHandler) BatchEnterMaintenance(c *gin.Context) {
 		endAt = &t
 	}
 
-	operator := "admin"
+	operator := middleware.GetUsername(c) // 从 JWT 获取当前用户
 	successCount := 0
 	for _, idStr := range req.IDs {
 		id, err := uuid.Parse(idStr)
@@ -324,7 +325,7 @@ func (h *CMDBHandler) BatchExitMaintenance(c *gin.Context) {
 		return
 	}
 
-	operator := "admin"
+	operator := middleware.GetUsername(c) // 从 JWT 获取当前用户
 	successCount := 0
 	for _, idStr := range req.IDs {
 		id, err := uuid.Parse(idStr)
