@@ -72,11 +72,11 @@ func main() {
 	// 绑定 platform_admin 角色
 	var platformAdminRole model.Role
 	if err := database.DB.Where("name = ?", "platform_admin").First(&platformAdminRole).Error; err == nil {
-		userRole := model.UserPlatformRole{
-			UserID: admin.ID,
-			RoleID: platformAdminRole.ID,
-		}
-		if err := database.DB.Create(&userRole).Error; err != nil {
+		// 使用原生 SQL 插入，避免 GORM 自动 RETURNING id（many2many 联表无 id 列）
+		if err := database.DB.Exec(
+			"INSERT INTO user_platform_roles (user_id, role_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+			admin.ID, platformAdminRole.ID,
+		).Error; err != nil {
 			fmt.Printf("⚠️  角色绑定失败: %v（不影响使用，admin 仍为 IsPlatformAdmin）\n", err)
 		} else {
 			fmt.Println("🔑 已绑定 platform_admin 角色")
