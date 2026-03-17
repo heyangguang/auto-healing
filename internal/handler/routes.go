@@ -425,7 +425,7 @@ func setupTenantRoutes(api *gin.RouterGroup, h *Handlers) {
 			channels.GET("/:id", middleware.RequirePermission("channel:list"), h.Notification.GetChannel)
 			channels.PUT("/:id", middleware.RequirePermission("channel:update"), h.Notification.UpdateChannel)
 			channels.DELETE("/:id", middleware.RequirePermission("channel:delete"), h.Notification.DeleteChannel)
-			channels.POST("/:id/test", middleware.RequirePermission("channel:list"), h.Notification.TestChannel)
+			channels.POST("/:id/test", middleware.RequirePermission("channel:update"), h.Notification.TestChannel)
 		}
 
 		// -------------------- 通知模板 --------------------
@@ -585,8 +585,8 @@ func setupTenantRoutes(api *gin.RouterGroup, h *Handlers) {
 			flowInstances.GET("", middleware.RequirePermission("healing:instances:view"), h.Healing.ListInstances)
 			flowInstances.GET("/stats", middleware.RequirePermission("healing:instances:view"), h.Healing.GetInstanceStats)
 			flowInstances.GET("/:id", middleware.RequirePermission("healing:instances:view"), h.Healing.GetInstance)
-			flowInstances.POST("/:id/cancel", middleware.RequirePermission("healing:instances:view"), h.Healing.CancelInstance)
-			flowInstances.POST("/:id/retry", middleware.RequirePermission("healing:instances:view"), h.Healing.RetryInstance)
+			flowInstances.POST("/:id/cancel", middleware.RequirePermission("healing:flows:update"), h.Healing.CancelInstance)
+			flowInstances.POST("/:id/retry", middleware.RequirePermission("healing:flows:update"), h.Healing.RetryInstance)
 			flowInstances.GET("/:id/events", middleware.RequirePermission("healing:instances:view"), h.Healing.InstanceEvents)
 		}
 
