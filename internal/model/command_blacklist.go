@@ -16,7 +16,7 @@ type CommandBlacklist struct {
 	Severity    string     `json:"severity" gorm:"type:varchar(20);not null;default:'critical'"`   // critical|high|medium
 	Category    string     `json:"category" gorm:"type:varchar(64)"`                               // filesystem|network|system|database
 	Description string     `json:"description" gorm:"type:text"`                                   // 风险说明
-	IsActive    bool       `json:"is_active" gorm:"default:true"`                                  // 是否启用
+	IsActive    bool       `json:"is_active" gorm:"default:false"`                                 // 是否启用（默认禁用）
 	IsSystem    bool       `json:"is_system" gorm:"default:false"`                                 // 是否内置（不可删除）
 	CreatedAt   time.Time  `json:"created_at" gorm:"default:now()"`
 	UpdatedAt   time.Time  `json:"updated_at" gorm:"default:now()"`

@@ -11,8 +11,8 @@ import (
 // 租户自有规则的开关直接存在 command_blacklist.is_active 上
 type TenantBlacklistOverride struct {
 	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	TenantID  uuid.UUID `json:"tenant_id" gorm:"type:uuid;not null;index"`
-	RuleID    uuid.UUID `json:"rule_id" gorm:"type:uuid;not null;index"`
+	TenantID  uuid.UUID `json:"tenant_id" gorm:"type:uuid;not null;uniqueIndex:idx_tenant_rule"`
+	RuleID    uuid.UUID `json:"rule_id" gorm:"type:uuid;not null;uniqueIndex:idx_tenant_rule"`
 	IsActive  bool      `json:"is_active" gorm:"not null;default:false"`
 	CreatedAt time.Time `json:"created_at" gorm:"default:now()"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"default:now()"`
