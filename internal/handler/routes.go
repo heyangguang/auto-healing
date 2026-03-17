@@ -338,7 +338,7 @@ func setupTenantRoutes(api *gin.RouterGroup, h *Handlers) {
 			tenantUsers.GET("/:id", middleware.RequirePermission("user:list"), h.User.GetUser)
 			tenantUsers.PUT("/:id", middleware.RequirePermission("user:update"), h.User.UpdateUser)
 			tenantUsers.DELETE("/:id", middleware.RequirePermission("user:delete"), h.User.DeleteUser)
-			tenantUsers.POST("/:id/reset-password", middleware.RequirePermission("user:create"), h.User.ResetPassword)
+			tenantUsers.POST("/:id/reset-password", middleware.RequirePermission("user:reset_password"), h.User.ResetPassword)
 			tenantUsers.PUT("/:id/roles", middleware.RequirePermission("role:assign"), h.User.AssignUserRoles)
 		}
 

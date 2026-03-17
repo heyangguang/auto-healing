@@ -172,6 +172,7 @@ var SystemRoles = []RoleSeed{
 			"platform:permissions:list",
 			"platform:audit:list", "platform:audit:export",
 			"platform:messages:send",
+			"site-message:settings:view", "site-message:settings:manage",
 		},
 	},
 	{
