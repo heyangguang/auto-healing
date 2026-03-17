@@ -139,7 +139,10 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, clientIP string)
 	// 平台管理员由 DB 字段 is_platform_admin 决定，不依赖角色名
 	isPlatformAdmin := user.IsPlatformAdmin
 	if isPlatformAdmin {
-		permissions = []string{"*"}
+		// 按平台角色权限加载，不再一刀切 "*"
+		if platformPerms, permErr := s.permRepo.GetPlatformPermissionCodes(ctx, user.ID); permErr == nil {
+			permissions = platformPerms
+		}
 	}
 
 	// 生成 Token（携带 IsPlatformAdmin 标志 + 租户信息）
@@ -364,7 +367,9 @@ func (s *Service) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*UserIn
 	// 平台管理员由 DB 字段 is_platform_admin 决定，不依赖角色名
 	isPlatformAdmin := user.IsPlatformAdmin
 	if isPlatformAdmin {
-		permissions = []string{"*"}
+		if platformPerms, permErr := s.permRepo.GetPlatformPermissionCodes(ctx, user.ID); permErr == nil {
+			permissions = platformPerms
+		}
 	}
 
 	return &UserInfo{
@@ -450,7 +455,9 @@ func (s *Service) GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserPr
 	// 平台管理员由 DB 字段 is_platform_admin 决定，不依赖角色名
 	isPlatformAdmin2 := user.IsPlatformAdmin
 	if isPlatformAdmin2 {
-		permissions = []string{"*"}
+		if platformPerms, permErr := s.permRepo.GetPlatformPermissionCodes(ctx, user.ID); permErr == nil {
+			permissions = platformPerms
+		}
 	}
 
 	return &UserProfile{
