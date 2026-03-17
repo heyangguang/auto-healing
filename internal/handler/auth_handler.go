@@ -392,7 +392,7 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 			}
 		}
 	}
-	// 平台管理员非提权：保留 service 层返回的权限（platform_admin → "*"，其他 → 各自平台权限）
+	// 平台管理员非提权：保留 service 层返回的平台角色权限（由 GetPlatformPermissionCodes 从 DB 加载）
 
 	response.Success(c, userInfo)
 }
