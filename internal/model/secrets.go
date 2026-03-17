@@ -9,8 +9,8 @@ import (
 // SecretsSource 密钥源模型
 type SecretsSource struct {
 	ID             uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	TenantID       *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
-	Name           string     `json:"name" gorm:"type:varchar(100);not null;unique"`
+	TenantID       *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;uniqueIndex:idx_secrets_tenant_name"`
+	Name           string     `json:"name" gorm:"type:varchar(100);not null;uniqueIndex:idx_secrets_tenant_name"`
 	Type           string     `json:"type" gorm:"type:varchar(20);not null"`      // vault, file, webhook
 	AuthType       string     `json:"auth_type" gorm:"type:varchar(20);not null"` // ssh_key, password
 	Config         JSON       `json:"config" gorm:"type:jsonb;not null"`          // 连接配置

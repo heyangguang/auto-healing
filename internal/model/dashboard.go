@@ -12,8 +12,8 @@ import (
 // DashboardConfig 用户 Dashboard 配置
 type DashboardConfig struct {
 	ID        uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	UserID    uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;uniqueIndex"`
-	TenantID  *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
+	UserID    uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;uniqueIndex:idx_dashboard_tenant_user"`
+	TenantID  *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;uniqueIndex:idx_dashboard_tenant_user"`
 	Config    JSON       `json:"config" gorm:"type:jsonb;not null;default:'{}'"`
 	CreatedAt time.Time  `json:"created_at" gorm:"default:now()"`
 	UpdatedAt time.Time  `json:"updated_at" gorm:"default:now()"`
@@ -87,8 +87,8 @@ type RoleWorkspace struct {
 	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	TenantID    *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	RoleID      uuid.UUID  `json:"role_id" gorm:"type:uuid;not null"`
-	WorkspaceID uuid.UUID `json:"workspace_id" gorm:"type:uuid;not null"`
-	CreatedAt   time.Time `json:"created_at" gorm:"default:now()"`
+	WorkspaceID uuid.UUID  `json:"workspace_id" gorm:"type:uuid;not null"`
+	CreatedAt   time.Time  `json:"created_at" gorm:"default:now()"`
 }
 
 // TableName 表名

@@ -9,8 +9,8 @@ import (
 // Plugin 插件模型
 type Plugin struct {
 	ID                  uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	TenantID            *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
-	Name                string     `json:"name" gorm:"type:varchar(100);not null;uniqueIndex"`
+	TenantID            *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;uniqueIndex:idx_plugin_tenant_name"`
+	Name                string     `json:"name" gorm:"type:varchar(100);not null;uniqueIndex:idx_plugin_tenant_name"`
 	Type                string     `json:"type" gorm:"type:varchar(50);not null"` // itsm, cmdb
 	Description         string     `json:"description,omitempty" gorm:"type:text"`
 	Version             string     `json:"version" gorm:"type:varchar(20);not null;default:'1.0.0'"`

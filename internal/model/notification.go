@@ -12,8 +12,8 @@ import (
 // NotificationChannel 通知渠道模型
 type NotificationChannel struct {
 	ID                 uuid.UUID    `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	TenantID           *uuid.UUID   `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
-	Name               string       `json:"name" gorm:"type:varchar(200);not null;uniqueIndex"`
+	TenantID           *uuid.UUID   `json:"tenant_id,omitempty" gorm:"type:uuid;uniqueIndex:idx_channel_tenant_name"`
+	Name               string       `json:"name" gorm:"type:varchar(200);not null;uniqueIndex:idx_channel_tenant_name"`
 	Type               string       `json:"type" gorm:"type:varchar(50);not null"` // email, dingtalk, webhook
 	Description        string       `json:"description,omitempty" gorm:"type:text"`
 	Config             JSON         `json:"-" gorm:"type:jsonb;not null"`              // 加密存储敏感信息

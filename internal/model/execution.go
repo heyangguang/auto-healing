@@ -9,8 +9,8 @@ import (
 // GitRepository Git仓库模型（只负责代码同步）
 type GitRepository struct {
 	ID            uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	TenantID      *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
-	Name          string     `json:"name" gorm:"type:varchar(100);not null;unique"`
+	TenantID      *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;uniqueIndex:idx_git_repo_tenant_name"`
+	Name          string     `json:"name" gorm:"type:varchar(100);not null;uniqueIndex:idx_git_repo_tenant_name"`
 	URL           string     `json:"url" gorm:"column:url;type:varchar(500);not null"`
 	DefaultBranch string     `json:"default_branch" gorm:"type:varchar(100);default:'main'"`
 	AuthType      string     `json:"auth_type" gorm:"type:varchar(20);default:'none'"` // none, token, password, ssh_key
