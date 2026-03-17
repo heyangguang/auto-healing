@@ -419,15 +419,25 @@ func (h *TenantHandler) CreateTenantUser(c *gin.Context) {
 func (h *TenantHandler) GetUserTenants(c *gin.Context) {
 	name := c.Query("name")
 
-	// 平台管理员直接返回所有租户
+	// 平台用户且拥有租户查看权限 → 返回所有租户
 	if middleware.IsPlatformAdmin(c) {
-		tenants, _, err := h.repo.List(c.Request.Context(), name, query.StringFilter{}, query.StringFilter{}, "", 1, 1000)
-		if err != nil {
-			response.InternalError(c, "查询租户列表失败")
+		perms := middleware.GetPermissions(c)
+		hasTenantPerm := false
+		for _, p := range perms {
+			if p == "platform:tenants:manage" || p == "platform:tenants:list" || p == "*" {
+				hasTenantPerm = true
+				break
+			}
+		}
+		if hasTenantPerm {
+			tenants, _, err := h.repo.List(c.Request.Context(), name, query.StringFilter{}, query.StringFilter{}, "", 1, 1000)
+			if err != nil {
+				response.InternalError(c, "查询租户列表失败")
+				return
+			}
+			response.Success(c, tenants)
 			return
 		}
-		response.Success(c, tenants)
-		return
 	}
 
 	// 普通用户：返回自己加入的租户
