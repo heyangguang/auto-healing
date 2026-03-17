@@ -250,6 +250,9 @@ func setupPlatformRoutes(api *gin.RouterGroup, h *Handlers) {
 			platformRoles.GET("/:id/users", middleware.RequirePermission("platform:roles:list"), h.Role.GetRoleUsers)
 		}
 
+		// ---- 租户级系统角色（供平台页面选择，如添加租户成员时选角色）----
+		platform.GET("/tenant-roles", middleware.RequireAnyPermission("platform:tenants:manage", "platform:tenants:list"), h.Role.ListSystemTenantRoles)
+
 		// ---- 平台级权限 ----
 		platform.GET("/permissions", middleware.RequirePermission("platform:permissions:list"), h.Permission.ListPermissions)
 		platform.GET("/permissions/tree", middleware.RequirePermission("platform:permissions:list"), h.Permission.GetPermissionTree)

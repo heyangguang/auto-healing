@@ -339,6 +339,30 @@ func NewRoleHandler() *RoleHandler {
 	}
 }
 
+// ListSystemTenantRoles 平台级：获取系统级租户角色列表
+// 供平台管理页面（如租户成员管理）在无租户上下文时使用
+func (h *RoleHandler) ListSystemTenantRoles(c *gin.Context) {
+	filter := repository.RoleFilter{
+		Scope: "tenant",
+	}
+
+	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), filter)
+	if err != nil {
+		response.InternalError(c, "获取角色列表失败")
+		return
+	}
+
+	// 过滤掉 impersonation_accessor 和非系统角色（只保留可供用户选择的系统角色）
+	filtered := make([]model.Role, 0, len(roles))
+	for _, r := range roles {
+		if r.IsSystem && r.Name != "impersonation_accessor" {
+			filtered = append(filtered, r)
+		}
+	}
+
+	response.Success(c, filtered)
+}
+
 // ListRoles 平台级：获取所有角色列表（含统计信息）
 func (h *RoleHandler) ListRoles(c *gin.Context) {
 	filter := repository.RoleFilter{
