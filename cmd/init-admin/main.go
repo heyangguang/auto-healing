@@ -69,6 +69,22 @@ func main() {
 	fmt.Println("⚠️  请尽快修改默认密码!")
 	fmt.Println("")
 
+	// 绑定 platform_admin 角色
+	var platformAdminRole model.Role
+	if err := database.DB.Where("name = ?", "platform_admin").First(&platformAdminRole).Error; err == nil {
+		userRole := model.UserPlatformRole{
+			UserID: admin.ID,
+			RoleID: platformAdminRole.ID,
+		}
+		if err := database.DB.Create(&userRole).Error; err != nil {
+			fmt.Printf("⚠️  角色绑定失败: %v（不影响使用，admin 仍为 IsPlatformAdmin）\n", err)
+		} else {
+			fmt.Println("🔑 已绑定 platform_admin 角色")
+		}
+	} else {
+		fmt.Println("⚠️  platform_admin 角色未找到，请先启动一次 server 以初始化角色种子数据")
+	}
+
 	// 显示权限数量
 	var permCount int64
 	database.DB.Model(&model.Permission{}).Count(&permCount)

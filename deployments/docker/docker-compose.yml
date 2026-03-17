@@ -46,7 +46,7 @@ services:
       - auto-healing-network
 
   ui:
-    image: ghcr.io/heyangguang/auto-healing-ui:${UI_VERSION:-v1.0.0}
+    image: auto-healing-ui:${UI_VERSION:-v1.0.0}
     container_name: auto-healing-ui
     restart: unless-stopped
     ports:

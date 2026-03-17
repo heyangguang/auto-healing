@@ -418,3 +418,26 @@ func (r *PermissionRepository) GetTenantPermissionCodes(ctx context.Context, use
 	}
 	return codes, nil
 }
+
+// GetPlatformPermissionCodes 获取用户的平台角色权限码列表
+// 仅查询 user_platform_roles 关联的角色权限，用于平台路由权限校验
+func (r *PermissionRepository) GetPlatformPermissionCodes(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	var perms []model.Permission
+	err := r.db.WithContext(ctx).
+		Distinct("permissions.*").
+		Table("permissions").
+		Joins("INNER JOIN role_permissions ON role_permissions.permission_id = permissions.id").
+		Where(`role_permissions.role_id IN (
+			SELECT role_id FROM user_platform_roles WHERE user_id = ?
+		)`, userID).
+		Find(&perms).Error
+	if err != nil {
+		return nil, err
+	}
+
+	codes := make([]string, len(perms))
+	for i, p := range perms {
+		codes[i] = p.Code
+	}
+	return codes, nil
+}

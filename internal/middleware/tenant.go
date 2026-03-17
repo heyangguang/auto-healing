@@ -163,11 +163,21 @@ func TenantMiddleware() gin.HandlerFunc {
 	}
 }
 
-// RequirePlatformAdmin 要求平台管理员权限
+// RequirePlatformAdmin 要求平台用户权限
 // 用于保护平台级管理操作（如租户 CRUD、平台设置等）
+// IsPlatformAdmin 表示用户是平台用户（拥有任意平台角色），实际权限由角色决定
 func RequirePlatformAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if IsPlatformAdmin(c) {
+			// 实时从 DB 加载该用户的平台角色权限（覆盖 JWT 缓存）
+			// 这样管理员修改角色权限后，用户刷新页面即可生效
+			userIDStr := GetUserID(c)
+			if uid, parseErr := uuid.Parse(userIDStr); parseErr == nil {
+				permRepo := repository.NewPermissionRepository()
+				if perms, permErr := permRepo.GetPlatformPermissionCodes(c.Request.Context(), uid); permErr == nil {
+					c.Set(PermissionsKey, perms)
+				}
+			}
 			c.Next()
 			return
 		}
