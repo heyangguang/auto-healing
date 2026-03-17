@@ -26,11 +26,11 @@ func NewUserPreferenceRepository() *UserPreferenceRepository {
 	return &UserPreferenceRepository{db: database.DB}
 }
 
-// GetByUserID 根据用户 ID 获取偏好设置
-// 注意：user_id 是唯一的，不需要 tenant_id 过滤，避免历史数据 tenant_id 为空时查不到
+// GetByUserID 根据用户 ID 和租户获取偏好设置
 func (r *UserPreferenceRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (*model.UserPreference, error) {
 	var pref model.UserPreference
-	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&pref).Error
+	tenantID := TenantIDFromContext(ctx)
+	err := r.db.WithContext(ctx).Where("user_id = ? AND tenant_id = ?", userID, tenantID).First(&pref).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrPreferenceNotFound
 	}
@@ -42,17 +42,15 @@ func (r *UserPreferenceRepository) Upsert(ctx context.Context, userID uuid.UUID,
 	tenantID := TenantIDFromContext(ctx)
 	pref := model.UserPreference{
 		UserID:      userID,
-		TenantID:    tenantID.String(),
+		TenantID:    &tenantID,
 		Preferences: preferences,
 	}
 
-	// user_id 列有唯一约束（user_preferences_user_id_key）
-	// 使用 ON CONFLICT(user_id) DO UPDATE SET preferences = EXCLUDED.preferences
-	// 原子性地处理创建或更新，彻底消除竞态条件
-	// 同时更新 tenant_id，修复历史记录 tenant_id 为空的问题
+	// 唯一约束现在是 (user_id, tenant_id) 联合索引
+	// 使用 ON CONFLICT(user_id, tenant_id) DO UPDATE SET preferences = EXCLUDED.preferences
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "user_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"preferences", "tenant_id", "updated_at"}),
+		Columns:   []clause.Column{{Name: "user_id"}, {Name: "tenant_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"preferences", "updated_at"}),
 	}).Create(&pref).Error
 
 	if err != nil {
