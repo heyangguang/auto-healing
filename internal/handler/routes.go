@@ -464,8 +464,8 @@ func setupTenantRoutes(api *gin.RouterGroup, h *Handlers) {
 		}
 
 		// -------------------- 权限列表（租户级查看）--------------------
-		tenant.GET("/permissions", middleware.RequirePermission("platform:permissions:list"), h.Permission.ListPermissions)
-		tenant.GET("/permissions/tree", middleware.RequirePermission("platform:permissions:list"), h.Permission.GetPermissionTree)
+		tenant.GET("/permissions", middleware.RequirePermission("role:list"), h.Permission.ListPermissions)
+		tenant.GET("/permissions/tree", middleware.RequirePermission("role:list"), h.Permission.GetPermissionTree)
 
 		// -------------------- 工单/事件 --------------------
 		incidents := tenant.Group("/incidents")

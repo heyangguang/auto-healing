@@ -318,12 +318,6 @@ var SystemRoles = []RoleSeed{
 			"dashboard:view", "dashboard:config:manage", "dashboard:workspace:manage",
 			// 站内信
 			"site-message:list", "site-message:create", "site-message:settings:view", "site-message:settings:manage",
-			// 平台权限查看
-			"platform:permissions:list",
-			// 平台设置
-			"platform:settings:manage",
-			// 租户管理
-			"platform:tenants:manage",
 			// 审计日志
 			"audit:list", "audit:export",
 			// 系统设置
