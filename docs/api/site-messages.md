@@ -161,7 +161,7 @@
 
 ## 9. SSE 实时推送（新消息通知）
 
-**GET** `/api/v1/site-messages/events?token=xxx`
+**GET** `/api/v1/tenant/site-messages/events?token=xxx`
 
 **权限**: 已登录（通过 URL query 传 token）  
 **协议**: Server-Sent Events (SSE) 长连接
@@ -186,7 +186,7 @@
 ```typescript
 // 建议在全局 Layout 层建立连接（登录后）
 const token = localStorage.getItem('access_token');
-const es = new EventSource(`/api/v1/site-messages/events?token=${token}`);
+const es = new EventSource(`/api/v1/tenant/site-messages/events?token=${token}`);
 
 // 1. 连接建立 → 获取初始未读数
 es.addEventListener('init', (e) => {
@@ -226,12 +226,11 @@ TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   -d '{"username":"admin","password":"admin123456"}' | jq -r '.access_token')
 
 # 连接 SSE（会立即看到 init 事件，然后每 30 秒心跳）
-curl -N "http://localhost:8080/api/v1/site-messages/events?token=$TOKEN"
+curl -N "http://localhost:8080/api/v1/tenant/site-messages/events?token=$TOKEN"
 
 # 另开终端发消息，上面的连接会立即收到 new_message 事件
-curl -X POST http://localhost:8080/api/v1/site-messages \
+curl -X POST http://localhost:8080/api/v1/platform/site-messages \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"category":"system_update","title":"测试","content":"SSE测试"}'
 ```
-

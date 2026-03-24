@@ -20,7 +20,7 @@ type Dictionary struct {
 	Bg        string    `json:"bg,omitempty" gorm:"type:varchar(32)"`
 	Extra     JSON      `json:"extra,omitempty" gorm:"type:jsonb"`
 	SortOrder int       `json:"sort_order" gorm:"default:0"`
-	IsSystem  bool      `json:"is_system" gorm:"default:true"`
+	IsSystem  bool      `json:"is_system" gorm:"default:false"`
 	IsActive  bool      `json:"is_active" gorm:"default:true"`
 	CreatedAt time.Time `json:"created_at" gorm:"default:now()"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"default:now()"`

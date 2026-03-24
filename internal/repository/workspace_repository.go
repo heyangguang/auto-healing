@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
@@ -29,6 +30,48 @@ func (r *WorkspaceRepository) Create(ctx context.Context, ws *model.SystemWorksp
 		ws.TenantID = &tid
 	}
 	return r.db.WithContext(ctx).Create(ws).Error
+}
+
+// CreateAndAssignToRoles 创建工作区并在同一事务中分配给指定角色。
+func (r *WorkspaceRepository) CreateAndAssignToRoles(ctx context.Context, ws *model.SystemWorkspace, roleIDs []uuid.UUID) error {
+	tenantID := TenantIDFromContext(ctx)
+	if ws.TenantID == nil {
+		ws.TenantID = &tenantID
+	}
+
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(ws).Error; err != nil {
+			return err
+		}
+
+		for _, roleID := range roleIDs {
+			var existing []uuid.UUID
+			if err := tx.Model(&model.RoleWorkspace{}).
+				Where("role_id = ? AND tenant_id = ?", roleID, tenantID).
+				Pluck("workspace_id", &existing).Error; err != nil {
+				return err
+			}
+
+			seen := make(map[uuid.UUID]bool, len(existing)+1)
+			for _, id := range existing {
+				seen[id] = true
+			}
+			if seen[ws.ID] {
+				continue
+			}
+
+			rw := model.RoleWorkspace{
+				TenantID:    &tenantID,
+				RoleID:      roleID,
+				WorkspaceID: ws.ID,
+			}
+			if err := tx.Create(&rw).Error; err != nil {
+				return fmt.Errorf("assign workspace to role %s: %w", roleID, err)
+			}
+		}
+
+		return nil
+	})
 }
 
 // GetByID 根据 ID 获取系统工作区
@@ -67,6 +110,18 @@ func (r *WorkspaceRepository) Delete(ctx context.Context, id uuid.UUID) error {
 func (r *WorkspaceRepository) AssignToRole(ctx context.Context, roleID uuid.UUID, workspaceIDs []uuid.UUID) error {
 	tenantID := TenantIDFromContext(ctx)
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if len(workspaceIDs) > 0 {
+			var count int64
+			if err := tx.Model(&model.SystemWorkspace{}).
+				Where("tenant_id = ? AND id IN ?", tenantID, workspaceIDs).
+				Count(&count).Error; err != nil {
+				return err
+			}
+			if count != int64(len(workspaceIDs)) {
+				return fmt.Errorf("workspace list contains IDs outside the current tenant")
+			}
+		}
+
 		// 删除该角色在当前租户的所有现有工作区关联
 		if err := tx.Where("role_id = ? AND tenant_id = ?", roleID, tenantID).Delete(&model.RoleWorkspace{}).Error; err != nil {
 			return err
@@ -131,11 +186,11 @@ func (r *WorkspaceRepository) GetWorkspacesByUserRoles(ctx context.Context, user
 				rw.role_id IN (
 					SELECT role_id FROM user_platform_roles WHERE user_id = ?
 					UNION
-					SELECT role_id FROM user_tenant_roles WHERE user_id = ?
+					SELECT role_id FROM user_tenant_roles WHERE user_id = ? AND tenant_id = ?
 				)
 				OR sw.is_default = true
 			) AND sw.tenant_id = ?
-			ORDER BY sw.is_default DESC, sw.created_at ASC`, tenantID, userID, userID, tenantID).
+			ORDER BY sw.is_default DESC, sw.created_at ASC`, tenantID, userID, userID, tenantID, tenantID).
 		Scan(&workspaces).Error
 	return workspaces, err
 }
@@ -144,10 +199,11 @@ func (r *WorkspaceRepository) GetWorkspacesByUserRoles(ctx context.Context, user
 func (r *WorkspaceRepository) GetUserRoleIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
 	var roleIDs []uuid.UUID
 	// 合并 user_platform_roles + user_tenant_roles
+	tenantID := TenantIDFromContext(ctx)
 	err := r.db.WithContext(ctx).
 		Raw(`SELECT role_id FROM user_platform_roles WHERE user_id = ?
 			UNION
-			SELECT role_id FROM user_tenant_roles WHERE user_id = ?`, userID, userID).
+			SELECT role_id FROM user_tenant_roles WHERE user_id = ? AND tenant_id = ?`, userID, userID, tenantID).
 		Pluck("role_id", &roleIDs).Error
 	return roleIDs, err
 }

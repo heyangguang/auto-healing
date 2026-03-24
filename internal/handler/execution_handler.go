@@ -430,7 +430,7 @@ func (h *ExecutionHandler) StreamLogs(c *gin.Context) {
 
 			// 检查执行状态
 			run, _ = h.service.GetRun(ctx, id)
-			if run != nil && (run.Status == "success" || run.Status == "failed" || run.Status == "cancelled") {
+			if run != nil && (run.Status == "success" || run.Status == "failed" || run.Status == "cancelled" || run.Status == "partial") {
 				doneData, _ := json.Marshal(map[string]any{
 					"status":    run.Status,
 					"exit_code": run.ExitCode,

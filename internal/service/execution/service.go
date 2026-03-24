@@ -30,6 +30,7 @@ type Service struct {
 	dockerExecutor   *ansible.DockerExecutor
 	notificationSvc  *notification.Service                  // 通知服务
 	blacklistSvc     *parentService.CommandBlacklistService // 高危指令扫描
+	exemptionSvc     *parentService.BlacklistExemptionService
 
 	// 运行中的执行映射，用于取消操作
 	runningExecutions sync.Map // map[uuid.UUID]context.CancelFunc
@@ -48,6 +49,7 @@ func NewService() *Service {
 		dockerExecutor:   ansible.NewDockerExecutor(),
 		notificationSvc:  notification.NewService(database.DB, "Auto-Healing", "", "1.0.0"),
 		blacklistSvc:     parentService.NewCommandBlacklistService(),
+		exemptionSvc:     parentService.NewBlacklistExemptionService(),
 	}
 }
 
@@ -280,13 +282,23 @@ func (s *Service) ExecuteTask(ctx context.Context, taskID uuid.UUID, opts *Execu
 		triggeredBy = "manual"
 	}
 
+	// 密钥源优先级：运行时覆盖 > 任务模板默认配置
+	secretsSourceIDs := opts.SecretsSourceIDs
+	if len(secretsSourceIDs) == 0 && len(task.SecretsSourceIDs) > 0 {
+		for _, idStr := range task.SecretsSourceIDs {
+			if id, err := uuid.Parse(idStr); err == nil {
+				secretsSourceIDs = append(secretsSourceIDs, id)
+			}
+		}
+	}
+
 	run := &model.ExecutionRun{
 		TaskID:      taskID,
 		Status:      "pending",
 		TriggeredBy: triggeredBy,
 		// 运行时参数快照
 		RuntimeTargetHosts:      targetHosts,
-		RuntimeSecretsSourceIDs: uuidsToStrings(opts.SecretsSourceIDs),
+		RuntimeSecretsSourceIDs: uuidsToStrings(secretsSourceIDs),
 		RuntimeExtraVars:        toJSON(opts.ExtraVars),
 		RuntimeSkipNotification: opts.SkipNotification,
 	}
@@ -299,7 +311,7 @@ func (s *Service) ExecuteTask(ctx context.Context, taskID uuid.UUID, opts *Execu
 	execOpts := &executeParams{
 		targetHosts:      targetHosts,
 		extraVars:        opts.ExtraVars,
-		secretsSourceIDs: opts.SecretsSourceIDs,
+		secretsSourceIDs: secretsSourceIDs,
 		skipNotification: opts.SkipNotification,
 	}
 
@@ -344,7 +356,15 @@ func (s *Service) executeInBackground(runID uuid.UUID, task *model.ExecutionTask
 	}()
 
 	// 更新状态为 running
-	s.repo.UpdateRunStarted(ctx, runID)
+	started, err := s.repo.UpdateRunStarted(ctx, runID)
+	if err != nil {
+		logger.Exec("RUN").Error("[%s] 更新执行开始状态失败: %v", runID.String()[:8], err)
+		return
+	}
+	if !started {
+		logger.Exec("RUN").Warn("[%s] 执行在启动前已取消，跳过后台执行", runID.String()[:8])
+		return
+	}
 
 	// 发送开始通知（如果配置了且未跳过）
 	if !params.skipNotification && task.NotificationConfig != nil && task.NotificationConfig.Enabled {
@@ -380,12 +400,42 @@ func (s *Service) executeInBackground(runID uuid.UUID, task *model.ExecutionTask
 		s.appendLog(ctx, runID, "warn", "security", fmt.Sprintf("安全扫描异常: %v", scanErr), nil)
 	}
 	if len(violations) > 0 {
+		approvedExemptions, err := s.exemptionSvc.GetApprovedByTaskID(ctx, task.ID)
+		if err != nil {
+			s.appendLog(ctx, runID, "warn", "security", fmt.Sprintf("加载豁免规则失败: %v", err), nil)
+		} else if len(approvedExemptions) > 0 {
+			logger.Exec("SECURITY").Info("[%s] 发现 %d 条已批准豁免规则", runID.String()[:8], len(approvedExemptions))
+			exemptedRuleIDs := make(map[uuid.UUID]bool, len(approvedExemptions))
+			for _, item := range approvedExemptions {
+				exemptedRuleIDs[item.RuleID] = true
+				logger.Exec("SECURITY").Info("[%s] 豁免规则: id=%s name=%s pattern=%s", runID.String()[:8], item.RuleID, item.RuleName, item.RulePattern)
+			}
+
+			filtered := violations[:0]
+			exemptedCount := 0
+			for _, violation := range violations {
+				logger.Exec("SECURITY").Info("[%s] 违规命中: id=%s name=%s pattern=%s", runID.String()[:8], violation.RuleID, violation.RuleName, violation.Pattern)
+				if exemptedRuleIDs[violation.RuleID] {
+					exemptedCount++
+					continue
+				}
+				filtered = append(filtered, violation)
+			}
+			violations = filtered
+			if exemptedCount > 0 {
+				logger.Exec("SECURITY").Info("[%s] 已应用 %d 条豁免规则", runID.String()[:8], exemptedCount)
+				s.appendLog(ctx, runID, "info", "security", fmt.Sprintf("已应用 %d 条豁免规则，跳过对应安全拦截", exemptedCount), nil)
+			}
+		}
+	}
+	if len(violations) > 0 {
 		// 构造违规详情
 		var violationList []map[string]interface{}
 		var msg strings.Builder
 		msg.WriteString(fmt.Sprintf("检测到 %d 个高危指令，执行已拦截:\n", len(violations)))
 		for i, v := range violations {
 			violationList = append(violationList, map[string]interface{}{
+				"rule_id":   v.RuleID,
 				"file":      v.File,
 				"line":      v.Line,
 				"content":   v.Content,
@@ -421,6 +471,10 @@ func (s *Service) executeInBackground(runID uuid.UUID, task *model.ExecutionTask
 			source, err := s.secretsRepo.GetByID(ctx, sourceID)
 			if err != nil {
 				s.appendLog(ctx, runID, "warn", "prepare", fmt.Sprintf("获取密钥源 %s 失败: %v", sourceID, err), nil)
+				continue
+			}
+			if source.Status != "active" {
+				s.appendLog(ctx, runID, "warn", "prepare", fmt.Sprintf("密钥源 %s 未启用，已跳过", source.Name), nil)
 				continue
 			}
 			provider, err := secrets.NewProvider(source)
@@ -716,7 +770,9 @@ func (s *Service) CancelRun(ctx context.Context, id uuid.UUID) error {
 		s.runningExecutions.Delete(id)
 	}
 
-	s.repo.UpdateRunStatus(ctx, id, "cancelled")
+	if err := s.repo.UpdateRunStatus(ctx, id, "cancelled"); err != nil {
+		return err
+	}
 	s.appendLog(ctx, id, "warn", "control", "执行已被取消", nil)
 
 	logger.Exec("RUN").Warn("已取消: %s", id)

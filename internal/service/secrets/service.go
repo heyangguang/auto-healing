@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
@@ -30,8 +31,19 @@ func (s *Service) CreateSource(ctx context.Context, source *model.SecretsSource)
 		return nil, fmt.Errorf("配置验证失败: %w", err)
 	}
 
+	requestedDefault := source.IsDefault
+	if requestedDefault {
+		source.IsDefault = false
+	}
+
 	if err := s.repo.Create(ctx, source); err != nil {
 		return nil, err
+	}
+	if requestedDefault {
+		if err := s.repo.SetDefault(ctx, source.ID); err != nil {
+			return nil, err
+		}
+		source.IsDefault = true
 	}
 
 	return source, nil
@@ -49,16 +61,39 @@ func (s *Service) UpdateSource(ctx context.Context, id uuid.UUID, config model.J
 		return nil, err
 	}
 
+	// 被任务/调度引用中的密钥源，不允许修改实际配置，避免任务在未感知的情况下切到另一套凭据语义。
+	if config != nil && !jsonEqual(config, source.Config) {
+		refCount, err := s.countSourceReferences(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if refCount > 0 {
+			return nil, fmt.Errorf("无法更新：该密钥源已被 %d 个任务或调度引用，请先解除引用后再修改配置", refCount)
+		}
+	}
+
 	if config != nil {
 		source.Config = config
 	}
+	requestedDefault := false
 	if isDefault != nil {
+		requestedDefault = *isDefault
 		source.IsDefault = *isDefault
+		if requestedDefault {
+			// 交给 SetDefault 事务统一收敛成单默认源
+			source.IsDefault = false
+		}
 	}
 	if priority != nil {
+		if *priority < 0 {
+			return nil, fmt.Errorf("优先级不能小于 0")
+		}
 		source.Priority = *priority
 	}
 	if status != "" {
+		if status != "active" && status != "inactive" {
+			return nil, fmt.Errorf("无效的状态: %s", status)
+		}
 		source.Status = status
 	}
 
@@ -70,8 +105,40 @@ func (s *Service) UpdateSource(ctx context.Context, id uuid.UUID, config model.J
 	if err := s.repo.Update(ctx, source); err != nil {
 		return nil, err
 	}
+	if requestedDefault {
+		if err := s.repo.SetDefault(ctx, id); err != nil {
+			return nil, err
+		}
+		source.IsDefault = true
+	}
 
 	return source, nil
+}
+
+func (s *Service) countSourceReferences(ctx context.Context, id uuid.UUID) (int64, error) {
+	taskCount, err := s.repo.CountTasksUsingSource(ctx, id.String())
+	if err != nil {
+		return 0, fmt.Errorf("检查关联任务模板失败: %w", err)
+	}
+
+	scheduleCount, err := s.repo.CountSchedulesUsingSource(ctx, id.String())
+	if err != nil {
+		return 0, fmt.Errorf("检查关联调度任务失败: %w", err)
+	}
+
+	return taskCount + scheduleCount, nil
+}
+
+func jsonEqual(a, b model.JSON) bool {
+	left, err := json.Marshal(a)
+	if err != nil {
+		return false
+	}
+	right, err := json.Marshal(b)
+	if err != nil {
+		return false
+	}
+	return string(left) == string(right)
 }
 
 // DeleteSource 删除密钥源（保护性删除）
@@ -111,13 +178,14 @@ func (s *Service) TestConnection(ctx context.Context, id uuid.UUID) error {
 
 	provider, err := secrets.NewProvider(source)
 	if err != nil {
+		_ = s.repo.UpdateTestResult(ctx, id, false)
 		return err
 	}
 
 	testErr := provider.TestConnection(ctx)
 
-	// 更新最后测试时间
-	s.repo.UpdateTestTime(ctx, id)
+	// 更新最后测试结果
+	_ = s.repo.UpdateTestResult(ctx, id, testErr == nil)
 
 	return testErr
 }
@@ -163,6 +231,9 @@ func (s *Service) QuerySecret(ctx context.Context, query model.SecretQuery) (*mo
 		source, err = s.repo.GetByID(ctx, sourceID)
 		if err != nil {
 			return nil, fmt.Errorf("密钥源不存在: %v", err)
+		}
+		if source.Status != "active" {
+			return nil, fmt.Errorf("密钥源未启用")
 		}
 	} else {
 		// 未指定 source_id，使用默认密钥源

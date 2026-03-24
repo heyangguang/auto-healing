@@ -73,8 +73,8 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 | 模块 | 文档 | 路径前缀 |
 |------|------|---------|
 | 认证 | [auth.md](./auth.md) | `/api/v1/auth` |
-| 用户偏好 | [auth.md](./auth.md#用户偏好设置) | `/api/v1/user/preferences` |
-| 用户收藏 & 最近访问 | [user-activity.md](./user-activity.md) | `/api/v1/user/favorites`, `/api/v1/user/recents` |
+| 用户偏好 | [auth.md](./auth.md#用户偏好设置) | `/api/v1/common/user/preferences` |
+| 用户收藏 & 最近访问 | [user-activity.md](./user-activity.md) | `/api/v1/common/user/favorites`, `/api/v1/common/user/recents` |
 | 全局搜索 | [search.md](./search.md) | `/api/v1/search` |
 
 ### 平台管理（Platform Admin）

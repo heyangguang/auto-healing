@@ -130,7 +130,7 @@ func (h *PluginHandler) UpdatePlugin(c *gin.Context) {
 		return
 	}
 
-	p, err := h.pluginSvc.UpdatePlugin(c.Request.Context(), id, req.Description, req.Version, req.Config, req.FieldMapping, req.SyncFilter, req.SyncEnabled, req.SyncIntervalMinutes)
+	p, err := h.pluginSvc.UpdatePlugin(c.Request.Context(), id, req.Description, req.Version, req.Config, req.FieldMapping, req.SyncFilter, req.SyncEnabled, req.SyncIntervalMinutes, req.MaxFailures)
 	if err != nil {
 		response.InternalError(c, "更新失败")
 		return

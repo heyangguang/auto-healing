@@ -172,15 +172,17 @@ func (r *UserRepository) AssignRoles(ctx context.Context, userID uuid.UUID, role
 
 		// 添加新角色关联
 		for _, roleID := range roleIDs {
-			userRole := model.UserPlatformRole{
-				UserID: userID,
-				RoleID: roleID,
-			}
-			if err := tx.Create(&userRole).Error; err != nil {
+			if err := tx.Table("user_platform_roles").Create(map[string]any{
+				"user_id": userID,
+				"role_id": roleID,
+			}).Error; err != nil {
 				return err
 			}
 		}
-		return nil
+
+		return tx.Model(&model.User{}).
+			Where("id = ?", userID).
+			Update("is_platform_admin", len(roleIDs) > 0).Error
 	})
 }
 

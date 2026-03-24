@@ -177,12 +177,25 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	userAgent := c.Request.UserAgent()
 	startTime := time.Now()
 
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest(c, "请求参数错误")
+			return
+		}
+	}
+
 	// 提取用户信息（在 token 失效前）
 	userIDStr := middleware.GetUserID(c)
 	username := middleware.GetUsername(c)
 	isPlatformAdmin := middleware.IsPlatformAdmin(c)
 	// 提取当前租户 ID（登出日志需要 tenant_id）
-	tenantID := repository.TenantIDFromContext(c.Request.Context())
+	tenantID := uuid.Nil
+	if tid, ok := repository.TenantIDFromContextOK(c.Request.Context()); ok {
+		tenantID = tid
+	}
 
 	authHeader := c.GetHeader("Authorization")
 	if len(authHeader) > 7 {
@@ -190,6 +203,12 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		claims, err := h.jwtSvc.ValidateToken(tokenString)
 		if err == nil {
 			_ = h.authSvc.Logout(c.Request.Context(), claims.ID, claims.ExpiresAt.Time)
+		}
+	}
+	if req.RefreshToken != "" {
+		refreshClaims, err := h.jwtSvc.ValidateRefreshToken(req.RefreshToken)
+		if err == nil && refreshClaims.Subject == userIDStr {
+			_ = h.authSvc.Logout(c.Request.Context(), refreshClaims.ID, refreshClaims.ExpiresAt.Time)
 		}
 	}
 
@@ -269,12 +288,17 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	userID, err := h.jwtSvc.ValidateRefreshToken(req.RefreshToken)
+	refreshClaims, err := h.jwtSvc.ValidateRefreshToken(req.RefreshToken)
 	if err != nil {
 		response.Unauthorized(c, "无效或过期的刷新令牌")
 		return
 	}
+	if err := h.authSvc.Logout(c.Request.Context(), refreshClaims.ID, refreshClaims.ExpiresAt.Time); err != nil {
+		response.InternalError(c, "刷新令牌轮换失败")
+		return
+	}
 
+	userID := refreshClaims.Subject
 	uid, _ := uuid.Parse(userID)
 	userInfo, err := h.authSvc.GetCurrentUser(c.Request.Context(), uid)
 	if err != nil {

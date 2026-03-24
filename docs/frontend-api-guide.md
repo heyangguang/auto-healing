@@ -1,6 +1,6 @@
 # 前端 API 对接指南
 
-> **版本**：v2.0 | **更新日期**：2026-02-18  
+> **版本**：v2.0 | **更新日期**：2026-02-18
 > 本文档描述 API 路由的整体结构，重点说明**平台级**与**租户级**接口的划分规则，供前端开发对接使用。
 
 ---
@@ -18,7 +18,8 @@
 
 ```
 /api/v1/platform/...   → 平台级接口（需平台管理员权限）
-/api/v1/...            → 租户级接口（需携带 X-Tenant-ID 请求头）
+/api/v1/common/...     → 认证后的公共入口（租户用户可带或省略 X-Tenant-ID；平台管理员仅在 Impersonation 时拥有租户上下文）
+/api/v1/tenant/...     → 显式租户级接口（需租户上下文；租户用户可省略 X-Tenant-ID 使用默认租户）
 ```
 
 ### 请求头规范
@@ -27,7 +28,7 @@
 # 所有需要认证的接口
 Authorization: Bearer <access_token>
 
-# 租户级接口必须携带（平台级接口不需要）
+# `/api/v1/tenant/*` 建议始终携带；`/api/v1/common/*` 对租户用户可选携带
 X-Tenant-ID: <tenant_uuid>
 ```
 
@@ -44,7 +45,7 @@ X-Tenant-ID: <tenant_uuid>
 
 ## 二、平台级接口 `/api/v1/platform/`
 
-> ⚠️ **仅平台管理员（`is_platform_admin: true`）可访问，普通租户用户调用会返回 403。**  
+> ⚠️ **仅平台管理员（`is_platform_admin: true`）可访问，普通租户用户调用会返回 403。**
 > 不需要携带 `X-Tenant-ID` 请求头。
 
 ### 用户管理
@@ -160,8 +161,8 @@ X-Tenant-ID: <tenant_uuid>
 
 ## 三、租户级接口 `/api/v1/`
 
-> 所有接口需携带 `Authorization` 和 `X-Tenant-ID` 请求头。  
-> 数据严格按租户隔离，用户只能看到自己租户内的数据。
+> 所有接口需携带 `Authorization` 请求头。
+> `/api/v1/common/*` 在租户用户场景下可选携带 `X-Tenant-ID`，未携带时默认使用当前默认租户；平台管理员仅在 Impersonation 场景下拥有租户上下文。
 
 ### 认证 & 个人信息
 
@@ -171,19 +172,19 @@ X-Tenant-ID: <tenant_uuid>
 | GET | `/api/v1/auth/profile` | 获取个人资料 |
 | PUT | `/api/v1/auth/profile` | 更新个人资料 |
 | PUT | `/api/v1/auth/password` | 修改密码 |
-| POST | `/api/v1/auth/logout` | 登出 |
+| POST | `/api/v1/auth/logout` | 登出；可选携带 `refresh_token` 以同时吊销 refresh token |
 
 ### 用户偏好 & 活动
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET/PUT/PATCH | `/api/v1/user/preferences` | 用户偏好设置 |
-| GET | `/api/v1/user/favorites` | 收藏列表 |
-| POST | `/api/v1/user/favorites` | 添加收藏 |
-| DELETE | `/api/v1/user/favorites/:menu_key` | 删除收藏 |
-| GET | `/api/v1/user/recents` | 最近访问 |
-| POST | `/api/v1/user/recents` | 记录最近访问 |
-| GET | `/api/v1/user/tenants` | 当前用户所属租户列表 |
+| GET/PUT/PATCH | `/api/v1/common/user/preferences` | 用户偏好设置 |
+| GET | `/api/v1/common/user/favorites` | 收藏列表 |
+| POST | `/api/v1/common/user/favorites` | 添加收藏 |
+| DELETE | `/api/v1/common/user/favorites/:menu_key` | 删除收藏 |
+| GET | `/api/v1/common/user/recents` | 最近访问 |
+| POST | `/api/v1/common/user/recents` | 记录最近访问 |
+| GET | `/api/v1/common/user/tenants` | 当前用户所属租户列表 |
 
 ### 租户级用户管理
 

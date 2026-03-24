@@ -27,18 +27,20 @@ func NewUserActivityRepository() *UserActivityRepository {
 // ListFavorites 获取用户收藏列表（按创建时间倒序）
 func (r *UserActivityRepository) ListFavorites(ctx context.Context, userID uuid.UUID) ([]model.UserFavorite, error) {
 	var favorites []model.UserFavorite
-	err := r.db.WithContext(ctx).
-		Where("user_id = ?", userID).
-		Order("created_at DESC").
-		Find(&favorites).Error
+	query := r.db.WithContext(ctx).Where("user_id = ?", userID)
+	query = applyOptionalTenantFilter(query, ctx, "tenant_id")
+	err := query.Order("created_at DESC").Find(&favorites).Error
 	return favorites, err
 }
 
 // AddFavorite 添加收藏（使用 ON CONFLICT DO NOTHING 避免先查后写竞态）
 func (r *UserActivityRepository) AddFavorite(ctx context.Context, fav *model.UserFavorite) error {
-	// 设置租户 ID
-	tenantID := TenantIDFromContext(ctx)
-	fav.TenantID = &tenantID
+	// 设置租户 ID；平台级公共数据使用 NULL tenant_id。
+	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+		fav.TenantID = &tenantID
+	} else {
+		fav.TenantID = nil
+	}
 
 	// idx_user_favorite 是 (user_id, menu_key) 的联合唯一约束
 	// ON CONFLICT DO NOTHING 原子性地处理重复添加，彻底消除先 COUNT 后 CREATE 竞态
@@ -54,9 +56,8 @@ func (r *UserActivityRepository) AddFavorite(ctx context.Context, fav *model.Use
 
 // RemoveFavorite 取消收藏
 func (r *UserActivityRepository) RemoveFavorite(ctx context.Context, userID uuid.UUID, menuKey string) error {
-	result := r.db.WithContext(ctx).
-		Where("user_id = ? AND menu_key = ?", userID, menuKey).
-		Delete(&model.UserFavorite{})
+	query := r.db.WithContext(ctx).Where("user_id = ? AND menu_key = ?", userID, menuKey)
+	result := applyOptionalTenantFilter(query, ctx, "tenant_id").Delete(&model.UserFavorite{})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -71,24 +72,27 @@ func (r *UserActivityRepository) RemoveFavorite(ctx context.Context, userID uuid
 // ListRecents 获取最近访问列表（按访问时间倒序，最多 10 条）
 func (r *UserActivityRepository) ListRecents(ctx context.Context, userID uuid.UUID) ([]model.UserRecent, error) {
 	var recents []model.UserRecent
-	err := r.db.WithContext(ctx).
-		Where("user_id = ?", userID).
-		Order("accessed_at DESC").
-		Limit(10).
-		Find(&recents).Error
+	query := r.db.WithContext(ctx).Where("user_id = ?", userID)
+	query = applyOptionalTenantFilter(query, ctx, "tenant_id")
+	err := query.Order("accessed_at DESC").Limit(10).Find(&recents).Error
 	return recents, err
 }
 
 // UpsertRecent 记录最近访问（已存在则更新访问时间，超过 10 条淘汰最旧的）
 func (r *UserActivityRepository) UpsertRecent(ctx context.Context, recent *model.UserRecent) error {
-	// 设置租户 ID
-	tenantID := TenantIDFromContext(ctx)
-	recent.TenantID = &tenantID
+	// 设置租户 ID；平台级公共数据使用 NULL tenant_id。
+	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+		recent.TenantID = &tenantID
+	} else {
+		recent.TenantID = nil
+	}
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 尝试查找已有记录
 		var existing model.UserRecent
-		err := tx.Where("user_id = ? AND menu_key = ?", recent.UserID, recent.MenuKey).First(&existing).Error
+		query := tx.Where("user_id = ? AND menu_key = ?", recent.UserID, recent.MenuKey)
+		query = applyOptionalTenantFilter(query, ctx, "tenant_id")
+		err := query.First(&existing).Error
 
 		if err == nil {
 			// 已存在 → 更新访问时间和名称/路径
@@ -111,20 +115,29 @@ func (r *UserActivityRepository) UpsertRecent(ctx context.Context, recent *model
 
 		// 淘汰超过 10 条的旧记录
 		var count int64
-		tx.Model(&model.UserRecent{}).Where("user_id = ?", recent.UserID).Count(&count)
+		countQuery := tx.Model(&model.UserRecent{}).Where("user_id = ?", recent.UserID)
+		applyOptionalTenantFilter(countQuery, ctx, "tenant_id").Count(&count)
 		if count > 10 {
 			// 找到第 10 条的访问时间，删除更旧的
 			var cutoff model.UserRecent
-			tx.Where("user_id = ?", recent.UserID).
+			cutoffQuery := tx.Where("user_id = ?", recent.UserID)
+			applyOptionalTenantFilter(cutoffQuery, ctx, "tenant_id").
 				Order("accessed_at DESC").
 				Offset(10).
 				Limit(1).
 				First(&cutoff)
 
-			tx.Where("user_id = ? AND accessed_at <= ?", recent.UserID, cutoff.AccessedAt).
-				Delete(&model.UserRecent{})
+			deleteQuery := tx.Where("user_id = ? AND accessed_at <= ?", recent.UserID, cutoff.AccessedAt)
+			applyOptionalTenantFilter(deleteQuery, ctx, "tenant_id").Delete(&model.UserRecent{})
 		}
 
 		return nil
 	})
+}
+
+func applyOptionalTenantFilter(db *gorm.DB, ctx context.Context, column string) *gorm.DB {
+	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+		return db.Where(column+" = ?", tenantID)
+	}
+	return db.Where(column + " IS NULL")
 }

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strings"
+
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	secretsSvc "github.com/company/auto-healing/internal/service/secrets"
@@ -97,7 +99,15 @@ func (h *SecretsHandler) UpdateSource(c *gin.Context) {
 
 	source, err := h.svc.UpdateSource(c.Request.Context(), id, req.Config, req.IsDefault, req.Priority, req.Status)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		if strings.Contains(err.Error(), "record not found") || strings.Contains(err.Error(), "密钥源不存在") {
+			response.NotFound(c, "密钥源不存在")
+			return
+		}
+		if strings.Contains(err.Error(), "无法更新：") {
+			response.Conflict(c, err.Error())
+			return
+		}
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -113,6 +123,10 @@ func (h *SecretsHandler) DeleteSource(c *gin.Context) {
 	}
 
 	if err := h.svc.DeleteSource(c.Request.Context(), id); err != nil {
+		if strings.Contains(err.Error(), "无法删除") {
+			response.Conflict(c, err.Error())
+			return
+		}
 		response.InternalError(c, "删除失败")
 		return
 	}
@@ -146,7 +160,16 @@ func (h *SecretsHandler) QuerySecret(c *gin.Context) {
 
 	secret, err := h.svc.QuerySecret(c.Request.Context(), query)
 	if err != nil {
-		response.NotFound(c, "密钥未找到: "+err.Error())
+		switch {
+		case strings.Contains(err.Error(), "无效的密钥源ID"):
+			response.BadRequest(c, err.Error())
+		case strings.Contains(err.Error(), "密钥源未启用"), strings.Contains(err.Error(), "未找到可用的默认密钥源"):
+			response.Conflict(c, err.Error())
+		case strings.Contains(err.Error(), "密钥源不存在"):
+			response.NotFound(c, err.Error())
+		default:
+			response.NotFound(c, "密钥未找到: "+err.Error())
+		}
 		return
 	}
 

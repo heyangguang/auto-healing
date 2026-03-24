@@ -53,6 +53,13 @@ func (r *CommandBlacklistRepository) GetByID(ctx context.Context, id uuid.UUID) 
 	if err != nil {
 		return nil, fmt.Errorf("黑名单规则不存在: %w", err)
 	}
+	if rule.IsSystem || rule.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		rules := r.applyOverrides(ctx, tenantID, []model.CommandBlacklist{rule})
+		if len(rules) > 0 {
+			rule = rules[0]
+		}
+	}
 	return &rule, nil
 }
 
@@ -97,13 +104,8 @@ func (r *CommandBlacklistRepository) List(ctx context.Context, opts *CommandBlac
 		query = query.Where("pattern = ?", opts.PatternExact)
 	}
 
-	var total int64
-	query.Count(&total)
-
 	var rules []model.CommandBlacklist
-	offset := (opts.Page - 1) * opts.PageSize
-	if err := query.Order("is_system DESC, severity ASC, created_at DESC").
-		Offset(offset).Limit(opts.PageSize).Find(&rules).Error; err != nil {
+	if err := query.Order("is_system DESC, severity ASC, created_at DESC").Find(&rules).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -112,7 +114,7 @@ func (r *CommandBlacklistRepository) List(ctx context.Context, opts *CommandBlac
 
 	// 3. 如果 IsActive 过滤，在内存中过滤（因为 is_active 已被 override 替换）
 	if opts.IsActive != nil {
-		filtered := rules[:0]
+		filtered := make([]model.CommandBlacklist, 0, len(rules))
 		for _, rule := range rules {
 			if rule.IsActive == *opts.IsActive {
 				filtered = append(filtered, rule)
@@ -121,7 +123,19 @@ func (r *CommandBlacklistRepository) List(ctx context.Context, opts *CommandBlac
 		rules = filtered
 	}
 
-	return rules, total, nil
+	total := int64(len(rules))
+	if opts.PageSize <= 0 {
+		return rules, total, nil
+	}
+	offset := (opts.Page - 1) * opts.PageSize
+	if offset >= len(rules) {
+		return []model.CommandBlacklist{}, total, nil
+	}
+	end := offset + opts.PageSize
+	if end > len(rules) {
+		end = len(rules)
+	}
+	return rules[offset:end], total, nil
 }
 
 // Update 更新租户自有规则
@@ -216,16 +230,6 @@ func (r *CommandBlacklistRepository) upsertOverride(ctx context.Context, tenantI
 // 包含：租户自有启用规则 + 系统规则中该租户 override 为 true 的
 func (r *CommandBlacklistRepository) GetActiveRules(ctx context.Context) ([]model.CommandBlacklist, error) {
 	tenantID := TenantIDFromContext(ctx)
-	cacheKey := tenantID.String()
-
-	r.mu.RLock()
-	if cached, ok := r.cache[cacheKey]; ok && time.Since(r.cacheTime[cacheKey]) < r.cacheTTL {
-		result := make([]model.CommandBlacklist, len(cached))
-		copy(result, cached)
-		r.mu.RUnlock()
-		return result, nil
-	}
-	r.mu.RUnlock()
 
 	// 1. 租户自有启用规则
 	var tenantRules []model.CommandBlacklist
@@ -246,13 +250,6 @@ func (r *CommandBlacklistRepository) GetActiveRules(ctx context.Context) ([]mode
 	}
 
 	rules := append(tenantRules, systemRules...)
-
-	// 更新缓存
-	r.mu.Lock()
-	r.cache[cacheKey] = make([]model.CommandBlacklist, len(rules))
-	copy(r.cache[cacheKey], rules)
-	r.cacheTime[cacheKey] = time.Now()
-	r.mu.Unlock()
 
 	return rules, nil
 }

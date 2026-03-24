@@ -86,6 +86,12 @@
 
 **权限**: 已登录用户
 
+### 请求体（可选）
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `refresh_token` | string | ❌ | 若携带，则服务端会同时吊销该刷新令牌 |
+
 ### 响应
 
 ```json
@@ -206,7 +212,7 @@
 
 ## 8. 获取用户偏好设置
 
-**GET** `/api/v1/user/preferences`
+**GET** `/api/v1/common/user/preferences`
 
 **权限**: 已登录用户
 
@@ -230,7 +236,7 @@
 
 ## 9. 全量更新偏好设置
 
-**PUT** `/api/v1/user/preferences`
+**PUT** `/api/v1/common/user/preferences`
 
 **权限**: 已登录用户
 
@@ -255,7 +261,7 @@
 
 ## 10. 部分更新偏好设置
 
-**PATCH** `/api/v1/user/preferences`
+**PATCH** `/api/v1/common/user/preferences`
 
 **权限**: 已登录用户
 

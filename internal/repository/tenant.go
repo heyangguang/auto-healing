@@ -222,7 +222,7 @@ func (r *TenantRepository) GetUserTenants(ctx context.Context, userID uuid.UUID,
 		query = query.Where("tenants.name ILIKE ? OR tenants.code ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
-	err := query.Group("tenants.id").Find(&tenants).Error
+	err := query.Group("tenants.id").Order("tenants.id ASC").Find(&tenants).Error
 	return tenants, err
 }
 

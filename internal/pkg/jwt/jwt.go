@@ -146,7 +146,7 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 }
 
 // ValidateRefreshToken 验证刷新Token
-func (s *Service) ValidateRefreshToken(tokenString string) (string, error) {
+func (s *Service) ValidateRefreshToken(tokenString string) (*jwt.RegisteredClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
@@ -156,17 +156,20 @@ func (s *Service) ValidateRefreshToken(tokenString string) (string, error) {
 
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
-			return "", ErrExpiredToken
+			return nil, ErrExpiredToken
 		}
-		return "", ErrInvalidToken
+		return nil, ErrInvalidToken
 	}
 
 	claims, ok := token.Claims.(*jwt.RegisteredClaims)
 	if !ok || !token.Valid {
-		return "", ErrInvalidToken
+		return nil, ErrInvalidToken
+	}
+	if s.IsBlacklisted(claims.ID) {
+		return nil, ErrInvalidToken
 	}
 
-	return claims.Subject, nil
+	return claims, nil
 }
 
 // Blacklist 将Token加入黑名单

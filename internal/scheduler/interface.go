@@ -19,19 +19,23 @@ import (
 
 // Manager 调度器管理器
 type Manager struct {
-	pluginScheduler    *provider.Scheduler
-	executionScheduler *provider.ExecutionScheduler
-	gitScheduler       *provider.GitScheduler
-	mu                 sync.Mutex
-	running            bool
+	pluginScheduler       *provider.Scheduler
+	executionScheduler    *provider.ExecutionScheduler
+	gitScheduler          *provider.GitScheduler
+	notificationScheduler *provider.NotificationRetryScheduler
+	blacklistScheduler    *provider.BlacklistExemptionScheduler
+	mu                    sync.Mutex
+	running               bool
 }
 
 // NewManager 创建调度器管理器
 func NewManager() *Manager {
 	return &Manager{
-		pluginScheduler:    provider.NewScheduler(),
-		executionScheduler: provider.NewExecutionScheduler(),
-		gitScheduler:       provider.NewGitScheduler(),
+		pluginScheduler:       provider.NewScheduler(),
+		executionScheduler:    provider.NewExecutionScheduler(),
+		gitScheduler:          provider.NewGitScheduler(),
+		notificationScheduler: provider.NewNotificationRetryScheduler(),
+		blacklistScheduler:    provider.NewBlacklistExemptionScheduler(),
 	}
 }
 
@@ -48,6 +52,8 @@ func (m *Manager) Start() {
 	m.pluginScheduler.Start()
 	m.executionScheduler.Start()
 	m.gitScheduler.Start()
+	m.notificationScheduler.Start()
+	m.blacklistScheduler.Start()
 
 	logger.Info("调度器管理器已启动")
 }
@@ -65,15 +71,19 @@ func (m *Manager) Stop() {
 	m.pluginScheduler.Stop()
 	m.executionScheduler.Stop()
 	m.gitScheduler.Stop()
+	m.notificationScheduler.Stop()
+	m.blacklistScheduler.Stop()
 
 	logger.Info("调度器管理器已停止")
 }
 
 // 类型别名，保持向后兼容
 type (
-	Scheduler          = provider.Scheduler
-	ExecutionScheduler = provider.ExecutionScheduler
-	GitScheduler       = provider.GitScheduler
+	Scheduler                   = provider.Scheduler
+	ExecutionScheduler          = provider.ExecutionScheduler
+	GitScheduler                = provider.GitScheduler
+	NotificationRetryScheduler  = provider.NotificationRetryScheduler
+	BlacklistExemptionScheduler = provider.BlacklistExemptionScheduler
 )
 
 // NewScheduler 创建插件调度器（向后兼容）
@@ -89,4 +99,14 @@ func NewExecutionScheduler() *provider.ExecutionScheduler {
 // NewGitScheduler 创建 Git 调度器（向后兼容）
 func NewGitScheduler() *provider.GitScheduler {
 	return provider.NewGitScheduler()
+}
+
+// NewNotificationRetryScheduler 创建通知重试调度器（向后兼容）
+func NewNotificationRetryScheduler() *provider.NotificationRetryScheduler {
+	return provider.NewNotificationRetryScheduler()
+}
+
+// NewBlacklistExemptionScheduler 创建黑名单豁免过期调度器（向后兼容）
+func NewBlacklistExemptionScheduler() *provider.BlacklistExemptionScheduler {
+	return provider.NewBlacklistExemptionScheduler()
 }

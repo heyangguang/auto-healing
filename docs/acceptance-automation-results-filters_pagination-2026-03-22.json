@@ -1,0 +1,41 @@
+{
+  "tenant_setup": {
+    "status": "passed"
+  },
+  "platform_tenants": {
+    "status": "passed"
+  },
+  "settings_secrets_dictionaries": {
+    "status": "passed"
+  },
+  "search_site_messages": {
+    "status": "passed"
+  },
+  "impersonation": {
+    "status": "passed"
+  },
+  "healing": {
+    "status": "passed"
+  },
+  "healing_queries": {
+    "status": "passed"
+  },
+  "git_execution": {
+    "status": "passed"
+  },
+  "plugin_cmdb": {
+    "status": "passed"
+  },
+  "execution_queries": {
+    "status": "passed"
+  },
+  "notifications_audit": {
+    "status": "passed"
+  },
+  "dashboard_overview_stats": {
+    "status": "passed"
+  },
+  "filters_pagination": {
+    "status": "passed"
+  }
+}

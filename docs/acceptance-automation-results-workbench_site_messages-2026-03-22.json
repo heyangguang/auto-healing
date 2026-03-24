@@ -1,0 +1,17 @@
+{
+  "tenant_setup": {
+    "status": "passed"
+  },
+  "common_isolation": {
+    "status": "passed"
+  },
+  "git_execution": {
+    "status": "passed"
+  },
+  "execution_queries": {
+    "status": "passed"
+  },
+  "workbench_site_messages": {
+    "status": "passed"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "tenant_setup": {
+    "status": "passed"
+  },
+  "blacklist_exemption_execution": {
+    "status": "passed"
+  }
+}

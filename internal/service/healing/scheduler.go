@@ -363,7 +363,16 @@ func (s *Scheduler) processExpiredApprovals(ctx context.Context) {
 		if task.TenantID != nil {
 			taskCtx = repository.WithTenantID(ctx, *task.TenantID)
 		}
-		s.instanceRepo.UpdateStatus(taskCtx, task.FlowInstanceID, model.FlowInstanceStatusFailed, "审批超时")
+		updated, err := s.instanceRepo.UpdateStatusIfCurrent(
+			taskCtx,
+			task.FlowInstanceID,
+			[]string{model.FlowInstanceStatusWaitingApproval},
+			model.FlowInstanceStatusFailed,
+			"审批超时",
+		)
+		if err != nil || !updated {
+			continue
+		}
 
 		if instance, err := s.instanceRepo.GetByID(taskCtx, task.FlowInstanceID); err == nil && instance.IncidentID != nil {
 			if incident, err := s.incidentRepo.GetByID(taskCtx, *instance.IncidentID); err == nil {

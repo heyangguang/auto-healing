@@ -54,9 +54,9 @@ func (SiteMessage) TableName() string {
 // SiteMessageRead 站内信已读记录（懒创建：标记已读时才插入）
 type SiteMessageRead struct {
 	ID        uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	TenantID  *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
-	MessageID uuid.UUID  `json:"message_id" gorm:"type:uuid;not null;uniqueIndex:idx_site_message_read_unique"`
-	UserID    uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;uniqueIndex:idx_site_message_read_unique"`
+	TenantID  *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index;uniqueIndex:idx_site_message_read_tenant_unique"`
+	MessageID uuid.UUID  `json:"message_id" gorm:"type:uuid;not null;uniqueIndex:idx_site_message_read_tenant_unique"`
+	UserID    uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;uniqueIndex:idx_site_message_read_tenant_unique"`
 	ReadAt    time.Time  `json:"read_at" gorm:"default:now()"`
 }
 

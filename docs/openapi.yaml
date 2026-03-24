@@ -13,7 +13,7 @@ info:
 
     ## Route Groups
     - **Auth** (`/api/v1/auth/*`) — Login, token refresh, user profile
-    - **Common** (`/api/v1/common/*`) — Shared endpoints (search, preferences, workbench)
+    - **Common** (`/api/v1/common/*`) — Authenticated shared endpoints; tenant users may use explicit or default tenant context, platform admins only gain tenant context during Impersonation
     - **Platform** (`/api/v1/platform/*`) — Platform admin operations (users, roles, tenants, settings)
     - **Tenant** (`/api/v1/tenant/*`) — Tenant-scoped operations (plugins, CMDB, execution, healing, etc.)
 

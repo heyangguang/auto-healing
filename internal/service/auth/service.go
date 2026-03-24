@@ -442,11 +442,6 @@ func (s *Service) GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserPr
 		}
 	}
 
-	roleNames := make([]string, 0, len(roleNameSet))
-	for name := range roleNameSet {
-		roleNames = append(roleNames, name)
-	}
-
 	permissions, err := s.permRepo.GetPermissionCodes(ctx, user.ID)
 	if err != nil {
 		return nil, err

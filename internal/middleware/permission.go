@@ -98,6 +98,11 @@ func RequireAllPermissions(requiredPermissions ...string) gin.HandlerFunc {
 	}
 }
 
+// HasPermission 检查是否有权限
+func HasPermission(userPermissions []string, required string) bool {
+	return hasPermission(userPermissions, required)
+}
+
 // hasPermission 检查是否有权限
 func hasPermission(userPermissions []string, required string) bool {
 	for _, p := range userPermissions {

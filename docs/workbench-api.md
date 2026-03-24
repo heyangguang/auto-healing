@@ -1,14 +1,16 @@
 # 工作台 (Workbench) API 文档
 
-> **Base URL**: `/api/v1/workbench`
+> **Base URL**: `/api/v1/common/workbench`
 >
 > **认证方式**: Bearer Token（所有接口均需要 `Authorization: Bearer <token>` Header）
+>
+> **租户上下文**: 租户用户可显式传 `X-Tenant-ID`，未传时使用当前默认租户；平台用户仅在 Impersonation 场景下具备租户上下文。
 
 ---
 
 ## 1. 综合概览
 
-### `GET /api/v1/workbench/overview`
+### `GET /api/v1/common/workbench/overview`
 
 获取工作台首页的核心统计数据，后端并发聚合 5 个 Section 返回。
 
@@ -108,7 +110,7 @@
 
 ## 2. 活动动态
 
-### `GET /api/v1/workbench/activities`
+### `GET /api/v1/common/workbench/activities`
 
 获取最近的操作活动记录（来源：审计日志）。
 
@@ -162,7 +164,7 @@
 
 ## 3. 定时任务日历
 
-### `GET /api/v1/workbench/schedule-calendar`
+### `GET /api/v1/common/workbench/schedule-calendar`
 
 获取指定月份的定时任务日历数据，按日期分组。包含 cron 类型（解析 cron 表达式计算执行时间点）和 once 类型（一次性定时任务）。
 
@@ -230,7 +232,7 @@
 
 ## 4. 系统公告
 
-### `GET /api/v1/workbench/announcements`
+### `GET /api/v1/common/workbench/announcements`
 
 获取系统公告列表（来源：站内信中 `category = "announcement"` 的记录）。
 
@@ -274,7 +276,7 @@
 
 ## 5. 我的收藏
 
-### `GET /api/v1/workbench/favorites`
+### `GET /api/v1/common/workbench/favorites`
 
 获取当前用户的快捷收藏列表。
 
@@ -309,7 +311,7 @@
 
 ---
 
-### `PUT /api/v1/workbench/favorites`
+### `PUT /api/v1/common/workbench/favorites`
 
 更新当前用户的快捷收藏列表（全量替换）。
 

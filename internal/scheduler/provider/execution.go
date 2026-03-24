@@ -145,7 +145,31 @@ func (s *ExecutionScheduler) checkAndExecute() {
 			}
 
 			shortID := sched.ID.String()[:8]
-			_, err := s.execSvc.ExecuteTask(tenantCtx, sched.TaskID, opts)
+			run, err := s.execSvc.ExecuteTask(tenantCtx, sched.TaskID, opts)
+
+			if err == nil {
+				// 调度触发成功后立即推进调度时间，避免同一调度被重复捞起。
+				_ = s.scheduleRepo.UpdateLastRunAt(tenantCtx, sched.ID)
+				if sched.IsCron() {
+					_ = s.scheduleSvc.UpdateNextRunAt(tenantCtx, sched.ID, *sched.ScheduleExpr)
+				} else {
+					_ = database.DB.WithContext(tenantCtx).
+						Model(&model.ExecutionSchedule{}).
+						Where("id = ?", sched.ID).
+						Updates(map[string]interface{}{
+							"status":      model.ScheduleStatusRunning,
+							"last_run_at": time.Now(),
+							"next_run_at": nil,
+						}).Error
+				}
+
+				finalStatus, waitErr := s.waitForRunTerminalStatus(tenantCtx, run.ID)
+				if waitErr != nil {
+					err = waitErr
+				} else if finalStatus != "success" {
+					err = fmt.Errorf("执行结果状态为 %s", finalStatus)
+				}
+			}
 
 			if err != nil {
 				// 连续失败计数 +1
@@ -173,6 +197,9 @@ func (s *ExecutionScheduler) checkAndExecute() {
 				}
 
 				database.DB.WithContext(ctx).Model(&model.ExecutionSchedule{}).Where("id = ?", sched.ID).Updates(updates)
+				if !sched.IsCron() {
+					_ = s.scheduleSvc.MarkCompleted(tenantCtx, sched.ID)
+				}
 			} else {
 				// 成功 → 重置失败计数
 				updates := map[string]interface{}{
@@ -187,21 +214,37 @@ func (s *ExecutionScheduler) checkAndExecute() {
 				} else {
 					logger.Sched("TASK").Info("[%s] 执行完成: %s", shortID, sched.Name)
 				}
-			}
-
-			// 更新上次执行时间
-			s.scheduleRepo.UpdateLastRunAt(tenantCtx, sched.ID)
-
-			// 更新下次执行时间（仅 Cron 模式且未被自动暂停）或标记完成（Once 模式）
-			if sched.IsCron() {
-				// 如果已经被自动暂停，不再计算下次时间
-				if !(sched.MaxFailures > 0 && err != nil && sched.ConsecutiveFailures+1 >= sched.MaxFailures) {
-					s.scheduleSvc.UpdateNextRunAt(tenantCtx, sched.ID, *sched.ScheduleExpr)
+				if !sched.IsCron() {
+					_ = s.scheduleSvc.MarkCompleted(tenantCtx, sched.ID)
 				}
-			} else {
-				// Once 模式执行后标记为已完成
-				s.scheduleSvc.MarkCompleted(tenantCtx, sched.ID)
 			}
 		}(schedule)
+	}
+}
+
+func (s *ExecutionScheduler) waitForRunTerminalStatus(ctx context.Context, runID uuid.UUID) (string, error) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	timeout := time.NewTimer(35 * time.Minute)
+	defer timeout.Stop()
+
+	for {
+		run, err := s.execSvc.GetRun(ctx, runID)
+		if err != nil {
+			return "", err
+		}
+		switch run.Status {
+		case "success", "failed", "partial", "cancelled":
+			return run.Status, nil
+		}
+
+		select {
+		case <-ticker.C:
+		case <-timeout.C:
+			return "", fmt.Errorf("等待执行结果超时")
+		case <-s.stopCh:
+			return "", fmt.Errorf("调度器已停止")
+		}
 	}
 }

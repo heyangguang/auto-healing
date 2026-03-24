@@ -121,7 +121,16 @@ func (s *Service) UpdateChannel(ctx context.Context, id uuid.UUID, req UpdateCha
 		channel.Description = *req.Description
 	}
 	if req.Config != nil {
-		configJSON, _ := json.Marshal(req.Config)
+		mergedConfig := map[string]interface{}{}
+		if channel.Config != nil {
+			for key, value := range channel.Config {
+				mergedConfig[key] = value
+			}
+		}
+		for key, value := range req.Config {
+			mergedConfig[key] = value
+		}
+		configJSON, _ := json.Marshal(mergedConfig)
 		json.Unmarshal(configJSON, &channel.Config)
 	}
 	if req.RetryConfig != nil {
@@ -214,6 +223,7 @@ type CreateTemplateRequest struct {
 	SubjectTemplate   string   `json:"subject_template"`
 	BodyTemplate      string   `json:"body_template" binding:"required"`
 	Format            string   `json:"format"` // text, markdown, html
+	IsActive          *bool    `json:"is_active"`
 }
 
 // CreateTemplate 创建模板
@@ -221,6 +231,10 @@ func (s *Service) CreateTemplate(ctx context.Context, req CreateTemplateRequest)
 	format := req.Format
 	if format == "" {
 		format = "text"
+	}
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
 	}
 
 	// 提取可用变量
@@ -240,7 +254,7 @@ func (s *Service) CreateTemplate(ctx context.Context, req CreateTemplateRequest)
 		BodyTemplate:       req.BodyTemplate,
 		Format:             format,
 		AvailableVariables: model.JSONArray(availableVars),
-		IsActive:           true,
+		IsActive:           isActive,
 	}
 
 	if err := s.repo.CreateTemplate(ctx, template); err != nil {
@@ -575,13 +589,18 @@ func (s *Service) ListNotifications(ctx context.Context, opts *repository.Notifi
 
 // RetryFailed 重试失败的通知
 func (s *Service) RetryFailed(ctx context.Context) error {
-	logs, err := s.repo.GetPendingRetryLogs(ctx)
+	logs, err := s.repo.GetPendingRetryLogsGlobal(ctx)
 	if err != nil {
 		return err
 	}
 
 	for _, log := range logs {
-		channel, err := s.repo.GetChannelByID(ctx, log.ChannelID)
+		retryCtx := ctx
+		if log.TenantID != nil {
+			retryCtx = repository.WithTenantID(ctx, *log.TenantID)
+		}
+
+		channel, err := s.repo.GetChannelByID(retryCtx, log.ChannelID)
 		if err != nil {
 			continue
 		}
@@ -592,7 +611,7 @@ func (s *Service) RetryFailed(ctx context.Context) error {
 		p, ok := s.providerRegistry.Get(channel.Type)
 		if !ok {
 			log.ErrorMessage = fmt.Sprintf("不支持的渠道类型: %s", channel.Type)
-			s.repo.UpdateLog(ctx, &log)
+			s.repo.UpdateLog(retryCtx, &log)
 			continue
 		}
 
@@ -627,9 +646,10 @@ func (s *Service) RetryFailed(ctx context.Context) error {
 			log.Status = "sent"
 			log.SentAt = &now
 			log.ExternalMessageID = resp.ExternalMessageID
+			log.ErrorMessage = ""
 		}
 
-		s.repo.UpdateLog(ctx, &log)
+		s.repo.UpdateLog(retryCtx, &log)
 	}
 
 	return nil

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	gitclient "github.com/company/auto-healing/internal/git"
@@ -361,8 +362,17 @@ func (s *Service) SyncRepoWithTrigger(ctx context.Context, id uuid.UUID, trigger
 	// 输出汇总日志
 	logger.Sync_("GIT").Info("完成: %s | 操作: %s | 分支: %s | Commit: %s | 耗时: %v", repo.Name, actionName, repo.DefaultBranch, repo.LastCommitID, duration)
 
+	if err := s.repo.Update(ctx, repo); err != nil {
+		_ = s.repo.UpdateStatus(ctx, id, "error", fmt.Sprintf("同步成功但持久化仓库状态失败: %v", err))
+		logger.Sync_("GIT").Error("仓库状态持久化失败: %s | %v", repo.Name, err)
+		return err
+	}
+
+	// 检查关联的 Playbooks（传递仓库租户 ID，确保查询在正确租户范围内）
+	go s.checkPlaybooksAfterSync(id, repo.TenantID)
+
 	// 记录成功日志
-	s.repo.CreateSyncLog(ctx, &model.GitSyncLog{
+	if err := s.repo.CreateSyncLog(ctx, &model.GitSyncLog{
 		RepositoryID: id,
 		TriggerType:  triggerType,
 		Action:       action,
@@ -370,12 +380,11 @@ func (s *Service) SyncRepoWithTrigger(ctx context.Context, id uuid.UUID, trigger
 		CommitID:     commitID,
 		Branch:       repo.DefaultBranch,
 		DurationMs:   durationMs,
-	})
+	}); err != nil {
+		logger.Sync_("GIT").Error("记录成功同步日志失败: %s | %v", repo.Name, err)
+		return err
+	}
 
-	// 检查关联的 Playbooks（传递仓库租户 ID，确保查询在正确租户范围内）
-	go s.checkPlaybooksAfterSync(id, repo.TenantID)
-
-	s.repo.Update(ctx, repo)
 	return nil
 }
 
@@ -542,7 +551,8 @@ func (s *Service) GetFileContent(ctx context.Context, id uuid.UUID, path string)
 	fullPath := filepath.Join(repo.LocalPath, path)
 
 	// 安全检查：确保路径在仓库内
-	if !filepath.HasPrefix(fullPath, repo.LocalPath) {
+	relPath, err := filepath.Rel(repo.LocalPath, fullPath)
+	if err != nil || relPath == ".." || strings.HasPrefix(relPath, ".."+string(os.PathSeparator)) {
 		return "", fmt.Errorf("非法路径")
 	}
 

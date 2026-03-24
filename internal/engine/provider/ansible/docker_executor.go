@@ -202,7 +202,7 @@ func (e *DockerExecutor) executeWithStreaming(ctx context.Context, req *ExecuteR
 		logger.Exec("DOCKER").Warn("收到取消信号，正在停止容器...")
 		e.stopContainer(containerName)
 		// 等待命令退出
-		cmdErr = <-cmdDone
+		<-cmdDone
 		// 返回取消错误
 		return &ExecuteResult{
 			ExitCode:  -1,

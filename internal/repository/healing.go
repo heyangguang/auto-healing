@@ -13,10 +13,12 @@ import (
 )
 
 var (
-	ErrHealingFlowNotFound  = errors.New("自愈流程不存在")
-	ErrHealingRuleNotFound  = errors.New("自愈规则不存在")
-	ErrFlowInstanceNotFound = errors.New("流程实例不存在")
-	ErrApprovalTaskNotFound = errors.New("审批任务不存在")
+	ErrHealingFlowNotFound       = errors.New("自愈流程不存在")
+	ErrHealingRuleNotFound       = errors.New("自愈规则不存在")
+	ErrFlowInstanceNotFound      = errors.New("流程实例不存在")
+	ErrApprovalTaskNotFound      = errors.New("审批任务不存在")
+	ErrApprovalTaskNotPending    = errors.New("审批任务已处理")
+	ErrFlowInstanceStateConflict = errors.New("流程实例状态已变更")
 )
 
 // HealingFlowRepository 自愈流程仓库
@@ -493,7 +495,48 @@ func (r *FlowInstanceRepository) GetByID(ctx context.Context, id uuid.UUID) (*mo
 
 // Update 更新流程实例
 func (r *FlowInstanceRepository) Update(ctx context.Context, instance *model.FlowInstance) error {
-	return r.db.WithContext(ctx).Save(instance).Error
+	return TenantDB(r.db, ctx).
+		Model(&model.FlowInstance{}).
+		Where("id = ?", instance.ID).
+		Select("flow_name", "flow_nodes", "flow_edges", "rule_id", "incident_id", "context", "current_node_id", "started_at", "updated_at").
+		Updates(instance).Error
+}
+
+// Start 将 pending 实例原子切换为 running，并记录开始时间。
+func (r *FlowInstanceRepository) Start(ctx context.Context, id uuid.UUID) (bool, error) {
+	result := TenantDB(r.db, ctx).
+		Model(&model.FlowInstance{}).
+		Where("id = ? AND status = ?", id, model.FlowInstanceStatusPending).
+		Updates(map[string]interface{}{
+			"status":        model.FlowInstanceStatusRunning,
+			"started_at":    time.Now(),
+			"completed_at":  nil,
+			"error_message": "",
+		})
+	return result.RowsAffected > 0, result.Error
+}
+
+// RetryStart 将 failed 实例原子切换为 running，并重置开始/结束信息。
+func (r *FlowInstanceRepository) RetryStart(ctx context.Context, id uuid.UUID) (bool, error) {
+	result := TenantDB(r.db, ctx).
+		Model(&model.FlowInstance{}).
+		Where("id = ? AND status = ?", id, model.FlowInstanceStatusFailed).
+		Updates(map[string]interface{}{
+			"status":        model.FlowInstanceStatusRunning,
+			"started_at":    time.Now(),
+			"completed_at":  nil,
+			"error_message": "",
+		})
+	return result.RowsAffected > 0, result.Error
+}
+
+// EnterWaitingApproval 将 running 实例原子切换为 waiting_approval。
+func (r *FlowInstanceRepository) EnterWaitingApproval(ctx context.Context, id uuid.UUID) (bool, error) {
+	result := TenantDB(r.db, ctx).
+		Model(&model.FlowInstance{}).
+		Where("id = ? AND status = ?", id, model.FlowInstanceStatusRunning).
+		Update("status", model.FlowInstanceStatusWaitingApproval)
+	return result.RowsAffected > 0, result.Error
 }
 
 // UpdateStatus 更新流程实例状态
@@ -504,10 +547,34 @@ func (r *FlowInstanceRepository) UpdateStatus(ctx context.Context, id uuid.UUID,
 	if errorMsg != "" {
 		updates["error_message"] = errorMsg
 	}
+	if status == model.FlowInstanceStatusRunning {
+		updates["completed_at"] = nil
+	}
 	if status == model.FlowInstanceStatusCompleted || status == model.FlowInstanceStatusFailed || status == model.FlowInstanceStatusCancelled {
-		updates["completed_at"] = gorm.Expr("NOW()")
+		updates["completed_at"] = time.Now()
 	}
 	return TenantDB(r.db, ctx).Model(&model.FlowInstance{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// UpdateStatusIfCurrent 仅当当前状态匹配时更新流程实例状态。
+func (r *FlowInstanceRepository) UpdateStatusIfCurrent(ctx context.Context, id uuid.UUID, currentStatuses []string, status string, errorMsg string) (bool, error) {
+	updates := map[string]interface{}{
+		"status": status,
+	}
+	if errorMsg != "" || status == model.FlowInstanceStatusRunning {
+		updates["error_message"] = errorMsg
+	}
+	if status == model.FlowInstanceStatusRunning {
+		updates["completed_at"] = nil
+	}
+	if status == model.FlowInstanceStatusCompleted || status == model.FlowInstanceStatusFailed || status == model.FlowInstanceStatusCancelled {
+		updates["completed_at"] = time.Now()
+	}
+	result := TenantDB(r.db, ctx).
+		Model(&model.FlowInstance{}).
+		Where("id = ? AND status IN ?", id, currentStatuses).
+		Updates(updates)
+	return result.RowsAffected > 0, result.Error
 }
 
 // UpdateNodeStates 更新节点状态
@@ -962,6 +1029,27 @@ func (r *ApprovalTaskRepository) Create(ctx context.Context, task *model.Approva
 	return r.db.WithContext(ctx).Create(task).Error
 }
 
+// CreateAndEnterWaiting 在同一事务中创建审批任务并将流程实例切换到 waiting_approval。
+func (r *ApprovalTaskRepository) CreateAndEnterWaiting(ctx context.Context, task *model.ApprovalTask) error {
+	if task.TenantID == nil {
+		tenantID := TenantIDFromContext(ctx)
+		task.TenantID = &tenantID
+	}
+
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.FlowInstance{}).
+			Where("id = ? AND tenant_id = ? AND status = ?", task.FlowInstanceID, *task.TenantID, model.FlowInstanceStatusRunning).
+			Update("status", model.FlowInstanceStatusWaitingApproval)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrFlowInstanceStateConflict
+		}
+		return tx.Create(task).Error
+	})
+}
+
 // GetByID 根据 ID 获取审批任务
 func (r *ApprovalTaskRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.ApprovalTask, error) {
 	var task model.ApprovalTask
@@ -984,26 +1072,52 @@ func (r *ApprovalTaskRepository) Update(ctx context.Context, task *model.Approva
 
 // Approve 批准审批任务
 func (r *ApprovalTaskRepository) Approve(ctx context.Context, id uuid.UUID, decidedBy uuid.UUID, comment string) error {
-	return TenantDB(r.db, ctx).Model(&model.ApprovalTask{}).
+	result := TenantDB(r.db, ctx).Model(&model.ApprovalTask{}).
 		Where("id = ? AND status = ?", id, model.ApprovalTaskStatusPending).
 		Updates(map[string]interface{}{
 			"status":           model.ApprovalTaskStatusApproved,
 			"decided_by":       decidedBy,
 			"decided_at":       gorm.Expr("NOW()"),
 			"decision_comment": comment,
-		}).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrApprovalTaskNotPending
+	}
+	return nil
 }
 
 // Reject 拒绝审批任务
 func (r *ApprovalTaskRepository) Reject(ctx context.Context, id uuid.UUID, decidedBy uuid.UUID, comment string) error {
-	return TenantDB(r.db, ctx).Model(&model.ApprovalTask{}).
+	result := TenantDB(r.db, ctx).Model(&model.ApprovalTask{}).
 		Where("id = ? AND status = ?", id, model.ApprovalTaskStatusPending).
 		Updates(map[string]interface{}{
 			"status":           model.ApprovalTaskStatusRejected,
 			"decided_by":       decidedBy,
 			"decided_at":       gorm.Expr("NOW()"),
 			"decision_comment": comment,
-		}).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrApprovalTaskNotPending
+	}
+	return nil
+}
+
+// CancelPendingByFlowInstance 关闭指定流程实例下所有待审批任务。
+func (r *ApprovalTaskRepository) CancelPendingByFlowInstance(ctx context.Context, flowInstanceID uuid.UUID, comment string) (int64, error) {
+	result := TenantDB(r.db, ctx).Model(&model.ApprovalTask{}).
+		Where("flow_instance_id = ? AND status = ?", flowInstanceID, model.ApprovalTaskStatusPending).
+		Updates(map[string]interface{}{
+			"status":           model.ApprovalTaskStatusCancelled,
+			"decided_at":       time.Now(),
+			"decision_comment": comment,
+		})
+	return result.RowsAffected, result.Error
 }
 
 // ExpireTimedOut 将超时的审批任务标记为过期（跨租户，调度器专用）

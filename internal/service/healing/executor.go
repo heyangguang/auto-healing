@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	cfg "github.com/company/auto-healing/internal/config"
@@ -38,6 +39,8 @@ type FlowExecutor struct {
 	ansibleExecutor ansible.Executor
 	eventBus        *EventBus // SSE 事件总线
 }
+
+var runningFlowCancels sync.Map // map[uuid.UUID]context.CancelFunc
 
 // NewFlowExecutor 创建流程执行器
 func NewFlowExecutor() *FlowExecutor {
@@ -87,30 +90,43 @@ func shortID(instance *model.FlowInstance) string {
 
 // Execute 执行流程
 func (e *FlowExecutor) Execute(ctx context.Context, instance *model.FlowInstance) error {
+	runCtx, cancel := context.WithCancel(ctx)
+	runningFlowCancels.Store(instance.ID, cancel)
+	defer func() {
+		runningFlowCancels.Delete(instance.ID)
+		cancel()
+	}()
+
 	logger.Exec("FLOW").Info("[%s] 开始执行流程实例", instance.ID.String()[:8])
 
-	// 更新状态为运行中
+	// 原子切换到 running，避免实例仍停留在 pending。
+	started, err := e.instanceRepo.Start(runCtx, instance.ID)
+	if err != nil {
+		return err
+	}
+	if !started {
+		return fmt.Errorf("流程实例状态不允许启动")
+	}
 	startedAt := time.Now()
 	instance.StartedAt = &startedAt
 	instance.Status = model.FlowInstanceStatusRunning
-	e.instanceRepo.Update(ctx, instance)
 
 	// 从实例快照解析节点和边
 	nodes, edges, err := e.parseFlowSnapshot(instance)
 	if err != nil {
-		e.fail(ctx, instance, "解析流程定义失败: "+err.Error())
+		e.fail(runCtx, instance, "解析流程定义失败: "+err.Error())
 		return err
 	}
 
 	// 找到起始节点
 	startNode := e.findStartNode(nodes)
 	if startNode == nil {
-		e.fail(ctx, instance, "找不到起始节点")
+		e.fail(runCtx, instance, "找不到起始节点")
 		return nil
 	}
 
 	// 从起始节点开始执行
-	return e.executeNode(ctx, instance, nodes, edges, startNode)
+	return e.executeNode(runCtx, instance, nodes, edges, startNode)
 }
 
 // RetryFromNode 从指定节点重试执行流程实例
@@ -118,20 +134,33 @@ func (e *FlowExecutor) Execute(ctx context.Context, instance *model.FlowInstance
 func (e *FlowExecutor) RetryFromNode(ctx context.Context, instance *model.FlowInstance, fromNodeID string) error {
 	logger.Exec("FLOW").Info("[%s] 从节点 %s 重试执行流程实例", instance.ID.String()[:8], fromNodeID)
 
-	// 检查状态
-	if instance.Status != model.FlowInstanceStatusFailed {
-		return fmt.Errorf("只能重试失败的流程实例，当前状态: %s", instance.Status)
+	updated, err := e.instanceRepo.UpdateStatusIfCurrent(
+		ctx,
+		instance.ID,
+		[]string{model.FlowInstanceStatusFailed},
+		model.FlowInstanceStatusRunning,
+		"",
+	)
+	if err != nil {
+		return err
 	}
+	if !updated {
+		return fmt.Errorf("只能重试失败的流程实例，当前状态已变更")
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	runningFlowCancels.Store(instance.ID, cancel)
+	defer func() {
+		runningFlowCancels.Delete(instance.ID)
+		cancel()
+	}()
 
-	// 更新状态为运行中
 	instance.Status = model.FlowInstanceStatusRunning
 	instance.ErrorMessage = ""
-	e.instanceRepo.Update(ctx, instance)
 
 	// 从实例快照解析节点和边
 	nodes, edges, err := e.parseFlowSnapshot(instance)
 	if err != nil {
-		e.fail(ctx, instance, "解析流程定义失败: "+err.Error())
+		e.fail(runCtx, instance, "解析流程定义失败: "+err.Error())
 		return err
 	}
 
@@ -160,12 +189,12 @@ func (e *FlowExecutor) RetryFromNode(ctx context.Context, instance *model.FlowIn
 		if fromNodeID == "" {
 			errMsg = fmt.Sprintf("找不到当前节点: %s", instance.CurrentNodeID)
 		}
-		e.fail(ctx, instance, errMsg)
+		e.fail(runCtx, instance, errMsg)
 		return fmt.Errorf("%s", errMsg)
 	}
 
 	// 从目标节点开始执行
-	return e.executeNode(ctx, instance, nodes, edges, targetNode)
+	return e.executeNode(runCtx, instance, nodes, edges, targetNode)
 }
 
 // executeNode 执行节点
@@ -212,6 +241,15 @@ func (e *FlowExecutor) setNodeState(ctx context.Context, instance *model.FlowIns
 }
 
 func (e *FlowExecutor) executeNode(ctx context.Context, instance *model.FlowInstance, nodes []model.FlowNode, edges []model.FlowEdge, node *model.FlowNode) error {
+	if err := ctx.Err(); err != nil {
+		logger.Exec("FLOW").Warn("[%s] 流程上下文已取消，停止后续节点执行", shortID(instance))
+		return nil
+	}
+	if latest, err := e.instanceRepo.GetByID(ctx, instance.ID); err == nil && latest.Status == model.FlowInstanceStatusCancelled {
+		logger.Exec("FLOW").Warn("[%s] 流程实例已取消，停止后续节点执行", shortID(instance))
+		return nil
+	}
+
 	logger.Exec("NODE").Info("[%s] 执行节点 %s (%s)", shortID(instance), node.ID, node.Type)
 
 	// 更新当前节点
@@ -420,6 +458,21 @@ func (e *FlowExecutor) findNextNodeByHandle(nodes []model.FlowNode, edges []mode
 
 // complete 完成流程
 func (e *FlowExecutor) complete(ctx context.Context, instance *model.FlowInstance) error {
+	updated, err := e.instanceRepo.UpdateStatusIfCurrent(
+		ctx,
+		instance.ID,
+		[]string{model.FlowInstanceStatusPending, model.FlowInstanceStatusRunning, model.FlowInstanceStatusWaitingApproval},
+		model.FlowInstanceStatusCompleted,
+		"",
+	)
+	if err != nil {
+		return err
+	}
+	if !updated {
+		logger.Exec("FLOW").Warn("[%s] 流程实例已进入终态，跳过完成状态覆盖", instance.ID.String()[:8])
+		return nil
+	}
+
 	logger.Exec("FLOW").Info("[%s] 流程实例完成", instance.ID.String()[:8])
 
 	// 发布 flow_complete 事件
@@ -434,11 +487,27 @@ func (e *FlowExecutor) complete(ctx context.Context, instance *model.FlowInstanc
 		}
 	}
 
-	return e.instanceRepo.UpdateStatus(ctx, instance.ID, model.FlowInstanceStatusCompleted, "")
+	return nil
 }
 
 // fail 失败流程
 func (e *FlowExecutor) fail(ctx context.Context, instance *model.FlowInstance, errMsg string) {
+	updated, err := e.instanceRepo.UpdateStatusIfCurrent(
+		ctx,
+		instance.ID,
+		[]string{model.FlowInstanceStatusPending, model.FlowInstanceStatusRunning, model.FlowInstanceStatusWaitingApproval},
+		model.FlowInstanceStatusFailed,
+		errMsg,
+	)
+	if err != nil {
+		logger.Exec("FLOW").Error("[%s] 更新失败状态异常: %v", instance.ID.String()[:8], err)
+		return
+	}
+	if !updated {
+		logger.Exec("FLOW").Warn("[%s] 流程实例已进入终态，跳过失败状态覆盖", instance.ID.String()[:8])
+		return
+	}
+
 	logger.Exec("FLOW").Error("[%s] 流程实例失败: %s", instance.ID.String()[:8], errMsg)
 
 	// 发布 flow_complete 事件
@@ -452,8 +521,6 @@ func (e *FlowExecutor) fail(ctx context.Context, instance *model.FlowInstance, e
 			logger.Exec("FLOW").Info("[%s] 工单 %s 自愈状态已更新为 failed", instance.ID.String()[:8], incident.ID.String()[:8])
 		}
 	}
-
-	e.instanceRepo.UpdateStatus(ctx, instance.ID, model.FlowInstanceStatusFailed, errMsg)
 }
 
 // executeHostExtractor 执行主机提取节点
@@ -1345,7 +1412,7 @@ func (e *FlowExecutor) executeApproval(ctx context.Context, instance *model.Flow
 		ApproverRoles:  approverRoles,
 	}
 
-	if err := e.approvalRepo.Create(ctx, task); err != nil {
+	if err := e.approvalRepo.CreateAndEnterWaiting(ctx, task); err != nil {
 		e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelError, "创建审批任务失败", map[string]interface{}{
 			"error": err.Error(),
 		})
@@ -1638,7 +1705,7 @@ func (e *FlowExecutor) executeExecution(ctx context.Context, instance *model.Flo
 	} else if run != nil {
 		// 同步等待执行完成
 		timeout := 30 * time.Minute
-		completedRun, waitErr := e.waitForRunCompletion(ctx, run.ID, timeout)
+		completedRun, waitErr := e.waitForRunCompletion(ctx, instance.ID, run.ID, timeout)
 		if waitErr != nil {
 			executionStatus = "failed"
 			executionMessage = fmt.Sprintf("等待执行完成失败: %v", waitErr)
@@ -1839,13 +1906,21 @@ func (e *FlowExecutor) executeExecutionWithBranch(ctx context.Context, instance 
 }
 
 // waitForRunCompletion 等待执行完成
-func (e *FlowExecutor) waitForRunCompletion(ctx context.Context, runID uuid.UUID, timeout time.Duration) (*model.ExecutionRun, error) {
+func (e *FlowExecutor) waitForRunCompletion(ctx context.Context, instanceID, runID uuid.UUID, timeout time.Duration) (*model.ExecutionRun, error) {
 	deadline := time.Now().Add(timeout)
 	pollInterval := 2 * time.Second
 
 	for {
 		if time.Now().After(deadline) {
 			return nil, fmt.Errorf("等待执行完成超时")
+		}
+		if inst, err := e.instanceRepo.GetByID(ctx, instanceID); err == nil && inst.Status == model.FlowInstanceStatusCancelled {
+			cancelCtx := context.Background()
+			if tenantID, ok := repository.TenantIDFromContextOK(ctx); ok {
+				cancelCtx = repository.WithTenantID(cancelCtx, tenantID)
+			}
+			_ = e.executionSvc.CancelRun(cancelCtx, runID)
+			return nil, fmt.Errorf("流程实例已取消")
 		}
 
 		run, err := e.executionRepo.GetRunByID(ctx, runID)
@@ -1859,6 +1934,11 @@ func (e *FlowExecutor) waitForRunCompletion(ctx context.Context, runID uuid.UUID
 
 		select {
 		case <-ctx.Done():
+			cancelCtx := context.Background()
+			if tenantID, ok := repository.TenantIDFromContextOK(ctx); ok {
+				cancelCtx = repository.WithTenantID(cancelCtx, tenantID)
+			}
+			_ = e.executionSvc.CancelRun(cancelCtx, runID)
 			return nil, ctx.Err()
 		case <-time.After(pollInterval):
 		}
@@ -2385,24 +2465,47 @@ func (e *FlowExecutor) ResumeAfterApproval(ctx context.Context, instanceID uuid.
 	}
 
 	if currentNode == nil {
-		updateIncidentStatus("failed")
-		return e.instanceRepo.UpdateStatus(ctx, instanceID, model.FlowInstanceStatusFailed, "找不到当前节点")
+		updated, err := e.instanceRepo.UpdateStatusIfCurrent(ctx, instanceID, []string{model.FlowInstanceStatusWaitingApproval, model.FlowInstanceStatusRunning}, model.FlowInstanceStatusFailed, "找不到当前节点")
+		if updated {
+			updateIncidentStatus("failed")
+		}
+		return err
+	}
+	if currentNode.Type != model.NodeTypeApproval {
+		return fmt.Errorf("当前节点不是审批节点: %s", currentNode.Type)
 	}
 
-	// 更新状态为运行中
+	updated, err := e.instanceRepo.UpdateStatusIfCurrent(
+		ctx,
+		instanceID,
+		[]string{model.FlowInstanceStatusWaitingApproval},
+		model.FlowInstanceStatusRunning,
+		"",
+	)
+	if err != nil {
+		return err
+	}
+	if !updated {
+		return fmt.Errorf("流程实例不处于待审批状态")
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	runningFlowCancels.Store(instance.ID, cancel)
+	defer func() {
+		runningFlowCancels.Delete(instance.ID)
+		cancel()
+	}()
 	instance.Status = model.FlowInstanceStatusRunning
-	e.instanceRepo.Update(ctx, instance)
 
 	// 根据审批结果选择分支
 	var outputHandle string
 	if approved {
 		outputHandle = "approved"
 		logger.Exec("FLOW").Info("[%s] 审批通过，走 approved 分支", instance.ID.String()[:8])
-		e.setNodeState(ctx, instance, currentNode.ID, "approved", "")
+		e.setNodeState(runCtx, instance, currentNode.ID, "approved", "")
 	} else {
 		outputHandle = "rejected"
 		logger.Exec("FLOW").Info("[%s] 审批拒绝，走 rejected 分支", instance.ID.String()[:8])
-		e.setNodeState(ctx, instance, currentNode.ID, "rejected", "审批被拒绝")
+		e.setNodeState(runCtx, instance, currentNode.ID, "rejected", "审批被拒绝")
 	}
 
 	// 找到对应分支的下一个节点
@@ -2411,14 +2514,27 @@ func (e *FlowExecutor) ResumeAfterApproval(ctx context.Context, instanceID uuid.
 		// 如果没有找到对应分支
 		if !approved {
 			// 拒绝但没有 rejected 分支，流程失败
-			updateIncidentStatus("failed")
-			return e.instanceRepo.UpdateStatus(ctx, instanceID, model.FlowInstanceStatusFailed, "审批被拒绝")
+			updated, err := e.instanceRepo.UpdateStatusIfCurrent(ctx, instanceID, []string{model.FlowInstanceStatusRunning}, model.FlowInstanceStatusFailed, "审批被拒绝")
+			if updated {
+				updateIncidentStatus("failed")
+			}
+			return err
 		}
 		// 通过但没有下一个节点，流程完成
-		return e.complete(ctx, instance)
+		return e.complete(runCtx, instance)
 	}
 
-	return e.executeNode(ctx, instance, nodes, edges, nextNode)
+	return e.executeNode(runCtx, instance, nodes, edges, nextNode)
+}
+
+// Cancel 停止运行中的流程实例。
+func (e *FlowExecutor) Cancel(instanceID uuid.UUID) {
+	if cancelFn, ok := runningFlowCancels.Load(instanceID); ok {
+		if cancel, ok := cancelFn.(context.CancelFunc); ok {
+			cancel()
+		}
+		runningFlowCancels.Delete(instanceID)
+	}
 }
 
 // parseUUID 解析 UUID

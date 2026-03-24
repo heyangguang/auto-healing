@@ -66,7 +66,11 @@ func (r *CMDBItemRepository) UpsertByExternalID(ctx context.Context, item *model
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// 新增
+			// 新增时补齐 tenant_id，避免写入成功但租户查询不可见
+			if item.TenantID == nil {
+				tenantID := TenantIDFromContext(ctx)
+				item.TenantID = &tenantID
+			}
 			if err := r.db.WithContext(ctx).Create(item).Error; err != nil {
 				return false, err
 			}
@@ -77,6 +81,9 @@ func (r *CMDBItemRepository) UpsertByExternalID(ctx context.Context, item *model
 
 	// 更新现有记录
 	item.ID = existing.ID
+	if item.TenantID == nil {
+		item.TenantID = existing.TenantID
+	}
 	item.CreatedAt = existing.CreatedAt
 	item.UpdatedAt = time.Now()
 	if err := r.db.WithContext(ctx).Save(item).Error; err != nil {

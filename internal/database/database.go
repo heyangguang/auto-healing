@@ -177,6 +177,26 @@ func AutoMigrate() error {
 	} else {
 		logger.Info("数据库表结构已是最新，无需迁移")
 	}
+
+	if err := ensureRoleWorkspaceSchema(); err != nil {
+		return fmt.Errorf("修正 role_workspaces 表结构失败: %w", err)
+	}
+	return nil
+}
+
+func ensureRoleWorkspaceSchema() error {
+	statements := []string{
+		`ALTER TABLE role_workspaces ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid()`,
+		`ALTER TABLE role_workspaces ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id)`,
+		`ALTER TABLE role_workspaces ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`,
+		`CREATE INDEX IF NOT EXISTS idx_role_workspaces_tenant_id ON role_workspaces(tenant_id)`,
+	}
+
+	for _, sql := range statements {
+		if err := DB.Exec(sql).Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

@@ -1,0 +1,104 @@
+{
+  "auth": {
+    "status": "passed"
+  },
+  "tenant_setup": {
+    "status": "passed"
+  },
+  "platform_tenants": {
+    "status": "passed"
+  },
+  "settings_secrets_dictionaries": {
+    "status": "passed"
+  },
+  "common_isolation": {
+    "status": "passed"
+  },
+  "profile_rbac_misc": {
+    "status": "passed"
+  },
+  "dashboard": {
+    "status": "passed"
+  },
+  "tenant_boundaries": {
+    "status": "passed"
+  },
+  "search_site_messages": {
+    "status": "passed"
+  },
+  "impersonation": {
+    "status": "passed"
+  },
+  "healing": {
+    "status": "passed"
+  },
+  "healing_queries": {
+    "status": "passed"
+  },
+  "git_execution": {
+    "status": "passed"
+  },
+  "plugin_cmdb": {
+    "status": "passed"
+  },
+  "execution_queries": {
+    "status": "passed"
+  },
+  "workbench_site_messages": {
+    "status": "passed"
+  },
+  "notifications_audit": {
+    "status": "passed"
+  },
+  "notification_variables": {
+    "status": "passed"
+  },
+  "notification_failures": {
+    "status": "passed"
+  },
+  "notification_retry": {
+    "status": "passed"
+  },
+  "notification_retry_exhaustion": {
+    "status": "passed"
+  },
+  "notification_rate_limit": {
+    "status": "passed"
+  },
+  "notification_retry_tenant_scope": {
+    "status": "passed"
+  },
+  "secrets_default_fallback": {
+    "status": "passed"
+  },
+  "secrets_disabled_usage": {
+    "status": "passed"
+  },
+  "secrets_runtime_override": {
+    "status": "passed"
+  },
+  "secrets_reference_updates": {
+    "status": "passed"
+  },
+  "secrets_update_constraints": {
+    "status": "passed"
+  },
+  "blacklist_security": {
+    "status": "passed"
+  },
+  "blacklist_exemption_execution": {
+    "status": "passed"
+  },
+  "audit_action_assertions": {
+    "status": "passed"
+  },
+  "dashboard_overview_stats": {
+    "status": "passed"
+  },
+  "filters_pagination": {
+    "status": "passed"
+  },
+  "query_token_sse": {
+    "status": "passed"
+  }
+}

@@ -605,7 +605,7 @@ func (h *ImpersonationHandler) notifyApproversNewRequest(ctx context.Context, im
 			zap.L().Error("notifyApproversNewRequest panic", zap.Any("error", r))
 		}
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	msg := &model.SiteMessage{
@@ -615,7 +615,7 @@ func (h *ImpersonationHandler) notifyApproversNewRequest(ctx context.Context, im
 		Title:          "新的临时提权申请待审批",
 		Content:        impReq.RequesterName + " 申请临时访问本租户（" + impReq.TenantName + "），申请时长 " + formatMinutes(impReq.DurationMinutes) + "，请及时处理。",
 	}
-	if err := h.siteMessageRepo.Create(ctx, msg); err != nil {
+	if err := h.siteMessageRepo.Create(notifyCtx, msg); err != nil {
 		zap.L().Error("发送审批人站内消息失败", zap.Error(err))
 	}
 }
@@ -627,7 +627,7 @@ func (h *ImpersonationHandler) notifyRequesterDecision(ctx context.Context, impR
 			zap.L().Error("notifyRequesterDecision panic", zap.Any("error", r))
 		}
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	var title, content string
@@ -648,7 +648,7 @@ func (h *ImpersonationHandler) notifyRequesterDecision(ctx context.Context, impR
 		Title:          title,
 		Content:        content,
 	}
-	if err := h.siteMessageRepo.Create(ctx, msg); err != nil {
+	if err := h.siteMessageRepo.Create(notifyCtx, msg); err != nil {
 		zap.L().Error("发送申请人站内消息失败", zap.Error(err))
 	}
 }

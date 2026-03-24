@@ -48,6 +48,10 @@ func (h *GitRepoHandler) GetSearchSchema(c *gin.Context) {
 func (h *GitRepoHandler) ListRepos(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	sortField := c.Query("sort_by")
+	if sortField == "" {
+		sortField = c.Query("sort_field")
+	}
 
 	opts := &repository.GitRepoListOptions{
 		Page:      page,
@@ -56,7 +60,7 @@ func (h *GitRepoHandler) ListRepos(c *gin.Context) {
 		URL:       GetStringFilter(c, "url"),
 		Status:    c.Query("status"),
 		AuthType:  c.Query("auth_type"),
-		SortField: c.Query("sort_field"),
+		SortField: sortField,
 		SortOrder: c.Query("sort_order"),
 	}
 

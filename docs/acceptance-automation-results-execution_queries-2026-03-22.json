@@ -1,0 +1,11 @@
+{
+  "tenant_setup": {
+    "status": "passed"
+  },
+  "git_execution": {
+    "status": "passed"
+  },
+  "execution_queries": {
+    "status": "passed"
+  }
+}

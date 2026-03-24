@@ -129,10 +129,11 @@ func (ApprovalTask) TableName() string {
 
 // ApprovalTaskStatus 审批任务状态常量
 const (
-	ApprovalTaskStatusPending  = "pending"
-	ApprovalTaskStatusApproved = "approved"
-	ApprovalTaskStatusRejected = "rejected"
-	ApprovalTaskStatusExpired  = "expired"
+	ApprovalTaskStatusPending   = "pending"
+	ApprovalTaskStatusApproved  = "approved"
+	ApprovalTaskStatusRejected  = "rejected"
+	ApprovalTaskStatusExpired   = "expired"
+	ApprovalTaskStatusCancelled = "cancelled"
 )
 
 // NodeStatus 节点执行状态常量

@@ -1,13 +1,13 @@
 # 用户偏好设置 API 文档
 
-**路径前缀**: `/api/v1/user/preferences`  
-**权限**: 已登录用户（数据按用户隔离）
+**路径前缀**: `/api/v1/common/user/preferences`
+**权限**: 已登录用户（数据按用户 + 当前租户上下文隔离；平台用户仅在 Impersonation 场景下具备租户上下文）
 
 ---
 
 ## 1. 获取当前用户偏好设置
 
-**GET** `/api/v1/user/preferences`
+**GET** `/api/v1/common/user/preferences`
 
 **权限**: 无特殊要求（已登录即可）
 
@@ -34,7 +34,7 @@
 
 ## 2. 全量更新偏好设置
 
-**PUT** `/api/v1/user/preferences`
+**PUT** `/api/v1/common/user/preferences`
 
 **权限**: 无特殊要求
 
@@ -63,7 +63,7 @@
 
 ## 3. 部分更新偏好设置
 
-**PATCH** `/api/v1/user/preferences`
+**PATCH** `/api/v1/common/user/preferences`
 
 **权限**: 无特殊要求
 

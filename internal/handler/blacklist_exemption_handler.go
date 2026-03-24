@@ -13,12 +13,16 @@ import (
 )
 
 type BlacklistExemptionHandler struct {
-	svc *service.BlacklistExemptionService
+	svc           *service.BlacklistExemptionService
+	taskRepo      *repository.ExecutionRepository
+	blacklistRepo *repository.CommandBlacklistRepository
 }
 
 func NewBlacklistExemptionHandler() *BlacklistExemptionHandler {
 	return &BlacklistExemptionHandler{
-		svc: service.NewBlacklistExemptionService(),
+		svc:           service.NewBlacklistExemptionService(),
+		taskRepo:      repository.NewExecutionRepository(),
+		blacklistRepo: repository.NewCommandBlacklistRepository(),
 	}
 }
 
@@ -96,13 +100,24 @@ func (h *BlacklistExemptionHandler) Create(c *gin.Context) {
 		input.ValidityDays = 30
 	}
 
+	task, err := h.taskRepo.GetTaskByID(c.Request.Context(), taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "任务模板不存在或不属于当前租户"})
+		return
+	}
+	rule, err := h.blacklistRepo.GetByID(c.Request.Context(), ruleID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "黑名单规则不存在或不属于当前租户"})
+		return
+	}
+
 	item := &model.BlacklistExemption{
 		TaskID:        taskID,
-		TaskName:      input.TaskName,
+		TaskName:      task.Name,
 		RuleID:        ruleID,
-		RuleName:      input.RuleName,
-		RuleSeverity:  input.RuleSeverity,
-		RulePattern:   input.RulePattern,
+		RuleName:      rule.Name,
+		RuleSeverity:  rule.Severity,
+		RulePattern:   rule.Pattern,
 		Reason:        input.Reason,
 		RequestedBy:   userID,
 		RequesterName: username,

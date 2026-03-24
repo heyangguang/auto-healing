@@ -163,6 +163,144 @@ func TenantMiddleware() gin.HandlerFunc {
 	}
 }
 
+// CommonTenantMiddleware 公共路由的租户上下文解析。
+// 普通租户用户：解析 X-Tenant-ID 或默认租户并注入上下文。
+// 平台管理员：仅在 Impersonation 模式下注入租户；否则保持无租户上下文。
+func CommonTenantMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if IsImpersonating(c) {
+			impTenantIDStr, _ := c.Get(ImpersonationTenantIDKey)
+			if impTenantIDStr == nil || impTenantIDStr.(string) == "" {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"code":    40300,
+					"message": "Impersonation 会话缺少租户信息",
+				})
+				return
+			}
+			tenantID, err := uuid.Parse(impTenantIDStr.(string))
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+					"code":    40000,
+					"message": "Impersonation 租户 ID 格式无效",
+				})
+				return
+			}
+			if !ensureActiveTenant(c, tenantID) {
+				return
+			}
+			injectTenantContext(c, tenantID)
+			c.Next()
+			return
+		}
+
+		if IsPlatformAdmin(c) {
+			c.Next()
+			return
+		}
+
+		var tenantIDs []string
+		if rawTenantIDs, exists := c.Get(TenantIDsKey); exists && rawTenantIDs != nil {
+			tenantIDs, _ = rawTenantIDs.([]string)
+		}
+
+		defaultTenantID := ""
+		if raw, exists := c.Get(DefaultTenantIDKey); exists && raw != nil {
+			defaultTenantID, _ = raw.(string)
+		}
+
+		tenantIDStr := c.GetHeader("X-Tenant-ID")
+		var tenantID uuid.UUID
+		if tenantIDStr == "" {
+			if defaultTenantID == "" {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"code":    40300,
+					"message": "用户未分配任何租户，请联系管理员",
+				})
+				return
+			}
+			parsed, err := uuid.Parse(defaultTenantID)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"code":    40300,
+					"message": "默认租户无效，请重新登录",
+				})
+				return
+			}
+			tenantID = parsed
+		} else {
+			parsed, err := uuid.Parse(tenantIDStr)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+					"code":    40000,
+					"message": "无效的 X-Tenant-ID 格式",
+				})
+				return
+			}
+			if !contains(tenantIDs, tenantIDStr) {
+				userIDStr := GetUserID(c)
+				uid, parseErr := uuid.Parse(userIDStr)
+				if parseErr != nil {
+					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+						"code":    40300,
+						"message": "无权访问该租户",
+					})
+					return
+				}
+				tenantRepo := repository.NewTenantRepository()
+				dbTenants, dbErr := tenantRepo.GetUserTenants(c.Request.Context(), uid, "")
+				if dbErr != nil || !containsTenantByID(dbTenants, tenantIDStr) {
+					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+						"code":    40300,
+						"message": "无权访问该租户",
+					})
+					return
+				}
+				c.Header("X-Refresh-Token", "true")
+			}
+			tenantID = parsed
+		}
+
+		if !ensureActiveTenant(c, tenantID) {
+			return
+		}
+		injectTenantContext(c, tenantID)
+		userIDStr := GetUserID(c)
+		if uid, parseErr := uuid.Parse(userIDStr); parseErr == nil {
+			permRepo := repository.NewPermissionRepository()
+			if dbPerms, permErr := permRepo.GetTenantPermissionCodes(c.Request.Context(), uid, tenantID); permErr == nil {
+				c.Set(PermissionsKey, dbPerms)
+			}
+		}
+		c.Next()
+	}
+}
+
+func ensureActiveTenant(c *gin.Context, tenantID uuid.UUID) bool {
+	tenantRepo := repository.NewTenantRepository()
+	tenant, tenantErr := tenantRepo.GetByID(c.Request.Context(), tenantID)
+	if tenantErr != nil || tenant == nil {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"code":    40300,
+			"message": "租户不存在",
+		})
+		return false
+	}
+	if tenant.Status != model.TenantStatusActive {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"code":    40301,
+			"message": "该租户已被禁用，请联系平台管理员",
+		})
+		return false
+	}
+	return true
+}
+
+func injectTenantContext(c *gin.Context, tenantID uuid.UUID) {
+	c.Set(TenantIDKey, tenantID.String())
+	ctx := repository.WithTenantID(c.Request.Context(), tenantID)
+	c.Request = c.Request.WithContext(ctx)
+}
+
 // RequirePlatformAdmin 要求平台用户权限
 // 用于保护平台级管理操作（如租户 CRUD、平台设置等）
 // IsPlatformAdmin 表示用户是平台用户（拥有任意平台角色），实际权限由角色决定

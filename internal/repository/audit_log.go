@@ -408,9 +408,10 @@ func IsHighRisk(action, resourceType string) bool {
 // GetRiskLevel 获取操作的风险等级（四级）
 // 返回 low / medium / high / critical
 func GetRiskLevel(action, resourceType string) string {
+	normalized := normalizeRiskResourceType(resourceType)
 	for _, rule := range RiskRules {
 		if (rule.Action == "*" || rule.Action == action) &&
-			(rule.ResourceType == "*" || rule.ResourceType == resourceType) {
+			(rule.ResourceType == "*" || rule.ResourceType == resourceType || rule.ResourceType == normalized) {
 			return rule.Level
 		}
 	}
@@ -419,9 +420,10 @@ func GetRiskLevel(action, resourceType string) string {
 
 // GetRiskReason 获取风险原因描述
 func GetRiskReason(action, resourceType string) string {
+	normalized := normalizeRiskResourceType(resourceType)
 	for _, rule := range RiskRules {
 		if (rule.Action == "*" || rule.Action == action) &&
-			(rule.ResourceType == "*" || rule.ResourceType == resourceType) {
+			(rule.ResourceType == "*" || rule.ResourceType == resourceType || rule.ResourceType == normalized) {
 			return rule.Reason
 		}
 	}
@@ -438,17 +440,62 @@ func buildHighRiskCondition() string {
 		if rule.Action == "*" && rule.ResourceType == "*" {
 			return "1=1"
 		} else if rule.Action == "*" {
-			conditions = append(conditions, fmt.Sprintf("resource_type = '%s'", rule.ResourceType))
+			variants := riskResourceVariants(rule.ResourceType)
+			if len(variants) == 1 {
+				conditions = append(conditions, fmt.Sprintf("resource_type = '%s'", variants[0]))
+			} else {
+				conditions = append(conditions, fmt.Sprintf("resource_type IN (%s)", quoteSQLStrings(variants)))
+			}
 		} else if rule.ResourceType == "*" {
 			conditions = append(conditions, fmt.Sprintf("action = '%s'", rule.Action))
 		} else {
-			conditions = append(conditions, fmt.Sprintf("(action = '%s' AND resource_type = '%s')", rule.Action, rule.ResourceType))
+			variants := riskResourceVariants(rule.ResourceType)
+			if len(variants) == 1 {
+				conditions = append(conditions, fmt.Sprintf("(action = '%s' AND resource_type = '%s')", rule.Action, variants[0]))
+			} else {
+				conditions = append(conditions, fmt.Sprintf("(action = '%s' AND resource_type IN (%s))", rule.Action, quoteSQLStrings(variants)))
+			}
 		}
 	}
 	if len(conditions) == 0 {
 		return "1=0" // 无规则匹配
 	}
 	return strings.Join(conditions, " OR ")
+}
+
+func normalizeRiskResourceType(resourceType string) string {
+	for _, prefix := range []string{"tenant-", "common-", "platform-"} {
+		if strings.HasPrefix(resourceType, prefix) {
+			return strings.TrimPrefix(resourceType, prefix)
+		}
+	}
+	return resourceType
+}
+
+func riskResourceVariants(resourceType string) []string {
+	seen := map[string]bool{}
+	var variants []string
+	add := func(value string) {
+		if value == "" || seen[value] {
+			return
+		}
+		seen[value] = true
+		variants = append(variants, value)
+	}
+
+	add(resourceType)
+	add("tenant-" + resourceType)
+	add("common-" + resourceType)
+	add("platform-" + resourceType)
+	return variants
+}
+
+func quoteSQLStrings(values []string) string {
+	quoted := make([]string, 0, len(values))
+	for _, value := range values {
+		quoted = append(quoted, fmt.Sprintf("'%s'", value))
+	}
+	return strings.Join(quoted, ", ")
 }
 
 // ==================== 用户个人中心查询 ====================

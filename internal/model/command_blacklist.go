@@ -29,10 +29,11 @@ func (CommandBlacklist) TableName() string {
 
 // CommandBlacklistViolation 违规项
 type CommandBlacklistViolation struct {
-	File     string `json:"file"`      // 文件路径（相对于工作空间）
-	Line     int    `json:"line"`      // 行号
-	Content  string `json:"content"`   // 匹配到的行内容
-	RuleName string `json:"rule_name"` // 触发的规则名称
-	Pattern  string `json:"pattern"`   // 匹配的模式
-	Severity string `json:"severity"`  // 严重级别
+	RuleID   uuid.UUID `json:"rule_id"`
+	File     string    `json:"file"`      // 文件路径（相对于工作空间）
+	Line     int       `json:"line"`      // 行号
+	Content  string    `json:"content"`   // 匹配到的行内容
+	RuleName string    `json:"rule_name"` // 触发的规则名称
+	Pattern  string    `json:"pattern"`   // 匹配的模式
+	Severity string    `json:"severity"`  // 严重级别
 }

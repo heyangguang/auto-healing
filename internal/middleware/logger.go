@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -33,7 +34,7 @@ func Logger() gin.HandlerFunc {
 		statusCode := c.Writer.Status()
 
 		if raw != "" {
-			path = path + "?" + raw
+			path = path + "?" + redactRawQuery(raw)
 		}
 
 		// 格式化延迟
@@ -67,6 +68,19 @@ func Logger() gin.HandlerFunc {
 			logger.API("").Error("Error: %s", c.Errors.String())
 		}
 	}
+}
+
+func redactRawQuery(raw string) string {
+	values, err := url.ParseQuery(raw)
+	if err != nil {
+		return raw
+	}
+	for _, key := range []string{"token", "access_token", "refresh_token"} {
+		if _, ok := values[key]; ok {
+			values.Set(key, "REDACTED")
+		}
+	}
+	return values.Encode()
 }
 
 // formatLatency 格式化延迟时间

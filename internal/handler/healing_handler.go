@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -947,10 +948,27 @@ func (h *HealingHandler) CancelInstance(c *gin.Context) {
 		return
 	}
 
-	if err := h.instanceRepo.UpdateStatus(c.Request.Context(), id, "cancelled", "用户手动取消"); err != nil {
+	updated, err := h.instanceRepo.UpdateStatusIfCurrent(
+		c.Request.Context(),
+		id,
+		[]string{model.FlowInstanceStatusPending, model.FlowInstanceStatusRunning, model.FlowInstanceStatusWaitingApproval},
+		model.FlowInstanceStatusCancelled,
+		"用户手动取消",
+	)
+	if err != nil {
 		response.InternalError(c, "取消流程实例失败")
 		return
 	}
+	if !updated {
+		response.Conflict(c, "当前流程实例状态不允许取消")
+		return
+	}
+	if _, err := h.approvalRepo.CancelPendingByFlowInstance(c.Request.Context(), id, "流程已取消"); err != nil {
+		response.InternalError(c, "关闭待审批任务失败")
+		return
+	}
+	h.executor.Cancel(id)
+	healing.GetEventBus().PublishFlowComplete(id, false, model.FlowInstanceStatusCancelled, "流程已取消")
 
 	// 更新关联的 Incident 状态为 dismissed（用户主动取消）
 	if instance.IncidentID != nil {
@@ -1037,6 +1055,24 @@ func (h *HealingHandler) InstanceEvents(c *gin.Context) {
 		"instance_id": instance.ID.String(),
 		"status":      instance.Status,
 	})
+	if instance.Status == model.FlowInstanceStatusCompleted ||
+		instance.Status == model.FlowInstanceStatusFailed ||
+		instance.Status == model.FlowInstanceStatusCancelled {
+		sseWriter.WriteEvent(string(healing.EventFlowComplete), map[string]interface{}{
+			"success": instance.Status == model.FlowInstanceStatusCompleted,
+			"status":  instance.Status,
+			"message": "流程已结束",
+		})
+		return
+	}
+	if instance.Status == model.FlowInstanceStatusCompleted || instance.Status == model.FlowInstanceStatusFailed || instance.Status == model.FlowInstanceStatusCancelled {
+		sseWriter.WriteEvent(string(healing.EventFlowComplete), map[string]interface{}{
+			"success": instance.Status == model.FlowInstanceStatusCompleted,
+			"status":  instance.Status,
+			"message": instance.ErrorMessage,
+		})
+		return
+	}
 
 	// 监听事件
 	ctx := c.Request.Context()
@@ -1147,9 +1183,17 @@ func (h *HealingHandler) ApproveTask(c *gin.Context) {
 		response.NotFound(c, "审批任务不存在")
 		return
 	}
+	if task.FlowInstance != nil && task.FlowInstance.Status != model.FlowInstanceStatusWaitingApproval {
+		response.Conflict(c, "流程实例当前不处于待审批状态，无法继续审批")
+		return
+	}
 
 	// 执行审批（WHERE status = 'pending' 防止重复审批）
 	if err := h.approvalRepo.Approve(c.Request.Context(), id, *userID, req.Comment); err != nil {
+		if errors.Is(err, repository.ErrApprovalTaskNotPending) {
+			response.Conflict(c, "审批任务已处理，请刷新后查看最新状态")
+			return
+		}
 		response.InternalError(c, "批准操作失败")
 		return
 	}
@@ -1201,6 +1245,10 @@ func (h *HealingHandler) RejectTask(c *gin.Context) {
 	}
 
 	if err := h.approvalRepo.Reject(c.Request.Context(), id, *userID, req.Comment); err != nil {
+		if errors.Is(err, repository.ErrApprovalTaskNotPending) {
+			response.Conflict(c, "审批任务已处理，请刷新后查看最新状态")
+			return
+		}
 		response.InternalError(c, "拒绝操作失败")
 		return
 	}

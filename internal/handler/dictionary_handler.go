@@ -89,6 +89,8 @@ func (h *DictionaryHandler) CreateDictionary(c *gin.Context) {
 	item.ID = uuid.New()
 	item.CreatedAt = time.Now()
 	item.UpdatedAt = time.Now()
+	// 平台接口创建的是可维护的业务字典项，不允许借此创建系统内置项。
+	item.IsSystem = false
 
 	if err := h.svc.Create(c.Request.Context(), &item); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建失败: " + err.Error()})

@@ -65,12 +65,14 @@ func (r *SiteMessageRepository) List(ctx context.Context, userID uuid.UUID, tena
 		}
 	}
 
+	ctxTenantID := TenantIDFromContext(ctx)
+
 	// 已读状态过滤
 	switch isRead {
 	case "true":
-		baseQuery = baseQuery.Where("EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = ?)", userID)
+		baseQuery = baseQuery.Where("EXISTS (SELECT 1 FROM site_message_reads WHERE tenant_id = ? AND message_id = sm.id AND user_id = ?)", ctxTenantID, userID)
 	case "false":
-		baseQuery = baseQuery.Where("NOT EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = ?)", userID)
+		baseQuery = baseQuery.Where("NOT EXISTS (SELECT 1 FROM site_message_reads WHERE tenant_id = ? AND message_id = sm.id AND user_id = ?)", ctxTenantID, userID)
 	}
 
 	// 先计算总数
@@ -93,7 +95,7 @@ func (r *SiteMessageRepository) List(ctx context.Context, userID uuid.UUID, tena
 	err := baseQuery.
 		Select(`sm.id, sm.category, sm.title, sm.content, sm.created_at, sm.expires_at,
 			CASE WHEN smr.id IS NOT NULL THEN true ELSE false END AS is_read`).
-		Joins("LEFT JOIN site_message_reads AS smr ON smr.message_id = sm.id AND smr.user_id = ?", userID).
+		Joins("LEFT JOIN site_message_reads AS smr ON smr.tenant_id = ? AND smr.message_id = sm.id AND smr.user_id = ?", ctxTenantID, userID).
 		Order(orderClause).
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
@@ -106,9 +108,10 @@ func (r *SiteMessageRepository) List(ctx context.Context, userID uuid.UUID, tena
 // tenantID: 当前用户所属租户，用于过滤目标租户
 func (r *SiteMessageRepository) GetUnreadCount(ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID, userCreatedAt time.Time) (int64, error) {
 	var count int64
+	ctxTenantID := TenantIDFromContext(ctx)
 	query := r.db.WithContext(ctx).Table("site_messages AS sm").
 		Where("(sm.expires_at IS NULL OR sm.expires_at > ?)", time.Now()).
-		Where("NOT EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = ?)", userID)
+		Where("NOT EXISTS (SELECT 1 FROM site_message_reads WHERE tenant_id = ? AND message_id = sm.id AND user_id = ?)", ctxTenantID, userID)
 
 	// 只计算用户创建时间之后的消息
 	if !userCreatedAt.IsZero() {
@@ -138,6 +141,7 @@ func (r *SiteMessageRepository) MarkRead(ctx context.Context, userID uuid.UUID, 
 	if err := r.db.WithContext(ctx).
 		Model(&model.SiteMessage{}).
 		Where("id IN ?", messageIDs).
+		Where("target_tenant_id IS NULL OR target_tenant_id = ?", tenantID).
 		Pluck("id", &existingIDs).Error; err != nil {
 		return err
 	}
@@ -154,7 +158,10 @@ func (r *SiteMessageRepository) MarkRead(ctx context.Context, userID uuid.UUID, 
 				ReadAt:    time.Now(),
 			}
 			// ON CONFLICT DO NOTHING — 已读的不重复插入
-			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&read).Error; err != nil {
+			if err := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "tenant_id"}, {Name: "message_id"}, {Name: "user_id"}},
+				DoNothing: true,
+			}).Create(&read).Error; err != nil {
 				return err
 			}
 		}
@@ -170,7 +177,6 @@ func (r *SiteMessageRepository) MarkAllRead(ctx context.Context, userID uuid.UUI
 
 	// 构建用户创建时间过滤条件
 	userCreatedFilter := ""
-	args := []interface{}{}
 	if !userCreatedAt.IsZero() {
 		userCreatedFilter = " AND sm.created_at >= ?"
 	}
@@ -181,26 +187,24 @@ func (r *SiteMessageRepository) MarkAllRead(ctx context.Context, userID uuid.UUI
 		if !userCreatedAt.IsZero() {
 			baseArgs = append(baseArgs, userCreatedAt)
 		}
-		args = baseArgs
-		result = TenantDB(r.db, ctx).Exec(`
+		result = r.db.WithContext(ctx).Exec(`
 			INSERT INTO site_message_reads (id, tenant_id, message_id, user_id, read_at)
 			SELECT gen_random_uuid(), ?, sm.id, ?, ? FROM site_messages sm
 			WHERE (sm.expires_at IS NULL OR sm.expires_at > ?)
 			AND (sm.target_tenant_id IS NULL OR sm.target_tenant_id = ?)
-			AND NOT EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = $2)`+userCreatedFilter+`
-		`, args...)
+			AND NOT EXISTS (SELECT 1 FROM site_message_reads WHERE tenant_id = $1 AND message_id = sm.id AND user_id = $2)`+userCreatedFilter+`
+		`, baseArgs...)
 	} else {
 		baseArgs := []interface{}{ctxTenantID, userID, now, now}
 		if !userCreatedAt.IsZero() {
 			baseArgs = append(baseArgs, userCreatedAt)
 		}
-		args = baseArgs
-		result = TenantDB(r.db, ctx).Exec(`
+		result = r.db.WithContext(ctx).Exec(`
 			INSERT INTO site_message_reads (id, tenant_id, message_id, user_id, read_at)
 			SELECT gen_random_uuid(), ?, sm.id, ?, ? FROM site_messages sm
 			WHERE (sm.expires_at IS NULL OR sm.expires_at > ?)
-			AND NOT EXISTS (SELECT 1 FROM site_message_reads WHERE message_id = sm.id AND user_id = $2)`+userCreatedFilter+`
-		`, args...)
+			AND NOT EXISTS (SELECT 1 FROM site_message_reads WHERE tenant_id = $1 AND message_id = sm.id AND user_id = $2)`+userCreatedFilter+`
+		`, baseArgs...)
 	}
 
 	return result.RowsAffected, result.Error
@@ -255,7 +259,7 @@ func (r *SiteMessageRepository) CreateBatch(ctx context.Context, msgs []*model.S
 
 // CleanExpired 清理已过期的站内信（级联删除 reads）
 func (r *SiteMessageRepository) CleanExpired(ctx context.Context) (int64, error) {
-	result := TenantDB(r.db, ctx).
+	result := r.db.WithContext(ctx).
 		Where("expires_at IS NOT NULL AND expires_at < ?", time.Now()).
 		Delete(&model.SiteMessage{})
 	if result.Error != nil {

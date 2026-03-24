@@ -1,0 +1,11 @@
+{
+  "tenant_setup": {
+    "status": "passed"
+  },
+  "healing": {
+    "status": "passed"
+  },
+  "healing_queries": {
+    "status": "passed"
+  }
+}

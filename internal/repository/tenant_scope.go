@@ -27,6 +27,14 @@ func TenantIDFromContext(ctx context.Context) uuid.UUID {
 	return DefaultTenantID
 }
 
+// TenantIDFromContextOK 从 context 中获取租户 ID，并返回是否显式设置
+func TenantIDFromContextOK(ctx context.Context) (uuid.UUID, bool) {
+	if id, ok := ctx.Value(tenantIDKey{}).(uuid.UUID); ok {
+		return id, true
+	}
+	return uuid.Nil, false
+}
+
 // TenantScope 租户过滤 scope，自动为查询添加 tenant_id 过滤条件
 // 用法：db.Scopes(TenantScope(tenantID)).Find(&items)
 func TenantScope(tenantID uuid.UUID) func(db *gorm.DB) *gorm.DB {

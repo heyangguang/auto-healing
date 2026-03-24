@@ -509,15 +509,16 @@ func (r *ExecutionRepository) UpdateRunStatus(ctx context.Context, id uuid.UUID,
 }
 
 // UpdateRunStarted 更新执行开始
-func (r *ExecutionRepository) UpdateRunStarted(ctx context.Context, id uuid.UUID) error {
+func (r *ExecutionRepository) UpdateRunStarted(ctx context.Context, id uuid.UUID) (bool, error) {
 	now := time.Now()
-	return TenantDB(database.DB, ctx).
+	result := TenantDB(database.DB, ctx).
 		Model(&model.ExecutionRun{}).
-		Where("id = ?", id).
+		Where("id = ? AND status = ?", id, "pending").
 		Updates(map[string]any{
 			"status":     "running",
 			"started_at": now,
-		}).Error
+		})
+	return result.RowsAffected > 0, result.Error
 }
 
 // UpdateRunResult 更新执行结果
@@ -556,7 +557,7 @@ func (r *ExecutionRepository) UpdateRunResult(ctx context.Context, id uuid.UUID,
 
 	return TenantDB(database.DB, ctx).
 		Model(&model.ExecutionRun{}).
-		Where("id = ?", id).
+		Where("id = ? AND status <> ?", id, "cancelled").
 		Updates(map[string]any{
 			"status":       status,
 			"exit_code":    exitCode,

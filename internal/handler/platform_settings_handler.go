@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
@@ -39,6 +41,11 @@ type platformSettingsGroupResponse struct {
 	Settings []model.PlatformSetting `json:"settings"`
 }
 
+func isSensitiveSettingKey(key string) bool {
+	lower := strings.ToLower(key)
+	return strings.Contains(lower, "password") || strings.Contains(lower, "secret") || strings.Contains(lower, "token") || strings.Contains(lower, "api_key")
+}
+
 // ==================== Handlers ====================
 
 // ListSettings 获取所有平台设置（按 module 分组）
@@ -65,8 +72,20 @@ func (h *PlatformSettingsHandler) ListSettings(c *gin.Context) {
 		grouped[s.Module] = append(grouped[s.Module], s)
 	}
 
+	modules := make([]string, 0, len(grouped))
+	for mod := range grouped {
+		modules = append(modules, mod)
+	}
+	sort.Strings(modules)
+
 	var result []platformSettingsGroupResponse
-	for mod, items := range grouped {
+	for _, mod := range modules {
+		items := grouped[mod]
+		for i := range items {
+			if isSensitiveSettingKey(items[i].Key) && items[i].Value != "" {
+				items[i].Value = "********"
+			}
+		}
 		result = append(result, platformSettingsGroupResponse{
 			Module:   mod,
 			Settings: items,
@@ -116,6 +135,9 @@ func (h *PlatformSettingsHandler) UpdateSetting(c *gin.Context) {
 	if err != nil {
 		response.InternalError(c, "更新设置失败")
 		return
+	}
+	if isSensitiveSettingKey(updated.Key) && updated.Value != "" {
+		updated.Value = "********"
 	}
 
 	response.Success(c, updated)

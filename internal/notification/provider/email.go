@@ -149,23 +149,23 @@ func (p *EmailProvider) Test(ctx context.Context, configMap map[string]interface
 	// 测试 SMTP 连接
 	addr := fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)
 
-	var conn interface{}
-	var connErr error
-
 	if config.UseTLS {
 		tlsConfig := &tls.Config{
 			InsecureSkipVerify: true,
 			ServerName:         config.SMTPHost,
 		}
-		conn, connErr = tls.Dial("tcp", addr, tlsConfig)
-	} else {
-		client, err := smtp.Dial(addr)
+		tlsConn, err := tls.Dial("tcp", addr, tlsConfig)
 		if err != nil {
-			return fmt.Errorf("SMTP 连接失败: %w", err)
+			return fmt.Errorf("TLS 连接失败: %w", err)
+		}
+		defer tlsConn.Close()
+
+		client, err := smtp.NewClient(tlsConn, config.SMTPHost)
+		if err != nil {
+			return fmt.Errorf("SMTP 客户端创建失败: %w", err)
 		}
 		defer client.Close()
 
-		// 尝试认证
 		auth := smtp.PlainAuth("", config.Username, config.Password, config.SMTPHost)
 		if err := client.Auth(auth); err != nil {
 			return fmt.Errorf("SMTP 认证失败: %w", err)
@@ -173,14 +173,16 @@ func (p *EmailProvider) Test(ctx context.Context, configMap map[string]interface
 		return nil
 	}
 
-	if connErr != nil {
-		return fmt.Errorf("TLS 连接失败: %w", connErr)
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("SMTP 连接失败: %w", err)
 	}
+	defer client.Close()
 
-	if tlsConn, ok := conn.(interface{ Close() error }); ok {
-		defer tlsConn.Close()
+	auth := smtp.PlainAuth("", config.Username, config.Password, config.SMTPHost)
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP 认证失败: %w", err)
 	}
-
 	return nil
 }
 

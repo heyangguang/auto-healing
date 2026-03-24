@@ -31,6 +31,7 @@ func (h *PlatformAuditHandler) ListPlatformAuditLogs(c *gin.Context) {
 	opts := &repository.PlatformAuditListOptions{
 		Page:         page,
 		PageSize:     pageSize,
+		Search:       GetStringFilter(c, "search"),
 		Category:     c.Query("category"),
 		Action:       c.Query("action"),
 		ResourceType: c.Query("resource_type"),

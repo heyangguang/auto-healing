@@ -1,0 +1,17 @@
+{
+  "tenant_setup": {
+    "status": "passed"
+  },
+  "platform_tenants": {
+    "status": "passed"
+  },
+  "search_site_messages": {
+    "status": "passed"
+  },
+  "impersonation": {
+    "status": "passed"
+  },
+  "notifications_audit": {
+    "status": "passed"
+  }
+}

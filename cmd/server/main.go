@@ -103,6 +103,16 @@ func main() {
 	execSched.Start()
 	defer execSched.Stop()
 
+	// 启动通知失败重试调度器
+	notifySched := scheduler.NewNotificationRetryScheduler()
+	notifySched.Start()
+	defer notifySched.Stop()
+
+	// 启动黑名单豁免过期调度器
+	blacklistSched := scheduler.NewBlacklistExemptionScheduler()
+	blacklistSched.Start()
+	defer blacklistSched.Stop()
+
 	// 启动自愈调度器
 	healingSched := healing.NewScheduler()
 	healingSched.Start()
@@ -142,6 +152,8 @@ func main() {
 		sched.Stop()
 		gitSched.Stop()
 		execSched.Stop()
+		notifySched.Stop()
+		blacklistSched.Stop()
 		healingSched.Stop()
 		os.Exit(0)
 	}()

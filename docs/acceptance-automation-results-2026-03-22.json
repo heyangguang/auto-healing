@@ -1,0 +1,32 @@
+{
+  "auth": {
+    "status": "passed"
+  },
+  "tenant_setup": {
+    "status": "passed"
+  },
+  "common_isolation": {
+    "status": "passed"
+  },
+  "dashboard": {
+    "status": "passed"
+  },
+  "tenant_boundaries": {
+    "status": "passed"
+  },
+  "search_site_messages": {
+    "status": "passed"
+  },
+  "impersonation": {
+    "status": "passed"
+  },
+  "healing": {
+    "status": "passed"
+  },
+  "execution_schedule": {
+    "status": "passed"
+  },
+  "query_token_sse": {
+    "status": "passed"
+  }
+}

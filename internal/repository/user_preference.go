@@ -29,8 +29,13 @@ func NewUserPreferenceRepository() *UserPreferenceRepository {
 // GetByUserID 根据用户 ID 和租户获取偏好设置
 func (r *UserPreferenceRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (*model.UserPreference, error) {
 	var pref model.UserPreference
-	tenantID := TenantIDFromContext(ctx)
-	err := r.db.WithContext(ctx).Where("user_id = ? AND tenant_id = ?", userID, tenantID).First(&pref).Error
+	query := r.db.WithContext(ctx).Where("user_id = ?", userID)
+	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+		query = query.Where("tenant_id = ?", tenantID)
+	} else {
+		query = query.Where("tenant_id IS NULL")
+	}
+	err := query.First(&pref).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrPreferenceNotFound
 	}
@@ -39,31 +44,47 @@ func (r *UserPreferenceRepository) GetByUserID(ctx context.Context, userID uuid.
 
 // Upsert 创建或全量更新偏好设置（使用 ON CONFLICT DO UPDATE 保证原子性）
 func (r *UserPreferenceRepository) Upsert(ctx context.Context, userID uuid.UUID, preferences json.RawMessage) (*model.UserPreference, error) {
-	tenantID := TenantIDFromContext(ctx)
 	pref := model.UserPreference{
 		UserID:      userID,
-		TenantID:    &tenantID,
 		Preferences: preferences,
 	}
 
-	// 唯一约束现在是 (user_id, tenant_id) 联合索引
-	// 使用 ON CONFLICT(user_id, tenant_id) DO UPDATE SET preferences = EXCLUDED.preferences
-	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "user_id"}, {Name: "tenant_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"preferences", "updated_at"}),
-	}).Create(&pref).Error
-
-	if err != nil {
-		return nil, err
+	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+		pref.TenantID = &tenantID
+		err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}, {Name: "tenant_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"preferences", "updated_at"}),
+		}).Create(&pref).Error
+		if err != nil {
+			return nil, err
+		}
+		return &pref, nil
 	}
 
+	query := r.db.WithContext(ctx).Model(&model.UserPreference{}).
+		Where("user_id = ? AND tenant_id IS NULL", userID).
+		Updates(map[string]any{"preferences": preferences, "updated_at": gorm.Expr("NOW()")})
+	if query.Error != nil {
+		return nil, query.Error
+	}
+	if query.RowsAffected == 0 {
+		if err := r.db.WithContext(ctx).Create(&pref).Error; err != nil {
+			return nil, err
+		}
+	}
 	return &pref, nil
 }
 
 // MergeUpdate 部分更新偏好设置（合并已有偏好）
 func (r *UserPreferenceRepository) MergeUpdate(ctx context.Context, userID uuid.UUID, patch json.RawMessage) (*model.UserPreference, error) {
 	var pref model.UserPreference
-	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&pref).Error
+	query := r.db.WithContext(ctx).Where("user_id = ?", userID)
+	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+		query = query.Where("tenant_id = ?", tenantID)
+	} else {
+		query = query.Where("tenant_id IS NULL")
+	}
+	err := query.First(&pref).Error
 
 	var existing map[string]interface{}
 	if errors.Is(err, gorm.ErrRecordNotFound) {

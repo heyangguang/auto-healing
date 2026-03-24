@@ -128,7 +128,7 @@
 
 ## 用户租户列表（当前用户）
 
-**GET** `/api/v1/user/tenants`
+**GET** `/api/v1/common/user/tenants`
 
 **权限**: 无特殊要求（已登录即可）
 

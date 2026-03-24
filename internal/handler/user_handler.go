@@ -3,7 +3,9 @@ package handler
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
+	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
@@ -11,6 +13,7 @@ import (
 	authService "github.com/company/auto-healing/internal/service/auth"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // UserHandler 用户管理处理器
@@ -32,6 +35,10 @@ func NewUserHandler(authSvc *authService.Service) *UserHandler {
 // ListUsers 获取平台管理员用户列表
 // 只返回拥有 platform_admin 或 super_admin 角色的用户
 func (h *UserHandler) ListUsers(c *gin.Context) {
+	sortField := c.Query("sort_by")
+	if sortField == "" {
+		sortField = c.Query("sort_field")
+	}
 	params := &repository.UserListParams{
 		Page:         getQueryInt(c, "page", 1),
 		PageSize:     getQueryInt(c, "page_size", 20),
@@ -41,7 +48,7 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 		DisplayName:  GetStringFilter(c, "display_name"),
 		CreatedFrom:  c.Query("created_from"),
 		CreatedTo:    c.Query("created_to"),
-		SortField:    c.Query("sort_field"),
+		SortField:    sortField,
 		SortOrder:    c.Query("sort_order"),
 		PlatformOnly: true, // 平台接口只展示平台级角色用户
 	}
@@ -110,7 +117,17 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		}
 		assignRoleID = platformAdminRole.ID
 	}
-	_ = h.userRepo.AssignRoles(c.Request.Context(), user.ID, []uuid.UUID{assignRoleID})
+	if err := h.userRepo.AssignRoles(c.Request.Context(), user.ID, []uuid.UUID{assignRoleID}); err != nil {
+		response.InternalError(c, "分配平台角色失败")
+		return
+	}
+	if err := database.DB.WithContext(c.Request.Context()).
+		Model(&model.User{}).
+		Where("id = ?", user.ID).
+		Update("is_platform_admin", true).Error; err != nil {
+		response.InternalError(c, "更新平台用户标记失败")
+		return
+	}
 
 	// 返回完整用户信息（含角色）
 	userWithRoles, _ := h.userRepo.GetByID(c.Request.Context(), user.ID)
@@ -158,12 +175,30 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
+	var targetRole *model.Role
+	if req.RoleID != nil {
+		role, err := h.roleRepo.GetByID(c.Request.Context(), *req.RoleID)
+		if err != nil {
+			response.BadRequest(c, "指定的角色不存在")
+			return
+		}
+		if role.Scope != "platform" {
+			response.BadRequest(c, "只能分配平台级别角色")
+			return
+		}
+		targetRole = role
+	}
+
 	// 保护最后一个平台管理员：不允许禁用
 	if req.Status != "" && req.Status != "active" {
 		if h.isLastPlatformAdmin(c, id) {
 			response.BadRequest(c, "系统中必须保留至少一个可用的平台管理员，无法禁用")
 			return
 		}
+	}
+	if targetRole != nil && targetRole.Name != "platform_admin" && h.isLastPlatformAdmin(c, id) {
+		response.BadRequest(c, "系统中必须保留至少一个平台管理员，无法变更角色")
+		return
 	}
 
 	if req.DisplayName != "" {
@@ -176,31 +211,28 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		user.Status = req.Status
 	}
 
-	if err := h.userRepo.Update(c.Request.Context(), user); err != nil {
+	if err := database.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(user).Error; err != nil {
+			return err
+		}
+		if targetRole != nil {
+			if err := tx.Where("user_id = ?", user.ID).Delete(&model.UserPlatformRole{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Table("user_platform_roles").Create(map[string]any{
+				"user_id": user.ID,
+				"role_id": targetRole.ID,
+			}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&model.User{}).
+				Where("id = ?", user.ID).
+				Update("is_platform_admin", true).Error
+		}
+		return nil
+	}); err != nil {
 		response.InternalError(c, "更新失败")
 		return
-	}
-
-	// 如果传了 role_id，变更用户角色
-	if req.RoleID != nil {
-		role, err := h.roleRepo.GetByID(c.Request.Context(), *req.RoleID)
-		if err != nil {
-			response.BadRequest(c, "指定的角色不存在")
-			return
-		}
-		if role.Scope != "platform" {
-			response.BadRequest(c, "只能分配平台级别角色")
-			return
-		}
-		// 保护最后一个平台管理员：不允许降级角色
-		if role.Name != "platform_admin" && h.isLastPlatformAdmin(c, id) {
-			response.BadRequest(c, "系统中必须保留至少一个平台管理员，无法变更角色")
-			return
-		}
-		if err := h.userRepo.AssignRoles(c.Request.Context(), user.ID, []uuid.UUID{role.ID}); err != nil {
-			response.InternalError(c, "角色变更失败")
-			return
-		}
 	}
 
 	// 返回含角色的完整信息
@@ -440,12 +472,47 @@ func (h *RoleHandler) buildTenantRoleStats(c *gin.Context, roles []model.Role, t
 	return result
 }
 
+func isTenantRoleRequest(c *gin.Context) bool {
+	return strings.HasPrefix(c.FullPath(), "/api/v1/tenant/roles")
+}
+
+func (h *RoleHandler) getScopedRole(c *gin.Context, id uuid.UUID) (*model.Role, error) {
+	role, err := h.roleRepo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		return nil, err
+	}
+
+	if isTenantRoleRequest(c) {
+		tenantID := repository.TenantIDFromContext(c.Request.Context())
+		if !isAssignableTenantRole(role, tenantID) {
+			return nil, repository.ErrRoleNotFound
+		}
+		return role, nil
+	}
+
+	if role.Scope != "platform" {
+		return nil, repository.ErrRoleNotFound
+	}
+	return role, nil
+}
+
 // CreateRole 创建角色
 func (h *RoleHandler) CreateRole(c *gin.Context) {
 	var role model.Role
 	if err := c.ShouldBindJSON(&role); err != nil {
 		response.BadRequest(c, "请求参数错误")
 		return
+	}
+
+	if isTenantRoleRequest(c) {
+		tenantID := repository.TenantIDFromContext(c.Request.Context())
+		role.Scope = "tenant"
+		role.IsSystem = false
+		role.TenantID = &tenantID
+	} else {
+		role.Scope = "platform"
+		role.IsSystem = false
+		role.TenantID = nil
 	}
 
 	if err := h.roleRepo.Create(c.Request.Context(), &role); err != nil {
@@ -464,7 +531,7 @@ func (h *RoleHandler) GetRole(c *gin.Context) {
 		return
 	}
 
-	role, err := h.roleRepo.GetByID(c.Request.Context(), id)
+	role, err := h.getScopedRole(c, id)
 	if err != nil {
 		response.NotFound(c, "角色不存在")
 		return
@@ -481,7 +548,7 @@ func (h *RoleHandler) UpdateRole(c *gin.Context) {
 		return
 	}
 
-	role, err := h.roleRepo.GetByID(c.Request.Context(), id)
+	role, err := h.getScopedRole(c, id)
 	if err != nil {
 		response.NotFound(c, "角色不存在")
 		return
@@ -522,6 +589,16 @@ func (h *RoleHandler) DeleteRole(c *gin.Context) {
 		return
 	}
 
+	role, err := h.getScopedRole(c, id)
+	if err != nil {
+		response.NotFound(c, "角色不存在")
+		return
+	}
+	if role.IsSystem {
+		response.BadRequest(c, "系统内置角色不允许删除")
+		return
+	}
+
 	if err := h.roleRepo.Delete(c.Request.Context(), id); err != nil {
 		response.BadRequest(c, ToBusinessError(err))
 		return
@@ -539,7 +616,7 @@ func (h *RoleHandler) AssignRolePermissions(c *gin.Context) {
 	}
 
 	// 系统角色不允许修改权限
-	role, err := h.roleRepo.GetByID(c.Request.Context(), id)
+	role, err := h.getScopedRole(c, id)
 	if err != nil {
 		response.NotFound(c, "角色不存在")
 		return
@@ -560,7 +637,7 @@ func (h *RoleHandler) AssignRolePermissions(c *gin.Context) {
 		return
 	}
 
-	role, _ = h.roleRepo.GetByID(c.Request.Context(), id)
+	role, _ = h.getScopedRole(c, id)
 	response.Success(c, role)
 }
 
@@ -597,6 +674,10 @@ func (h *RoleHandler) GetTenantRoleUsers(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		response.BadRequest(c, "无效的角色 ID")
+		return
+	}
+	if _, err := h.getScopedRole(c, id); err != nil {
+		response.NotFound(c, "角色不存在")
 		return
 	}
 

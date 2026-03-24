@@ -34,6 +34,7 @@ func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 	opts := &repository.AuditLogListOptions{
 		Page:         page,
 		PageSize:     pageSize,
+		Search:       GetStringFilter(c, "search"),
 		Category:     c.Query("category"),
 		Action:       c.Query("action"),
 		ResourceType: c.Query("resource_type"),

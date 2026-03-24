@@ -1,7 +1,7 @@
 # 用户活动 API 文档（收藏 & 最近访问）
 
 **Base URL**: `/api/v1/user`  
-**权限**: 已登录用户（数据按用户隔离）
+**权限**: 已登录用户（数据按用户 + 当前租户上下文隔离；平台用户仅在 Impersonation 场景下具备租户上下文）
 
 ---
 
@@ -9,7 +9,7 @@
 
 ### 1. 获取收藏列表
 
-**GET** `/api/v1/user/favorites`
+**GET** `/api/v1/common/user/favorites`
 
 #### 响应
 
@@ -35,7 +35,7 @@
 
 ### 2. 添加收藏
 
-**POST** `/api/v1/user/favorites`
+**POST** `/api/v1/common/user/favorites`
 
 #### 请求体
 
@@ -59,7 +59,7 @@
 
 ### 3. 取消收藏
 
-**DELETE** `/api/v1/user/favorites/:menu_key`
+**DELETE** `/api/v1/common/user/favorites/:menu_key`
 
 #### 路径参数
 
@@ -82,7 +82,7 @@
 
 ### 4. 获取最近访问列表
 
-**GET** `/api/v1/user/recents`
+**GET** `/api/v1/common/user/recents`
 
 #### 响应
 
@@ -108,7 +108,7 @@
 
 ### 5. 记录最近访问
 
-**POST** `/api/v1/user/recents`
+**POST** `/api/v1/common/user/recents`
 
 #### 请求体
 

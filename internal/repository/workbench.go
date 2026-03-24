@@ -342,15 +342,25 @@ func (r *WorkbenchRepository) GetRecentActivities(ctx context.Context, limit int
 // mapResourceTypeToActivityType 将审计资源类型映射为活动类型
 func mapResourceTypeToActivityType(resourceType string) string {
 	switch resourceType {
-	case "execution_task", "execution_run":
+	case "execution_task", "execution_run", "execution-tasks", "execution-runs", "git-repos", "playbooks", "execution-schedules":
 		return "execution"
-	case "healing_flow":
+	case "healing_flow", "healing-flow", "healing-flows", "healing-instance", "healing-instances", "healing-approval", "healing-approvals":
 		return "flow"
-	case "healing_rule":
+	case "healing_rule", "healing-rule", "healing-rules":
 		return "rule"
+	case "tenant-users", "tenant-roles", "tenant-permissions", "users", "roles":
+		return "access"
+	case "tenant-plugins", "tenant-incidents", "tenant-cmdb", "tenant-secrets-sources", "tenant-site-messages":
+		return "ops"
 	case "auth":
 		return "system"
 	default:
+		if strings.HasPrefix(resourceType, "healing-") {
+			return "flow"
+		}
+		if strings.HasPrefix(resourceType, "tenant-") {
+			return "ops"
+		}
 		return "system"
 	}
 }
@@ -384,21 +394,38 @@ func buildActivityText(action, resourceType, resourceName string) string {
 	}
 
 	typeMap := map[string]string{
-		"execution_task":   "执行任务",
-		"execution_run":    "执行运行",
-		"healing_flow":     "自愈流程",
-		"healing_rule":     "自愈规则",
-		"healing_instance": "自愈实例",
-		"cmdb_item":        "资产",
-		"plugin":           "插件",
-		"playbook":         "Playbook",
-		"schedule":         "定时任务",
-		"notification":     "通知",
-		"secrets":          "密钥",
-		"user":             "用户",
-		"role":             "角色",
-		"site_message":     "站内信",
-		"tenant":           "租户",
+		"execution_task":         "执行任务",
+		"execution_run":          "执行运行",
+		"execution-tasks":        "执行任务",
+		"execution-runs":         "执行运行",
+		"git-repos":              "Git仓库",
+		"playbooks":              "Playbook",
+		"execution-schedules":    "定时任务",
+		"healing_flow":           "自愈流程",
+		"healing_rule":           "自愈规则",
+		"healing_instance":       "自愈实例",
+		"healing-flows":          "自愈流程",
+		"healing-rules":          "自愈规则",
+		"healing-instances":      "自愈实例",
+		"healing-approvals":      "审批任务",
+		"cmdb_item":              "资产",
+		"tenant-cmdb":            "资产",
+		"plugin":                 "插件",
+		"tenant-plugins":         "插件",
+		"tenant-incidents":       "事件",
+		"tenant-secrets-sources": "密钥源",
+		"playbook":               "Playbook",
+		"schedule":               "定时任务",
+		"notification":           "通知",
+		"secrets":                "密钥",
+		"user":                   "用户",
+		"tenant-users":           "用户",
+		"role":                   "角色",
+		"tenant-roles":           "角色",
+		"tenant-permissions":     "权限",
+		"site_message":           "站内信",
+		"tenant-site-messages":   "站内信",
+		"tenant":                 "租户",
 	}
 
 	actionText := actionMap[action]
@@ -528,8 +555,12 @@ func (r *WorkbenchRepository) GetAnnouncements(ctx context.Context, limit int, u
 		limit = 5
 	}
 
-	query := TenantDB(r.db, ctx).
-		Where("category = ?", model.SiteMessageCategoryAnnouncement)
+	tenantID := TenantIDFromContext(ctx)
+	query := r.db.WithContext(ctx).
+		Model(&model.SiteMessage{}).
+		Where("category = ?", model.SiteMessageCategoryAnnouncement).
+		Where("(expires_at IS NULL OR expires_at > ?)", time.Now()).
+		Where("(target_tenant_id IS NULL OR target_tenant_id = ?)", tenantID)
 
 	// 只显示用户创建时间之后的公告（新用户不看旧公告）
 	if !userCreatedAt.IsZero() {

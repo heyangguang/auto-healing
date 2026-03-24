@@ -244,19 +244,16 @@ func (h *DashboardHandler) CreateSystemWorkspace(c *gin.Context) {
 		CreatedBy:   &uid,
 	}
 
-	if err := h.wsRepo.Create(c.Request.Context(), ws); err != nil {
-		response.InternalError(c, "failed to create workspace: "+err.Error())
+	// 自动分配给当前用户的所有角色
+	roleIDs, err := h.wsRepo.GetUserRoleIDs(c.Request.Context(), uid)
+	if err != nil {
+		response.InternalError(c, "failed to load user roles: "+err.Error())
 		return
 	}
 
-	// 自动分配给当前用户的所有角色
-	roleIDs, err := h.wsRepo.GetUserRoleIDs(c.Request.Context(), uid)
-	if err == nil && len(roleIDs) > 0 {
-		for _, roleID := range roleIDs {
-			existingIDs, _ := h.wsRepo.GetRoleExplicitWorkspaceIDs(c.Request.Context(), roleID)
-			existingIDs = append(existingIDs, ws.ID)
-			_ = h.wsRepo.AssignToRole(c.Request.Context(), roleID, existingIDs)
-		}
+	if err := h.wsRepo.CreateAndAssignToRoles(c.Request.Context(), ws, roleIDs); err != nil {
+		response.InternalError(c, "failed to create workspace: "+err.Error())
+		return
 	}
 
 	response.Success(c, ws)

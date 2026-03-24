@@ -307,6 +307,7 @@ func (s *CommandBlacklistService) scanFile(filePath, relPath string, rules []com
 				}
 
 				violations = append(violations, model.CommandBlacklistViolation{
+					RuleID:   cr.rule.ID,
 					File:     relPath,
 					Line:     lineNum,
 					Content:  strings.TrimSpace(content),

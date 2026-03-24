@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,6 +33,9 @@ func NewWorkbenchHandler() *WorkbenchHandler {
 // GetOverview 获取工作台综合概览（按权限动态返回 section）
 // GET /api/v1/workbench/overview
 func (h *WorkbenchHandler) GetOverview(c *gin.Context) {
+	if !requireTenantContext(c, "当前工作台接口需要租户上下文，请先选择租户或通过 Impersonation 进入租户") {
+		return
+	}
 	ctx := c.Request.Context()
 	permissions := middleware.GetPermissions(c)
 
@@ -79,7 +83,7 @@ func (h *WorkbenchHandler) GetOverview(c *gin.Context) {
 			defer func() {
 				if rec := recover(); rec != nil {
 					mu.Lock()
-					lastErr = nil // 静默处理 panic
+					lastErr = fmt.Errorf("section %s panic: %v", key, rec)
 					mu.Unlock()
 				}
 			}()
@@ -108,6 +112,9 @@ func (h *WorkbenchHandler) GetOverview(c *gin.Context) {
 // GetActivities 获取活动动态
 // GET /api/v1/workbench/activities?limit=10
 func (h *WorkbenchHandler) GetActivities(c *gin.Context) {
+	if !requireTenantContext(c, "当前工作台接口需要租户上下文，请先选择租户或通过 Impersonation 进入租户") {
+		return
+	}
 	limit := 10
 	if l := c.Query("limit"); l != "" {
 		if v, err := strconv.Atoi(l); err == nil && v > 0 {
@@ -129,6 +136,9 @@ func (h *WorkbenchHandler) GetActivities(c *gin.Context) {
 // GetScheduleCalendar 获取定时任务日历
 // GET /api/v1/workbench/schedule-calendar?year=2026&month=2
 func (h *WorkbenchHandler) GetScheduleCalendar(c *gin.Context) {
+	if !requireTenantContext(c, "当前工作台接口需要租户上下文，请先选择租户或通过 Impersonation 进入租户") {
+		return
+	}
 	yearStr := c.Query("year")
 	monthStr := c.Query("month")
 
@@ -163,6 +173,9 @@ func (h *WorkbenchHandler) GetScheduleCalendar(c *gin.Context) {
 // GetAnnouncements 获取系统公告
 // GET /api/v1/workbench/announcements?limit=5
 func (h *WorkbenchHandler) GetAnnouncements(c *gin.Context) {
+	if !requireTenantContext(c, "当前工作台接口需要租户上下文，请先选择租户或通过 Impersonation 进入租户") {
+		return
+	}
 	limit := 5
 	if l := c.Query("limit"); l != "" {
 		if v, err := strconv.Atoi(l); err == nil && v > 0 {
@@ -192,6 +205,9 @@ func (h *WorkbenchHandler) GetAnnouncements(c *gin.Context) {
 // GetFavorites 获取用户收藏（复用 user_favorites 表，与侧边栏一致）
 // GET /api/v1/workbench/favorites
 func (h *WorkbenchHandler) GetFavorites(c *gin.Context) {
+	if !requireTenantContext(c, "当前工作台接口需要租户上下文，请先选择租户或通过 Impersonation 进入租户") {
+		return
+	}
 	userID, err := uuid.Parse(middleware.GetUserID(c))
 	if err != nil {
 		response.BadRequest(c, "无效的用户ID")

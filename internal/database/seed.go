@@ -62,6 +62,9 @@ var AllPermissions = []PermissionSeed{
 	{Code: "repository:delete", Name: "删除仓库", Module: "execution", Resource: "repository", Action: "delete"},
 	{Code: "repository:sync", Name: "同步仓库", Module: "execution", Resource: "repository", Action: "execute"},
 	{Code: "playbook:list", Name: "查看Playbook列表", Module: "execution", Resource: "playbook", Action: "read"},
+	{Code: "playbook:create", Name: "创建Playbook", Module: "execution", Resource: "playbook", Action: "create"},
+	{Code: "playbook:update", Name: "更新Playbook", Module: "execution", Resource: "playbook", Action: "update"},
+	{Code: "playbook:delete", Name: "删除Playbook", Module: "execution", Resource: "playbook", Action: "delete"},
 	{Code: "playbook:execute", Name: "执行Playbook", Module: "execution", Resource: "playbook", Action: "execute"},
 	{Code: "task:list", Name: "查看任务列表", Module: "execution", Resource: "task", Action: "read"},
 	{Code: "task:detail", Name: "查看任务详情", Module: "execution", Resource: "task", Action: "read"},
@@ -258,7 +261,7 @@ var SystemRoles = []RoleSeed{
 			"plugin:list", "plugin:detail", "plugin:create", "plugin:update", "plugin:delete", "plugin:sync", "plugin:test",
 			// 执行管理（完整）
 			"repository:list", "repository:create", "repository:update", "repository:delete", "repository:sync",
-			"playbook:list", "playbook:execute",
+			"playbook:list", "playbook:create", "playbook:update", "playbook:delete", "playbook:execute",
 			"task:list", "task:detail", "task:create", "task:update", "task:delete", "task:cancel",
 			// 通知管理（完整）
 			"channel:list", "channel:create", "channel:update", "channel:delete",
@@ -303,7 +306,7 @@ var SystemRoles = []RoleSeed{
 			"plugin:list", "plugin:detail", "plugin:create", "plugin:update", "plugin:delete", "plugin:sync", "plugin:test",
 			// 执行管理（完整）
 			"repository:list", "repository:create", "repository:update", "repository:delete", "repository:sync",
-			"playbook:list", "playbook:execute",
+			"playbook:list", "playbook:create", "playbook:update", "playbook:delete", "playbook:execute",
 			"task:list", "task:detail", "task:create", "task:update", "task:delete", "task:cancel",
 			// 通知管理（完整）
 			"channel:list", "channel:create", "channel:update", "channel:delete",
@@ -446,7 +449,7 @@ var SystemRoles = []RoleSeed{
 			// 执行管理（完整）
 			"task:list", "task:detail", "task:create", "task:update", "task:delete", "task:cancel",
 			"repository:list", "repository:create", "repository:update", "repository:delete", "repository:sync",
-			"playbook:list", "playbook:execute",
+			"playbook:list", "playbook:create", "playbook:update", "playbook:delete", "playbook:execute",
 			// 插件（只读 + 操作）
 			"plugin:list", "plugin:detail", "plugin:sync", "plugin:test",
 			// 自愈（只读 + 手动触发）

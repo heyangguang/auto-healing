@@ -28,7 +28,13 @@ func NewDashboardRepository() *DashboardRepository {
 // GetConfigByUserID 获取用户配置
 func (r *DashboardRepository) GetConfigByUserID(ctx context.Context, userID uuid.UUID) (*model.DashboardConfig, error) {
 	var config model.DashboardConfig
-	err := TenantDB(r.db, ctx).Where("user_id = ?", userID).First(&config).Error
+	query := r.db.WithContext(ctx).Where("user_id = ?", userID)
+	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+		query = query.Where("tenant_id = ?", tenantID)
+	} else {
+		query = query.Where("tenant_id IS NULL")
+	}
+	err := query.First(&config).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -40,21 +46,34 @@ func (r *DashboardRepository) GetConfigByUserID(ctx context.Context, userID uuid
 
 // UpsertConfig 创建或更新用户配置（使用 ON CONFLICT DO UPDATE 保证原子性）
 func (r *DashboardRepository) UpsertConfig(ctx context.Context, userID uuid.UUID, configData model.JSON) error {
-	tenantID := TenantIDFromContext(ctx)
 	config := model.DashboardConfig{
-		UserID:   userID,
-		TenantID: &tenantID,
-		Config:   configData,
+		UserID: userID,
+		Config: configData,
 	}
-	// user_id 列有唯一约束（dashboard_configs_user_id_key）
-	// ON CONFLICT(user_id) DO UPDATE 原子性地处理创建或更新，彻底消除竞态
-	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "user_id"}},
-		DoUpdates: clause.Assignments(map[string]interface{}{
+	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+		config.TenantID = &tenantID
+		return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "user_id"}, {Name: "tenant_id"}},
+			DoUpdates: clause.Assignments(map[string]interface{}{
+				"config":     configData,
+				"updated_at": time.Now(),
+			}),
+		}).Create(&config).Error
+	}
+
+	result := r.db.WithContext(ctx).Model(&model.DashboardConfig{}).
+		Where("user_id = ? AND tenant_id IS NULL", userID).
+		Updates(map[string]interface{}{
 			"config":     configData,
 			"updated_at": time.Now(),
-		}),
-	}).Create(&config).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return r.db.WithContext(ctx).Create(&config).Error
+	}
+	return nil
 }
 
 // ==================== Section: incidents ====================
@@ -827,15 +846,34 @@ type LoginItem struct {
 
 func (r *DashboardRepository) GetUsersSection(ctx context.Context) (*UsersSection, error) {
 	section := &UsersSection{}
-	// users 和 roles 表是全局资源，没有 tenant_id 列，使用普通 DB
-	userDB := func() *gorm.DB { return r.db.WithContext(ctx) }
+	tenantID := TenantIDFromContext(ctx)
+	tenantDB := r.db.WithContext(ctx)
 
-	userDB().Model(&model.User{}).Count(&section.Total)
-	userDB().Model(&model.User{}).Where("status = ?", "active").Count(&section.Active)
-	userDB().Model(&model.Role{}).Count(&section.RolesTotal)
+	tenantDB.Table("users").
+		Joins("JOIN user_tenant_roles utr ON utr.user_id = users.id").
+		Where("utr.tenant_id = ?", tenantID).
+		Distinct("users.id").
+		Count(&section.Total)
+
+	tenantDB.Table("users").
+		Joins("JOIN user_tenant_roles utr ON utr.user_id = users.id").
+		Where("utr.tenant_id = ? AND users.status = ?", tenantID, "active").
+		Distinct("users.id").
+		Count(&section.Active)
+
+	tenantDB.Model(&model.Role{}).
+		Where("scope = ?", "tenant").
+		Where("tenant_id IS NULL OR tenant_id = ?", tenantID).
+		Count(&section.RolesTotal)
 
 	var users []model.User
-	userDB().Model(&model.User{}).Where("last_login_at IS NOT NULL").Order("last_login_at DESC").Limit(10).Find(&users)
+	tenantDB.Table("users").
+		Joins("JOIN user_tenant_roles utr ON utr.user_id = users.id").
+		Where("utr.tenant_id = ? AND users.last_login_at IS NOT NULL", tenantID).
+		Distinct("users.id").
+		Order("users.last_login_at DESC").
+		Limit(10).
+		Find(&users)
 	for _, u := range users {
 		section.RecentLogins = append(section.RecentLogins, LoginItem{
 			ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, LastLoginAt: u.LastLoginAt, LastLoginIP: u.LastLoginIP,

@@ -400,6 +400,17 @@ func (r *NotificationRepository) GetPendingRetryLogs(ctx context.Context) ([]mod
 	return logs, nil
 }
 
+// GetPendingRetryLogsGlobal 获取所有租户待重试的日志（通知重试调度器专用）
+func (r *NotificationRepository) GetPendingRetryLogsGlobal(ctx context.Context) ([]model.NotificationLog, error) {
+	var logs []model.NotificationLog
+	if err := r.db.WithContext(ctx).
+		Where("status = ? AND next_retry_at IS NOT NULL AND next_retry_at <= NOW()", "failed").
+		Find(&logs).Error; err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
 // ==================== 统计 ====================
 
 // GetStats 获取通知统计信息

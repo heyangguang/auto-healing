@@ -26,8 +26,8 @@ func JWTAuth(jwtService *jwt.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader(AuthorizationHeader)
 
-		// 如果 Header 中没有 token，尝试从 URL query 参数获取（支持 SSE/EventSource）
-		if authHeader == "" {
+		// EventSource 无法自定义 Authorization header，仅在 SSE 端点允许 query token。
+		if authHeader == "" && allowQueryToken(c) {
 			if token := c.Query("token"); token != "" {
 				authHeader = BearerPrefix + token
 			}
@@ -101,6 +101,17 @@ func JWTAuth(jwtService *jwt.Service) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+func allowQueryToken(c *gin.Context) bool {
+	if c.Request.Method != http.MethodGet {
+		return false
+	}
+	path := c.FullPath()
+	if path == "" {
+		path = c.Request.URL.Path
+	}
+	return strings.HasSuffix(path, "/events") || strings.HasSuffix(path, "/stream")
 }
 
 // GetUserID 从上下文获取用户ID

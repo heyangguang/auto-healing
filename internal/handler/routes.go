@@ -163,6 +163,7 @@ func setupCommonRoutes(api *gin.RouterGroup, h *Handlers) {
 	common := api.Group("/common")
 	common.Use(middleware.JWTAuth(h.Auth.GetJWTService()))
 	common.Use(middleware.ImpersonationMiddleware())
+	common.Use(middleware.CommonTenantMiddleware())
 	common.Use(middleware.AuditMiddleware())
 	{
 		// -------------------- 全局搜索 --------------------
@@ -300,6 +301,7 @@ func setupPlatformRoutes(api *gin.RouterGroup, h *Handlers) {
 
 		// ---- Impersonation 申请管理（平台管理员）----
 		impersonation := platform.Group("/impersonation")
+		impersonation.Use(middleware.RequirePermission("platform:tenants:manage"))
 		{
 			impersonation.POST("/requests", h.Impersonation.CreateRequest)
 			impersonation.GET("/requests", h.Impersonation.ListMyRequests)
@@ -335,11 +337,11 @@ func setupTenantRoutes(api *gin.RouterGroup, h *Handlers) {
 			tenantUsers.GET("", middleware.RequirePermission("user:list"), h.TenantUser.ListTenantUsers)
 			tenantUsers.GET("/simple", middleware.RequirePermission("user:list"), h.TenantUser.ListSimpleUsers)
 			tenantUsers.POST("", middleware.RequirePermission("user:create"), h.TenantUser.CreateTenantUser)
-			tenantUsers.GET("/:id", middleware.RequirePermission("user:list"), h.User.GetUser)
-			tenantUsers.PUT("/:id", middleware.RequirePermission("user:update"), h.User.UpdateUser)
-			tenantUsers.DELETE("/:id", middleware.RequirePermission("user:delete"), h.User.DeleteUser)
-			tenantUsers.POST("/:id/reset-password", middleware.RequirePermission("user:reset_password"), h.User.ResetPassword)
-			tenantUsers.PUT("/:id/roles", middleware.RequirePermission("role:assign"), h.User.AssignUserRoles)
+			tenantUsers.GET("/:id", middleware.RequirePermission("user:list"), h.TenantUser.GetTenantUser)
+			tenantUsers.PUT("/:id", middleware.RequirePermission("user:update"), h.TenantUser.UpdateTenantUser)
+			tenantUsers.DELETE("/:id", middleware.RequirePermission("user:delete"), h.TenantUser.DeleteTenantUser)
+			tenantUsers.POST("/:id/reset-password", middleware.RequirePermission("user:reset_password"), h.TenantUser.ResetTenantUserPassword)
+			tenantUsers.PUT("/:id/roles", middleware.RequirePermission("role:assign"), h.TenantUser.AssignTenantUserRoles)
 		}
 
 		// -------------------- 租户级角色管理 --------------------
@@ -375,7 +377,7 @@ func setupTenantRoutes(api *gin.RouterGroup, h *Handlers) {
 		execTasks := tenant.Group("/execution-tasks")
 		{
 			execTasks.GET("", middleware.RequirePermission("task:list"), h.Execution.ListTasks)
-			execTasks.POST("", middleware.RequirePermission("playbook:execute"), h.Execution.CreateTask)
+			execTasks.POST("", middleware.RequirePermission("task:create"), h.Execution.CreateTask)
 			execTasks.GET("/stats", middleware.RequirePermission("task:list"), h.Execution.GetTaskStats)
 			execTasks.GET("/search-schema", middleware.RequirePermission("task:list"), h.Execution.GetTaskSearchSchema)
 			execTasks.POST("/batch-confirm-review", middleware.RequirePermission("task:update"), h.Execution.BatchConfirmReview)
@@ -517,36 +519,36 @@ func setupTenantRoutes(api *gin.RouterGroup, h *Handlers) {
 		// -------------------- Git 仓库 --------------------
 		gitRepos := tenant.Group("/git-repos")
 		{
-			gitRepos.POST("/validate", middleware.RequirePermission("plugin:list"), h.GitRepo.ValidateRepo)
-			gitRepos.GET("", middleware.RequirePermission("plugin:list"), h.GitRepo.ListRepos)
-			gitRepos.POST("", middleware.RequirePermission("plugin:create"), h.GitRepo.CreateRepo)
-			gitRepos.GET("/stats", middleware.RequirePermission("plugin:list"), h.GitRepo.GetStats)
-			gitRepos.GET("/search-schema", middleware.RequirePermission("plugin:list"), h.GitRepo.GetSearchSchema)
-			gitRepos.GET("/:id", middleware.RequirePermission("plugin:list"), h.GitRepo.GetRepo)
-			gitRepos.PUT("/:id", middleware.RequirePermission("plugin:update"), h.GitRepo.UpdateRepo)
-			gitRepos.DELETE("/:id", middleware.RequirePermission("plugin:delete"), h.GitRepo.DeleteRepo)
-			gitRepos.POST("/:id/sync", middleware.RequirePermission("plugin:sync"), h.GitRepo.SyncRepo)
-			gitRepos.POST("/:id/reset-status", middleware.RequirePermission("plugin:update"), h.GitRepo.ResetStatus)
-			gitRepos.GET("/:id/logs", middleware.RequirePermission("plugin:list"), h.GitRepo.GetSyncLogs)
-			gitRepos.GET("/:id/commits", middleware.RequirePermission("plugin:list"), h.GitRepo.GetCommits)
-			gitRepos.GET("/:id/files", middleware.RequirePermission("plugin:list"), h.GitRepo.GetFiles)
+			gitRepos.POST("/validate", middleware.RequirePermission("repository:list"), h.GitRepo.ValidateRepo)
+			gitRepos.GET("", middleware.RequirePermission("repository:list"), h.GitRepo.ListRepos)
+			gitRepos.POST("", middleware.RequirePermission("repository:create"), h.GitRepo.CreateRepo)
+			gitRepos.GET("/stats", middleware.RequirePermission("repository:list"), h.GitRepo.GetStats)
+			gitRepos.GET("/search-schema", middleware.RequirePermission("repository:list"), h.GitRepo.GetSearchSchema)
+			gitRepos.GET("/:id", middleware.RequirePermission("repository:list"), h.GitRepo.GetRepo)
+			gitRepos.PUT("/:id", middleware.RequirePermission("repository:update"), h.GitRepo.UpdateRepo)
+			gitRepos.DELETE("/:id", middleware.RequirePermission("repository:delete"), h.GitRepo.DeleteRepo)
+			gitRepos.POST("/:id/sync", middleware.RequirePermission("repository:sync"), h.GitRepo.SyncRepo)
+			gitRepos.POST("/:id/reset-status", middleware.RequirePermission("repository:update"), h.GitRepo.ResetStatus)
+			gitRepos.GET("/:id/logs", middleware.RequirePermission("repository:list"), h.GitRepo.GetSyncLogs)
+			gitRepos.GET("/:id/commits", middleware.RequirePermission("repository:list"), h.GitRepo.GetCommits)
+			gitRepos.GET("/:id/files", middleware.RequirePermission("repository:list"), h.GitRepo.GetFiles)
 		}
 
 		// -------------------- Playbook 模板 --------------------
 		playbooks := tenant.Group("/playbooks")
 		{
-			playbooks.GET("", middleware.RequirePermission("plugin:list"), h.Playbook.List)
-			playbooks.POST("", middleware.RequirePermission("plugin:create"), h.Playbook.Create)
-			playbooks.GET("/stats", middleware.RequirePermission("plugin:list"), h.Playbook.GetStats)
-			playbooks.GET("/:id", middleware.RequirePermission("plugin:list"), h.Playbook.Get)
-			playbooks.PUT("/:id", middleware.RequirePermission("plugin:update"), h.Playbook.Update)
-			playbooks.DELETE("/:id", middleware.RequirePermission("plugin:delete"), h.Playbook.Delete)
-			playbooks.POST("/:id/scan", middleware.RequirePermission("plugin:update"), h.Playbook.ScanVariables)
-			playbooks.PUT("/:id/variables", middleware.RequirePermission("plugin:update"), h.Playbook.UpdateVariables)
-			playbooks.POST("/:id/ready", middleware.RequirePermission("plugin:update"), h.Playbook.SetReady)
-			playbooks.POST("/:id/offline", middleware.RequirePermission("plugin:update"), h.Playbook.SetOffline)
-			playbooks.GET("/:id/files", middleware.RequirePermission("plugin:list"), h.Playbook.GetFiles)
-			playbooks.GET("/:id/scan-logs", middleware.RequirePermission("plugin:list"), h.Playbook.GetScanLogs)
+			playbooks.GET("", middleware.RequirePermission("playbook:list"), h.Playbook.List)
+			playbooks.POST("", middleware.RequirePermission("playbook:create"), h.Playbook.Create)
+			playbooks.GET("/stats", middleware.RequirePermission("playbook:list"), h.Playbook.GetStats)
+			playbooks.GET("/:id", middleware.RequirePermission("playbook:list"), h.Playbook.Get)
+			playbooks.PUT("/:id", middleware.RequirePermission("playbook:update"), h.Playbook.Update)
+			playbooks.DELETE("/:id", middleware.RequirePermission("playbook:delete"), h.Playbook.Delete)
+			playbooks.POST("/:id/scan", middleware.RequirePermission("playbook:update"), h.Playbook.ScanVariables)
+			playbooks.PUT("/:id/variables", middleware.RequirePermission("playbook:update"), h.Playbook.UpdateVariables)
+			playbooks.POST("/:id/ready", middleware.RequirePermission("playbook:update"), h.Playbook.SetReady)
+			playbooks.POST("/:id/offline", middleware.RequirePermission("playbook:update"), h.Playbook.SetOffline)
+			playbooks.GET("/:id/files", middleware.RequirePermission("playbook:list"), h.Playbook.GetFiles)
+			playbooks.GET("/:id/scan-logs", middleware.RequirePermission("playbook:list"), h.Playbook.GetScanLogs)
 		}
 
 		// -------------------- 自愈流程 --------------------

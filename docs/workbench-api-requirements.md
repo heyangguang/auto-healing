@@ -29,7 +29,7 @@
 ### 接口 1（P0）：工作台综合概览
 
 ```
-GET /api/v1/workbench/overview
+GET /api/v1/common/workbench/overview
 ```
 
 **说明**：聚合接口，一次性返回工作台核心统计数据。避免前端发 8+ 个并发请求。
@@ -91,16 +91,16 @@ GET /api/v1/workbench/overview
 | `resource_overview` | 各模块资源总数 + 关键子状态 |
 
 > 如果聚合太复杂，也可以拆成 3 个独立接口：
-> - `GET /api/v1/workbench/system-health`
-> - `GET /api/v1/workbench/healing-stats`
-> - `GET /api/v1/workbench/resource-overview`
+> - `GET /api/v1/common/workbench/system-health`
+> - `GET /api/v1/common/workbench/healing-stats`
+> - `GET /api/v1/common/workbench/resource-overview`
 
 ---
 
 ### 接口 2（P1）：活动动态
 
 ```
-GET /api/v1/workbench/activities
+GET /api/v1/common/workbench/activities
 ```
 
 **说明**：获取当前租户下最近的活动动态（跨模块混合时间线）
@@ -151,7 +151,7 @@ GET /api/v1/workbench/activities
 ### 接口 3（P1）：定时任务日历
 
 ```
-GET /api/v1/workbench/schedule-calendar
+GET /api/v1/common/workbench/schedule-calendar
 ```
 
 **说明**：获取指定月份的定时任务日历数据，展示每天有哪些定时任务。
@@ -194,7 +194,7 @@ GET /api/v1/workbench/schedule-calendar
 ### 接口 4（P2）：系统公告
 
 ```
-GET /api/v1/workbench/announcements
+GET /api/v1/common/workbench/announcements
 ```
 
 **说明**：获取系统公告列表（版本更新说明、维护计划通知等）
@@ -240,7 +240,7 @@ GET /api/v1/workbench/announcements
 #### 5.1 获取收藏
 
 ```
-GET /api/v1/workbench/favorites
+GET /api/v1/common/workbench/favorites
 ```
 
 **请求参数**：无
@@ -263,7 +263,7 @@ GET /api/v1/workbench/favorites
 #### 5.2 更新收藏
 
 ```
-PUT /api/v1/workbench/favorites
+PUT /api/v1/common/workbench/favorites
 ```
 
 **请求 Body**：
@@ -294,11 +294,11 @@ PUT /api/v1/workbench/favorites
 
 | 优先级 | 接口 | 原因 |
 |---|---|---|
-| 🔴 P0 | `GET /api/v1/workbench/overview` | 工作台核心，没它页面全是空的 |
-| 🟡 P1 | `GET /api/v1/workbench/activities` | 活动动态是运维人员高频查看区域 |
-| 🟡 P1 | `GET /api/v1/workbench/schedule-calendar` | 定时任务日历是重要展示模块 |
-| 🟢 P2 | `GET /api/v1/workbench/announcements` | 系统公告可以后期补充 |
-| 🟢 P2 | `GET/PUT /api/v1/workbench/favorites` | 收藏暂时可硬编码，后续个性化 |
+| 🔴 P0 | `GET /api/v1/common/workbench/overview` | 工作台核心，没它页面全是空的 |
+| 🟡 P1 | `GET /api/v1/common/workbench/activities` | 活动动态是运维人员高频查看区域 |
+| 🟡 P1 | `GET /api/v1/common/workbench/schedule-calendar` | 定时任务日历是重要展示模块 |
+| 🟢 P2 | `GET /api/v1/common/workbench/announcements` | 系统公告可以后期补充 |
+| 🟢 P2 | `GET/PUT /api/v1/common/workbench/favorites` | 收藏暂时可硬编码，后续个性化 |
 
 ---
 

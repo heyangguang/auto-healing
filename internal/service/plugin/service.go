@@ -72,7 +72,7 @@ func (s *Service) GetPlugin(ctx context.Context, id uuid.UUID) (*model.Plugin, e
 }
 
 // UpdatePlugin 更新插件
-func (s *Service) UpdatePlugin(ctx context.Context, id uuid.UUID, description, version string, config, fieldMapping, syncFilter model.JSON, syncEnabled *bool, syncIntervalMinutes *int) (*model.Plugin, error) {
+func (s *Service) UpdatePlugin(ctx context.Context, id uuid.UUID, description, version string, config, fieldMapping, syncFilter model.JSON, syncEnabled *bool, syncIntervalMinutes, maxFailures *int) (*model.Plugin, error) {
 	plugin, err := s.pluginRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -99,6 +99,9 @@ func (s *Service) UpdatePlugin(ctx context.Context, id uuid.UUID, description, v
 	}
 	if syncIntervalMinutes != nil {
 		plugin.SyncIntervalMinutes = *syncIntervalMinutes
+	}
+	if maxFailures != nil {
+		plugin.MaxFailures = *maxFailures
 	}
 
 	// 重新计算下次同步时间
@@ -396,6 +399,10 @@ func (s *Service) performSync(ctx context.Context, plugin *model.Plugin, syncLog
 
 	// 更新同步日志
 	syncLog.Status = "success"
+	if failedCount > 0 {
+		syncLog.Status = "failed"
+		syncLog.ErrorMessage = fmt.Sprintf("同步处理存在 %d 条失败记录", failedCount)
+	}
 	syncLog.RecordsFetched = fetchedCount
 	syncLog.RecordsFiltered = filteredCount
 	syncLog.RecordsProcessed = processedCount
@@ -417,9 +424,13 @@ func (s *Service) performSync(ctx context.Context, plugin *model.Plugin, syncLog
 	logger.Sync_("PLUGIN").Info("完成: %s | 获取: %d条 | 筛选: %d条 | 新增: %d条 | 更新: %d条 | 失败: %d条 | 耗时: %v",
 		plugin.Name, fetchedCount, filteredCount, newCount, updatedCount, failedCount, duration)
 
-	// 更新插件的最后同步时间
-	if err := s.pluginRepo.UpdateSyncInfo(ctx, plugin.ID, &now, nil); err != nil {
-		logger.Sync_("PLUGIN").Error("更新插件同步信息失败: %v", err)
+	// 只有完全成功才推进最后同步时间，避免失败记录被永久跳过。
+	if failedCount == 0 {
+		if err := s.pluginRepo.UpdateSyncInfo(ctx, plugin.ID, &now, nil); err != nil {
+			logger.Sync_("PLUGIN").Error("更新插件同步信息失败: %v", err)
+		}
+	} else {
+		logger.Sync_("PLUGIN").Warn("同步存在失败记录，跳过推进最后同步时间: %s | 失败: %d条", plugin.Name, failedCount)
 	}
 }
 

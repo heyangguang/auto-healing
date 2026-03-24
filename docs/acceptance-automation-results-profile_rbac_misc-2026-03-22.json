@@ -1,0 +1,8 @@
+{
+  "tenant_setup": {
+    "status": "passed"
+  },
+  "profile_rbac_misc": {
+    "status": "passed"
+  }
+}

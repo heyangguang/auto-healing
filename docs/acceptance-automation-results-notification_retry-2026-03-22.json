@@ -1,0 +1,8 @@
+{
+  "tenant_setup": {
+    "status": "passed"
+  },
+  "notification_retry": {
+    "status": "passed"
+  }
+}
