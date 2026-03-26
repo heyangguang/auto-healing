@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -10,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+var ErrPlaybookNotFound = errors.New("Playbook不存在")
 
 // PlaybookRepository Playbook 仓库
 type PlaybookRepository struct {
@@ -57,6 +60,9 @@ func (r *PlaybookRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.
 	var playbook model.Playbook
 	err := r.tenantDB(ctx).Preload("Repository").First(&playbook, "id = ?", id).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrPlaybookNotFound
+		}
 		return nil, err
 	}
 	return &playbook, nil
@@ -79,13 +85,25 @@ func (r *PlaybookRepository) ListByRepositoryID(ctx context.Context, repositoryI
 	return playbooks, err
 }
 
-// Update 更新 Playbook
-func (r *PlaybookRepository) Update(ctx context.Context, playbook *model.Playbook) error {
-	playbook.UpdatedAt = time.Now()
+func (r *PlaybookRepository) UpdateMetadata(ctx context.Context, id uuid.UUID, name, description string) error {
 	return r.tenantDB(ctx).
-		Model(playbook).
-		Select("name", "file_path", "repository_id", "status", "config_mode", "variables", "scanned_variables", "default_extra_vars", "default_timeout_minutes", "tags", "updated_at").
-		Updates(playbook).Error
+		Model(&model.Playbook{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"name":        name,
+			"description": description,
+			"updated_at":  time.Now(),
+		}).Error
+}
+
+func (r *PlaybookRepository) UpdateConfirmedVariables(ctx context.Context, id uuid.UUID, variables model.JSONArray) error {
+	return r.tenantDB(ctx).
+		Model(&model.Playbook{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"variables":  variables,
+			"updated_at": time.Now(),
+		}).Error
 }
 
 // UpdateStatus 更新 Playbook 状态

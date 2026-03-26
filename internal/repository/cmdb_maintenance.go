@@ -53,7 +53,9 @@ func (r *CMDBItemRepository) ListMaintenanceLogs(ctx context.Context, cmdbItemID
 	var logs []model.CMDBMaintenanceLog
 	var total int64
 	query := TenantDB(r.db, ctx).Model(&model.CMDBMaintenanceLog{}).Where("cmdb_item_id = ?", cmdbItemID)
-	query.Session(&gorm.Session{}).Count(&total)
+	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 	err := query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&logs).Error
 	return logs, total, err
 }

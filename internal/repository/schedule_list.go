@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
@@ -67,7 +68,7 @@ func applyScheduleOverrideFilter(queryBuilder *gorm.DB, hasOverrides bool) *gorm
 
 func scheduleOrderClause(opts *ScheduleListOptions) string {
 	dir := "ASC"
-	if opts.SortOrder == "desc" {
+	if strings.ToLower(opts.SortOrder) == "desc" {
 		dir = "DESC"
 	}
 	switch opts.SortBy {

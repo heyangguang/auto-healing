@@ -98,7 +98,7 @@ func (h *CMDBHandler) GetCMDBItem(c *gin.Context) {
 
 	item, err := h.cmdbSvc.GetCMDBItem(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "配置项不存在: "+err.Error())
+		respondCMDBItemError(c, "获取 CMDB 详情失败", err)
 		return
 	}
 	response.Success(c, item)

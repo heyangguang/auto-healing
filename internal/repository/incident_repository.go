@@ -17,6 +17,8 @@ type IncidentRepository struct {
 	db *gorm.DB
 }
 
+var ErrIncidentNotFound = errors.New("工单不存在")
+
 // NewIncidentRepository 创建工单仓库
 func NewIncidentRepository() *IncidentRepository {
 	return &IncidentRepository{db: database.DB}
@@ -35,7 +37,7 @@ func (r *IncidentRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.
 	var incident model.Incident
 	err := TenantDB(r.db, ctx).Preload("Plugin").First(&incident, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, errors.New("工单不存在")
+		return nil, ErrIncidentNotFound
 	}
 	return &incident, err
 }
@@ -121,8 +123,32 @@ func (r *IncidentRepository) UpsertByExternalID(ctx context.Context, incident *m
 	if err != nil {
 		return false, err
 	}
-	incident.ID = existing.ID
-	return false, r.Update(ctx, incident)
+	return false, r.updateFromSync(ctx, existing.ID, buildIncidentSyncUpdates(incident))
+}
+
+func (r *IncidentRepository) updateFromSync(ctx context.Context, id uuid.UUID, updates map[string]any) error {
+	return TenantDB(r.db, ctx).Model(&model.Incident{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func buildIncidentSyncUpdates(incident *model.Incident) map[string]any {
+	return map[string]any{
+		"plugin_id":          incident.PluginID,
+		"source_plugin_name": incident.SourcePluginName,
+		"title":              incident.Title,
+		"description":        incident.Description,
+		"severity":           incident.Severity,
+		"priority":           incident.Priority,
+		"status":             incident.Status,
+		"category":           incident.Category,
+		"affected_ci":        incident.AffectedCI,
+		"affected_service":   incident.AffectedService,
+		"assignee":           incident.Assignee,
+		"reporter":           incident.Reporter,
+		"raw_data":           incident.RawData,
+		"source_created_at":  incident.SourceCreatedAt,
+		"source_updated_at":  incident.SourceUpdatedAt,
+		"updated_at":         gorm.Expr("NOW()"),
+	}
 }
 
 // ListUnscanned 获取未扫描的工单列表（跨租户，自愈引擎调度器专用）

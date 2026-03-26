@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,12 +31,12 @@ func NewService() *Service {
 	if reposDir == "" {
 		reposDir = DefaultReposDir
 	}
-		return &Service{
-			repo:         repository.NewGitRepositoryRepository(),
-			playbookRepo: repository.NewPlaybookRepository(),
-			reposDir:     reposDir,
-			lifecycle:    newAsyncLifecycle(),
-		}
+	return &Service{
+		repo:         repository.NewGitRepositoryRepository(),
+		playbookRepo: repository.NewPlaybookRepository(),
+		reposDir:     reposDir,
+		lifecycle:    newAsyncLifecycle(),
+	}
 }
 
 // ValidateRepoResult 验证仓库结果
@@ -70,6 +71,9 @@ type PlaybookVariable struct {
 // 流程：验证远程仓库 -> 创建记录 -> 首次同步
 func (s *Service) CreateRepo(ctx context.Context, repo *model.GitRepository) (*model.GitRepository, error) {
 	repo.LocalPath = filepath.Join(s.reposDir, uuid.New().String())
+	if err := validateRepoMutation(repo.AuthType, repo.SyncEnabled, repo.SyncInterval, repo.MaxFailures); err != nil {
+		return nil, err
+	}
 
 	if err := gitclient.NewClient(repo, s.reposDir).ValidateRemote(ctx); err != nil {
 		return nil, fmt.Errorf("仓库验证失败: %w", err)
@@ -84,17 +88,18 @@ func (s *Service) CreateRepo(ctx context.Context, repo *model.GitRepository) (*m
 		return nil, err
 	}
 	if err := s.syncRepoInternal(ctx, repo, "create"); err != nil {
+		cleanupErr := cleanupRepoDirectory(repo.LocalPath)
 		if deleteErr := s.repo.Delete(ctx, repo.ID); deleteErr != nil {
-			return nil, fmt.Errorf("首次同步失败: %w（回滚删除失败: %v）", err, deleteErr)
+			return nil, errors.Join(fmt.Errorf("首次同步失败: %w", err), cleanupErr, fmt.Errorf("回滚删除失败: %w", deleteErr))
 		}
-		return nil, fmt.Errorf("首次同步失败: %w", err)
+		return nil, errors.Join(fmt.Errorf("首次同步失败: %w", err), cleanupErr)
 	}
 	return repo, nil
 }
 
 func (s *Service) initializeRepoLocalPath(ctx context.Context, repo *model.GitRepository) error {
 	repo.LocalPath = filepath.Join(s.reposDir, repo.ID.String())
-	if err := s.repo.Update(ctx, repo); err != nil {
+	if err := s.repo.UpdateLocalPath(ctx, repo.ID, repo.LocalPath); err != nil {
 		if deleteErr := s.repo.Delete(ctx, repo.ID); deleteErr != nil {
 			return fmt.Errorf("初始化仓库本地路径失败: %w（回滚删除失败: %v）", err, deleteErr)
 		}
@@ -117,25 +122,36 @@ func (s *Service) GetRepo(ctx context.Context, id uuid.UUID) (*model.GitReposito
 }
 
 // UpdateRepo 更新仓库
-func (s *Service) UpdateRepo(ctx context.Context, id uuid.UUID, defaultBranch, authType string, authConfig model.JSON, syncEnabled *bool, syncInterval *string) (*model.GitRepository, error) {
+func (s *Service) UpdateRepo(ctx context.Context, id uuid.UUID, defaultBranch, authType string, authConfig model.JSON, syncEnabled *bool, syncInterval *string, maxFailures *int) (*model.GitRepository, error) {
 	repo, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	oldBranch := repo.DefaultBranch
-	applyRepoUpdates(repo, defaultBranch, authType, authConfig, syncEnabled, syncInterval)
+	applyRepoUpdates(repo, defaultBranch, authType, authConfig, syncEnabled, syncInterval, maxFailures)
 	repo.NextSyncAt = nextRepoSyncAt(repo.SyncEnabled, repo.SyncInterval)
-	if err := s.repo.Update(ctx, repo); err != nil {
+	if err := validateRepoMutation(repo.AuthType, repo.SyncEnabled, repo.SyncInterval, repo.MaxFailures); err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateConfig(ctx, repo.ID, repository.GitRepositoryConfigUpdate{
+		DefaultBranch: repo.DefaultBranch,
+		AuthType:      repo.AuthType,
+		AuthConfig:    repo.AuthConfig,
+		SyncEnabled:   repo.SyncEnabled,
+		SyncInterval:  repo.SyncInterval,
+		NextSyncAt:    repo.NextSyncAt,
+		MaxFailures:   repo.MaxFailures,
+	}); err != nil {
 		return nil, err
 	}
 	if defaultBranch != "" && defaultBranch != oldBranch {
 		s.triggerBranchChangeSync(ctx, repo, id, oldBranch, defaultBranch)
 	}
-	return repo, nil
+	return s.repo.GetByID(ctx, id)
 }
 
-func applyRepoUpdates(repo *model.GitRepository, defaultBranch, authType string, authConfig model.JSON, syncEnabled *bool, syncInterval *string) {
+func applyRepoUpdates(repo *model.GitRepository, defaultBranch, authType string, authConfig model.JSON, syncEnabled *bool, syncInterval *string, maxFailures *int) {
 	if defaultBranch != "" {
 		repo.DefaultBranch = defaultBranch
 	}
@@ -150,6 +166,9 @@ func applyRepoUpdates(repo *model.GitRepository, defaultBranch, authType string,
 	}
 	if syncInterval != nil && *syncInterval != "" {
 		repo.SyncInterval = *syncInterval
+	}
+	if maxFailures != nil {
+		repo.MaxFailures = *maxFailures
 	}
 }
 
@@ -177,8 +196,8 @@ func (s *Service) DeleteRepo(ctx context.Context, id uuid.UUID) error {
 	if playbookCount > 0 {
 		return fmt.Errorf("无法删除：该仓库下有 %d 个 Playbook，请先删除关联的 Playbook", playbookCount)
 	}
-	if repo.LocalPath != "" {
-		os.RemoveAll(repo.LocalPath)
+	if err := cleanupRepoDirectory(repo.LocalPath); err != nil {
+		return err
 	}
 	return s.repo.Delete(ctx, id)
 }
@@ -205,9 +224,7 @@ func (s *Service) ResetStatus(ctx context.Context, id uuid.UUID, targetStatus st
 	if err != nil {
 		return err
 	}
-	repo.Status = targetStatus
-	repo.ErrorMessage = ""
-	return s.repo.Update(ctx, repo)
+	return s.repo.UpdateStatus(ctx, repo.ID, targetStatus, "")
 }
 
 // ValidateRepo 验证仓库（无需创建）
@@ -232,6 +249,16 @@ func (s *Service) GetStats(ctx context.Context) (map[string]interface{}, error) 
 
 func (s *Service) getPlaybookService() *playbookSvc.Service {
 	return playbookSvc.NewService()
+}
+
+func cleanupRepoDirectory(path string) error {
+	if path == "" {
+		return nil
+	}
+	if err := os.RemoveAll(path); err != nil {
+		return fmt.Errorf("清理仓库目录失败: %w", err)
+	}
+	return nil
 }
 
 // 注意：Activate、Deactivate 函数已移除

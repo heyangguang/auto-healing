@@ -54,7 +54,7 @@ func (h *CMDBHandler) TestConnection(c *gin.Context) {
 
 	item, err := h.cmdbSvc.GetCMDBItem(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "配置项不存在: "+err.Error())
+		respondCMDBItemError(c, "获取配置项失败", err)
 		return
 	}
 	response.Success(c, h.testSSHConnection(c.Request.Context(), id.String(), item.IPAddress, cmdbConnectionHostname(item), req.SecretsSourceID))
@@ -89,7 +89,7 @@ func (h *CMDBHandler) testSingleCMDBConnection(c *gin.Context, idStr, secretsSou
 	}
 	item, err := h.cmdbSvc.GetCMDBItem(c.Request.Context(), id)
 	if err != nil {
-		return ConnectionTestResult{CMDBID: idStr, Success: false, Message: "配置项不存在"}
+		return ConnectionTestResult{CMDBID: idStr, Success: false, Message: cmdbLookupFailureMessage(err)}
 	}
 	return h.testSSHConnection(c.Request.Context(), idStr, item.IPAddress, cmdbConnectionHostname(item), secretsSourceID)
 }
@@ -132,7 +132,10 @@ func testConnectionByAuthType(ipAddress, username, password, privateKey, authTyp
 	if authType == "ssh_key" {
 		return testSSHWithKey(ipAddress, username, privateKey)
 	}
-	return testSSHWithPassword(ipAddress, username, password)
+	if authType == "password" {
+		return testSSHWithPassword(ipAddress, username, password)
+	}
+	return fmt.Errorf("不支持的认证方式: %s", authType)
 }
 
 func testSSHWithKey(host, username, privateKey string) error {
@@ -140,23 +143,32 @@ func testSSHWithKey(host, username, privateKey string) error {
 	if err != nil {
 		return fmt.Errorf("解析私钥失败: %v", err)
 	}
-	config := &ssh.ClientConfig{
-		User:            username,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: mustSSHHostKeyCallback(),
-		Timeout:         5 * time.Second,
+	config, err := newSSHClientConfig(username, ssh.PublicKeys(signer))
+	if err != nil {
+		return err
 	}
 	return dialSSH(host, config)
 }
 
 func testSSHWithPassword(host, username, password string) error {
-	config := &ssh.ClientConfig{
-		User:            username,
-		Auth:            []ssh.AuthMethod{ssh.Password(password)},
-		HostKeyCallback: mustSSHHostKeyCallback(),
-		Timeout:         5 * time.Second,
+	config, err := newSSHClientConfig(username, ssh.Password(password))
+	if err != nil {
+		return err
 	}
 	return dialSSH(host, config)
+}
+
+func newSSHClientConfig(username string, authMethod ssh.AuthMethod) (*ssh.ClientConfig, error) {
+	callback, err := loadSSHHostKeyCallback()
+	if err != nil {
+		return nil, err
+	}
+	return &ssh.ClientConfig{
+		User:            username,
+		Auth:            []ssh.AuthMethod{authMethod},
+		HostKeyCallback: callback,
+		Timeout:         5 * time.Second,
+	}, nil
 }
 
 func dialSSH(host string, config *ssh.ClientConfig) error {
@@ -169,14 +181,6 @@ func dialSSH(host string, config *ssh.ClientConfig) error {
 		return err
 	}
 	return client.Close()
-}
-
-func mustSSHHostKeyCallback() ssh.HostKeyCallback {
-	callback, err := loadSSHHostKeyCallback()
-	if err != nil {
-		return ssh.InsecureIgnoreHostKey()
-	}
-	return callback
 }
 
 func loadSSHHostKeyCallback() (ssh.HostKeyCallback, error) {

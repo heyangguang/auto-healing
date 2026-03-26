@@ -86,7 +86,9 @@ func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface
 		Count int64  `json:"count"`
 	}
 	var typeCounts []typeCount
-	newDB().Model(&model.CMDBItem{}).Select("type, count(*) as count").Group("type").Scan(&typeCounts)
+	if err := newDB().Model(&model.CMDBItem{}).Select("type, count(*) as count").Group("type").Scan(&typeCounts).Error; err != nil {
+		return nil, err
+	}
 	stats["by_type"] = typeCounts
 
 	type statusCount struct {
@@ -94,7 +96,9 @@ func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface
 		Count  int64  `json:"count"`
 	}
 	var statusCounts []statusCount
-	newDB().Model(&model.CMDBItem{}).Select("status, count(*) as count").Group("status").Scan(&statusCounts)
+	if err := newDB().Model(&model.CMDBItem{}).Select("status, count(*) as count").Group("status").Scan(&statusCounts).Error; err != nil {
+		return nil, err
+	}
 	stats["by_status"] = statusCounts
 
 	type envCount struct {
@@ -102,11 +106,15 @@ func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface
 		Count       int64  `json:"count"`
 	}
 	var envCounts []envCount
-	newDB().Model(&model.CMDBItem{}).Select("environment, count(*) as count").Group("environment").Scan(&envCounts)
+	if err := newDB().Model(&model.CMDBItem{}).Select("environment, count(*) as count").Group("environment").Scan(&envCounts).Error; err != nil {
+		return nil, err
+	}
 	stats["by_environment"] = envCounts
 
 	var maintenanceCount int64
-	newDB().Model(&model.CMDBItem{}).Where("status = ?", "maintenance").Count(&maintenanceCount)
+	if err := newDB().Model(&model.CMDBItem{}).Where("status = ?", "maintenance").Count(&maintenanceCount).Error; err != nil {
+		return nil, err
+	}
 	stats["maintenance_count"] = maintenanceCount
 	return stats, nil
 }

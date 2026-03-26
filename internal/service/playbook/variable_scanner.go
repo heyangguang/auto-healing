@@ -31,31 +31,35 @@ type VariableScanner struct {
 	basePath     string
 	scannedFiles map[string]bool
 	variables    map[string]*ScannedVariable
+	err          error
 }
 
 // ScanFile 扫描文件（递归）
 func (vs *VariableScanner) ScanFile(filePath string) error {
-	absPath, _ := filepath.Abs(filePath)
-	if vs.scannedFiles[absPath] {
+	resolvedPath, err := resolveExistingRepoPath(vs.basePath, filePath)
+	if err != nil {
+		return err
+	}
+	if vs.scannedFiles[resolvedPath] {
 		return nil
 	}
-	vs.scannedFiles[absPath] = true
+	vs.scannedFiles[resolvedPath] = true
 
-	content, err := os.ReadFile(filePath)
+	content, err := os.ReadFile(resolvedPath)
 	if err != nil {
 		return err
 	}
 
 	var data interface{}
 	if err := yaml.Unmarshal(content, &data); err != nil {
-		vs.scanVariableReferences(string(content), filePath)
+		vs.scanVariableReferences(string(content), resolvedPath)
 		return nil
 	}
 
-	vs.scanYAMLStructure(data, filePath)
-	vs.scanVariableReferences(string(content), filePath)
-	vs.scanIncludes(data, filePath)
-	return nil
+	vs.scanYAMLStructure(data, resolvedPath)
+	vs.scanVariableReferences(string(content), resolvedPath)
+	vs.scanIncludes(data, resolvedPath)
+	return vs.err
 }
 
 func (vs *VariableScanner) scanYAMLStructure(data interface{}, filePath string) {

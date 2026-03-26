@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -40,7 +41,9 @@ func (c *HTTPClient) TestConnection(ctx context.Context, config model.JSON) erro
 	}
 
 	// 添加认证
-	c.addAuth(req, config)
+	if err := c.addAuth(req, config); err != nil {
+		return err
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -68,7 +71,9 @@ func (c *HTTPClient) FetchData(ctx context.Context, config model.JSON, since tim
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
 
-	c.addAuth(req, config)
+	if err := c.addAuth(req, config); err != nil {
+		return nil, err
+	}
 	req.Header.Set("Accept", "application/json")
 
 	body, err := c.doJSONRequest(req, "请求")
@@ -96,20 +101,20 @@ func (c *HTTPClient) buildRequestURL(url string, config model.JSON, since time.T
 	if strings.Contains(url, "?") {
 		separator = "&"
 	}
-	return url + separator + strings.Join(params, "&")
+	return url + separator + params.Encode()
 }
 
-func (c *HTTPClient) buildQueryParams(config model.JSON, since time.Time) []string {
-	params := make([]string, 0)
+func (c *HTTPClient) buildQueryParams(config model.JSON, since time.Time) url.Values {
+	params := url.Values{}
 	if extraParams, ok := config["extra_params"].(map[string]interface{}); ok {
 		for key, value := range extraParams {
 			if str, ok := value.(string); ok {
-				params = append(params, fmt.Sprintf("%s=%s", key, str))
+				params.Set(key, str)
 			}
 		}
 	}
 	if timeParam, ok := config["since_param"].(string); ok && timeParam != "" {
-		params = append(params, fmt.Sprintf("%s=%s", timeParam, since.Format(time.RFC3339)))
+		params.Set(timeParam, since.Format(time.RFC3339))
 	}
 	return params
 }
@@ -157,26 +162,32 @@ func (c *HTTPClient) CloseIncident(ctx context.Context, config model.JSON, close
 		return fmt.Errorf("创建请求失败: %w", err)
 	}
 
-	c.addAuth(req, config)
+	if err := c.addAuth(req, config); err != nil {
+		return err
+	}
 	req.Header.Set("Content-Type", "application/json")
 	_, err = c.doJSONRequest(req, "关闭工单")
 	return err
 }
 
 // addAuth 添加认证信息
-func (c *HTTPClient) addAuth(req *http.Request, config model.JSON) {
+func (c *HTTPClient) addAuth(req *http.Request, config model.JSON) error {
 	authType, _ := config["auth_type"].(string)
 
 	switch authType {
+	case "", "none":
+		return nil
 	case "basic":
 		username, _ := config["username"].(string)
 		password, _ := config["password"].(string)
 		auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
 		req.Header.Set("Authorization", "Basic "+auth)
+		return nil
 
 	case "bearer":
 		token, _ := config["token"].(string)
 		req.Header.Set("Authorization", "Bearer "+token)
+		return nil
 
 	case "api_key":
 		apiKey, _ := config["api_key"].(string)
@@ -185,7 +196,9 @@ func (c *HTTPClient) addAuth(req *http.Request, config model.JSON) {
 			headerName = "X-API-Key"
 		}
 		req.Header.Set(headerName, apiKey)
+		return nil
 	}
+	return fmt.Errorf("不支持的认证方式: %s", authType)
 }
 
 // parseResponse 解析响应数据

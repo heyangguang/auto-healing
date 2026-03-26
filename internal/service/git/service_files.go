@@ -87,11 +87,15 @@ func (s *Service) GetFileContent(ctx context.Context, id uuid.UUID, path string)
 }
 
 func resolveRepoFilePath(repoRoot, relPath string) (string, error) {
+	cleaned, err := normalizeRepoRelativePath(relPath)
+	if err != nil {
+		return "", err
+	}
 	resolvedRoot, err := filepath.EvalSymlinks(repoRoot)
 	if err != nil {
 		return "", err
 	}
-	resolvedPath, err := filepath.EvalSymlinks(filepath.Join(resolvedRoot, relPath))
+	resolvedPath, err := filepath.EvalSymlinks(filepath.Join(resolvedRoot, cleaned))
 	if err != nil {
 		return "", err
 	}
@@ -112,7 +116,11 @@ func (s *Service) ScanVariables(ctx context.Context, id uuid.UUID, mainPlaybook 
 		return nil, fmt.Errorf("仓库未同步")
 	}
 
-	content, err := os.ReadFile(filepath.Join(repo.LocalPath, mainPlaybook))
+	fullPath, err := resolveRepoFilePath(repo.LocalPath, mainPlaybook)
+	if err != nil {
+		return nil, err
+	}
+	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, fmt.Errorf("无法读取 playbook: %v", err)
 	}

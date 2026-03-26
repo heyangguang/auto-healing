@@ -113,7 +113,10 @@ func (s *Service) syncIncidents(ctx context.Context, plugin *model.Plugin, since
 	}
 
 	incidents := s.mapToIncidents(rawData, plugin.FieldMapping)
-	filter, _ := ParseSyncFilter(plugin.SyncFilter)
+	filter, err := ParseSyncFilter(plugin.SyncFilter)
+	if err != nil {
+		return nil, fmt.Errorf("解析同步过滤器失败: %w", err)
+	}
 	summary := &syncSummary{fetchedCount: len(incidents)}
 	for _, incident := range incidents {
 		if summary.skipFilteredIncident(filter, incident) {
@@ -132,7 +135,10 @@ func (s *Service) syncCMDB(ctx context.Context, plugin *model.Plugin, since time
 	}
 
 	items := s.mapToCMDBItems(rawData, plugin.FieldMapping)
-	filter, _ := ParseSyncFilter(plugin.SyncFilter)
+	filter, err := ParseSyncFilter(plugin.SyncFilter)
+	if err != nil {
+		return nil, fmt.Errorf("解析同步过滤器失败: %w", err)
+	}
 	summary := &syncSummary{fetchedCount: len(items)}
 	for _, item := range items {
 		if summary.skipFilteredCMDB(filter, item) {
@@ -177,7 +183,13 @@ func (s *Service) completeSync(ctx context.Context, plugin *model.Plugin, syncLo
 }
 
 func (s *Service) advancePluginSyncCursor(ctx context.Context, pluginID uuid.UUID, syncedAt time.Time) {
-	if err := s.pluginRepo.UpdateSyncInfo(ctx, pluginID, &syncedAt, nil); err != nil {
+	latestPlugin, err := s.pluginRepo.GetByID(ctx, pluginID)
+	if err != nil {
+		logger.Sync_("PLUGIN").Error("读取插件最新同步配置失败: %v", err)
+		return
+	}
+	nextSyncAt := calculateNextSyncAtFrom(syncedAt, latestPlugin.SyncEnabled, latestPlugin.SyncIntervalMinutes)
+	if err := s.pluginRepo.UpdateSyncInfo(ctx, pluginID, &syncedAt, nextSyncAt); err != nil {
 		logger.Sync_("PLUGIN").Error("更新插件同步信息失败: %v", err)
 	}
 }

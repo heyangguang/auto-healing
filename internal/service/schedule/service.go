@@ -33,9 +33,12 @@ func (s *Service) Create(ctx context.Context, schedule *model.ExecutionSchedule)
 	if err != nil {
 		return nil, fmt.Errorf("任务模板不存在: %w", err)
 	}
+	if schedule.MaxFailures < 0 {
+		return nil, fmt.Errorf("最大连续失败次数不能为负数")
+	}
 
-	// 根据调度类型验证和设置字段
-	if err := s.validateAndSetNextRun(schedule); err != nil {
+	// 根据调度类型验证和准备 next_run_at
+	if err := s.prepareScheduleForSave(schedule); err != nil {
 		return nil, err
 	}
 
@@ -52,30 +55,21 @@ func (s *Service) Create(ctx context.Context, schedule *model.ExecutionSchedule)
 
 // validateAndSetNextRun 根据调度类型验证并设置 next_run_at
 func (s *Service) validateAndSetNextRun(schedule *model.ExecutionSchedule) error {
+	if err := validateScheduleDefinition(schedule); err != nil {
+		return err
+	}
 	switch schedule.ScheduleType {
 	case model.ScheduleTypeCron:
-		// Cron 模式：验证 Cron 表达式
-		if schedule.ScheduleExpr == nil || *schedule.ScheduleExpr == "" {
-			return fmt.Errorf("循环调度必须提供 Cron 表达式")
+		nextRun, err := s.nextRunFromExpr(*schedule.ScheduleExpr)
+		if err != nil {
+			return err
 		}
-		if _, err := cron.ParseStandard(*schedule.ScheduleExpr); err != nil {
-			return fmt.Errorf("无效的 Cron 表达式: %w", err)
-		}
-		schedule.NextRunAt = s.calculateNextRun(*schedule.ScheduleExpr)
-
+		schedule.NextRunAt = nextRun
 	case model.ScheduleTypeOnce:
-		// Once 模式：验证 scheduled_at
-		if schedule.ScheduledAt == nil {
-			return fmt.Errorf("单次调度必须提供执行时间")
-		}
-		// 检查是否是未来时间
 		if schedule.ScheduledAt.Before(time.Now()) {
 			return fmt.Errorf("执行时间不能是过去时间")
 		}
 		schedule.NextRunAt = schedule.ScheduledAt
-
-	default:
-		return fmt.Errorf("无效的调度类型: %s（支持: cron, once）", schedule.ScheduleType)
 	}
 	return nil
 }
@@ -97,55 +91,17 @@ func (s *Service) List(ctx context.Context, opts *repository.ScheduleListOptions
 }
 
 // Update 更新定时任务调度
-func (s *Service) Update(ctx context.Context, id uuid.UUID, req *model.ExecutionSchedule) (*model.ExecutionSchedule, error) {
+func (s *Service) Update(ctx context.Context, id uuid.UUID, input *UpdateInput) (*model.ExecutionSchedule, error) {
 	schedule, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// 更新基础字段
-	schedule.Name = req.Name
-	schedule.Description = req.Description
-
-	// 更新调度类型相关字段
-	if req.ScheduleType != "" && req.ScheduleType != schedule.ScheduleType {
-		// 类型发生变化，清空另一种模式的字段
-		schedule.ScheduleType = req.ScheduleType
-		switch req.ScheduleType {
-		case model.ScheduleTypeCron:
-			// 切换到 cron 模式，清空 scheduled_at
-			schedule.ScheduledAt = nil
-		case model.ScheduleTypeOnce:
-			// 切换到 once 模式，清空 schedule_expr
-			schedule.ScheduleExpr = nil
-		}
+	if err := s.applyUpdate(schedule, input); err != nil {
+		return nil, err
 	}
 
-	// 更新对应模式的字段
-	if req.ScheduleExpr != nil {
-		schedule.ScheduleExpr = req.ScheduleExpr
-	}
-	if req.ScheduledAt != nil {
-		schedule.ScheduledAt = req.ScheduledAt
-	}
-
-	// 根据调度类型重新验证和设置 next_run_at
-	if schedule.Enabled {
-		if err := s.validateAndSetNextRun(schedule); err != nil {
-			return nil, err
-		}
-	}
-
-	// 更新执行参数覆盖字段
-	schedule.TargetHostsOverride = req.TargetHostsOverride
-	schedule.ExtraVarsOverride = req.ExtraVarsOverride
-	schedule.SecretsSourceIDs = req.SecretsSourceIDs
-	schedule.SkipNotification = req.SkipNotification
-
-	// 更新 max_failures
-	schedule.MaxFailures = req.MaxFailures
-
-	if err := s.repo.Update(ctx, schedule); err != nil {
+	if err := s.repo.UpdateFields(ctx, schedule.ID, buildScheduleDefinitionUpdates(schedule)); err != nil {
 		return nil, err
 	}
 
@@ -180,36 +136,19 @@ func (s *Service) Enable(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	// 根据调度类型处理
-	switch schedule.ScheduleType {
-	case model.ScheduleTypeCron:
-		// Cron 模式：重新计算 next_run_at
-		if schedule.ScheduleExpr == nil || *schedule.ScheduleExpr == "" {
-			return fmt.Errorf("循环调度缺少 Cron 表达式")
-		}
-		schedule.NextRunAt = s.calculateNextRun(*schedule.ScheduleExpr)
-
-	case model.ScheduleTypeOnce:
-		// Once 模式：检查 scheduled_at 是否是未来时间
-		if schedule.ScheduledAt == nil {
-			return fmt.Errorf("单次调度缺少执行时间")
-		}
-		if schedule.ScheduledAt.Before(time.Now()) {
-			return fmt.Errorf("执行时间已过期，请重新设置执行时间")
-		}
-		schedule.NextRunAt = schedule.ScheduledAt
-		// 如果之前已完成，重置 last_run_at
-		if schedule.LastRunAt != nil {
-			schedule.LastRunAt = nil
-		}
-	}
-
 	schedule.Enabled = true
+	if err := s.prepareScheduleForSave(schedule); err != nil {
+		schedule.Enabled = false
+		return err
+	}
+	if schedule.IsOnce() && schedule.LastRunAt != nil {
+		schedule.LastRunAt = nil
+	}
 	schedule.ConsecutiveFailures = 0
 	schedule.PauseReason = ""
 	schedule.Status = schedule.CalculateStatus()
 
-	if err := s.repo.Update(ctx, schedule); err != nil {
+	if err := s.repo.UpdateFields(ctx, schedule.ID, buildScheduleEnableUpdates(schedule)); err != nil {
 		return err
 	}
 
@@ -228,7 +167,7 @@ func (s *Service) Disable(ctx context.Context, id uuid.UUID) error {
 	schedule.Status = model.ScheduleStatusDisabled
 	schedule.NextRunAt = nil // 禁用后清除下次执行时间
 
-	if err := s.repo.Update(ctx, schedule); err != nil {
+	if err := s.repo.UpdateFields(ctx, schedule.ID, buildScheduleDisableUpdates(schedule)); err != nil {
 		return err
 	}
 
@@ -243,9 +182,9 @@ func (s *Service) GetDueSchedules(ctx context.Context) ([]model.ExecutionSchedul
 
 // UpdateNextRunAt 更新下次执行时间（仅用于 Cron 模式）
 func (s *Service) UpdateNextRunAt(ctx context.Context, id uuid.UUID, scheduleExpr string) error {
-	nextRun := s.calculateNextRun(scheduleExpr)
-	if nextRun == nil {
-		return nil
+	nextRun, err := s.nextRunFromExpr(scheduleExpr)
+	if err != nil {
+		return err
 	}
 	return s.repo.UpdateNextRunAt(ctx, id, *nextRun)
 }
@@ -260,7 +199,7 @@ func (s *Service) MarkCompleted(ctx context.Context, id uuid.UUID) error {
 	schedule.Enabled = false
 	schedule.Status = model.ScheduleStatusCompleted
 
-	if err := s.repo.Update(ctx, schedule); err != nil {
+	if err := s.repo.UpdateFields(ctx, schedule.ID, buildScheduleCompletionUpdates(schedule)); err != nil {
 		return err
 	}
 
@@ -284,6 +223,14 @@ func (s *Service) calculateNextRun(scheduleExpr string) *time.Time {
 	now := time.Now().In(loc)
 	next := schedule.Next(now)
 	return &next
+}
+
+func (s *Service) nextRunFromExpr(scheduleExpr string) (*time.Time, error) {
+	nextRun := s.calculateNextRun(scheduleExpr)
+	if nextRun == nil {
+		return nil, fmt.Errorf("无效的 Cron 表达式")
+	}
+	return nextRun, nil
 }
 
 // ==================== 统计 ====================

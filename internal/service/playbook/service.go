@@ -2,9 +2,8 @@ package playbook
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/company/auto-healing/internal/model"
@@ -32,12 +31,23 @@ func NewService() *Service {
 func (s *Service) Create(ctx context.Context, repositoryID uuid.UUID, name, filePath, description, configMode string) (*model.Playbook, error) {
 	gitRepo, err := s.gitRepo.GetByID(ctx, repositoryID)
 	if err != nil {
-		return nil, fmt.Errorf("仓库不存在: %w", err)
+		if errors.Is(err, repository.ErrGitRepositoryNotFound) {
+			return nil, fmt.Errorf("仓库不存在: %w", err)
+		}
+		return nil, fmt.Errorf("获取仓库失败: %w", err)
 	}
 	if gitRepo.Status != "synced" && gitRepo.Status != "ready" {
 		return nil, fmt.Errorf("仓库未同步，请先同步仓库")
 	}
-	if _, err := os.Stat(filepath.Join(gitRepo.LocalPath, filePath)); os.IsNotExist(err) {
+	cleanedPath, err := normalizeRepoRelativePath(filePath)
+	if err != nil {
+		return nil, invalidRepoPathError(filePath)
+	}
+	exists, err := repoPathExists(gitRepo.LocalPath, cleanedPath)
+	if err != nil {
+		return nil, invalidRepoPathError(filePath)
+	}
+	if !exists {
 		return nil, fmt.Errorf("入口文件不存在: %s", filePath)
 	}
 	if configMode != "auto" && configMode != "enhanced" {
@@ -48,7 +58,7 @@ func (s *Service) Create(ctx context.Context, repositoryID uuid.UUID, name, file
 		RepositoryID: repositoryID,
 		Name:         name,
 		Description:  description,
-		FilePath:     filePath,
+		FilePath:     cleanedPath,
 		ConfigMode:   configMode,
 		Status:       "pending",
 		Variables:    model.JSONArray{},
@@ -83,15 +93,17 @@ func (s *Service) ListWithOptions(ctx context.Context, opts *repository.Playbook
 }
 
 // Update 更新 Playbook
-func (s *Service) Update(ctx context.Context, id uuid.UUID, name, description string) error {
+func (s *Service) Update(ctx context.Context, id uuid.UUID, input *UpdateInput) error {
 	playbook, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
+	if err := validatePlaybookUpdateInput(input); err != nil {
+		return err
+	}
 
-	playbook.Name = name
-	playbook.Description = description
-	return s.repo.Update(ctx, playbook)
+	applyPlaybookUpdate(&playbook.Name, &playbook.Description, input)
+	return s.repo.UpdateMetadata(ctx, playbook.ID, playbook.Name, playbook.Description)
 }
 
 // Delete 删除 Playbook（保护性删除）
@@ -153,7 +165,10 @@ func (s *Service) GetFiles(ctx context.Context, id uuid.UUID) ([]ScannedFile, er
 	}
 
 	logs, _, err := s.repo.ListScanLogs(ctx, id, 1, 1)
-	if err != nil || len(logs) == 0 {
+	if err != nil {
+		return nil, err
+	}
+	if len(logs) == 0 {
 		return []ScannedFile{{Path: playbook.FilePath, Type: "entry"}}, nil
 	}
 

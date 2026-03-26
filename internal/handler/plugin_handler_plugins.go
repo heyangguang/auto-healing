@@ -42,6 +42,10 @@ func (h *PluginHandler) CreatePlugin(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
+	if err := validatePluginCreateRequest(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
 	p, err := h.pluginSvc.CreatePlugin(c.Request.Context(), req.ToModel())
 	if err != nil {
@@ -78,6 +82,15 @@ func (h *PluginHandler) UpdatePlugin(c *gin.Context) {
 	var req UpdatePluginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数错误")
+		return
+	}
+	current, err := h.pluginSvc.GetPlugin(c.Request.Context(), id)
+	if err != nil {
+		response.NotFound(c, "插件不存在")
+		return
+	}
+	if err := validatePluginUpdateRequest(current, &req); err != nil {
+		response.BadRequest(c, err.Error())
 		return
 	}
 

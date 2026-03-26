@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	gitclient "github.com/company/auto-healing/internal/git"
@@ -144,7 +142,11 @@ func (s *Service) persistRepoAfterSync(ctx context.Context, repo *model.GitRepos
 	}
 	logger.Sync_("GIT").Info("完成: %s | 操作: %s | 分支: %s | Commit: %s | 耗时: %v",
 		repo.Name, result.actionName, repo.DefaultBranch, repo.LastCommitID, result.duration)
-	return s.repo.Update(ctx, repo)
+	latestRepo, err := s.repo.GetByID(ctx, repo.ID)
+	if err != nil {
+		return fmt.Errorf("刷新仓库最新配置失败: %w", err)
+	}
+	return s.repo.UpdateSyncState(ctx, repo.ID, repo.Status, repo.ErrorMessage, repo.LastCommitID, repo.LastSyncAt, nextRepoSyncAt(latestRepo.SyncEnabled, latestRepo.SyncInterval))
 }
 
 func (s *Service) recordSuccessfulSync(ctx context.Context, repoID uuid.UUID, branch, triggerType string, result *repoSyncResult) error {
@@ -223,11 +225,16 @@ func (s *Service) checkPlaybooksAfterSync(ctx context.Context, repositoryID uuid
 }
 
 func (s *Service) markPlaybookInvalidIfMissing(ctx context.Context, repoPath string, playbook model.Playbook) bool {
-	fullPath := filepath.Join(repoPath, playbook.FilePath)
-	if _, err := os.Stat(fullPath); !os.IsNotExist(err) {
+	exists, err := repoFileExists(repoPath, playbook.FilePath)
+	if err != nil {
+		logger.Sync_("GIT").Warn("Playbook %s 入口文件路径非法: %v", playbook.Name, err)
+	} else if exists {
 		return false
 	}
-	s.playbookRepo.UpdateStatus(ctx, playbook.ID, "invalid")
+	if err := s.playbookRepo.UpdateStatus(ctx, playbook.ID, "invalid"); err != nil {
+		logger.Sync_("GIT").Error("Playbook %s 标记 invalid 失败: %v", playbook.Name, err)
+		return false
+	}
 	logger.Sync_("GIT").Warn("Playbook %s 入口文件不存在，标记为 invalid", playbook.Name)
 	return true
 }

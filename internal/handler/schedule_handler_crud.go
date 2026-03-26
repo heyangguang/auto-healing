@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -10,6 +11,10 @@ import (
 func (h *ScheduleHandler) Create(c *gin.Context) {
 	var req CreateScheduleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	if err := validateScheduleCreateRequest(&req); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
@@ -45,7 +50,7 @@ func (h *ScheduleHandler) Get(c *gin.Context) {
 
 	schedule, err := h.service.Get(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "调度不存在")
+		respondResourceError(c, "SCHEDULE", "获取调度详情失败", "调度不存在", repository.ErrScheduleNotFound, resourceErrorModeInternal, err)
 		return
 	}
 	response.Success(c, schedule)
@@ -64,10 +69,14 @@ func (h *ScheduleHandler) Update(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-
-	schedule, err := h.service.Update(c.Request.Context(), id, req.ToModel())
-	if err != nil {
+	if err := validateScheduleUpdateRequest(&req); err != nil {
 		response.BadRequest(c, err.Error())
+		return
+	}
+
+	schedule, err := h.service.Update(c.Request.Context(), id, req.ToUpdateInput())
+	if err != nil {
+		respondResourceError(c, "SCHEDULE", "更新调度失败", "调度不存在", repository.ErrScheduleNotFound, resourceErrorModeBadRequest, err)
 		return
 	}
 	response.Success(c, schedule)
@@ -82,7 +91,7 @@ func (h *ScheduleHandler) Delete(c *gin.Context) {
 	}
 
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
-		response.BadRequest(c, err.Error())
+		respondResourceError(c, "SCHEDULE", "删除调度失败", "调度不存在", repository.ErrScheduleNotFound, resourceErrorModeBadRequest, err)
 		return
 	}
 	response.Message(c, "删除成功")
@@ -97,7 +106,7 @@ func (h *ScheduleHandler) Enable(c *gin.Context) {
 	}
 
 	if err := h.service.Enable(c.Request.Context(), id); err != nil {
-		response.BadRequest(c, err.Error())
+		respondResourceError(c, "SCHEDULE", "启用调度失败", "调度不存在", repository.ErrScheduleNotFound, resourceErrorModeBadRequest, err)
 		return
 	}
 	response.Message(c, "已启用")
@@ -112,7 +121,7 @@ func (h *ScheduleHandler) Disable(c *gin.Context) {
 	}
 
 	if err := h.service.Disable(c.Request.Context(), id); err != nil {
-		response.BadRequest(c, err.Error())
+		respondResourceError(c, "SCHEDULE", "禁用调度失败", "调度不存在", repository.ErrScheduleNotFound, resourceErrorModeBadRequest, err)
 		return
 	}
 	response.Message(c, "已禁用")

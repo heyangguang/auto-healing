@@ -47,8 +47,8 @@ func (s *Service) CreatePlugin(ctx context.Context, plugin *model.Plugin) (*mode
 	if exists {
 		return nil, ErrPluginNameExists
 	}
-	if plugin.SyncEnabled && plugin.SyncIntervalMinutes < 1 {
-		return nil, errors.New("同步间隔最小为1分钟")
+	if err := validatePluginMutation(plugin.Type, plugin.SyncEnabled, plugin.SyncIntervalMinutes, plugin.MaxFailures); err != nil {
+		return nil, err
 	}
 
 	plugin.NextSyncAt = calculateNextSyncAt(plugin.SyncEnabled, plugin.SyncIntervalMinutes)
@@ -71,12 +71,25 @@ func (s *Service) UpdatePlugin(ctx context.Context, id uuid.UUID, description, v
 	}
 
 	applyPluginUpdates(plugin, description, version, config, fieldMapping, syncFilter, syncEnabled, syncIntervalMinutes, maxFailures)
-	plugin.NextSyncAt = calculateNextSyncAt(plugin.SyncEnabled, plugin.SyncIntervalMinutes)
-
-	if err := s.pluginRepo.Update(ctx, plugin); err != nil {
+	if err := validatePluginMutation(plugin.Type, plugin.SyncEnabled, plugin.SyncIntervalMinutes, plugin.MaxFailures); err != nil {
 		return nil, err
 	}
-	return plugin, nil
+	plugin.NextSyncAt = calculateNextSyncAt(plugin.SyncEnabled, plugin.SyncIntervalMinutes)
+
+	if err := s.pluginRepo.UpdateConfig(ctx, plugin.ID, repository.PluginConfigUpdate{
+		Description:         plugin.Description,
+		Version:             plugin.Version,
+		Config:              plugin.Config,
+		FieldMapping:        plugin.FieldMapping,
+		SyncFilter:          plugin.SyncFilter,
+		SyncEnabled:         plugin.SyncEnabled,
+		SyncIntervalMinutes: plugin.SyncIntervalMinutes,
+		NextSyncAt:          plugin.NextSyncAt,
+		MaxFailures:         plugin.MaxFailures,
+	}); err != nil {
+		return nil, err
+	}
+	return s.pluginRepo.GetByID(ctx, id)
 }
 
 func applyPluginUpdates(plugin *model.Plugin, description, version string, config, fieldMapping, syncFilter model.JSON, syncEnabled *bool, syncIntervalMinutes, maxFailures *int) {
@@ -107,10 +120,14 @@ func applyPluginUpdates(plugin *model.Plugin, description, version string, confi
 }
 
 func calculateNextSyncAt(enabled bool, intervalMinutes int) *time.Time {
+	return calculateNextSyncAtFrom(time.Now(), enabled, intervalMinutes)
+}
+
+func calculateNextSyncAtFrom(base time.Time, enabled bool, intervalMinutes int) *time.Time {
 	if !enabled || intervalMinutes <= 0 {
 		return nil
 	}
-	next := time.Now().Add(time.Duration(intervalMinutes) * time.Minute)
+	next := base.Add(time.Duration(intervalMinutes) * time.Minute)
 	return &next
 }
 
@@ -138,40 +155,22 @@ type PluginStats struct {
 
 // GetStats 获取插件统计数据
 func (s *Service) GetStats(ctx context.Context) (*PluginStats, error) {
-	plugins, _, err := s.pluginRepo.List(ctx, 1, 10000, "", "", query.StringFilter{}, "", "")
+	aggregate, err := s.pluginRepo.GetAggregateStats(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	stats := &PluginStats{
-		Total:    int64(len(plugins)),
-		ByType:   make(map[string]int64),
-		ByStatus: make(map[string]int64),
+		Total:        aggregate.Total,
+		ByType:       aggregate.ByType,
+		ByStatus:     aggregate.ByStatus,
+		SyncEnabled:  aggregate.SyncEnabled,
+		SyncDisabled: aggregate.SyncDisabled,
 	}
-	for _, plugin := range plugins {
-		collectPluginStats(stats, plugin)
-	}
+	stats.ActiveCount = aggregate.ByStatus["active"]
+	stats.InactiveCount = aggregate.ByStatus["inactive"]
+	stats.ErrorCount = aggregate.ByStatus["error"]
 	return stats, nil
-}
-
-func collectPluginStats(stats *PluginStats, plugin model.Plugin) {
-	stats.ByType[plugin.Type]++
-	stats.ByStatus[plugin.Status]++
-
-	switch plugin.Status {
-	case "active":
-		stats.ActiveCount++
-	case "inactive":
-		stats.InactiveCount++
-	case "error":
-		stats.ErrorCount++
-	}
-
-	if plugin.SyncEnabled {
-		stats.SyncEnabled++
-	} else {
-		stats.SyncDisabled++
-	}
 }
 
 // TestConnection 测试插件连接（只测试，不改变状态）
@@ -190,7 +189,9 @@ func (s *Service) Activate(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	if err := s.httpClient.TestConnection(ctx, plugin.Config); err != nil {
-		s.pluginRepo.UpdateStatus(ctx, id, "error", err.Error())
+		if updateErr := s.pluginRepo.UpdateStatus(ctx, id, "error", err.Error()); updateErr != nil {
+			return errors.Join(fmt.Errorf("连接测试失败: %w", err), fmt.Errorf("更新插件错误状态失败: %w", updateErr))
+		}
 		return fmt.Errorf("连接测试失败: %w", err)
 	}
 	return s.pluginRepo.UpdateStatus(ctx, id, "active", "")

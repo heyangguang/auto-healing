@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"errors"
+
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
@@ -68,7 +70,7 @@ func (h *PluginHandler) GetIncident(c *gin.Context) {
 
 	incident, err := h.incidentSvc.GetIncident(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "工单不存在")
+		respondPluginIncidentError(c, "获取工单详情失败", err)
 		return
 	}
 	response.Success(c, incident)
@@ -90,7 +92,7 @@ func (h *PluginHandler) CloseIncident(c *gin.Context) {
 
 	resp, err := h.incidentSvc.CloseIncident(c.Request.Context(), id, req.Resolution, req.WorkNotes, req.CloseCode, req.GetCloseStatus())
 	if err != nil {
-		respondInternalError(c, "PLUGIN", "关闭工单失败", err)
+		respondPluginIncidentError(c, "关闭工单失败", err)
 		return
 	}
 	response.Success(c, resp)
@@ -105,7 +107,7 @@ func (h *PluginHandler) ResetIncidentScan(c *gin.Context) {
 	}
 
 	if err := h.incidentSvc.ResetScan(c.Request.Context(), id); err != nil {
-		respondInternalError(c, "PLUGIN", "重置扫描状态失败", err)
+		respondPluginIncidentError(c, "重置扫描状态失败", err)
 		return
 	}
 	response.Message(c, "工单扫描状态已重置，将被重新扫描")
@@ -121,8 +123,20 @@ func (h *PluginHandler) BatchResetIncidentScan(c *gin.Context) {
 
 	resp, err := h.incidentSvc.BatchResetScan(c.Request.Context(), req.IDs, req.HealingStatus)
 	if err != nil {
+		if errors.Is(err, plugin.ErrBatchResetScanScopeRequired) {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		respondInternalError(c, "PLUGIN", "批量重置失败", err)
 		return
 	}
 	response.Success(c, resp)
+}
+
+func respondPluginIncidentError(c *gin.Context, publicMsg string, err error) {
+	if errors.Is(err, repository.ErrIncidentNotFound) {
+		response.NotFound(c, "工单不存在")
+		return
+	}
+	respondInternalError(c, "PLUGIN", publicMsg, err)
 }

@@ -56,11 +56,6 @@ func (r *PluginRepository) GetByName(ctx context.Context, name string) (*model.P
 	return &plugin, err
 }
 
-// Update 更新插件
-func (r *PluginRepository) Update(ctx context.Context, plugin *model.Plugin) error {
-	return UpdateTenantScopedModel(r.db, ctx, plugin.ID, plugin)
-}
-
 // Delete 删除插件（工单保留并记录插件名称，同步日志级联删除）
 func (r *PluginRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	// 先获取插件信息
@@ -150,10 +145,8 @@ func (r *PluginRepository) ExistsByName(ctx context.Context, name string) (bool,
 // UpdateStatus 更新插件状态
 func (r *PluginRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string, errorMsg string) error {
 	updates := map[string]interface{}{
-		"status": status,
-	}
-	if errorMsg != "" {
-		updates["error_message"] = errorMsg
+		"status":        status,
+		"error_message": errorMsg,
 	}
 	return TenantDB(r.db, ctx).Model(&model.Plugin{}).Where("id = ?", id).Updates(updates).Error
 }
