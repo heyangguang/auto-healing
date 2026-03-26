@@ -61,9 +61,21 @@ func (c *Client) getEnv() []string {
 
 func buildGitSSHCommand(keyPath string) (string, error) {
 	if knownHostsPath := gitKnownHostsPath(); knownHostsPath != "" {
-		return fmt.Sprintf("ssh -i %s -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%s", keyPath, knownHostsPath), nil
+		return fmt.Sprintf(
+			"ssh -i %s -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%s",
+			shellQuoteSSHArg(keyPath),
+			shellQuoteSSHArg(knownHostsPath),
+		), nil
 	}
 	return "", newKnownHostsRequiredError()
+}
+
+func shellQuoteSSHArg(arg string) string {
+	if arg == "" {
+		return "''"
+	}
+	quote := "'"
+	return quote + strings.ReplaceAll(arg, quote, `'"\''"`) + quote
 }
 
 func gitKnownHostsPath() string {

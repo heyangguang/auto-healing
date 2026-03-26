@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	pluginService "github.com/company/auto-healing/internal/service/plugin"
 	"gorm.io/gorm"
 )
+
+const pluginClaimLease = 40 * time.Minute
 
 // Scheduler 定时调度器
 type Scheduler struct {
@@ -24,6 +27,8 @@ type Scheduler struct {
 	loadPluginsNeedSync     func(context.Context) ([]model.Plugin, error)
 	checkExpiredMaintenance func(context.Context) (int, error)
 	runPluginSync           func(context.Context, model.Plugin)
+	updateSyncState         func(context.Context, interface{}, map[string]interface{}) error
+	claimPluginSync         func(context.Context, model.Plugin) (bool, error)
 }
 
 // NewScheduler 创建调度器
@@ -37,6 +42,8 @@ func NewScheduler() *Scheduler {
 	s.loadPluginsNeedSync = s.getPluginsNeedSync
 	s.checkExpiredMaintenance = s.cmdbSvc.CheckExpiredMaintenance
 	s.runPluginSync = s.syncPlugin
+	s.updateSyncState = s.updatePluginSyncState
+	s.claimPluginSync = s.claimPlugin
 	return s
 }
 
@@ -51,7 +58,7 @@ func (s *Scheduler) Start() {
 	s.lifecycle = newSchedulerLifecycle()
 	s.mu.Unlock()
 
-	s.lifecycle.Go(s.run)
+	s.lifecycleGo(s.run)
 	logger.Sched("SYNC").Info("插件同步调度器已启动 (检查间隔: %v)", s.interval)
 }
 
@@ -67,7 +74,9 @@ func (s *Scheduler) Stop() {
 	s.lifecycle = nil
 	s.mu.Unlock()
 
-	lifecycle.Stop()
+	if lifecycle != nil {
+		lifecycle.Stop()
+	}
 	logger.Sched("SYNC").Info("插件同步调度器已停止")
 }
 
@@ -109,20 +118,72 @@ func (s *Scheduler) checkAndSync(ctx context.Context) {
 	logger.Sched("SYNC").Info("发现 %d 个插件需要同步", len(plugins))
 
 	for _, plugin := range plugins {
-		s.dispatchPluginSync(plugin)
+		claimed, err := s.claimPluginSync(ctx, plugin)
+		if err != nil {
+			logger.Sched("SYNC").Error("认领插件同步失败: %s (%s) - %v", plugin.Name, plugin.ID.String()[:8], err)
+			continue
+		}
+		if !claimed {
+			continue
+		}
+		if !s.dispatchPluginSync(plugin) {
+			s.rollbackPluginClaim(ctx, plugin)
+		}
 	}
 }
 
-func (s *Scheduler) dispatchPluginSync(plugin model.Plugin) {
+func (s *Scheduler) dispatchPluginSync(plugin model.Plugin) bool {
 	p := plugin
-	s.lifecycle.Go(func(rootCtx context.Context) {
+	return s.lifecycleGo(func(rootCtx context.Context) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.Sched("SYNC").Error("[%s] syncPlugin panic: %v", p.ID.String()[:8], rec)
+				panicErr := fmt.Errorf("panic: %v", rec)
+				shortID := p.ID.String()[:8]
+				logger.Sched("SYNC").Error("[%s] syncPlugin panic: %v", shortID, rec)
+				s.handlePluginSyncError(withTenantContext(rootCtx, p.TenantID), p, shortID, time.Now().Add(time.Duration(p.SyncIntervalMinutes)*time.Minute), panicErr)
 			}
 		}()
 		s.runPluginSync(withTenantContext(rootCtx, p.TenantID), p)
 	})
+}
+
+func (s *Scheduler) lifecycleGo(fn func(context.Context)) bool {
+	s.mu.Lock()
+	lifecycle := s.lifecycle
+	running := s.running
+	s.mu.Unlock()
+	if !running || lifecycle == nil {
+		return false
+	}
+	return lifecycle.Go(fn)
+}
+
+func (s *Scheduler) claimPlugin(ctx context.Context, plugin model.Plugin) (bool, error) {
+	if plugin.NextSyncAt == nil {
+		return false, nil
+	}
+	now := time.Now()
+	interval := time.Duration(plugin.SyncIntervalMinutes) * time.Minute
+	nextSyncAt := now.Add(maxDuration(interval, pluginClaimLease))
+	result := s.db.WithContext(ctx).
+		Model(&model.Plugin{}).
+		Where("id = ? AND sync_enabled = ? AND status = ? AND next_sync_at IS NOT NULL AND next_sync_at <= ?", plugin.ID, true, "active", now).
+		Update("next_sync_at", nextSyncAt)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
+}
+
+func (s *Scheduler) rollbackPluginClaim(ctx context.Context, plugin model.Plugin) {
+	if plugin.NextSyncAt == nil {
+		return
+	}
+	if err := s.updateSyncState(ctx, plugin.ID, map[string]interface{}{
+		"next_sync_at": plugin.NextSyncAt,
+	}); err != nil {
+		logger.Sched("SYNC").Warn("回滚插件认领失败: %s (%s) - %v", plugin.Name, plugin.ID.String()[:8], err)
+	}
 }
 
 // getPluginsNeedSync 获取需要同步的插件列表

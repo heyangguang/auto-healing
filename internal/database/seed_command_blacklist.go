@@ -2,39 +2,52 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // SeedCommandBlacklist 种子化高危指令黑名单（增量：只插入不存在的）
 func SeedCommandBlacklist() error {
 	ctx := context.Background()
 	now := time.Now()
-	inserted := 0
-
-	for _, seed := range commandBlacklistSeeds {
-		ok, err := seedCommandBlacklistEntry(ctx, now, &seed)
-		if err != nil {
-			logger.Warn("插入黑名单种子数据失败: %s (%v)", seed.Name, err)
-			continue
-		}
-		if ok {
-			inserted++
-		}
+	inserted, err := syncCommandBlacklistSeeds(ctx, now, commandBlacklistSeeds)
+	if err != nil {
+		return err
 	}
 
 	if inserted > 0 {
 		logger.Info("高危指令黑名单种子数据: 新增 %d 条", inserted)
+		return nil
 	}
+	logger.Info("高危指令黑名单种子数据已是最新，无需新增")
 	return nil
 }
 
-func seedCommandBlacklistEntry(ctx context.Context, now time.Time, seed *model.CommandBlacklist) (bool, error) {
+func syncCommandBlacklistSeeds(ctx context.Context, now time.Time, seeds []model.CommandBlacklist) (int, error) {
+	inserted := 0
+	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, seed := range seeds {
+			ok, err := seedCommandBlacklistEntry(ctx, tx, now, seed)
+			if err != nil {
+				return fmt.Errorf("同步黑名单种子 %s 失败: %w", seed.Name, err)
+			}
+			if ok {
+				inserted++
+			}
+		}
+		return nil
+	})
+	return inserted, err
+}
+
+func seedCommandBlacklistEntry(ctx context.Context, tx *gorm.DB, now time.Time, seed model.CommandBlacklist) (bool, error) {
 	var count int64
-	if err := DB.WithContext(ctx).Model(&model.CommandBlacklist{}).
+	if err := tx.WithContext(ctx).Model(&model.CommandBlacklist{}).
 		Where("name = ? AND pattern = ?", seed.Name, seed.Pattern).
 		Count(&count).Error; err != nil {
 		return false, err
@@ -43,8 +56,10 @@ func seedCommandBlacklistEntry(ctx context.Context, now time.Time, seed *model.C
 		return false, nil
 	}
 
-	seed.ID = uuid.New()
+	if seed.ID == uuid.Nil {
+		seed.ID = uuid.New()
+	}
 	seed.CreatedAt = now
 	seed.UpdatedAt = now
-	return true, DB.WithContext(ctx).Create(seed).Error
+	return true, tx.WithContext(ctx).Create(&seed).Error
 }

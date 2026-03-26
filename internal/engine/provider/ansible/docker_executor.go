@@ -72,7 +72,9 @@ func (e *DockerExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exe
 	// 确保 ansible.cfg 存在
 	cfgPath := filepath.Join(req.WorkDir, "ansible.cfg")
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		WriteAnsibleCfg(req.WorkDir, nil)
+		if err := WriteAnsibleCfg(req.WorkDir, nil); err != nil {
+			return buildStreamingStartFailure(startedAt, fmt.Errorf("写入 ansible.cfg 失败: %w", err)), err
+		}
 	}
 
 	// 如果有日志回调，使用流式方式

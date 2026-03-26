@@ -2,45 +2,67 @@ package database
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // SeedSiteMessages 插入站内信测试数据（15 条，覆盖 6 个分类）
 func SeedSiteMessages() error {
 	ctx := context.Background()
-
-	count, err := countSiteMessages(ctx)
+	messages := buildSeedSiteMessages(time.Now().AddDate(0, 0, 90))
+	inserted, skipped, err := syncSiteMessages(ctx, messages)
 	if err != nil {
 		return err
 	}
-	if count > 0 {
-		logger.Info("站内信已有 %d 条数据，跳过种子数据插入", count)
-		return nil
-	}
-
-	logger.Info("插入站内信种子数据...")
-	messages := buildSeedSiteMessages(time.Now().AddDate(0, 0, 90))
-	return insertSeedSiteMessages(ctx, messages)
+	logger.Info("站内信种子数据同步完成，新建 %d 条，跳过 %d 条", inserted, skipped)
+	return nil
 }
 
-func countSiteMessages(ctx context.Context) (int64, error) {
-	var count int64
-	err := DB.WithContext(ctx).Model(&model.SiteMessage{}).Count(&count).Error
-	return count, err
-}
+func syncSiteMessages(ctx context.Context, messages []model.SiteMessage) (int, int, error) {
+	inserted := 0
+	skipped := 0
 
-func insertSeedSiteMessages(ctx context.Context, messages []model.SiteMessage) error {
-	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i := range messages {
+			exists, err := seedSiteMessageExists(tx, messages[i])
+			if err != nil {
+				return err
+			}
+			if exists {
+				skipped++
+				continue
+			}
+			prepareSeedSiteMessage(&messages[i])
 			if err := tx.Create(&messages[i]).Error; err != nil {
 				return err
 			}
+			inserted++
 		}
-		logger.Info("站内信种子数据插入完成，共 %d 条", len(messages))
 		return nil
 	})
+	return inserted, skipped, err
+}
+
+func seedSiteMessageExists(tx *gorm.DB, message model.SiteMessage) (bool, error) {
+	var existing model.SiteMessage
+	err := tx.
+		Where("tenant_id IS NULL").
+		Where("target_tenant_id IS NULL").
+		Where("category = ? AND title = ?", message.Category, message.Title).
+		First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func prepareSeedSiteMessage(message *model.SiteMessage) {
+	if message.ID == uuid.Nil {
+		message.ID = uuid.New()
+	}
 }

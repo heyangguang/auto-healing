@@ -2,9 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
-
-	appcrypto "github.com/company/auto-healing/internal/pkg/crypto"
 	"time"
 
 	"github.com/spf13/viper"
@@ -30,7 +27,7 @@ func GetAppConfig() *AppConfig {
 			Name:    "Auto-Healing",
 			Version: "1.0.0",
 			URL:     "http://localhost:8080",
-			Env:     "production",
+			Env:     "development",
 		}
 	}
 	return &globalConfig.App
@@ -143,62 +140,12 @@ type FileLogConfig struct {
 
 // Load 从配置文件加载配置
 func Load() (*Config, error) {
-	v := viper.New()
+	return load(false)
+}
 
-	// 设置配置文件路径
-	v.SetConfigName("config")
-	v.SetConfigType("yaml")
-	v.AddConfigPath("./configs")
-	v.AddConfigPath(".")
-
-	// 设置默认值
-	setDefaults(v)
-
-	// 允许环境变量覆盖
-	v.AutomaticEnv()
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-
-	// 读取配置文件
-	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return nil, fmt.Errorf("读取配置文件失败: %w", err)
-		}
-		// 配置文件不存在时使用默认值
-		fmt.Println("📝 未找到配置文件，使用默认配置")
-	} else {
-		fmt.Printf("📝 已加载配置文件: %s\n", v.ConfigFileUsed())
-	}
-
-	var cfg Config
-	if err := v.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("解析配置失败: %w", err)
-	}
-
-	if cfg.JWT.Secret == "" || cfg.JWT.Secret == "your-super-secret-key-change-in-production" {
-		if cfg.App.Env == "production" {
-			return nil, fmt.Errorf("production 环境必须显式配置 jwt.secret")
-		}
-		secret, genErr := appcrypto.GenerateRandomString(48)
-		if genErr != nil {
-			return nil, fmt.Errorf("生成默认 JWT Secret 失败: %w", genErr)
-		}
-		cfg.JWT.Secret = secret
-		fmt.Println("⚠️  未配置安全的 JWT Secret，已生成临时随机值；重启后会失效，请尽快在配置中显式设置 jwt.secret")
-	}
-
-	if cfg.App.Env == "production" {
-		if cfg.Server.Mode == "debug" {
-			fmt.Println("⚠️  当前 app.env=production 但 server.mode=debug，请尽快切换到 release")
-		}
-		if cfg.Database.SSLMode == "disable" {
-			fmt.Println("⚠️  当前 app.env=production 但 database.ssl_mode=disable，请确认数据库链路已启用 TLS")
-		}
-		if cfg.Database.Password == "postgres" {
-			fmt.Println("⚠️  当前 app.env=production 仍在使用默认数据库密码 postgres，请立即更换")
-		}
-	}
-
-	return &cfg, nil
+// LoadRequired 从配置文件加载配置并要求必须找到配置文件
+func LoadRequired() (*Config, error) {
+	return load(true)
 }
 
 // setDefaults 设置默认值
@@ -207,7 +154,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("app.name", "Auto-Healing")
 	v.SetDefault("app.version", "1.0.0")
 	v.SetDefault("app.url", "http://localhost:8080")
-	v.SetDefault("app.env", "production")
+	v.SetDefault("app.env", "development")
 
 	// 服务器
 	v.SetDefault("server.host", "0.0.0.0")

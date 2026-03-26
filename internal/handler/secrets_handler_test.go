@@ -57,6 +57,12 @@ func TestClassifySecretsError(t *testing.T) {
 			wantMsg:    "invalid secrets source id: bad uuid",
 		},
 		{
+			name:       "invalid input",
+			err:        fmt.Errorf("%w: 无效的状态: banana", secretsSvc.ErrSecretsSourceInvalidInput),
+			wantStatus: http.StatusBadRequest,
+			wantMsg:    "invalid secrets source input: 无效的状态: banana",
+		},
+		{
 			name:       "in use",
 			err:        fmt.Errorf("%w: still referenced", secretsSvc.ErrSecretsSourceInUse),
 			wantStatus: http.StatusConflict,

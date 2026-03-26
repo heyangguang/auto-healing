@@ -56,6 +56,7 @@
 - `curl`
 - `jq`
 - `git`
+- `go`（或通过 `ACCEPTANCE_GO_BIN` 指定本机 Go 二进制）
 - `python3.11`
 
 还需要本机存在以下容器：
@@ -68,6 +69,18 @@
 ```bash
 export ACCEPTANCE_PG_CONTAINER=your-postgres-container
 export ACCEPTANCE_REDIS_CONTAINER=your-redis-container
+```
+
+验收脚本会直接调用本机 Go 构建当前源码的静态二进制。若 `go` 不在 `PATH` 中，可显式指定：
+
+```bash
+export ACCEPTANCE_GO_BIN=/usr/local/go/bin/go
+```
+
+脚本会在启动服务时把 `INIT_ADMIN_PASSWORD` 传给 `init-admin`。如需覆盖默认验收管理员密码 `admin123456`，可设置：
+
+```bash
+export ACCEPTANCE_ADMIN_PASSWORD='your-admin-password'
 ```
 
 ## 全量运行

@@ -1,6 +1,7 @@
 package ansible
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -77,6 +78,9 @@ func copyDir(src, dst string) error {
 
 		if info.IsDir() {
 			return os.MkdirAll(dstPath, info.Mode())
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("禁止复制符号链接: %s", path)
 		}
 
 		return copyFile(path, dstPath)

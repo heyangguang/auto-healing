@@ -84,13 +84,13 @@ func applySourceAdminChanges(source *model.SecretsSource, isDefault *bool, prior
 	}
 	if priority != nil {
 		if *priority < 0 {
-			return false, fmt.Errorf("优先级不能小于 0")
+			return false, fmt.Errorf("%w: 优先级不能小于 0", ErrSecretsSourceInvalidInput)
 		}
 		source.Priority = *priority
 	}
 	if status != "" {
 		if status != "active" && status != "inactive" {
-			return false, fmt.Errorf("无效的状态: %s", status)
+			return false, fmt.Errorf("%w: 无效的状态: %s", ErrSecretsSourceInvalidInput, status)
 		}
 		source.Status = status
 	}

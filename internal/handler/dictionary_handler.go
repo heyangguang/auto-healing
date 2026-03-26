@@ -46,19 +46,7 @@ func (h *DictionaryHandler) ListDictionaries(c *gin.Context) {
 		return
 	}
 
-	// 统计
-	totalItems := 0
-	for _, items := range data {
-		totalItems += len(items)
-	}
-
-	response.Success(c, gin.H{
-		"items": data,
-		"meta": gin.H{
-			"types_count": len(data),
-			"items_count": totalItems,
-		},
-	})
+	response.Success(c, data)
 }
 
 // ListTypes 查询可用类型列表
@@ -70,10 +58,7 @@ func (h *DictionaryHandler) ListTypes(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, gin.H{
-		"items": types,
-		"total": len(types),
-	})
+	response.Success(c, types)
 }
 
 // CreateDictionary 创建字典项

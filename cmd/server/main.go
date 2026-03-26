@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -39,7 +40,9 @@ func main() {
 	cleanup := initializeInfrastructure(cfg)
 	defer cleanup()
 	defer middleware.Shutdown()
-	runStartupJobs(signalCtx)
+	if err := runStartupJobs(signalCtx); err != nil {
+		logger.Fatal("启动任务失败: %v", err)
+	}
 	schedulers := startSchedulers()
 	defer stopSchedulers(schedulers)
 
@@ -54,7 +57,7 @@ func main() {
 }
 
 func mustLoadConfig() *config.Config {
-	cfg, err := config.Load()
+	cfg, err := config.LoadRequired()
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
@@ -79,27 +82,66 @@ func initializeInfrastructure(cfg *config.Config) func() {
 	}
 }
 
-func runStartupJobs(ctx context.Context) {
-	runSeedJob("权限种子同步失败", database.SyncPermissionsAndRoles)
-	runSeedJob("站内信种子数据插入失败", database.SeedSiteMessages)
-	runSeedJob("高危指令黑名单种子数据同步失败", database.SeedCommandBlacklist)
-	runSeedJob("平台设置默认值初始化失败", database.SeedPlatformSettings)
+type startupJob struct {
+	name     string
+	required bool
+	run      func() error
+}
 
-	dictSvc := service.NewDictionaryService()
-	if err := dictSvc.SeedDictionaries(ctx); err != nil {
-		logger.Error("字典种子数据同步失败: %v", err)
+type dictionarySeeder interface {
+	SeedDictionaries(context.Context) error
+}
+
+type siteMessageCleaner interface {
+	CleanExpired(context.Context) (int64, error)
+}
+
+var (
+	newDictionaryService = func() dictionarySeeder {
+		return service.NewDictionaryService()
+	}
+	newSiteMessageRepo = func() siteMessageCleaner {
+		return repository.NewSiteMessageRepository()
+	}
+	listStartupSeedJobs = startupSeedJobs
+)
+
+func runStartupJobs(ctx context.Context) error {
+	for _, job := range listStartupSeedJobs() {
+		if err := runStartupJob(job); err != nil {
+			return err
+		}
 	}
 
-	siteMessageRepo := repository.NewSiteMessageRepository()
+	dictSvc := newDictionaryService()
+	if err := dictSvc.SeedDictionaries(ctx); err != nil {
+		return fmt.Errorf("字典种子数据同步失败: %w", err)
+	}
+
+	siteMessageRepo := newSiteMessageRepo()
 	if _, err := siteMessageRepo.CleanExpired(ctx); err != nil {
 		logger.Error("站内信过期清理失败: %v", err)
 	}
+	return nil
 }
 
-func runSeedJob(message string, fn func() error) {
-	if err := fn(); err != nil {
-		logger.Error("%s: %v", message, err)
+func startupSeedJobs() []startupJob {
+	return []startupJob{
+		{name: "权限种子同步失败", required: true, run: database.SyncPermissionsAndRoles},
+		{name: "站内信种子数据插入失败", required: false, run: database.SeedSiteMessages},
+		{name: "高危指令黑名单种子数据同步失败", required: true, run: database.SeedCommandBlacklist},
+		{name: "平台设置默认值初始化失败", required: true, run: database.SeedPlatformSettings},
 	}
+}
+
+func runStartupJob(job startupJob) error {
+	if err := job.run(); err != nil {
+		if job.required {
+			return fmt.Errorf("%s: %w", job.name, err)
+		}
+		logger.Error("%s: %v", job.name, err)
+	}
+	return nil
 }
 
 type lifecycleService interface {

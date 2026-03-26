@@ -102,7 +102,9 @@ func (c *Client) ListBranches(ctx context.Context) ([]string, error) {
 	fetchCmd := exec.CommandContext(ctx, "git", "fetch", "--all")
 	fetchCmd.Dir = localPath
 	fetchCmd.Env = c.getEnv()
-	fetchCmd.Run()
+	if err := fetchCmd.Run(); err != nil {
+		return nil, fmt.Errorf("刷新远程分支失败: %w", err)
+	}
 
 	cmd := exec.CommandContext(ctx, "git", "branch", "-r")
 	cmd.Dir = localPath

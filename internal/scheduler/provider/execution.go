@@ -16,6 +16,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const executionClaimLease = 40 * time.Minute
+
 // ExecutionScheduler 执行任务调度器
 // 使用独立的 ExecutionSchedule 表管理定时任务
 type ExecutionScheduler struct {
@@ -30,6 +32,11 @@ type ExecutionScheduler struct {
 	sem                   chan struct{} // 并发执行限制
 	loadDueSchedules      func(context.Context) ([]model.ExecutionSchedule, error)
 	runScheduledExecution func(context.Context, model.ExecutionSchedule)
+	updateScheduleState   func(context.Context, uuid.UUID, map[string]interface{}) error
+	updateScheduleLastRun func(context.Context, uuid.UUID) error
+	updateScheduleNextRun func(context.Context, uuid.UUID, string) error
+	markScheduleCompleted func(context.Context, uuid.UUID) error
+	claimDueSchedule      func(context.Context, model.ExecutionSchedule) (bool, error)
 }
 
 // NewExecutionScheduler 创建执行任务调度器
@@ -44,7 +51,16 @@ func NewExecutionScheduler() *ExecutionScheduler {
 	}
 	s.loadDueSchedules = s.scheduleRepo.GetDueSchedules
 	s.runScheduledExecution = s.executeSchedule
+	s.updateScheduleState = s.persistScheduleState
+	s.updateScheduleLastRun = s.scheduleRepo.UpdateLastRunAt
+	s.updateScheduleNextRun = s.scheduleSvc.UpdateNextRunAt
+	s.markScheduleCompleted = s.scheduleSvc.MarkCompleted
+	s.claimDueSchedule = s.claimSchedule
 	return s
+}
+
+func (s *ExecutionScheduler) persistScheduleState(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
+	return s.db.WithContext(ctx).Model(&model.ExecutionSchedule{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // Start 启动调度器
@@ -58,7 +74,7 @@ func (s *ExecutionScheduler) Start() {
 	s.lifecycle = newSchedulerLifecycle()
 	s.mu.Unlock()
 
-	s.lifecycle.Go(s.run)
+	s.lifecycleGo(s.run)
 	logger.Sched("TASK").Info("执行任务调度器已启动 (检查间隔: %v, 最大并发: %d)", s.interval, cap(s.sem))
 }
 
@@ -74,7 +90,9 @@ func (s *ExecutionScheduler) Stop() {
 	s.lifecycle = nil
 	s.mu.Unlock()
 
-	lifecycle.Stop()
+	if lifecycle != nil {
+		lifecycle.Stop()
+	}
 	logger.Sched("TASK").Info("执行任务调度器已停止")
 }
 
@@ -111,23 +129,82 @@ func (s *ExecutionScheduler) checkAndExecute(ctx context.Context) {
 	logger.Sched("TASK").Info("发现 %d 个定时任务需要执行", len(schedules))
 
 	for _, schedule := range schedules {
+		claimed, err := s.claimDueSchedule(ctx, schedule)
+		if err != nil {
+			logger.Sched("TASK").Error("认领定时任务失败: %s (%s) - %v", schedule.Name, schedule.ID.String()[:8], err)
+			continue
+		}
+		if !claimed {
+			continue
+		}
+
 		select {
 		case <-ctx.Done():
+			s.rollbackExecutionClaim(ctx, schedule)
 			return
 		case s.sem <- struct{}{}:
-			s.dispatchScheduledExecution(schedule)
+			if !s.dispatchScheduledExecution(schedule) {
+				<-s.sem
+				s.rollbackExecutionClaim(ctx, schedule)
+			}
 		default:
+			s.rollbackExecutionClaim(ctx, schedule)
 			logger.Sched("TASK").Warn("执行调度器并发已满，延后调度: %s (%s)", schedule.Name, schedule.ID.String()[:8])
 		}
 	}
 }
 
-func (s *ExecutionScheduler) dispatchScheduledExecution(schedule model.ExecutionSchedule) {
+func (s *ExecutionScheduler) dispatchScheduledExecution(schedule model.ExecutionSchedule) bool {
 	sched := schedule
-	s.lifecycle.Go(func(rootCtx context.Context) {
+	return s.lifecycleGo(func(rootCtx context.Context) {
 		defer func() { <-s.sem }()
 		s.runScheduledExecution(rootCtx, sched)
 	})
+}
+
+func (s *ExecutionScheduler) lifecycleGo(fn func(context.Context)) bool {
+	s.mu.Lock()
+	lifecycle := s.lifecycle
+	running := s.running
+	s.mu.Unlock()
+	if !running || lifecycle == nil {
+		return false
+	}
+	return lifecycle.Go(fn)
+}
+
+func (s *ExecutionScheduler) claimSchedule(ctx context.Context, schedule model.ExecutionSchedule) (bool, error) {
+	if schedule.NextRunAt == nil {
+		return false, nil
+	}
+	now := time.Now()
+	claimUntil := now.Add(executionClaimLease)
+	result := s.db.WithContext(ctx).
+		Model(&model.ExecutionSchedule{}).
+		Where("id = ? AND enabled = ? AND next_run_at IS NOT NULL AND next_run_at <= ?", schedule.ID, true, now).
+		Update("next_run_at", claimUntil)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
+}
+
+func (s *ExecutionScheduler) restoreCronNextRun(ctx context.Context, schedule model.ExecutionSchedule) error {
+	if schedule.ScheduleExpr == nil || *schedule.ScheduleExpr == "" {
+		return nil
+	}
+	return s.updateScheduleNextRun(ctx, schedule.ID, *schedule.ScheduleExpr)
+}
+
+func (s *ExecutionScheduler) rollbackExecutionClaim(ctx context.Context, schedule model.ExecutionSchedule) {
+	if schedule.NextRunAt == nil {
+		return
+	}
+	if err := s.updateScheduleState(ctx, schedule.ID, map[string]interface{}{
+		"next_run_at": schedule.NextRunAt,
+	}); err != nil {
+		logger.Sched("TASK").Warn("回滚定时任务认领失败: %s (%s) - %v", schedule.Name, schedule.ID.String()[:8], err)
+	}
 }
 
 func runStatusCountsAsSuccess(status string) bool {
