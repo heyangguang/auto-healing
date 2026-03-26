@@ -11,8 +11,8 @@ func setupTenantRoutes(api *gin.RouterGroup, h *Handlers) {
 	tenant := api.Group("/tenant")
 	tenant.Use(middleware.JWTAuth(h.Auth.GetJWTService()))
 	tenant.Use(middleware.ImpersonationMiddleware())
-	tenant.Use(middleware.AuditMiddleware())
 	tenant.Use(middleware.TenantMiddleware())
+	tenant.Use(middleware.AuditMiddleware())
 
 	registerTenantUserRoutes(tenant, h)
 	registerTenantRoleRoutes(tenant, h)

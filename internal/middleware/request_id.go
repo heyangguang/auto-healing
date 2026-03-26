@@ -27,7 +27,9 @@ func RequestID() gin.HandlerFunc {
 // GetRequestID 从上下文获取请求ID
 func GetRequestID(c *gin.Context) string {
 	if id, exists := c.Get(RequestIDKey); exists {
-		return id.(string)
+		if value, ok := id.(string); ok {
+			return value
+		}
 	}
 	return ""
 }

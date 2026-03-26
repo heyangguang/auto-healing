@@ -149,22 +149,32 @@ func setupAuthRoutes(api *gin.RouterGroup, h *Handlers) {
 	// --- 需要认证 ---
 	authProtected := auth.Group("")
 	authProtected.Use(middleware.JWTAuth(h.Auth.GetJWTService()))
-	authProtected.Use(middleware.AuditMiddleware())
 	{
 		// /auth/me 需要返回当前“有效视角”下的用户信息：
 		// - 普通租户用户：当前租户权限
 		// - 平台管理员提权中：impersonation_accessor 权限
 		authProtected.GET("/me",
 			middleware.ImpersonationMiddleware(),
-			middleware.CommonTenantMiddleware(),
+			requiredAuthTenantContext(),
 			h.Auth.GetCurrentUser,
 		)
 		authProtected.GET("/profile", h.Auth.GetProfile)
-		authProtected.PUT("/profile", h.Auth.UpdateProfile)
 		authProtected.GET("/profile/login-history", h.Auth.GetLoginHistory)
-		authProtected.GET("/profile/activities", h.Auth.GetProfileActivities)
-		authProtected.PUT("/password", h.Auth.ChangePassword)
-		authProtected.POST("/logout", h.Auth.Logout)
+		authProtected.GET("/profile/activities",
+			middleware.ImpersonationMiddleware(),
+			requiredAuthTenantContext(),
+			h.Auth.GetProfileActivities,
+		)
+	}
+
+	authAudited := authProtected.Group("")
+	authAudited.Use(middleware.ImpersonationMiddleware())
+	authAudited.Use(optionalAuthTenantContext())
+	authAudited.Use(middleware.AuditMiddleware())
+	{
+		authAudited.PUT("/profile", h.Auth.UpdateProfile)
+		authAudited.PUT("/password", h.Auth.ChangePassword)
+		authAudited.POST("/logout", h.Auth.Logout)
 	}
 }
 
