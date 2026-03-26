@@ -1,52 +1,29 @@
-# 并行修复工作流
+# 并行审计工作流
 
-这套脚手架现在按“并行修复 + 全源码审查”设计，不再建议多个窗口共用主工作区直接改代码。正确模型是：
+这套脚手架现在按“手动多进程 + 分模块审计”设计，不再依赖 `tmux`。
 
-- 主仓库：只做总控、汇总、最终集成
+核心模型：
+
+- 主仓库：只看总表、做最终集成
 - 每个模块：一个独立 `worktree`
 - 每个模块：一个独立分支
-- 每个模块：只改自己的写入边界
+- 每个模块：一个独立终端 / SSH 会话 / Codex 进程
 
 ## 目录
 
-- 模块定义：[scripts/review/backend_modules.csv](/root/auto-healing/scripts/review/backend_modules.csv)
-- session 生成脚本：[scripts/review/setup_parallel_review.sh](/root/auto-healing/scripts/review/setup_parallel_review.sh)
-- tmux 启动脚本：[scripts/review/start_tmux_parallel_review.sh](/root/auto-healing/scripts/review/start_tmux_parallel_review.sh)
+- 模块定义：[scripts/review/backend_modules.csv](/root/auto-healing-tooling/scripts/review/backend_modules.csv)
+- session 生成脚本：[scripts/review/setup_parallel_review.sh](/root/auto-healing-tooling/scripts/review/setup_parallel_review.sh)
 - 运行产物：`.parallel-review/<session>/`
 
-`.parallel-review/` 已加入 [/.gitignore](/root/auto-healing/.gitignore)，不会污染代码仓库。
-
-默认覆盖目标是“仓库里的源码和交付物”，包括：
-
-- `internal/`
-- `cmd/`
-- `pkg/`
-- `api/`
-- `configs/`
-- `migrations/`
-- `tests/`
-- `deployments/`
-- `docker/`
-- `tools/`
-- `scripts/`
-- `.github/workflows/`
-- `docs/api/`
-
-默认不纳入分支拆分的是运行时和元数据目录，例如：
-
-- `.git/`
-- `.parallel-review/`
-- `.codex-tasks/`
-- `logs/`
-- `bin/`
+`.parallel-review/` 已加入 [.gitignore](/root/auto-healing-tooling/.gitignore)，不会污染仓库。
 
 ## 一次完整流程
 
 ### 1. 生成 session
 
 ```bash
-cd /root/auto-healing
-bash scripts/review/setup_parallel_review.sh backend-review-20260326
+cd /root/auto-healing-tooling
+bash scripts/review/setup_parallel_review.sh dev-20260326
 ```
 
 会生成：
@@ -58,50 +35,11 @@ bash scripts/review/setup_parallel_review.sh backend-review-20260326
 - `.parallel-review/<session>/findings/*.md`
 - `.parallel-review/<session>/create_worktrees.sh`
 
-### 2. 先看 repair plan
-
-先打开：
-
-```bash
-sed -n '1,200p' .parallel-review/<session>/repair_plan.csv
-```
-
-这个文件已经把下面这些信息列好了：
-
-- 模块 ID
-- 分支名
-- worktree 路径
-- 允许修改的路径范围
-- 共享触点
-- 重点关注点
-
-默认分支命名规则是：
-
-```text
-fix/<session>/<module-branch-suffix>
-```
-
-例如：
-
-- `fix/backend-review-20260326/auth-middleware`
-- `fix/backend-review-20260326/tenant-user-role`
-
-### 3. 创建独立 worktree
+### 2. 创建独立 worktree
 
 ```bash
 bash .parallel-review/<session>/create_worktrees.sh
 ```
-
-脚本会按模块创建：
-
-- 一个 worktree 目录
-- 一个独立分支
-
-例如：
-
-- `/root/auto-healing-backend-review-20260326-auth`
-- `/root/auto-healing-backend-review-20260326-tenant`
-- `/root/auto-healing-backend-review-20260326-healing`
 
 如果你当前是 detached HEAD，需要显式指定基线分支：
 
@@ -109,52 +47,67 @@ bash .parallel-review/<session>/create_worktrees.sh
 REVIEW_BASE_BRANCH=main bash .parallel-review/<session>/create_worktrees.sh
 ```
 
-### 4. 启动 tmux
+### 3. 看总分工表
 
 ```bash
-bash scripts/review/start_tmux_parallel_review.sh <session>
+sed -n '1,200p' .parallel-review/<session>/repair_plan.csv
 ```
 
-它会默认直接进入 `tmux`，并创建：
+这里会列出：
 
-- `control` 窗口：看 `review_status.csv` 和 `repair_plan.csv`
-- 每个模块一个窗口：优先进入对应 worktree
+- 模块 ID
+- 分支名
+- worktree 路径
+- 审计范围
+- 共享触点
+- 关注重点
 
-如果只想后台创建 session：
+### 4. 手动开多个进程
+
+你自己开多个终端、标签页或 SSH 会话。每个进程只负责一个模块。
+
+例如：
 
 ```bash
-bash scripts/review/start_tmux_parallel_review.sh <session> --detach
+cd /root/auto-healing-dev-20260326-auth
+git branch --show-current
+sed -n '1,200p' /root/auto-healing-tooling/.parallel-review/dev-20260326/prompts/auth_middleware.md
+codex
 ```
 
-## 你在每个模块窗口里做什么
+然后把刚才 prompt 文件内容贴给这个进程里的 Codex。
 
-### 模块窗口只做一件事
+## Prompt 在哪里
 
-只处理自己模块的审查和修复，不越界。
-
-先看模块 prompt：
+所有模块 prompt 都在：
 
 ```bash
-sed -n '1,200p' .parallel-review/<session>/prompts/<module>.md
+.parallel-review/<session>/prompts/
 ```
 
-然后：
+例如：
 
-1. 先按模块范围审查
-2. 把 findings 写到 `findings/<module>.md`
-3. 在自己的 worktree 里修复
-4. 更新 `review_status.csv`
+```bash
+sed -n '1,200p' .parallel-review/dev-20260326/prompts/auth_middleware.md
+sed -n '1,200p' .parallel-review/dev-20260326/prompts/tenant_user_role.md
+sed -n '1,200p' .parallel-review/dev-20260326/prompts/execution_healing.md
+```
 
-## 为什么要这么做
+这些 prompt 默认是：
 
-共享主工作区多窗口同时改代码，会有两类问题：
+- 先只做审计
+- 不改代码
+- 只输出 findings
+- 带 file:line、触发条件、影响
 
-- 工作区冲突：同一目录被多个窗口同时改
-- 集成冲突：不同分支最后改到同一文件或同一接口
+## 你在每个模块进程里做什么
 
-`worktree + 分支` 只能解决第一类，第二类仍然要靠边界拆分和总控集成。
-
-所以模块 CSV 里除了写入范围，还显式列了 `shared_touchpoints`。这些文件默认不要随便改，避免把冲突从工作区层面搬到 merge 层面。
+1. 进入自己的 worktree
+2. 打开自己的 prompt 文件
+3. 启动该进程里的 Codex
+4. 把 prompt 内容贴进去
+5. 审计结果写回 `findings/<module>.md`
+6. 更新 `review_status.csv`
 
 ## 当前模块拆分
 
@@ -172,12 +125,12 @@ sed -n '1,200p' .parallel-review/<session>/prompts/<module>.md
 - `config_database_pkg`
 - `quality_ops_surface`
 
-模块定义都在 [backend_modules.csv](/root/auto-healing/scripts/review/backend_modules.csv)，你要继续拆细，就直接改这个文件，然后重新跑一次 `setup_parallel_review.sh`。
+如果你要继续拆细，就改 [backend_modules.csv](/root/auto-healing-tooling/scripts/review/backend_modules.csv)，然后重新跑一次 `setup_parallel_review.sh`。
 
 ## 最实用的使用方式
 
-- 主仓库窗口：只看状态表、做最终集成
-- 模块 worktree 窗口：各自审查和修复
-- 公共文件：只指定一个模块改
+- 主仓库终端：只看 `repair_plan.csv` 和 `review_status.csv`
+- 模块终端：各自审计各自范围
+- 公共文件：只指定一个模块负责
 
-像 [routes.go](/root/auto-healing/internal/handler/routes.go) 这种共享装配文件，不要多个模块同时碰。
+像共享装配文件和跨模块接口，不要让多个模块同时处理。

@@ -11,7 +11,7 @@ Optional env:
   REVIEW_MODULES     Override module CSV. Default: scripts/review/backend_modules.csv
 
 What it does:
-  1. Creates a review/fix session directory
+  1. Creates a review session directory
   2. Generates review_status.csv and repair_plan.csv
   3. Generates one prompt per module
   4. Generates branch-aware create_worktrees.sh
@@ -127,7 +127,7 @@ write_prompt() {
 - Findings output: \`.parallel-review/${session}/findings/${module_id}.md\`
 - Status CSV row: \`.parallel-review/${session}/review_status.csv\`
 
-## Write Scope
+## Audit Scope
 
 \`${paths}\`
 
@@ -139,21 +139,22 @@ write_prompt() {
 
 \`${focus}\`
 
-## Repair Rules
+## Audit Prompt
 
-你负责的修复范围：
+你只审计以下范围：
 ${paths}
 
 共享触点：
 ${shared_touchpoints}
 
 要求：
-1. 默认只改本模块写入范围内的文件
-2. 共享触点默认不改，除非总控明确分配
-3. 所有修改都在独立 worktree 和分支里完成，不要回主工作区直接改
-4. 先审查再修复，findings 写入 \`.parallel-review/${session}/findings/${module_id}.md\`
-5. 修复完成后，更新 \`.parallel-review/${session}/review_status.csv\` 中本模块的 status 和 notes
-6. 如果需要跨模块接口变更，先在 notes 里记录阻塞点，不要直接越界修改
+1. 先只做审计，不要改代码
+2. 只看当前模块范围内的文件，不要越界
+3. 优先找：安全、隔离、事务、一致性、并发、错误语义、静默降级、测试缺口
+4. 每条 finding 必须带 file:line、触发条件、影响
+5. findings 写入 \`.parallel-review/${session}/findings/${module_id}.md\`
+6. 审计完成后，更新 \`.parallel-review/${session}/review_status.csv\` 中本模块的 status 和 notes
+7. 如果当前模块未发现明确问题，明确写“当前模块未发现新的明确问题”
 EOF
 }
 
@@ -212,7 +213,7 @@ write_readme() {
   local session_dir="$1"
   local session="$2"
   cat >"$session_dir/README.md" <<EOF
-# Parallel Review and Fix Session
+# Parallel Review Session
 
 - Session: \`${session}\`
 - Review status: \`review_status.csv\`
@@ -225,10 +226,10 @@ write_readme() {
 
 1. 先看 \`repair_plan.csv\`，确认模块边界、分支名和 worktree 目录
 2. 运行 \`./create_worktrees.sh\` 为每个模块创建独立分支和 worktree
-3. 再运行仓库根下的 \`scripts/review/start_tmux_parallel_review.sh ${session}\`
-4. 每个窗口只在自己的 worktree 里审查和修复
+3. 手动开多个终端/SSH 会话，每个进程进入自己的 worktree
+4. 在每个进程里打开 \`prompts/<module>.md\`，把内容贴给对应的 Codex 会话
 5. findings 写入 \`findings/<module>.md\`
-6. 总控窗口维护 \`review_status.csv\`
+6. 总控只维护 \`review_status.csv\`
 EOF
 }
 
@@ -264,7 +265,8 @@ main() {
   printf 'Created review session: %s\n' "$session_dir"
   printf 'Next:\n'
   printf '  1. %s\n' "$session_dir/create_worktrees.sh"
-  printf '  2. scripts/review/start_tmux_parallel_review.sh %s\n' "$session"
+  printf '  2. sed -n %q %s\n' '1,200p' "$session_dir/repair_plan.csv"
+  printf '  3. 手动开多个终端，分别进入各模块 worktree，并把 prompts/*.md 贴给对应进程\n'
 }
 
 main "$@"
