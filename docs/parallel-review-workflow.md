@@ -9,6 +9,9 @@
 - 每个模块：一个独立分支
 - 每个模块：一个独立终端 / SSH 会话 / Codex 进程
 
+这些模块是“业务/平台/基础设施/质量”分组，不包含脚手架本身。
+脚手架本身只在工具分支 `chore/parallel-review-tooling`。
+
 ## 目录
 
 - 模块定义：[scripts/review/backend_modules.csv](/root/auto-healing-tooling/scripts/review/backend_modules.csv)
@@ -41,6 +44,18 @@ bash scripts/review/setup_parallel_review.sh dev-20260326
 bash .parallel-review/<session>/create_worktrees.sh
 ```
 
+如果你不想一次建 11 个模块，先看模块清单和备注：
+
+```bash
+bash .parallel-review/<session>/create_worktrees.sh --list
+```
+
+然后只创建你要的模块：
+
+```bash
+bash .parallel-review/<session>/create_worktrees.sh auth_middleware tenant_user_role
+```
+
 如果你当前是 detached HEAD，需要显式指定基线分支：
 
 ```bash
@@ -56,6 +71,8 @@ sed -n '1,200p' .parallel-review/<session>/repair_plan.csv
 这里会列出：
 
 - 模块 ID
+- 模块类型
+- 模块备注
 - 分支名
 - worktree 路径
 - 审计范围
@@ -124,6 +141,13 @@ sed -n '1,200p' .parallel-review/dev-20260326/prompts/execution_healing.md
 - `model_engine_scheduler`
 - `config_database_pkg`
 - `quality_ops_surface`
+
+模块类型大致分为：
+
+- `business-core`
+- `platform-core`
+- `infra-core`
+- `quality-surface`
 
 如果你要继续拆细，就改 [backend_modules.csv](/root/auto-healing-tooling/scripts/review/backend_modules.csv)，然后重新跑一次 `setup_parallel_review.sh`。
 

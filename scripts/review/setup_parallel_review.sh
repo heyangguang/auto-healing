@@ -76,11 +76,13 @@ write_status_csv() {
   local session="$2"
   local modules="$3"
   {
-    printf 'module_id,label,status,branch_name,worktree_dir,owner,findings_file,notes\n'
-    tail -n +2 "$modules" | while IFS=, read -r module_id label worktree_suffix branch_suffix paths shared_touchpoints focus; do
-      printf '%s,%s,TODO,%s,%s,,findings/%s.md,\n' \
+    printf 'module_id,label,module_kind,module_note,status,branch_name,worktree_dir,owner,findings_file,notes\n'
+    tail -n +2 "$modules" | while IFS=, read -r module_id label module_kind module_note worktree_suffix branch_suffix paths shared_touchpoints focus; do
+      printf '%s,%s,%s,%s,TODO,%s,%s,,findings/%s.md,\n' \
         "$module_id" \
         "$label" \
+        "$module_kind" \
+        "$module_note" \
         "$(branch_name "$session" "$branch_suffix")" \
         "$(worktree_dir "$session" "$worktree_suffix")" \
         "$module_id"
@@ -93,11 +95,13 @@ write_repair_plan_csv() {
   local session="$2"
   local modules="$3"
   {
-    printf 'module_id,label,branch_name,worktree_dir,paths,shared_touchpoints,focus\n'
-    tail -n +2 "$modules" | while IFS=, read -r module_id label worktree_suffix branch_suffix paths shared_touchpoints focus; do
-      printf '%s,%s,%s,%s,%s,%s,%s\n' \
+    printf 'module_id,label,module_kind,module_note,branch_name,worktree_dir,paths,shared_touchpoints,focus\n'
+    tail -n +2 "$modules" | while IFS=, read -r module_id label module_kind module_note worktree_suffix branch_suffix paths shared_touchpoints focus; do
+      printf '%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
         "$module_id" \
         "$label" \
+        "$module_kind" \
+        "$module_note" \
         "$(branch_name "$session" "$branch_suffix")" \
         "$(worktree_dir "$session" "$worktree_suffix")" \
         "$paths" \
@@ -112,20 +116,27 @@ write_prompt() {
   local session="$2"
   local module_id="$3"
   local label="$4"
-  local worktree_suffix="$5"
-  local branch_suffix="$6"
-  local paths="$7"
-  local shared_touchpoints="$8"
-  local focus="$9"
+  local module_kind="$5"
+  local module_note="$6"
+  local worktree_suffix="$7"
+  local branch_suffix="$8"
+  local paths="$9"
+  local shared_touchpoints="${10}"
+  local focus="${11}"
   cat >"$prompt_file" <<EOF
 # ${label}
 
 - Session: \`${session}\`
 - Module ID: \`${module_id}\`
+- Module Kind: \`${module_kind}\`
 - Branch: \`$(branch_name "$session" "$branch_suffix")\`
 - Worktree: \`$(worktree_dir "$session" "$worktree_suffix")\`
 - Findings output: \`.parallel-review/${session}/findings/${module_id}.md\`
 - Status CSV row: \`.parallel-review/${session}/review_status.csv\`
+
+## Module Note
+
+\`${module_note}\`
 
 ## Audit Scope
 
@@ -161,8 +172,11 @@ EOF
 write_findings_stub() {
   local findings_file="$1"
   local label="$2"
+  local module_note="$3"
   cat >"$findings_file" <<EOF
 # ${label}
+
+> ${module_note}
 
 ## Findings
 
@@ -179,32 +193,117 @@ write_worktree_helper() {
   repo_name="$(basename "$root")"
   parent="$(dirname "$root")"
 
-  {
-    printf '#!/usr/bin/env bash\nset -euo pipefail\n\n'
-    printf 'cd %q\n' "$root"
-    printf 'base_ref="${REVIEW_BASE_BRANCH:-$(git branch --show-current)}"\n'
-    printf '[[ -n "$base_ref" ]] || {\n'
-    printf '  printf %q >&2\n' 'REVIEW_BASE_BRANCH is required when HEAD is detached\n'
-    printf '  exit 1\n'
-    printf '}\n'
-    printf 'git rev-parse --verify "$base_ref" >/dev/null 2>&1 || {\n'
-    printf '  printf %q "$base_ref" >&2\n' 'base ref not found: %s\n'
-    printf '  exit 1\n'
-    printf '}\n'
-    printf 'parent=%q\n' "$parent"
-    printf 'repo_name=%q\n\n' "$repo_name"
-    tail -n +2 "$modules" | while IFS=, read -r module_id label worktree_suffix branch_suffix paths shared_touchpoints focus; do
-      printf 'branch=%q\n' "$(branch_name "$session" "$branch_suffix")"
-      printf 'dir=%q\n' "$(worktree_dir "$session" "$worktree_suffix")"
-      printf 'if [[ -d "$dir" ]]; then\n'
-      printf '  printf %q "$dir"\n' 'skip existing worktree: %s\n'
-      printf 'elif git show-ref --verify --quiet "refs/heads/$branch"; then\n'
-      printf '  git worktree add "$dir" "$branch"\n'
-      printf 'else\n'
-      printf '  git worktree add -b "$branch" "$dir" "$base_ref"\n'
-      printf 'fi\n\n'
-    done
-  } >"$helper_file"
+  cat >"$helper_file" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(printf '%q' "$root")
+session_name=$(printf '%q' "$session")
+parent=$(printf '%q' "$parent")
+repo_name=$(printf '%q' "$repo_name")
+modules_file="\$(cd "\$(dirname "\$0")" && pwd)/modules.csv"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ./create_worktrees.sh [module_id...]
+  ./create_worktrees.sh --list
+
+Notes:
+  - Without module arguments, all modules are created
+  - With module arguments, only the selected modules are created
+USAGE
+}
+
+branch_name() {
+  local branch_suffix="\$1"
+  printf 'fix/%s/%s\n' "\$session_name" "\$branch_suffix"
+}
+
+worktree_dir() {
+  local worktree_suffix="\$1"
+  printf '%s/%s-%s-%s\n' "\$parent" "\$repo_name" "\$session_name" "\$worktree_suffix"
+}
+
+cd "\$repo_root"
+
+base_ref="\${REVIEW_BASE_BRANCH:-\$(git branch --show-current)}"
+[[ -n "\$base_ref" ]] || {
+  printf 'REVIEW_BASE_BRANCH is required when HEAD is detached\n' >&2
+  exit 1
+}
+git rev-parse --verify "\$base_ref" >/dev/null 2>&1 || {
+  printf 'base ref not found: %s\n' "\$base_ref" >&2
+  exit 1
+}
+
+if [[ "\${1:-}" == "--help" || "\${1:-}" == "-h" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ "\${1:-}" == "--list" ]]; then
+  printf 'module_id,label,module_kind,module_note,branch_name,worktree_dir\n'
+  while IFS=, read -r module_id label module_kind module_note worktree_suffix branch_suffix paths shared_touchpoints focus; do
+    printf '%s,%s,%s,%s,%s,%s\n' \
+      "\$module_id" \
+      "\$label" \
+      "\$module_kind" \
+      "\$module_note" \
+      "\$(branch_name "\$branch_suffix")" \
+      "\$(worktree_dir "\$worktree_suffix")"
+  done < <(tail -n +2 "\$modules_file")
+  exit 0
+fi
+
+selected_modules=("\$@")
+declare -A found_modules=()
+
+module_requested() {
+  local module_id="\$1"
+  if [[ \${#selected_modules[@]} -eq 0 ]]; then
+    return 0
+  fi
+  local wanted
+  for wanted in "\${selected_modules[@]}"; do
+    if [[ "\$wanted" == "\$module_id" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+while IFS=, read -r module_id label module_kind module_note worktree_suffix branch_suffix paths shared_touchpoints focus; do
+  if ! module_requested "\$module_id"; then
+    continue
+  fi
+  found_modules["\$module_id"]=1
+  branch="\$(branch_name "\$branch_suffix")"
+  dir="\$(worktree_dir "\$worktree_suffix")"
+  if [[ -d "\$dir" ]]; then
+    printf 'skip existing worktree: %s\n' "\$dir"
+    continue
+  fi
+  if git show-ref --verify --quiet "refs/heads/\$branch"; then
+    git worktree add "\$dir" "\$branch"
+    continue
+  fi
+  git worktree add -b "\$branch" "\$dir" "\$base_ref"
+done < <(tail -n +2 "\$modules_file")
+
+if [[ \${#selected_modules[@]} -gt 0 ]]; then
+  missing=0
+  for wanted in "\${selected_modules[@]}"; do
+    if [[ -z "\${found_modules[\$wanted]:-}" ]]; then
+      printf 'unknown module_id: %s\n' "\$wanted" >&2
+      missing=1
+    fi
+  done
+  if [[ "\$missing" == "1" ]]; then
+    exit 1
+  fi
+fi
+EOF
 
   chmod +x "$helper_file"
 }
@@ -225,11 +324,12 @@ write_readme() {
 ## Recommended Flow
 
 1. 先看 \`repair_plan.csv\`，确认模块边界、分支名和 worktree 目录
-2. 运行 \`./create_worktrees.sh\` 为每个模块创建独立分支和 worktree
-3. 手动开多个终端/SSH 会话，每个进程进入自己的 worktree
-4. 在每个进程里打开 \`prompts/<module>.md\`，把内容贴给对应的 Codex 会话
-5. findings 写入 \`findings/<module>.md\`
-6. 总控只维护 \`review_status.csv\`
+2. 如需先挑模块，可运行 \`./create_worktrees.sh --list\` 查看模块清单和备注
+3. 运行 \`./create_worktrees.sh auth_middleware tenant_user_role\` 或不带参数全量创建
+4. 手动开多个终端/SSH 会话，每个进程进入自己的 worktree
+5. 在每个进程里打开 \`prompts/<module>.md\`，把内容贴给对应的 Codex 会话
+6. findings 写入 \`findings/<module>.md\`
+7. 总控只维护 \`review_status.csv\`
 EOF
 }
 
@@ -248,25 +348,28 @@ main() {
   write_worktree_helper "$session_dir/create_worktrees.sh" "$session" "$modules"
   write_readme "$session_dir" "$session"
 
-  tail -n +2 "$modules" | while IFS=, read -r module_id label worktree_suffix branch_suffix paths shared_touchpoints focus; do
+  tail -n +2 "$modules" | while IFS=, read -r module_id label module_kind module_note worktree_suffix branch_suffix paths shared_touchpoints focus; do
     write_prompt \
       "$session_dir/prompts/${module_id}.md" \
       "$session" \
       "$module_id" \
       "$label" \
+      "$module_kind" \
+      "$module_note" \
       "$worktree_suffix" \
       "$branch_suffix" \
       "$paths" \
       "$shared_touchpoints" \
       "$focus"
-    write_findings_stub "$session_dir/findings/${module_id}.md" "$label"
+    write_findings_stub "$session_dir/findings/${module_id}.md" "$label" "$module_note"
   done
 
   printf 'Created review session: %s\n' "$session_dir"
   printf 'Next:\n'
-  printf '  1. %s\n' "$session_dir/create_worktrees.sh"
-  printf '  2. sed -n %q %s\n' '1,200p' "$session_dir/repair_plan.csv"
-  printf '  3. 手动开多个终端，分别进入各模块 worktree，并把 prompts/*.md 贴给对应进程\n'
+  printf '  1. sed -n %q %s\n' '1,200p' "$session_dir/repair_plan.csv"
+  printf '  2. %s --list\n' "$session_dir/create_worktrees.sh"
+  printf '  3. %s auth_middleware tenant_user_role\n' "$session_dir/create_worktrees.sh"
+  printf '  4. 手动开多个终端，分别进入各模块 worktree，并把 prompts/*.md 贴给对应进程\n'
 }
 
 main "$@"
