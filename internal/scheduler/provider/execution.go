@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -25,19 +26,28 @@ type ExecutionScheduler struct {
 	scheduleSvc           *scheduleService.Service
 	scheduleRepo          *repository.ScheduleRepository
 	db                    *gorm.DB
-	interval              time.Duration // 检查间隔
+	interval              time.Duration
 	lifecycle             *schedulerLifecycle
+	inFlight              *inFlightSet
 	running               bool
 	mu                    sync.Mutex
-	sem                   chan struct{} // 并发执行限制
+	sem                   chan struct{}
 	loadDueSchedules      func(context.Context) ([]model.ExecutionSchedule, error)
 	runScheduledExecution func(context.Context, model.ExecutionSchedule)
+	executeTask           func(context.Context, uuid.UUID, *executionService.ExecuteOptions) (*model.ExecutionRun, error)
+	getRun                func(context.Context, uuid.UUID) (*model.ExecutionRun, error)
 	updateScheduleState   func(context.Context, uuid.UUID, map[string]interface{}) error
 	updateScheduleLastRun func(context.Context, uuid.UUID) error
 	updateScheduleNextRun func(context.Context, uuid.UUID, string) error
 	markScheduleCompleted func(context.Context, uuid.UUID) error
+	updateLastRunAt       func(context.Context, uuid.UUID) error
+	updateNextRunAt       func(context.Context, uuid.UUID, string) error
+	markCompleted         func(context.Context, uuid.UUID) error
 	claimDueSchedule      func(context.Context, model.ExecutionSchedule) (bool, error)
+	followRunAfterStop    func(context.Context, model.ExecutionSchedule, uuid.UUID)
 }
+
+var errExecutionSchedulerStopped = errors.New("execution scheduler stopped")
 
 // NewExecutionScheduler 创建执行任务调度器
 func NewExecutionScheduler() *ExecutionScheduler {
@@ -46,21 +56,21 @@ func NewExecutionScheduler() *ExecutionScheduler {
 		scheduleSvc:  scheduleService.NewService(),
 		scheduleRepo: repository.NewScheduleRepository(),
 		db:           database.DB,
-		interval:     30 * time.Second, // 每30秒检查一次
+		interval:     30 * time.Second,
+		inFlight:     newInFlightSet(),
 		sem:          make(chan struct{}, 8),
 	}
 	s.loadDueSchedules = s.scheduleRepo.GetDueSchedules
 	s.runScheduledExecution = s.executeSchedule
-	s.updateScheduleState = s.persistScheduleState
-	s.updateScheduleLastRun = s.scheduleRepo.UpdateLastRunAt
-	s.updateScheduleNextRun = s.scheduleSvc.UpdateNextRunAt
-	s.markScheduleCompleted = s.scheduleSvc.MarkCompleted
+	s.executeTask = s.execSvc.ExecuteTask
+	s.getRun = s.execSvc.GetRun
+	s.updateScheduleState = s.applyScheduleStateUpdate
+	s.updateLastRunAt = s.scheduleRepo.UpdateLastRunAt
+	s.updateNextRunAt = s.scheduleSvc.UpdateNextRunAt
+	s.markCompleted = s.scheduleSvc.MarkCompleted
 	s.claimDueSchedule = s.claimSchedule
+	s.followRunAfterStop = s.detachScheduleCompletion
 	return s
-}
-
-func (s *ExecutionScheduler) persistScheduleState(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
-	return s.db.WithContext(ctx).Model(&model.ExecutionSchedule{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // Start 启动调度器
@@ -70,11 +80,14 @@ func (s *ExecutionScheduler) Start() {
 		s.mu.Unlock()
 		return
 	}
+	if s.lifecycle == nil || s.lifecycle.ctx.Err() != nil {
+		s.lifecycle = newSchedulerLifecycle()
+	}
+	lifecycle := s.lifecycle
 	s.running = true
-	s.lifecycle = newSchedulerLifecycle()
 	s.mu.Unlock()
 
-	s.lifecycleGo(s.run)
+	lifecycle.Go(s.run)
 	logger.Sched("TASK").Info("执行任务调度器已启动 (检查间隔: %v, 最大并发: %d)", s.interval, cap(s.sem))
 }
 
@@ -87,7 +100,6 @@ func (s *ExecutionScheduler) Stop() {
 	}
 	s.running = false
 	lifecycle := s.lifecycle
-	s.lifecycle = nil
 	s.mu.Unlock()
 
 	if lifecycle != nil {
@@ -101,7 +113,6 @@ func (s *ExecutionScheduler) run(ctx context.Context) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
-	// 启动时立即检查一次
 	s.checkAndExecute(ctx)
 
 	for {
@@ -121,13 +132,13 @@ func (s *ExecutionScheduler) checkAndExecute(ctx context.Context) {
 		logger.Sched("TASK").Error("查询待执行调度失败: %v", err)
 		return
 	}
-
 	if len(schedules) == 0 {
 		return
 	}
 
 	logger.Sched("TASK").Info("发现 %d 个定时任务需要执行", len(schedules))
 
+	lifecycle := s.lifecycleSnapshot()
 	for _, schedule := range schedules {
 		claimed, err := s.claimDueSchedule(ctx, schedule)
 		if err != nil {
@@ -143,8 +154,7 @@ func (s *ExecutionScheduler) checkAndExecute(ctx context.Context) {
 			s.rollbackExecutionClaim(ctx, schedule)
 			return
 		case s.sem <- struct{}{}:
-			if !s.dispatchScheduledExecution(schedule) {
-				<-s.sem
+			if !s.dispatchScheduledExecution(lifecycle, schedule) {
 				s.rollbackExecutionClaim(ctx, schedule)
 			}
 		default:
@@ -154,23 +164,27 @@ func (s *ExecutionScheduler) checkAndExecute(ctx context.Context) {
 	}
 }
 
-func (s *ExecutionScheduler) dispatchScheduledExecution(schedule model.ExecutionSchedule) bool {
-	sched := schedule
-	return s.lifecycleGo(func(rootCtx context.Context) {
-		defer func() { <-s.sem }()
-		s.runScheduledExecution(rootCtx, sched)
-	})
-}
-
-func (s *ExecutionScheduler) lifecycleGo(fn func(context.Context)) bool {
-	s.mu.Lock()
-	lifecycle := s.lifecycle
-	running := s.running
-	s.mu.Unlock()
-	if !running || lifecycle == nil {
+func (s *ExecutionScheduler) dispatchScheduledExecution(lifecycle *schedulerLifecycle, schedule model.ExecutionSchedule) bool {
+	if lifecycle == nil {
+		s.releaseSemaphoreToken()
 		return false
 	}
-	return lifecycle.Go(fn)
+	if !s.inFlight.Start(schedule.ID) {
+		s.releaseSemaphoreToken()
+		return false
+	}
+
+	sched := schedule
+	started := lifecycle.Go(func(rootCtx context.Context) {
+		defer s.inFlight.Finish(sched.ID)
+		defer s.releaseSemaphoreToken()
+		s.runScheduledExecution(rootCtx, sched)
+	})
+	if !started {
+		s.inFlight.Finish(sched.ID)
+		s.releaseSemaphoreToken()
+	}
+	return started
 }
 
 func (s *ExecutionScheduler) claimSchedule(ctx context.Context, schedule model.ExecutionSchedule) (bool, error) {
@@ -193,7 +207,7 @@ func (s *ExecutionScheduler) restoreCronNextRun(ctx context.Context, schedule mo
 	if schedule.ScheduleExpr == nil || *schedule.ScheduleExpr == "" {
 		return nil
 	}
-	return s.updateScheduleNextRun(ctx, schedule.ID, *schedule.ScheduleExpr)
+	return s.updateNextRun(ctx, schedule.ID, *schedule.ScheduleExpr)
 }
 
 func (s *ExecutionScheduler) rollbackExecutionClaim(ctx context.Context, schedule model.ExecutionSchedule) {
@@ -224,12 +238,18 @@ func (s *ExecutionScheduler) waitForRunTerminalStatus(ctx context.Context, runID
 	defer timeout.Stop()
 
 	for {
-		run, err := s.execSvc.GetRun(ctx, runID)
+		if ctx.Err() != nil {
+			return "", errExecutionSchedulerStopped
+		}
+		run, err := s.getRun(ctx, runID)
 		if err != nil {
+			if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+				return "", errExecutionSchedulerStopped
+			}
 			return "", err
 		}
 		switch run.Status {
-		case "success", "failed", "partial", "cancelled":
+		case "success", "failed", "partial", "cancelled", "timeout":
 			return run.Status, nil
 		}
 
@@ -238,7 +258,80 @@ func (s *ExecutionScheduler) waitForRunTerminalStatus(ctx context.Context, runID
 		case <-timeout.C:
 			return "", fmt.Errorf("等待执行结果超时")
 		case <-ctx.Done():
-			return "", fmt.Errorf("调度器已停止")
+			return "", errExecutionSchedulerStopped
 		}
+	}
+}
+
+func (s *ExecutionScheduler) lifecycleSnapshot() *schedulerLifecycle {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lifecycle
+}
+
+func (s *ExecutionScheduler) applyScheduleStateUpdate(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
+	return s.db.WithContext(ctx).
+		Model(&model.ExecutionSchedule{}).
+		Where("id = ?", id).
+		Updates(updates).Error
+}
+
+func (s *ExecutionScheduler) detachScheduleCompletion(ctx context.Context, sched model.ExecutionSchedule, runID uuid.UUID) {
+	go func() {
+		defer s.inFlight.Finish(sched.ID)
+		shortID := sched.ID.String()[:8]
+		tenantCtx := scheduleTenantContext(ctx, sched)
+
+		finalStatus, err := s.waitForRunTerminalStatus(ctx, runID)
+		if err != nil {
+			logger.Sched("TASK").Error("[%s] 调度器停止后继续跟踪执行结果失败: %v", shortID, err)
+			return
+		}
+		if runStatusCountsAsSuccess(finalStatus) {
+			if err := s.handleScheduledExecutionSuccess(ctx, tenantCtx, sched, shortID); err != nil {
+				logger.Sched("TASK").Error("[%s] 后台跟踪成功但状态更新失败: %v", shortID, err)
+			}
+			return
+		}
+		if err := s.handleScheduledExecutionError(ctx, tenantCtx, sched, shortID, fmt.Errorf("执行结果状态为 %s", finalStatus), true); err != nil {
+			logger.Sched("TASK").Error("[%s] 后台跟踪失败且状态更新失败: %v", shortID, err)
+		}
+	}()
+}
+
+func (s *ExecutionScheduler) updateLastRun(ctx context.Context, id uuid.UUID) error {
+	if s.updateScheduleLastRun != nil {
+		return s.updateScheduleLastRun(ctx, id)
+	}
+	if s.updateLastRunAt != nil {
+		return s.updateLastRunAt(ctx, id)
+	}
+	return nil
+}
+
+func (s *ExecutionScheduler) updateNextRun(ctx context.Context, id uuid.UUID, expr string) error {
+	if s.updateScheduleNextRun != nil {
+		return s.updateScheduleNextRun(ctx, id, expr)
+	}
+	if s.updateNextRunAt != nil {
+		return s.updateNextRunAt(ctx, id, expr)
+	}
+	return nil
+}
+
+func (s *ExecutionScheduler) markCompletedSchedule(ctx context.Context, id uuid.UUID) error {
+	if s.markScheduleCompleted != nil {
+		return s.markScheduleCompleted(ctx, id)
+	}
+	if s.markCompleted != nil {
+		return s.markCompleted(ctx, id)
+	}
+	return nil
+}
+
+func (s *ExecutionScheduler) releaseSemaphoreToken() {
+	select {
+	case <-s.sem:
+	default:
 	}
 }

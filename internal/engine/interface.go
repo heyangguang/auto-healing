@@ -11,6 +11,8 @@ package engine
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/company/auto-healing/internal/engine/provider/ansible"
@@ -28,15 +30,23 @@ type ExecuteResult = ansible.ExecuteResult
 // AnsibleStats Ansible 执行统计
 type AnsibleStats = ansible.AnsibleStats
 
+const (
+	ExecutorTypeDocker  = "docker"
+	ExecutorTypeLocal   = "local"
+	DefaultExecutorType = ExecutorTypeLocal
+)
+
+var ErrUnsupportedExecutorType = errors.New("unsupported executor type")
+
 // NewExecutor 创建执行器（工厂函数）
-func NewExecutor(executorType string) Executor {
+func NewExecutor(executorType string) (Executor, error) {
 	switch executorType {
-	case "docker":
-		return ansible.NewDockerExecutor()
-	case "local":
-		return ansible.NewLocalExecutor()
+	case ExecutorTypeDocker:
+		return ansible.NewDockerExecutor(), nil
+	case ExecutorTypeLocal:
+		return ansible.NewLocalExecutor(), nil
 	default:
-		return ansible.NewDockerExecutor() // 默认使用 Docker
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedExecutorType, executorType)
 	}
 }
 
@@ -52,7 +62,10 @@ func NewLocalExecutor() *ansible.LocalExecutor {
 
 // Execute 便捷执行函数（使用默认执行器）
 func Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResult, error) {
-	executor := NewExecutor("docker")
+	executor, err := NewExecutor(DefaultExecutorType)
+	if err != nil {
+		return nil, err
+	}
 	return executor.Execute(ctx, req)
 }
 

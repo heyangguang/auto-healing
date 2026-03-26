@@ -31,3 +31,21 @@ func TestSchedulerLifecycleStopWaitsForWorker(t *testing.T) {
 		t.Fatal("worker did not stop before lifecycle.Stop returned")
 	}
 }
+
+func TestSchedulerLifecycleGoAfterStopDoesNotStartWorker(t *testing.T) {
+	lifecycle := newSchedulerLifecycle()
+	lifecycle.Stop()
+
+	started := make(chan struct{}, 1)
+	if ok := lifecycle.Go(func(context.Context) {
+		started <- struct{}{}
+	}); ok {
+		t.Fatal("expected lifecycle.Go to reject new worker after Stop")
+	}
+
+	select {
+	case <-started:
+		t.Fatal("worker should not start after lifecycle.Stop")
+	case <-time.After(50 * time.Millisecond):
+	}
+}

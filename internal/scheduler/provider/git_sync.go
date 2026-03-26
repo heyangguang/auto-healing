@@ -22,7 +22,7 @@ func (s *GitScheduler) handleGitSyncError(ctx context.Context, repo model.GitRep
 		updates["pause_reason"] = fmt.Sprintf("连续失败 %d 次后自动暂停 (最后错误: %s)", newCount, truncateStr(err.Error(), 200))
 	}
 
-	if updateErr := s.updateSyncState(ctx, repo.ID, updates); updateErr != nil {
+	if updateErr := s.persistRepoState(ctx, repo.ID, updates); updateErr != nil {
 		logger.Sched("GIT").Error("[%s] 同步失败且状态落库失败: %s - %v | state_err=%v", shortID, repo.Name, err, updateErr)
 		return
 	}
@@ -39,7 +39,7 @@ func (s *GitScheduler) handleGitSyncError(ctx context.Context, repo model.GitRep
 }
 
 func (s *GitScheduler) handleGitSyncSuccess(ctx context.Context, repo model.GitRepository, shortID string, nextSyncAt time.Time, duration time.Duration) {
-	if err := s.updateSyncState(ctx, repo.ID, map[string]interface{}{
+	if err := s.persistRepoState(ctx, repo.ID, map[string]interface{}{
 		"consecutive_failures": 0,
 		"pause_reason":         "",
 		"next_sync_at":         nextSyncAt,

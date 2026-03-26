@@ -5,7 +5,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 )
 
@@ -46,7 +48,9 @@ func (m *WorkspaceManager) PrepareWorkspace(taskID uuid.UUID, repoPath string) (
 
 	// 返回清理函数
 	cleanup = func() {
-		os.RemoveAll(workDir)
+		if removeErr := os.RemoveAll(workDir); removeErr != nil && !os.IsNotExist(removeErr) {
+			logger.Exec("ANSIBLE").Error("清理工作目录失败: %v", removeErr)
+		}
 	}
 
 	return workDir, cleanup, nil
@@ -76,6 +80,9 @@ func copyDir(src, dst string) error {
 			return filepath.SkipDir
 		}
 
+		if info.Mode()&os.ModeSymlink != 0 {
+			return copySymlink(src, path, dstPath)
+		}
 		if info.IsDir() {
 			return os.MkdirAll(dstPath, info.Mode())
 		}
@@ -87,8 +94,34 @@ func copyDir(src, dst string) error {
 	})
 }
 
+func copySymlink(root, srcPath, dstPath string) error {
+	target, err := os.Readlink(srcPath)
+	if err != nil {
+		return fmt.Errorf("读取符号链接失败: %w", err)
+	}
+	if filepath.IsAbs(target) {
+		return fmt.Errorf("工作区不允许绝对路径符号链接: %s", srcPath)
+	}
+	resolved := filepath.Clean(filepath.Join(filepath.Dir(srcPath), target))
+	relPath, err := filepath.Rel(root, resolved)
+	if err != nil {
+		return fmt.Errorf("校验符号链接失败: %w", err)
+	}
+	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) || filepath.IsAbs(relPath) {
+		return fmt.Errorf("工作区不允许指向仓库外的符号链接: %s -> %s", srcPath, target)
+	}
+	return os.Symlink(target, dstPath)
+}
+
 // copyFile 复制单个文件
 func copyFile(src, dst string) error {
+	srcInfo, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	if !srcInfo.Mode().IsRegular() {
+		return fmt.Errorf("工作区只允许复制普通文件: %s", src)
+	}
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return err
@@ -106,10 +139,5 @@ func copyFile(src, dst string) error {
 		return err
 	}
 
-	// 复制权限
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
 	return os.Chmod(dst, srcInfo.Mode())
 }

@@ -16,9 +16,11 @@ func TestExecutionSchedulerAfterScheduleTriggeredReturnsStateUpdateError(t *test
 	scheduler.updateScheduleNextRun = func(context.Context, uuid.UUID, string) error {
 		return errors.New("next run failed")
 	}
-	scheduler.execSvc = nil
+	scheduler.getRun = func(context.Context, uuid.UUID) (*model.ExecutionRun, error) {
+		return &model.ExecutionRun{Status: "success"}, nil
+	}
 
-	err := scheduler.afterScheduleTriggered(context.Background(), model.ExecutionSchedule{
+	_, err := scheduler.afterScheduleTriggered(context.Background(), model.ExecutionSchedule{
 		ID:           uuid.New(),
 		ScheduleType: model.ScheduleTypeCron,
 		ScheduleExpr: stringPtr("* * * * *"),

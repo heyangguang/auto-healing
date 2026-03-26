@@ -15,9 +15,9 @@ func (e *DockerExecutor) executeBuffered(ctx context.Context, req *ExecuteReques
 	containerName := e.generateContainerName(req.WorkDir)
 	args, err := e.buildDockerArgs(req, containerName)
 	if err != nil {
-		return &ExecuteResult{ExitCode: -1, Stderr: err.Error(), StartedAt: startedAt, Duration: time.Since(startedAt)}, err
+		return nil, err
 	}
-	cmd := exec.Command("docker", args...)
+	cmd := exec.CommandContext(ctx, "docker", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

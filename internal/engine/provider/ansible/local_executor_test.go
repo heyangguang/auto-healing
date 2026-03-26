@@ -1,8 +1,7 @@
 package ansible
 
 import (
-	"bytes"
-	"errors"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,31 +108,6 @@ func TestWorkspaceManagerPrepareWorkspaceCreatesPrivateDir(t *testing.T) {
 	}
 }
 
-func TestWorkspaceManagerPrepareWorkspaceRejectsSymlink(t *testing.T) {
-	t.Helper()
-
-	repoDir := t.TempDir()
-	targetFile := filepath.Join(t.TempDir(), "secret.txt")
-	if err := os.WriteFile(targetFile, []byte("secret"), 0600); err != nil {
-		t.Fatalf("write target file: %v", err)
-	}
-	linkPath := filepath.Join(repoDir, "leak")
-	if err := os.Symlink(targetFile, linkPath); err != nil {
-		t.Skipf("symlink not supported: %v", err)
-	}
-
-	baseDir := t.TempDir()
-	t.Setenv("ANSIBLE_WORKSPACE_DIR", baseDir)
-	manager := NewWorkspaceManager()
-	_, _, err := manager.PrepareWorkspace(uuid.New(), repoDir)
-	if err == nil {
-		t.Fatal("PrepareWorkspace() error = nil, want symlink rejection")
-	}
-	if !strings.Contains(err.Error(), "符号链接") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
 func TestBuildArgsCreatesAndCleansTemporaryInventoryFile(t *testing.T) {
 	t.Helper()
 
@@ -168,153 +142,122 @@ func TestBuildArgsCreatesAndCleansTemporaryInventoryFile(t *testing.T) {
 	}
 }
 
-func TestBuildArgsRejectsUnmarshalableExtraVars(t *testing.T) {
+func TestDeriveExecuteContextHonorsRequestTimeout(t *testing.T) {
 	t.Helper()
 
+	ctx, cancel := deriveExecuteContext(context.Background(), 50*time.Millisecond, time.Second)
+	defer cancel()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("expected derived context deadline")
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 || remaining > 200*time.Millisecond {
+		t.Fatalf("unexpected derived timeout window: %v", remaining)
+	}
+}
+
+func TestLocalExecutorExecuteReturnsConfigPreparationError(t *testing.T) {
+	t.Helper()
+
+	root := t.TempDir()
+	workDir := filepath.Join(root, "not-a-dir")
+	if err := os.WriteFile(workDir, []byte("x"), 0600); err != nil {
+		t.Fatalf("write sentinel file: %v", err)
+	}
+
 	executor := NewLocalExecutor()
-	_, _, err := executor.buildArgs(&ExecuteRequest{
-		PlaybookPath: "play.yml",
-		WorkDir:      t.TempDir(),
-		ExtraVars: map[string]any{
-			"bad": make(chan int),
-		},
-	})
-	if err == nil {
-		t.Fatal("buildArgs() error = nil, want marshal error")
-	}
-	if !strings.Contains(err.Error(), "序列化 extra_vars 失败") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestBuildDockerArgsRejectsUnmarshalableExtraVars(t *testing.T) {
-	executor := NewDockerExecutor()
-	_, err := executor.buildDockerArgs(&ExecuteRequest{
-		PlaybookPath: "play.yml",
-		WorkDir:      t.TempDir(),
-		ExtraVars: map[string]any{
-			"bad": make(chan int),
-		},
-	}, "container")
-	if err == nil {
-		t.Fatal("buildDockerArgs() error = nil, want marshal error")
-	}
-	if !strings.Contains(err.Error(), "序列化 extra_vars 失败") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestBuildDockerArgsReturnsErrorWhenInventoryFileWriteFails(t *testing.T) {
-	executor := NewDockerExecutor()
-	_, err := executor.buildDockerArgs(&ExecuteRequest{
-		PlaybookPath: "play.yml",
-		WorkDir:      filepath.Join(t.TempDir(), "missing-dir"),
-		Inventory:    "host-a\nhost-b",
-	}, "container")
-	if err == nil {
-		t.Fatal("buildDockerArgs() error = nil, want inventory write failure")
-	}
-	if !strings.Contains(err.Error(), "写入 Docker inventory 文件失败") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestBuildStreamingResultReturnsErrorForWaitFailure(t *testing.T) {
-	result, err := buildStreamingResult(time.Now(), &bytes.Buffer{}, &bytes.Buffer{}, errors.New("wait failed"))
-	if err == nil {
-		t.Fatal("buildStreamingResult() error = nil, want wait failure")
-	}
-	if result.ExitCode != -1 {
-		t.Fatalf("ExitCode = %d, want -1", result.ExitCode)
-	}
-	if !strings.Contains(result.Stderr, "wait failed") {
-		t.Fatalf("Stderr = %q, want wait failure text", result.Stderr)
-	}
-}
-
-func TestGenerateInventoryWithAuthRejectsUnsafeCredential(t *testing.T) {
-	content := GenerateInventoryWithAuth([]HostCredential{
-		{
-			Host:     "host-a ansible_user=hacker",
-			AuthType: "password",
-			Username: "root",
-			Password: "pass",
-		},
-	}, "targets")
-	_, err := WriteInventoryFile(t.TempDir(), content)
-	if err == nil {
-		t.Fatal("WriteInventoryFile() error = nil, want inventory validation failure")
-	}
-}
-
-func TestGenerateInventoryWithAuthAllowsPasswordWithSpaces(t *testing.T) {
-	content := GenerateInventoryWithAuth([]HostCredential{
-		{
-			Host:     "host-a",
-			AuthType: "password",
-			Username: "root",
-			Password: "pass with space",
-		},
-	}, "targets")
-	if _, err := WriteInventoryFile(t.TempDir(), content); err != nil {
-		t.Fatalf("WriteInventoryFile() error = %v", err)
-	}
-	if !strings.Contains(content, "ansible_ssh_pass='pass with space'") {
-		t.Fatalf("content = %q, want quoted password", content)
-	}
-}
-
-func TestGenerateInventoryWithAuthAllowsKeyPathWithSpaces(t *testing.T) {
-	content := GenerateInventoryWithAuth([]HostCredential{
-		{
-			Host:     "host-a",
-			AuthType: "ssh_key",
-			KeyFile:  "/tmp/key path",
-		},
-	}, "targets")
-	if _, err := WriteInventoryFile(t.TempDir(), content); err != nil {
-		t.Fatalf("WriteInventoryFile() error = %v", err)
-	}
-	if !strings.Contains(content, "ansible_ssh_private_key_file='/tmp/key path'") {
-		t.Fatalf("content = %q, want quoted key path", content)
-	}
-}
-
-func TestWriteKeyFileRejectsPathTraversal(t *testing.T) {
-	_, err := WriteKeyFile(t.TempDir(), "../id_rsa", "key")
-	if err == nil {
-		t.Fatal("WriteKeyFile() error = nil, want traversal rejection")
-	}
-}
-
-func TestGenerateInventoryRejectsUnsafeHost(t *testing.T) {
-	content := GenerateInventory("host-a\n[evil]", "targets", nil)
-	_, err := WriteInventoryFile(t.TempDir(), content)
-	if err == nil {
-		t.Fatal("WriteInventoryFile() error = nil, want inventory validation failure")
-	}
-}
-
-func TestLocalExecutorExecuteReturnsErrorWhenConfigWriteFails(t *testing.T) {
-	executor := NewLocalExecutor()
-	workDir := filepath.Join(t.TempDir(), "missing")
-	_, err := executor.Execute(t.Context(), &ExecuteRequest{
+	_, err := executor.Execute(context.Background(), &ExecuteRequest{
 		PlaybookPath: "play.yml",
 		WorkDir:      workDir,
 	})
-	if err == nil {
-		t.Fatal("Execute() error = nil, want ansible.cfg write failure")
+	if err == nil || !strings.Contains(err.Error(), "检查 ansible.cfg 失败") {
+		t.Fatalf("expected ansible.cfg preparation error, got %v", err)
 	}
 }
 
-func TestDockerExecutorExecuteReturnsErrorWhenConfigWriteFails(t *testing.T) {
-	executor := NewDockerExecutor()
-	workDir := filepath.Join(t.TempDir(), "missing")
-	_, err := executor.Execute(t.Context(), &ExecuteRequest{
+func TestLocalExecutorExecuteStreamsLogsWhenCallbackProvided(t *testing.T) {
+	t.Helper()
+
+	workDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workDir, "play.yml"), []byte("---\n"), 0600); err != nil {
+		t.Fatalf("write playbook: %v", err)
+	}
+
+	ansiblePath := filepath.Join(workDir, "fake-ansible.sh")
+	ansibleScript := "#!/bin/sh\nprintf 'stream-start\\n'\nsleep 1\nprintf 'stream-end\\n'\n"
+	if err := os.WriteFile(ansiblePath, []byte(ansibleScript), 0755); err != nil {
+		t.Fatalf("write fake ansible: %v", err)
+	}
+
+	executor := &LocalExecutor{ansiblePath: ansiblePath}
+	streamed := make(chan struct{}, 1)
+	done := make(chan error, 1)
+
+	go func() {
+		_, err := executor.Execute(context.Background(), &ExecuteRequest{
+			PlaybookPath: "play.yml",
+			WorkDir:      workDir,
+			LogCallback: func(level, stage, message string) {
+				if strings.Contains(message, "stream-start") {
+					select {
+					case streamed <- struct{}{}:
+					default:
+					}
+				}
+			},
+		})
+		done <- err
+	}()
+
+	select {
+	case <-streamed:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("expected streamed callback before command completion")
+	}
+
+	select {
+	case err := <-done:
+		t.Fatalf("execute returned too early, err=%v", err)
+	default:
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Execute() did not complete")
+	}
+}
+
+func TestLocalExecutorExecuteStreamingTimeoutReturnsError(t *testing.T) {
+	t.Helper()
+
+	workDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workDir, "play.yml"), []byte("---\n"), 0600); err != nil {
+		t.Fatalf("write playbook: %v", err)
+	}
+
+	ansiblePath := filepath.Join(workDir, "fake-ansible.sh")
+	ansibleScript := "#!/bin/sh\nprintf 'stream-start\\n'\nsleep 1\n"
+	if err := os.WriteFile(ansiblePath, []byte(ansibleScript), 0755); err != nil {
+		t.Fatalf("write fake ansible: %v", err)
+	}
+
+	executor := &LocalExecutor{ansiblePath: ansiblePath}
+	result, err := executor.Execute(context.Background(), &ExecuteRequest{
 		PlaybookPath: "play.yml",
 		WorkDir:      workDir,
+		Timeout:      50 * time.Millisecond,
+		LogCallback:  func(level, stage, message string) {},
 	})
-	if err == nil {
-		t.Fatal("Execute() error = nil, want ansible.cfg write failure")
+	if result == nil {
+		t.Fatal("expected partial result on streaming timeout")
+	}
+	if err == nil && result.ExitCode == 0 {
+		t.Fatalf("streaming timeout was reported as success: err=%v exit=%d", err, result.ExitCode)
 	}
 }

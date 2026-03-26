@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+func buildExecuteEnv() []string {
+	return append(os.Environ(), "ANSIBLE_FORCE_COLOR=0", "ANSIBLE_NOCOLOR=1", "PYTHONUNBUFFERED=1", "TERM=dumb")
+}
+
 // executeBuffered 使用缓冲方式执行
 func (e *LocalExecutor) executeBuffered(ctx context.Context, req *ExecuteRequest, startedAt time.Time) (*ExecuteResult, error) {
 	args, cleanup, err := e.buildArgs(req)
@@ -20,7 +24,7 @@ func (e *LocalExecutor) executeBuffered(ctx context.Context, req *ExecuteRequest
 
 	cmd := exec.CommandContext(ctx, e.ansiblePath, args...)
 	cmd.Dir = req.WorkDir
-	cmd.Env = append(os.Environ(), "ANSIBLE_FORCE_COLOR=0", "ANSIBLE_NOCOLOR=1")
+	cmd.Env = buildExecuteEnv()
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

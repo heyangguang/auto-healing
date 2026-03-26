@@ -12,17 +12,20 @@ import (
 
 // syncPlugin 同步单个插件
 func (s *Scheduler) syncPlugin(ctx context.Context, plugin model.Plugin) {
-	startTime := time.Now()
+	startTime := s.now()
 	shortID := plugin.ID.String()[:8]
 	logger.Sched("SYNC").Info("[%s] 开始同步: %s", shortID, plugin.Name)
 
-	syncLog, err := s.pluginSvc.TriggerSyncSync(ctx, plugin.ID)
-	nextSyncAt := time.Now().Add(time.Duration(plugin.SyncIntervalMinutes) * time.Minute)
+	syncLog, err := s.triggerPluginSync(ctx, plugin.ID)
 	if err != nil {
+		completedAt := s.now()
+		nextSyncAt := completedAt.Add(time.Duration(plugin.SyncIntervalMinutes) * time.Minute)
 		s.handlePluginSyncError(ctx, plugin, shortID, nextSyncAt, err)
 		return
 	}
-	s.handlePluginSyncResult(ctx, plugin, syncLog, shortID, nextSyncAt, time.Since(startTime))
+	completedAt := s.now()
+	nextSyncAt := completedAt.Add(time.Duration(plugin.SyncIntervalMinutes) * time.Minute)
+	s.handlePluginSyncResult(ctx, plugin, syncLog, shortID, nextSyncAt, completedAt.Sub(startTime))
 }
 
 func (s *Scheduler) handlePluginSyncError(ctx context.Context, plugin model.Plugin, shortID string, nextSyncAt time.Time, err error) {
@@ -38,7 +41,7 @@ func (s *Scheduler) handlePluginSyncError(ctx context.Context, plugin model.Plug
 		updates["pause_reason"] = fmt.Sprintf("连续失败 %d 次后自动暂停 (最后错误: %s)", newCount, truncateStr(err.Error(), 200))
 	}
 
-	if updateErr := s.updateSyncState(ctx, plugin.ID, updates); updateErr != nil {
+	if updateErr := s.persistPluginState(ctx, plugin.ID, updates); updateErr != nil {
 		logger.Sched("SYNC").Error("[%s] 同步失败且状态落库失败: %s - %v | state_err=%v", shortID, plugin.Name, err, updateErr)
 		return
 	}
@@ -61,7 +64,7 @@ func (s *Scheduler) handlePluginSyncResult(ctx context.Context, plugin model.Plu
 		return
 	}
 
-	if err := s.updateSyncState(ctx, plugin.ID, map[string]interface{}{
+	if err := s.persistPluginState(ctx, plugin.ID, map[string]interface{}{
 		"consecutive_failures": 0,
 		"pause_reason":         "",
 		"next_sync_at":         nextSyncAt,
@@ -100,7 +103,7 @@ func (s *Scheduler) handlePluginSyncStatusError(ctx context.Context, plugin mode
 		updates["pause_reason"] = fmt.Sprintf("连续失败 %d 次后自动暂停 (状态: %s)", newCount, syncLog.Status)
 	}
 
-	if updateErr := s.updateSyncState(ctx, plugin.ID, updates); updateErr != nil {
+	if updateErr := s.persistPluginState(ctx, plugin.ID, updates); updateErr != nil {
 		logger.Sched("SYNC").Error("[%s] 同步异常且状态落库失败: %s | status=%s | state_err=%v", shortID, plugin.Name, syncLog.Status, updateErr)
 		return
 	}
