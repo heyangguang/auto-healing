@@ -6,6 +6,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const ErrorCodeTenantMembershipLookupFailed = "TENANT_MEMBERSHIP_LOOKUP_FAILED"
+
 // TenantMiddleware 租户上下文中间件
 func TenantMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -21,7 +23,10 @@ func TenantMiddleware() gin.HandlerFunc {
 
 		injectTenantContext(c, tenantID)
 		if !IsPlatformAdmin(c) && !IsImpersonating(c) {
-			reloadTenantPermissions(c, tenantID)
+			if err := reloadTenantPermissions(c, tenantID); err != nil {
+				abortInternalError(c, "刷新租户权限失败", ErrorCodeTenantPermissionReloadFailed)
+				return
+			}
 		}
 		c.Next()
 	}
@@ -60,7 +65,15 @@ func resolveRegularTenant(c *gin.Context, tenantIDs []string, defaultTenantID st
 			abortForbidden(c, "用户未分配任何租户，请联系管理员", ErrorCodeTenantUnassigned)
 			return uuid.Nil, false
 		}
-		return uuid.MustParse(defaultTenantID), true
+		tenantID, err := uuid.Parse(defaultTenantID)
+		if err != nil {
+			abortForbidden(c, "默认租户无效，请重新登录", ErrorCodeDefaultTenantInvalid)
+			return uuid.Nil, false
+		}
+		if !ensureTenantMembership(c, tenantIDs, defaultTenantID) {
+			return uuid.Nil, false
+		}
+		return tenantID, true
 	}
 
 	tenantID, err := uuid.Parse(tenantIDStr)
@@ -75,9 +88,6 @@ func resolveRegularTenant(c *gin.Context, tenantIDs []string, defaultTenantID st
 }
 
 func ensureTenantMembership(c *gin.Context, tenantIDs []string, tenantIDStr string) bool {
-	if contains(tenantIDs, tenantIDStr) {
-		return true
-	}
 	userID, err := uuid.Parse(GetUserID(c))
 	if err != nil {
 		abortForbidden(c, "无权访问该租户", ErrorCodeTenantAccessDenied)
@@ -86,10 +96,16 @@ func ensureTenantMembership(c *gin.Context, tenantIDs []string, tenantIDStr stri
 
 	tenantRepo := repository.NewTenantRepository()
 	dbTenants, dbErr := tenantRepo.GetUserTenants(c.Request.Context(), userID, "")
-	if dbErr != nil || !containsTenantByID(dbTenants, tenantIDStr) {
+	if dbErr != nil {
+		abortInternalError(c, "租户成员关系校验失败", ErrorCodeTenantMembershipLookupFailed)
+		return false
+	}
+	if !containsTenantByID(dbTenants, tenantIDStr) {
 		abortForbidden(c, "无权访问该租户", ErrorCodeTenantAccessDenied)
 		return false
 	}
-	c.Header("X-Refresh-Token", "true")
+	if !contains(tenantIDs, tenantIDStr) {
+		c.Header("X-Refresh-Token", "true")
+	}
 	return true
 }

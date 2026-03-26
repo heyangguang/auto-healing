@@ -22,13 +22,12 @@ type AuthHandler struct {
 
 // NewAuthHandler 创建认证处理器
 func NewAuthHandler(cfg *config.Config) *AuthHandler {
-	blacklistStore := database.NewTokenBlacklistStore()
 	jwtSvc := jwt.NewService(jwt.Config{
 		Secret:          cfg.JWT.Secret,
 		AccessTokenTTL:  cfg.JWT.AccessTokenTTL(),
 		RefreshTokenTTL: cfg.JWT.RefreshTokenTTL(),
 		Issuer:          cfg.JWT.Issuer,
-	}, blacklistStore)
+	}, newAuthTokenBlacklistStore())
 
 	return &AuthHandler{
 		authSvc:           authService.NewService(jwtSvc),

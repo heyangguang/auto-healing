@@ -24,10 +24,6 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, clientIP string)
 	if err := s.ensureLoginAllowed(ctx, user, req.Password); err != nil {
 		return nil, err
 	}
-	if err := s.recordSuccessfulLogin(ctx, user.ID, clientIP); err != nil {
-		return nil, err
-	}
-
 	roles, permissions, isPlatformAdmin, err := s.resolveUserAccess(ctx, user)
 	if err != nil {
 		return nil, err
@@ -39,6 +35,9 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest, clientIP string)
 
 	tokenPair, err := s.issueLoginToken(user, roles, permissions, isPlatformAdmin, tenantIDs, currentTenantID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.recordSuccessfulLogin(ctx, user.ID, clientIP); err != nil {
 		return nil, err
 	}
 	return &LoginResponse{
@@ -57,7 +56,7 @@ func (s *Service) ensureLoginAllowed(ctx context.Context, user *model.User, pass
 		if user.LockedUntil == nil || user.LockedUntil.After(time.Now()) {
 			return ErrUserLocked
 		}
-		if err := s.clearExpiredLoginLock(ctx, user.ID); err != nil {
+		if err := s.clearExpiredLoginLock(ctx, user); err != nil {
 			return err
 		}
 	}
@@ -74,11 +73,28 @@ func (s *Service) ensureLoginAllowed(ctx context.Context, user *model.User, pass
 }
 
 func (s *Service) recordSuccessfulLogin(ctx context.Context, userID uuid.UUID, clientIP string) error {
-	return s.userRepo.UpdateLoginInfo(ctx, userID, clientIP)
+	now := time.Now().UTC()
+	return s.db.WithContext(ctx).
+		Model(&model.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]any{
+			"last_login_at":      now,
+			"last_login_ip":      clientIP,
+			"failed_login_count": 0,
+			"status":             "active",
+			"locked_until":       nil,
+		}).Error
 }
 
-func (s *Service) clearExpiredLoginLock(ctx context.Context, userID uuid.UUID) error {
-	return s.userRepo.UpdateLoginInfo(ctx, userID, "")
+func (s *Service) clearExpiredLoginLock(ctx context.Context, user *model.User) error {
+	return s.db.WithContext(ctx).
+		Model(&model.User{}).
+		Where("id = ?", user.ID).
+		Updates(map[string]any{
+			"status":             "active",
+			"failed_login_count": 0,
+			"locked_until":       nil,
+		}).Error
 }
 
 func (s *Service) recordFailedLogin(ctx context.Context, userID uuid.UUID) error {

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const (
@@ -20,14 +22,15 @@ const (
 )
 
 const (
-	ErrorCodeImpersonationPlatformOnly    = "IMPERSONATION_PLATFORM_ONLY"
-	ErrorCodeImpersonationRequestMissing  = "IMPERSONATION_REQUEST_ID_MISSING"
-	ErrorCodeImpersonationRequestInvalid  = "IMPERSONATION_REQUEST_ID_INVALID"
-	ErrorCodeImpersonationRequestNotFound = "IMPERSONATION_REQUEST_NOT_FOUND"
-	ErrorCodeImpersonationUserMismatch    = "IMPERSONATION_USER_MISMATCH"
-	ErrorCodeImpersonationSessionInvalid  = "IMPERSONATION_SESSION_INVALID"
-	ErrorCodeImpersonationTenantMismatch  = "IMPERSONATION_TENANT_MISMATCH"
-	ErrorCodeImpersonationPermsLoadFailed = "IMPERSONATION_PERMS_LOAD_FAILED"
+	ErrorCodeImpersonationPlatformOnly        = "IMPERSONATION_PLATFORM_ONLY"
+	ErrorCodeImpersonationRequestMissing      = "IMPERSONATION_REQUEST_ID_MISSING"
+	ErrorCodeImpersonationRequestInvalid      = "IMPERSONATION_REQUEST_ID_INVALID"
+	ErrorCodeImpersonationRequestNotFound     = "IMPERSONATION_REQUEST_NOT_FOUND"
+	ErrorCodeImpersonationRequestLookupFailed = "IMPERSONATION_REQUEST_LOOKUP_FAILED"
+	ErrorCodeImpersonationUserMismatch        = "IMPERSONATION_USER_MISMATCH"
+	ErrorCodeImpersonationSessionInvalid      = "IMPERSONATION_SESSION_INVALID"
+	ErrorCodeImpersonationTenantMismatch      = "IMPERSONATION_TENANT_MISMATCH"
+	ErrorCodeImpersonationPermsLoadFailed     = "IMPERSONATION_PERMS_LOAD_FAILED"
 )
 
 // 缓存 impersonation_accessor 角色的权限列表（进程级缓存）
@@ -107,12 +110,12 @@ func ImpersonationMiddleware() gin.HandlerFunc {
 		if !ok {
 			return
 		}
-			if !applyImpersonationContext(c, requestID, req.TenantID) {
-				return
-			}
-			c.Next()
+		if !applyImpersonationContext(c, requestID, req.TenantID) {
+			return
 		}
+		c.Next()
 	}
+}
 
 func requestIsImpersonating(c *gin.Context) bool {
 	return c.GetHeader("X-Impersonation") == "true"
@@ -135,6 +138,14 @@ func parseImpersonationRequestID(c *gin.Context) (uuid.UUID, bool) {
 func loadActiveImpersonationRequest(c *gin.Context, repo *repository.ImpersonationRepository, requestID uuid.UUID) (*model.ImpersonationRequest, bool) {
 	req, err := repo.GetByID(c.Request.Context(), requestID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			abortForbidden(c, "Impersonation 申请不存在", ErrorCodeImpersonationRequestNotFound)
+			return nil, false
+		}
+		abortInternalError(c, "加载 Impersonation 申请失败", ErrorCodeImpersonationRequestLookupFailed)
+		return nil, false
+	}
+	if req == nil {
 		abortForbidden(c, "Impersonation 申请不存在", ErrorCodeImpersonationRequestNotFound)
 		return nil, false
 	}

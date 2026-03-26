@@ -1,10 +1,14 @@
 package middleware
 
 import (
+	"fmt"
+
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+const ErrorCodePlatformPermissionReloadFailed = "PLATFORM_PERMISSION_RELOAD_FAILED"
 
 // RequirePlatformAdmin 要求平台用户权限
 func RequirePlatformAdmin() gin.HandlerFunc {
@@ -13,18 +17,24 @@ func RequirePlatformAdmin() gin.HandlerFunc {
 			abortForbidden(c, "此操作需要平台管理员权限", ErrorCodePlatformAdminRequired)
 			return
 		}
-		reloadPlatformPermissions(c)
+		if err := reloadPlatformPermissions(c); err != nil {
+			abortInternalError(c, "刷新平台权限失败", ErrorCodePlatformPermissionReloadFailed)
+			return
+		}
 		c.Next()
 	}
 }
 
-func reloadPlatformPermissions(c *gin.Context) {
+func reloadPlatformPermissions(c *gin.Context) error {
 	userID, err := uuid.Parse(GetUserID(c))
 	if err != nil {
-		return
+		return fmt.Errorf("解析当前用户失败: %w", err)
 	}
 	permRepo := repository.NewPermissionRepository()
-	if perms, permErr := permRepo.GetPlatformPermissionCodes(c.Request.Context(), userID); permErr == nil {
-		c.Set(PermissionsKey, perms)
+	perms, permErr := permRepo.GetPlatformPermissionCodes(c.Request.Context(), userID)
+	if permErr != nil {
+		return permErr
 	}
+	c.Set(PermissionsKey, perms)
+	return nil
 }

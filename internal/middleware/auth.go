@@ -1,11 +1,12 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
-	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/jwt"
+	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -23,9 +24,11 @@ const (
 )
 
 const (
-	ErrorCodeUnauthorized    = "UNAUTHORIZED"
-	ErrorCodeAccountDisabled = "ACCOUNT_DISABLED"
-	ErrorCodeAccountLookup    = "ACCOUNT_LOOKUP_FAILED"
+	ErrorCodeUnauthorized         = "UNAUTHORIZED"
+	ErrorCodeAccountDisabled      = "ACCOUNT_DISABLED"
+	ErrorCodeAccountNotFound      = "ACCOUNT_NOT_FOUND"
+	ErrorCodeAccountLookup        = "ACCOUNT_LOOKUP_FAILED"
+	ErrorCodeTokenBlacklistLookup = "TOKEN_BLACKLIST_LOOKUP_FAILED"
 )
 
 // JWTAuth JWT认证中间件
@@ -43,10 +46,16 @@ func JWTAuth(jwtService *jwt.Service) gin.HandlerFunc {
 		}
 
 		// 检查 Token 是否在黑名单中
-			if jwtService.IsBlacklisted(c.Request.Context(), claims.ID) {
-				logger.Auth("TOKEN").Warn("鉴权失败: token 已撤销 | user=%s ip=%s", claims.Subject, c.ClientIP())
-				abortUnauthorized(c, "Token has been revoked", ErrorCodeUnauthorized)
-				return
+		isBlacklisted, blacklistErr := jwtService.IsBlacklisted(c.Request.Context(), claims.ID)
+		if blacklistErr != nil {
+			logger.Auth("TOKEN").Error("鉴权失败: token 黑名单校验失败 | user=%s ip=%s err=%v", claims.Subject, c.ClientIP(), blacklistErr)
+			abortInternalError(c, "令牌撤销状态校验失败", ErrorCodeTokenBlacklistLookup)
+			return
+		}
+		if isBlacklisted {
+			logger.Auth("TOKEN").Warn("鉴权失败: token 已撤销 | user=%s ip=%s", claims.Subject, c.ClientIP())
+			abortUnauthorized(c, "Token has been revoked", ErrorCodeUnauthorized)
+			return
 		}
 		if !ensureActiveUser(c, claims.Subject) {
 			return
@@ -95,6 +104,11 @@ func ensureActiveUser(c *gin.Context, subject string) bool {
 	user, userErr := userRepo.GetByID(c.Request.Context(), uid)
 	if userErr == nil && user.Status == "active" {
 		return true
+	}
+	if userErr != nil && errors.Is(userErr, repository.ErrUserNotFound) {
+		logger.Auth("TOKEN").Warn("鉴权失败: 用户不存在 | user=%s ip=%s", subject, c.ClientIP())
+		abortUnauthorized(c, "账户不存在或已失效，请重新登录", ErrorCodeAccountNotFound)
+		return false
 	}
 	if userErr != nil {
 		logger.Auth("TOKEN").Error("鉴权失败: 查询用户失败 | user=%s ip=%s err=%v", subject, c.ClientIP(), userErr)

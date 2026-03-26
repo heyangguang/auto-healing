@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
@@ -11,6 +12,9 @@ import (
 
 func TestGetCurrentUserReturnsErrorWhenPermissionQueryFails(t *testing.T) {
 	db := openAuthTestDB(t)
+	origDB := database.DB
+	database.DB = db
+	t.Cleanup(func() { database.DB = origDB })
 	mustExecAuthTest(t, db, `
 		CREATE TABLE users (
 			id TEXT PRIMARY KEY NOT NULL,
@@ -45,6 +49,7 @@ func TestGetCurrentUserReturnsErrorWhenPermissionQueryFails(t *testing.T) {
 		);
 	`)
 	mustExecAuthTest(t, db, `CREATE TABLE user_platform_roles (id TEXT PRIMARY KEY NOT NULL, user_id TEXT, role_id TEXT, created_at DATETIME);`)
+	mustExecAuthTest(t, db, `CREATE TABLE user_tenant_roles (id TEXT PRIMARY KEY NOT NULL, user_id TEXT, tenant_id TEXT, role_id TEXT, created_at DATETIME);`)
 	user := &model.User{
 		ID:           uuid.New(),
 		Username:     "profile-user",

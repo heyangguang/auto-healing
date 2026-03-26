@@ -97,7 +97,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 	if err := h.authSvc.ChangePassword(c.Request.Context(), userID, &req); err != nil {
-		response.BadRequest(c, ToBusinessError(err))
+		respondChangePasswordError(c, err)
 		return
 	}
 	response.Message(c, "密码修改成功")
@@ -135,7 +135,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 	if err := h.authSvc.UpdateProfile(c.Request.Context(), userID, req.DisplayName, req.Email, req.Phone); err != nil {
-		response.BadRequest(c, ToBusinessError(err))
+		respondUpdateProfileError(c, err)
 		return
 	}
 	response.Message(c, "更新成功")
@@ -150,7 +150,7 @@ func (h *AuthHandler) GetLoginHistory(c *gin.Context) {
 
 	items, err := h.loadLoginHistoryItems(c, userID, authHistoryLimit(c, 10))
 	if err != nil {
-		respondInternalError(c, "AUTH", "获取登录历史失败", err)
+		respondProfileAuditQueryError(c, "获取登录历史失败", err)
 		return
 	}
 	response.Success(c, map[string]interface{}{"items": items})
@@ -175,7 +175,11 @@ func (h *AuthHandler) loadLoginHistoryItems(c *gin.Context, userID uuid.UUID, li
 		return buildPlatformLoginHistoryItems(logs), nil
 	}
 
-	logs, err := h.auditRepo.GetUserLoginHistory(c.Request.Context(), userID, uuid.Nil, limit)
+	tenantID, err := authTenantIDOrError(c)
+	if err != nil {
+		return nil, err
+	}
+	logs, err := h.auditRepo.GetUserLoginHistory(c.Request.Context(), userID, tenantID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +195,7 @@ func (h *AuthHandler) GetProfileActivities(c *gin.Context) {
 
 	items, err := h.loadProfileActivityItems(c, userID, authHistoryLimit(c, 15))
 	if err != nil {
-		respondInternalError(c, "AUTH", "获取操作记录失败", err)
+		respondProfileAuditQueryError(c, "获取操作记录失败", err)
 		return
 	}
 	response.Success(c, map[string]interface{}{"items": items})
@@ -206,9 +210,9 @@ func (h *AuthHandler) loadProfileActivityItems(c *gin.Context, userID uuid.UUID,
 		return buildPlatformActivityItems(logs), nil
 	}
 
-	tenantID, ok := requireTenantID(c, "AUTH")
-	if !ok {
-		return nil, repository.ErrTenantContextRequired
+	tenantID, err := authTenantIDOrError(c)
+	if err != nil {
+		return nil, err
 	}
 	logs, err := h.auditRepo.GetUserActivities(c.Request.Context(), userID, tenantID, limit)
 	if err != nil {
@@ -226,7 +230,7 @@ func buildPlatformLoginHistoryItems(logs []model.PlatformAuditLog) []LoginHistor
 			IPAddress:    log.IPAddress,
 			UserAgent:    log.UserAgent,
 			Status:       log.Status,
-			ErrorMessage: log.ErrorMessage,
+			ErrorMessage: sanitizeLoginHistoryErrorMessage(log.Status, log.ResponseStatus, log.ErrorMessage),
 			CreatedAt:    log.CreatedAt,
 		})
 	}
@@ -245,7 +249,7 @@ func buildTenantLoginHistoryItems(logs []model.AuditLog) []LoginHistoryItem {
 			IPAddress:    log.IPAddress,
 			UserAgent:    log.UserAgent,
 			Status:       log.Status,
-			ErrorMessage: log.ErrorMessage,
+			ErrorMessage: sanitizeLoginHistoryErrorMessage(log.Status, log.ResponseStatus, log.ErrorMessage),
 			CreatedAt:    log.CreatedAt,
 		})
 	}
