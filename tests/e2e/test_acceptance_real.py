@@ -580,6 +580,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                 "SERVER_MODE": "release",
                 "DATABASE_DBNAME": self.db_name,
                 "REDIS_DB": self.redis_db,
+                "INIT_ADMIN_PASSWORD": "admin123456",
                 "JWT_SECRET": "acceptance-secret-key",
                 "JWT_ISSUER": "auto-healing-acceptance",
                 "INIT_ADMIN_PASSWORD": "admin123456",
@@ -691,6 +692,72 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
         )
         assert_true(resp.get("access_token"), f"login failed for {username}")
         return resp
+
+    def create_tenant_user_with_permissions(self, suffix, permission_codes, tenant_id=None):
+        tenant_id = tenant_id or self.default_tenant_id
+        tenant_headers = self.auth_args(self.tenant_admin_token, tenant_id=tenant_id, json_content=True)
+        tenant_view_headers = self.auth_args(self.tenant_admin_token, tenant_id=tenant_id)
+        permissions = curl_json([f"{self.api_base()}/tenant/permissions", *tenant_view_headers])["data"]
+        permission_ids = [item["id"] for item in permissions if item["code"] in permission_codes]
+        assert_eq(len(permission_ids), len(permission_codes), f"tenant permissions should include {permission_codes}")
+
+        role = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/roles",
+                *tenant_headers,
+                "-d",
+                json.dumps(
+                    {
+                        "name": f"acc_perm_role_{suffix}",
+                        "display_name": f"Acceptance Permission Role {suffix}",
+                        "description": "acceptance permission-scoped role",
+                    }
+                ),
+            ]
+        )["data"]
+        curl_json(
+            [
+                "-X",
+                "PUT",
+                f"{self.api_base()}/tenant/roles/{role['id']}/permissions",
+                *tenant_headers,
+                "-d",
+                json.dumps({"permission_ids": permission_ids}),
+            ]
+        )
+
+        username = f"accperm{suffix}"
+        user = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/users",
+                *tenant_headers,
+                "-d",
+                json.dumps(
+                    {
+                        "username": username,
+                        "email": f"{username}@example.com",
+                        "password": "Tenant123456!",
+                        "display_name": f"Acceptance Scoped User {suffix}",
+                    }
+                ),
+            ]
+        )["data"]
+        curl_json(
+            [
+                "-X",
+                "PUT",
+                f"{self.api_base()}/tenant/users/{user['id']}/roles",
+                *tenant_headers,
+                "-d",
+                json.dumps({"role_ids": [role["id"]]}),
+            ]
+        )
+        login = self.login(username, "Tenant123456!")
+        return {"role": role, "user": user, "token": login["access_token"], "tenant_id": tenant_id}
 
     def run_auth_scenarios(self):
         info("==> auth scenarios")
@@ -1757,10 +1824,15 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
         other_tenant_headers = self.auth_args(self.tenant_admin_token, tenant_id=self.other_tenant_id)
         platform_view_headers = self.auth_args(self.platform_token)
         platform_headers = self.auth_args(self.platform_token, json_content=True)
+        limited = self.create_tenant_user_with_permissions(str(time.time_ns())[-6:], ["plugin:list"])
 
         overview = curl_json([f"{self.api_base()}/common/workbench/overview", *tenant_view_headers])["data"]
         assert_true("system_health" in overview, "workbench overview should include system_health")
         assert_true("resource_overview" in overview, "workbench overview should include resource_overview")
+        limited_overview = curl_json([f"{self.api_base()}/common/workbench/overview", *self.auth_args(limited["token"])])["data"]
+        limited_resources = limited_overview["resource_overview"]
+        assert_eq(limited_resources["playbooks"]["total"], 0, "plugin-only workbench overview should hide playbooks")
+        assert_true("needs_review" not in limited_resources["playbooks"], "plugin-only workbench overview should omit playbook review stats")
 
         temp_role = curl_json(
             [
@@ -1924,6 +1996,11 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
         assert_true(overview["playbooks"]["total"] >= 1, "dashboard playbooks total should be non-zero")
         assert_true(overview["secrets"]["total"] >= 1, "dashboard secrets total should be non-zero")
 
+        platform_dashboard_status, _ = curl_status_json(
+            [f"{self.api_base()}/tenant/dashboard/overview?sections=plugins", *self.auth_args(self.platform_token)]
+        )
+        assert_true(platform_dashboard_status in (400, 403), "platform user without tenant should not access tenant dashboard")
+
         tenant_users = curl_json([f"{self.api_base()}/tenant/users?page=1&page_size=100", *tenant_view_headers])
         assert_eq(overview["users"]["total"], tenant_users["total"], "dashboard users section should respect tenant membership")
         assert_true(overview["users"]["roles_total"] >= 2, "dashboard users roles_total should include tenant-visible roles")
@@ -1936,6 +2013,21 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
         assert_true(git_stats["total"] >= 1, "git stats should be non-zero")
         assert_true(playbook_stats["total"] >= 1, "playbook stats should be non-zero")
         assert_true(secrets_stats["total"] >= 1, "secrets stats should be non-zero")
+        limited = self.create_tenant_user_with_permissions(str(time.time_ns())[-6:], ["plugin:list"])
+        limited_plugins = curl_json(
+            [
+                f"{self.api_base()}/tenant/dashboard/overview?sections=plugins",
+                *self.auth_args(limited["token"]),
+            ]
+        )["data"]
+        assert_true("plugins" in limited_plugins, "plugin-only dashboard overview should allow plugins section")
+        limited_healing_status, _ = curl_status_json(
+            [
+                f"{self.api_base()}/tenant/dashboard/overview?sections=healing",
+                *self.auth_args(limited["token"]),
+            ]
+        )
+        assert_eq(limited_healing_status, 403, "dashboard healing section should require healing permission")
 
         protected_source = curl_json(
             [
@@ -3096,6 +3188,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
         }
         search_default = curl_json([f"{self.api_base()}/common/search?q=plugin-", "-H", f"Authorization: Bearer {token}"])
         search_b = curl_json([f"{self.api_base()}/common/search?q=plugin-", "-H", f"Authorization: Bearer {token}", "-H", f"X-Tenant-ID: {self.other_tenant_id}"])
+        search_platform_status, _ = curl_status_json([f"{self.api_base()}/common/search?q=plugin-", "-H", f"Authorization: Bearer {self.platform_token}"])
 
         def titles(payload):
             result = []
@@ -3106,6 +3199,61 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
 
         assert_eq(titles(search_default), [default_plugin_name], "default tenant search")
         assert_eq(titles(search_b), [other_plugin_name], "explicit tenant search")
+        assert_true(search_platform_status in (400, 403), "platform user without tenant should not access tenant search")
+        scope_key = f"scope-{str(time.time_ns())[-6:]}"
+        curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/plugins",
+                *headers,
+                "-d",
+                json.dumps({"name": f"{scope_key}-plugin", "type": "itsm", "config": {"url": "http://itsm-scope.local"}}),
+            ]
+        )
+        repo = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/git-repos",
+                *headers,
+                "-d",
+                json.dumps(
+                    {
+                        "name": f"{scope_key}-repo",
+                        "url": f"file://{self.repo_dir}",
+                        "default_branch": "main",
+                        "auth_type": "none",
+                        "auth_config": {},
+                        "sync_enabled": False,
+                    }
+                ),
+            ]
+        )["data"]
+        curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/playbooks",
+                *headers,
+                "-d",
+                json.dumps(
+                    {
+                        "repository_id": repo["id"],
+                        "name": f"{scope_key}-playbook",
+                        "file_path": "local.yml",
+                        "description": "search allowlist acceptance playbook",
+                        "config_mode": "auto",
+                    }
+                ),
+            ]
+        )
+        limited = self.create_tenant_user_with_permissions(str(time.time_ns())[-6:], ["plugin:list"])
+        limited_search = curl_json([f"{self.api_base()}/common/search?q={scope_key}", *self.auth_args(limited["token"])])
+        limited_titles = titles(limited_search)
+        assert_true(f"{scope_key}-plugin" in limited_titles, "plugin-only search should include plugin matches")
+        assert_true(f"{scope_key}-repo" not in limited_titles, "plugin-only search should exclude git repos")
+        assert_true(f"{scope_key}-playbook" not in limited_titles, "plugin-only search should exclude playbooks")
 
         create = curl_json(
             [

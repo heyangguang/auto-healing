@@ -44,35 +44,75 @@ func (r *DashboardRepository) GetPluginSection(ctx context.Context) (*PluginSect
 		ByStatus: []StatusCount{},
 		ByType:   []StatusCount{},
 	}
-	db := r.tenantDB(ctx)
+	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
+	tenantID, err := RequireTenantID(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	countModel(db, &model.Plugin{}, &section.Total)
-	countModel(db.Where("status = ?", "active"), &model.Plugin{}, &section.Active)
-	countModel(db.Where("status = ?", "inactive"), &model.Plugin{}, &section.Inactive)
-	countModel(db.Where("status = ?", "error"), &model.Plugin{}, &section.Error)
-	section.SyncSuccessRate = calculatePluginSyncRate(db)
-	scanStatusCounts(db, &model.Plugin{}, "status", &section.ByStatus)
-	scanStatusCounts(db, &model.Plugin{}, "type", &section.ByType)
-	scanTrendPoints(db, &model.PluginSyncLog{}, "started_at", time.Now().AddDate(0, 0, -7), &section.SyncTrend7d)
-	section.RecentSyncs = listPluginSyncs(db.Preload("Plugin").Order("started_at DESC").Limit(10))
-	section.ErrorPlugins = listPluginItems(db.Where("status = ?", "error"))
-	section.PluginOverview = listPluginItems(db.Order("name"))
+	if err := countModel(newDB(), &model.Plugin{}, &section.Total); err != nil {
+		return nil, err
+	}
+	if err := countModel(newDB().Where("status = ?", "active"), &model.Plugin{}, &section.Active); err != nil {
+		return nil, err
+	}
+	if err := countModel(newDB().Where("status = ?", "inactive"), &model.Plugin{}, &section.Inactive); err != nil {
+		return nil, err
+	}
+	if err := countModel(newDB().Where("status = ?", "error"), &model.Plugin{}, &section.Error); err != nil {
+		return nil, err
+	}
+	rate, err := calculatePluginSyncRate(newDB())
+	if err != nil {
+		return nil, err
+	}
+	section.SyncSuccessRate = rate
+	if err := scanStatusCounts(newDB(), &model.Plugin{}, "status", &section.ByStatus); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(newDB(), &model.Plugin{}, "type", &section.ByType); err != nil {
+		return nil, err
+	}
+	if err := scanTrendPoints(newDB(), &model.PluginSyncLog{}, "started_at", time.Now().AddDate(0, 0, -7), &section.SyncTrend7d); err != nil {
+		return nil, err
+	}
+	recent, err := listPluginSyncs(newDB().Preload("Plugin", "tenant_id = ?", tenantID).Order("started_at DESC").Limit(10))
+	if err != nil {
+		return nil, err
+	}
+	section.RecentSyncs = recent
+	errorPlugins, err := listPluginItems(newDB().Where("status = ?", "error"))
+	if err != nil {
+		return nil, err
+	}
+	section.ErrorPlugins = errorPlugins
+	overview, err := listPluginItems(newDB().Order("name"))
+	if err != nil {
+		return nil, err
+	}
+	section.PluginOverview = overview
 	return section, nil
 }
 
-func calculatePluginSyncRate(db *gorm.DB) float64 {
+func calculatePluginSyncRate(db *gorm.DB) (float64, error) {
 	var total, success int64
-	countModel(db, &model.PluginSyncLog{}, &total)
-	if total == 0 {
-		return 0
+	if err := countModel(db, &model.PluginSyncLog{}, &total); err != nil {
+		return 0, err
 	}
-	countModel(db.Where("status = ?", "success"), &model.PluginSyncLog{}, &success)
-	return float64(success) / float64(total) * 100
+	if total == 0 {
+		return 0, nil
+	}
+	if err := countModel(db.Where("status = ?", "success"), &model.PluginSyncLog{}, &success); err != nil {
+		return 0, err
+	}
+	return float64(success) / float64(total) * 100, nil
 }
 
-func listPluginSyncs(query *gorm.DB) []SyncItem {
+func listPluginSyncs(query *gorm.DB) ([]SyncItem, error) {
 	var logs []model.PluginSyncLog
-	query.Find(&logs)
+	if err := query.Find(&logs).Error; err != nil {
+		return nil, err
+	}
 	items := make([]SyncItem, 0, len(logs))
 	for _, log := range logs {
 		name := ""
@@ -87,12 +127,14 @@ func listPluginSyncs(query *gorm.DB) []SyncItem {
 			StartedAt:  log.StartedAt,
 		})
 	}
-	return items
+	return items, nil
 }
 
-func listPluginItems(query *gorm.DB) []PluginItem {
+func listPluginItems(query *gorm.DB) ([]PluginItem, error) {
 	var plugins []model.Plugin
-	query.Find(&plugins)
+	if err := query.Find(&plugins).Error; err != nil {
+		return nil, err
+	}
 	items := make([]PluginItem, 0, len(plugins))
 	for _, plugin := range plugins {
 		items = append(items, PluginItem{
@@ -103,5 +145,5 @@ func listPluginItems(query *gorm.DB) []PluginItem {
 			LastSyncAt: plugin.LastSyncAt,
 		})
 	}
-	return items
+	return items, nil
 }

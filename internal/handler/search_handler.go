@@ -64,9 +64,15 @@ func requireTenantContext(c *gin.Context, msg string) bool {
 func buildSearchAllowlist(perms []string) map[string]bool {
 	allow := make(map[string]bool)
 	if middleware.HasPermission(perms, "plugin:list") {
-		for _, key := range []string{"hosts", "incidents", "playbooks", "git_repos", "secrets", "plugins"} {
+		for _, key := range []string{"hosts", "incidents", "secrets", "plugins"} {
 			allow[key] = true
 		}
+	}
+	if middleware.HasPermission(perms, "repository:list") {
+		allow["git_repos"] = true
+	}
+	if middleware.HasPermission(perms, "playbook:list") {
+		allow["playbooks"] = true
 	}
 	if middleware.HasPermission(perms, "healing:rules:view") {
 		allow["rules"] = true

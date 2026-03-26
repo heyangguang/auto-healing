@@ -3,7 +3,9 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
+	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
@@ -13,15 +15,17 @@ import (
 
 // DashboardHandler Dashboard 处理器
 type DashboardHandler struct {
-	repo   *repository.DashboardRepository
-	wsRepo *repository.WorkspaceRepository
+	repo     *repository.DashboardRepository
+	wsRepo   *repository.WorkspaceRepository
+	roleRepo *repository.RoleRepository
 }
 
 // NewDashboardHandler 创建 Dashboard 处理器
 func NewDashboardHandler() *DashboardHandler {
 	return &DashboardHandler{
-		repo:   repository.NewDashboardRepository(),
-		wsRepo: repository.NewWorkspaceRepository(),
+		repo:     repository.NewDashboardRepository(),
+		wsRepo:   repository.NewWorkspaceRepository(),
+		roleRepo: repository.NewRoleRepository(),
 	}
 }
 
@@ -39,14 +43,14 @@ func currentUserID(c *gin.Context) (uuid.UUID, bool) {
 
 type dashboardSectionFunc func(context.Context) (interface{}, error)
 
-func dashboardSectionLoader(h *DashboardHandler, section string) dashboardSectionFunc {
+func dashboardSectionLoader(h *DashboardHandler, section string, permissions []string) dashboardSectionFunc {
 	switch section {
 	case "incidents":
 		return func(ctx context.Context) (interface{}, error) { return h.repo.GetIncidentSection(ctx) }
 	case "cmdb":
 		return func(ctx context.Context) (interface{}, error) { return h.repo.GetCMDBSection(ctx) }
 	case "healing":
-		return func(ctx context.Context) (interface{}, error) { return h.repo.GetHealingSection(ctx) }
+		return func(ctx context.Context) (interface{}, error) { return h.repo.GetHealingSection(ctx, permissions) }
 	case "execution":
 		return func(ctx context.Context) (interface{}, error) { return h.repo.GetExecutionSection(ctx) }
 	case "plugins":
@@ -64,6 +68,69 @@ func dashboardSectionLoader(h *DashboardHandler, section string) dashboardSectio
 	default:
 		return nil
 	}
+}
+
+func dashboardSectionPermission(section string) string {
+	switch section {
+	case "incidents", "cmdb", "secrets":
+		return "plugin:list"
+	case "healing":
+		return "healing:instances:view"
+	case "execution":
+		return "task:list"
+	case "plugins":
+		return "plugin:list"
+	case "notifications":
+		return "notification:list"
+	case "git":
+		return "repository:list"
+	case "playbooks":
+		return "playbook:list"
+	case "users":
+		return "user:list"
+	default:
+		return ""
+	}
+}
+
+func dashboardHasAnyHealingPermission(permissions []string) bool {
+	for _, permission := range []string{
+		"healing:instances:view",
+		"healing:flows:view",
+		"healing:rules:view",
+		"healing:approvals:view",
+		"healing:trigger:view",
+	} {
+		if middleware.HasPermission(permissions, permission) {
+			return true
+		}
+	}
+	return false
+}
+
+func dashboardUnauthorizedSections(sections []string, permissions []string) []string {
+	unauthorized := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, rawSection := range sections {
+		section := strings.TrimSpace(rawSection)
+		if section == "" || seen[section] {
+			continue
+		}
+		seen[section] = true
+		required := dashboardSectionPermission(section)
+		if section == "healing" {
+			if dashboardHasAnyHealingPermission(permissions) {
+				continue
+			}
+			unauthorized = append(unauthorized, section)
+			continue
+		}
+		if required == "" || middleware.HasPermission(permissions, required) {
+			continue
+		}
+		unauthorized = append(unauthorized, section)
+	}
+	return unauthorized
 }
 
 func parseDashboardBody(c *gin.Context, target interface{}, badRequestMsg string) bool {

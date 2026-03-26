@@ -48,7 +48,7 @@ func templateAvailableVariables(parser *TemplateParser, subjectTemplate, bodyTem
 
 // UpdateTemplate 更新模板
 func (s *Service) UpdateTemplate(ctx context.Context, id uuid.UUID, req UpdateTemplateRequest) (*model.NotificationTemplate, error) {
-	template, err := s.repo.GetTemplateByID(ctx, id)
+	template, err := s.GetTemplate(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (s *Service) DeleteTemplate(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("检查关联任务模板失败: %w", err)
 	}
 	if taskCount > 0 {
-		return fmt.Errorf("无法删除：有 %d 个任务模板使用此通知模板，请先修改这些任务的通知配置", taskCount)
+		return fmt.Errorf("%w: 无法删除：有 %d 个任务模板使用此通知模板，请先修改这些任务的通知配置", ErrNotificationResourceInUse, taskCount)
 	}
 
 	flowCount, err := s.healingFlowRepo.CountFlowsUsingTemplate(ctx, id.String())
@@ -101,7 +101,7 @@ func (s *Service) DeleteTemplate(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("检查关联自愈流程失败: %w", err)
 	}
 	if flowCount > 0 {
-		return fmt.Errorf("无法删除：有 %d 个自愈流程使用此通知模板，请先修改这些流程的通知节点配置", flowCount)
+		return fmt.Errorf("%w: 无法删除：有 %d 个自愈流程使用此通知模板，请先修改这些流程的通知节点配置", ErrNotificationResourceInUse, flowCount)
 	}
 
 	return s.repo.DeleteTemplate(ctx, id)
@@ -109,7 +109,7 @@ func (s *Service) DeleteTemplate(ctx context.Context, id uuid.UUID) error {
 
 // PreviewTemplate 预览模板
 func (s *Service) PreviewTemplate(ctx context.Context, id uuid.UUID, variables map[string]interface{}) (*PreviewResult, error) {
-	template, err := s.repo.GetTemplateByID(ctx, id)
+	template, err := s.GetTemplate(ctx, id)
 	if err != nil {
 		return nil, err
 	}

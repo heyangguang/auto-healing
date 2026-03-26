@@ -12,7 +12,6 @@ import (
 
 // WebhookProvider Webhook 通知提供者
 type WebhookProvider struct {
-	client *http.Client
 }
 
 // WebhookConfig Webhook 配置
@@ -27,11 +26,7 @@ type WebhookConfig struct {
 
 // NewWebhookProvider 创建 Webhook 提供者
 func NewWebhookProvider() *WebhookProvider {
-	return &WebhookProvider{
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-	}
+	return &WebhookProvider{}
 }
 
 // Type 返回提供者类型
@@ -45,12 +40,11 @@ func (p *WebhookProvider) Send(ctx context.Context, req *SendRequest) (*SendResp
 	if err != nil {
 		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
 	}
-	p.applyTimeout(config)
 	httpReq, err := p.newWebhookRequest(ctx, config, webhookPayload(req))
 	if err != nil {
 		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
 	}
-	resp, err := p.client.Do(httpReq)
+	resp, err := webhookHTTPClient(config.TimeoutSeconds).Do(httpReq)
 	if err != nil {
 		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
 	}
@@ -58,10 +52,12 @@ func (p *WebhookProvider) Send(ctx context.Context, req *SendRequest) (*SendResp
 	return buildWebhookSendResult(resp)
 }
 
-func (p *WebhookProvider) applyTimeout(config *WebhookConfig) {
-	if config.TimeoutSeconds > 0 {
-		p.client.Timeout = time.Duration(config.TimeoutSeconds) * time.Second
+func webhookHTTPClient(timeoutSeconds int) *http.Client {
+	timeout := 30 * time.Second
+	if timeoutSeconds > 0 {
+		timeout = time.Duration(timeoutSeconds) * time.Second
 	}
+	return &http.Client{Timeout: timeout}
 }
 
 func webhookPayload(req *SendRequest) map[string]interface{} {
@@ -150,7 +146,7 @@ func (p *WebhookProvider) Test(ctx context.Context, configMap map[string]interfa
 		httpReq.SetBasicAuth(config.Username, config.Password)
 	}
 
-	resp, err := p.client.Do(httpReq)
+	resp, err := webhookHTTPClient(config.TimeoutSeconds).Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("连接失败: %w", err)
 	}

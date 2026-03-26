@@ -9,14 +9,16 @@ import (
 )
 
 func (r *SearchRepository) searchHosts(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	var total int64
-	db.Model(&model.CMDBItem{}).Where("hostname ILIKE ? OR ip_address ILIKE ? OR name ILIKE ?", like, like, like).Count(&total)
+	total, err := searchCount(db, &model.CMDBItem{}, "hostname ILIKE ? OR ip_address ILIKE ? OR name ILIKE ?", like, like, like)
+	if err != nil {
+		return nil, 0, err
+	}
 	if total == 0 {
 		return nil, 0, nil
 	}
 
 	var items []model.CMDBItem
-	err := db.Model(&model.CMDBItem{}).
+	err = db.Model(&model.CMDBItem{}).
 		Select("id, hostname, ip_address, name, status").
 		Where("hostname ILIKE ? OR ip_address ILIKE ? OR name ILIKE ?", like, like, like).
 		Order("name").Limit(limit).Find(&items).Error
@@ -42,16 +44,16 @@ func (r *SearchRepository) searchHosts(ctx context.Context, db *gorm.DB, like st
 }
 
 func (r *SearchRepository) searchIncidents(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	var total int64
-	db.Model(&model.Incident{}).
-		Where("title ILIKE ? OR external_id ILIKE ? OR description ILIKE ?", like, like, like).
-		Count(&total)
+	total, err := searchCount(db, &model.Incident{}, "title ILIKE ? OR external_id ILIKE ? OR description ILIKE ?", like, like, like)
+	if err != nil {
+		return nil, 0, err
+	}
 	if total == 0 {
 		return nil, 0, nil
 	}
 
 	var items []model.Incident
-	err := db.Model(&model.Incident{}).
+	err = db.Model(&model.Incident{}).
 		Select("id, title, description, external_id, severity, status, healing_status").
 		Where("title ILIKE ? OR external_id ILIKE ? OR description ILIKE ?", like, like, like).
 		Order("created_at DESC").Limit(limit).Find(&items).Error
@@ -105,14 +107,16 @@ func incidentDescription(item model.Incident) string {
 }
 
 func (r *SearchRepository) searchSecrets(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	var total int64
-	db.Model(&model.SecretsSource{}).Where("name ILIKE ?", like).Count(&total)
+	total, err := searchCount(db, &model.SecretsSource{}, "name ILIKE ?", like)
+	if err != nil {
+		return nil, 0, err
+	}
 	if total == 0 {
 		return nil, 0, nil
 	}
 
 	var items []model.SecretsSource
-	err := db.Model(&model.SecretsSource{}).
+	err = db.Model(&model.SecretsSource{}).
 		Select("id, name, type").
 		Where("name ILIKE ?", like).
 		Order("name").Limit(limit).Find(&items).Error
@@ -134,14 +138,16 @@ func (r *SearchRepository) searchSecrets(ctx context.Context, db *gorm.DB, like 
 }
 
 func (r *SearchRepository) searchGitRepos(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	var total int64
-	db.Model(&model.GitRepository{}).Where("name ILIKE ? OR url ILIKE ?", like, like).Count(&total)
+	total, err := searchCount(db, &model.GitRepository{}, "name ILIKE ? OR url ILIKE ?", like, like)
+	if err != nil {
+		return nil, 0, err
+	}
 	if total == 0 {
 		return nil, 0, nil
 	}
 
 	var items []model.GitRepository
-	err := db.Model(&model.GitRepository{}).
+	err = db.Model(&model.GitRepository{}).
 		Select("id, name, url, status, default_branch").
 		Where("name ILIKE ? OR url ILIKE ?", like, like).
 		Order("name").Limit(limit).Find(&items).Error

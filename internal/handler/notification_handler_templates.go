@@ -49,7 +49,7 @@ func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 
 	template, err := h.svc.CreateTemplate(c.Request.Context(), req)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		writeNotificationMutationError(c, err, "模板不存在", "创建通知模板失败")
 		return
 	}
 	response.Created(c, template)
@@ -65,7 +65,7 @@ func (h *NotificationHandler) GetTemplate(c *gin.Context) {
 
 	template, err := h.svc.GetTemplate(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "模板不存在")
+		writeNotificationLookupError(c, err, "模板不存在", "获取通知模板失败")
 		return
 	}
 	response.Success(c, template)
@@ -87,7 +87,7 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 
 	template, err := h.svc.UpdateTemplate(c.Request.Context(), id, req)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		writeNotificationMutationError(c, err, "模板不存在", "更新通知模板失败")
 		return
 	}
 	response.Success(c, template)
@@ -102,7 +102,7 @@ func (h *NotificationHandler) DeleteTemplate(c *gin.Context) {
 	}
 
 	if err := h.svc.DeleteTemplate(c.Request.Context(), id); err != nil {
-		respondInternalError(c, "NOTIFY", "删除通知模板失败", err)
+		writeNotificationMutationError(c, err, "模板不存在", "删除通知模板失败")
 		return
 	}
 	response.Message(c, "删除成功")
@@ -124,7 +124,7 @@ func (h *NotificationHandler) PreviewTemplate(c *gin.Context) {
 
 	result, err := h.svc.PreviewTemplate(c.Request.Context(), id, req.Variables)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		writeNotificationMutationError(c, err, "模板不存在", "预览通知模板失败")
 		return
 	}
 	response.Success(c, result)

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/pkg/response"
@@ -37,11 +38,14 @@ func (h *PreferenceHandler) GetPreferences(c *gin.Context) {
 
 	pref, err := h.prefRepo.GetByUserID(c.Request.Context(), userID)
 	if err != nil {
-		// 用户还没有偏好设置，返回空对象
-		response.Success(c, map[string]interface{}{
-			"user_id":     userID,
-			"preferences": json.RawMessage("{}"),
-		})
+		if errors.Is(err, repository.ErrPreferenceNotFound) {
+			response.Success(c, map[string]interface{}{
+				"user_id":     userID,
+				"preferences": json.RawMessage("{}"),
+			})
+			return
+		}
+		respondInternalError(c, "PREFERENCE", "获取偏好设置失败", err)
 		return
 	}
 
@@ -68,6 +72,10 @@ func (h *PreferenceHandler) UpdatePreferences(c *gin.Context) {
 		response.BadRequest(c, "preferences 必须是有效的 JSON 对象")
 		return
 	}
+	if check == nil {
+		response.BadRequest(c, "preferences 必须是 JSON 对象，不能为 null")
+		return
+	}
 
 	pref, err := h.prefRepo.Upsert(c.Request.Context(), userID, req.Preferences)
 	if err != nil {
@@ -91,10 +99,15 @@ func (h *PreferenceHandler) PatchPreferences(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误: preferences 字段必填")
 		return
 	}
+	var patch map[string]interface{}
+	if err := json.Unmarshal(req.Preferences, &patch); err != nil || patch == nil {
+		response.BadRequest(c, "preferences 必须是 JSON 对象，不能为 null")
+		return
+	}
 
 	pref, err := h.prefRepo.MergeUpdate(c.Request.Context(), userID, req.Preferences)
 	if err != nil {
-		response.BadRequest(c, "更新偏好设置失败: "+err.Error())
+		respondInternalError(c, "PREFERENCE", "更新偏好设置失败", err)
 		return
 	}
 
