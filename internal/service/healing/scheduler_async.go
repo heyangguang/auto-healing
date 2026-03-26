@@ -31,6 +31,7 @@ func (s *Scheduler) scheduleAutoFlowExecution(instance *model.FlowInstance, inci
 			select {
 			case s.sem <- struct{}{}:
 			case <-rootCtx.Done():
+				s.interruptQueuedFlow(rootCtx, instance)
 				return
 			}
 			s.executeTrackedFlow(rootCtx, instance)
@@ -42,10 +43,19 @@ func (s *Scheduler) scheduleManualFlowExecution(instance *model.FlowInstance) {
 	lifecycle := s.ensureLifecycle()
 	select {
 	case s.sem <- struct{}{}:
-	case <-lifecycle.ctx.Done():
+		s.startTrackedFlowWorker(lifecycle, instance)
 		return
+	default:
+		lifecycle.Go(func(rootCtx context.Context) {
+			select {
+			case s.sem <- struct{}{}:
+			case <-rootCtx.Done():
+				s.interruptQueuedFlow(rootCtx, instance)
+				return
+			}
+			s.executeTrackedFlow(rootCtx, instance)
+		})
 	}
-	s.startTrackedFlowWorker(lifecycle, instance)
 }
 
 func (s *Scheduler) startTrackedFlowWorker(lifecycle *asyncLifecycle, instance *model.FlowInstance) {
@@ -60,14 +70,38 @@ func (s *Scheduler) executeTrackedFlow(rootCtx context.Context, instance *model.
 	execCtx := withTenantContext(rootCtx, instance.TenantID)
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Sched("HEAL").Error("流程执行 panic [%s]: %v", instance.ID.String()[:8], fmt.Sprintf("%v", r))
-			s.instanceRepo.UpdateStatus(execCtx, instance.ID,
-				model.FlowInstanceStatusFailed,
-				fmt.Sprintf("执行异常(panic): %v", r))
+			errMsg := fmt.Sprintf("执行异常(panic): %v", r)
+			logger.Sched("HEAL").Error("流程执行 panic [%s]: %v", instance.ID.String()[:8], errMsg)
+			s.failTrackedFlow(execCtx, instance, errMsg)
 		}
 	}()
 	if err := s.runFlow(execCtx, instance); shouldLogTrackedFlowError(rootCtx, err) {
 		logger.Sched("HEAL").Error("流程执行返回错误 [%s]: %v", instance.ID.String()[:8], err)
+	}
+	if rootCtx.Err() != nil {
+		s.interruptActiveFlow(rootCtx, instance)
+	}
+}
+
+func (s *Scheduler) failTrackedFlow(ctx context.Context, instance *model.FlowInstance, errMsg string) {
+	updated, err := s.instanceRepo.UpdateStatusWithIncidentSync(
+		ctx,
+		instance.ID,
+		[]string{
+			model.FlowInstanceStatusPending,
+			model.FlowInstanceStatusRunning,
+			model.FlowInstanceStatusWaitingApproval,
+		},
+		model.FlowInstanceStatusFailed,
+		errMsg,
+		instanceIncidentSyncOptions(instance, "failed"),
+	)
+	if err != nil {
+		logger.Sched("HEAL").Error("更新流程实例失败 [%s]: %v", instance.ID.String()[:8], err)
+		return
+	}
+	if !updated {
+		logger.Sched("HEAL").Warn("流程实例已进入终态，跳过失败状态覆盖 [%s]", instance.ID.String()[:8])
 	}
 }
 

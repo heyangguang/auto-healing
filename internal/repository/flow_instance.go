@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
@@ -13,6 +14,15 @@ import (
 // FlowInstanceRepository 流程实例仓库
 type FlowInstanceRepository struct {
 	db *gorm.DB
+}
+
+type IncidentSyncOptions struct {
+	IncidentID        uuid.UUID
+	HealingStatus     string
+	MatchedRuleID     *uuid.UUID
+	FlowInstanceID    *uuid.UUID
+	Scanned           *bool
+	ResetFlowInstance bool
 }
 
 // NewFlowInstanceRepository 创建流程实例仓库
@@ -26,6 +36,52 @@ func (r *FlowInstanceRepository) Create(ctx context.Context, instance *model.Flo
 		return err
 	}
 	return r.db.WithContext(ctx).Create(instance).Error
+}
+
+func (r *FlowInstanceRepository) CreateWithIncidentSync(ctx context.Context, instance *model.FlowInstance, opts IncidentSyncOptions) error {
+	if err := FillTenantID(ctx, &instance.TenantID); err != nil {
+		return err
+	}
+	return TenantDB(r.db, ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.WithContext(ctx).Create(instance).Error; err != nil {
+			return err
+		}
+		return updateIncidentSyncTx(tx, ctx, opts)
+	})
+}
+
+func updateIncidentSyncTx(tx *gorm.DB, ctx context.Context, opts IncidentSyncOptions) error {
+	result := TenantDB(tx, ctx).
+		Model(&model.Incident{}).
+		Where("id = ?", opts.IncidentID).
+		Updates(incidentSyncUpdates(opts))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("工单不存在: %s", opts.IncidentID)
+	}
+	return nil
+}
+
+func incidentSyncUpdates(opts IncidentSyncOptions) map[string]interface{} {
+	updates := map[string]interface{}{}
+	if opts.HealingStatus != "" {
+		updates["healing_status"] = opts.HealingStatus
+	}
+	if opts.MatchedRuleID != nil {
+		updates["matched_rule_id"] = *opts.MatchedRuleID
+	}
+	if opts.FlowInstanceID != nil {
+		updates["healing_flow_instance_id"] = *opts.FlowInstanceID
+	}
+	if opts.Scanned != nil {
+		updates["scanned"] = *opts.Scanned
+	}
+	if opts.ResetFlowInstance {
+		updates["healing_flow_instance_id"] = nil
+	}
+	return updates
 }
 
 // GetByID 根据 ID 获取流程实例

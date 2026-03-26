@@ -139,12 +139,13 @@ func (e *FlowExecutor) RetryFromNode(ctx context.Context, instance *model.FlowIn
 }
 
 func (e *FlowExecutor) restartFailedInstance(ctx context.Context, instance *model.FlowInstance) error {
-	updated, err := e.instanceRepo.UpdateStatusIfCurrent(
+	updated, err := e.instanceRepo.UpdateStatusWithIncidentSync(
 		ctx,
 		instance.ID,
 		[]string{model.FlowInstanceStatusFailed},
 		model.FlowInstanceStatusRunning,
 		"",
+		instanceIncidentSyncOptions(instance, "processing"),
 	)
 	if err != nil {
 		return err

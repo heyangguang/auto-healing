@@ -7,6 +7,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/repository"
+	"github.com/google/uuid"
 )
 
 // scan 扫描未处理的工单
@@ -40,8 +41,9 @@ func (s *Scheduler) scan(ctx context.Context) {
 
 func (s *Scheduler) markIncidentsScannedWithoutRules(ctx context.Context, incidents []model.Incident) {
 	for _, incident := range incidents {
-		if err := s.markIncidentScanned(ctx, incident.ID, nil, nil); err != nil {
-			logger.Sched("HEAL").Error("标记工单 %s 已扫描失败: %v", incident.ID, err)
+		incidentCtx := schedulerTenantContext(ctx, &incident)
+		if err := s.syncIncidentSkipped(incidentCtx, incident.ID); err != nil {
+			logger.Sched("HEAL").Error("标记工单 %s 已跳过失败: %v", incident.ID, err)
 		}
 	}
 }
@@ -57,12 +59,11 @@ func schedulerTenantContext(ctx context.Context, incident *model.Incident) conte
 func (s *Scheduler) processIncident(ctx context.Context, incident *model.Incident, rules []model.HealingRule) {
 	matchedRule := s.matchIncidentRule(ctx, incident, rules)
 	if matchedRule == nil {
-		incident.Scanned = true
-		incident.HealingStatus = "skipped"
-		if err := s.persistIncident(ctx, incident, "更新工单跳过状态"); err != nil {
+		if err := s.syncIncidentSkipped(ctx, incident.ID); err != nil {
 			logger.Sched("HEAL").Error("更新工单 %s 跳过状态失败: %v", incident.ID, err)
 			return
 		}
+		incident.HealingStatus = "skipped"
 		logger.Sched("HEAL").Debug("工单 %s 无匹配规则，已跳过", incident.ID)
 		return
 	}
@@ -78,6 +79,15 @@ func (s *Scheduler) processIncident(ctx context.Context, incident *model.Inciden
 		}
 		logger.Sched("HEAL").Info("工单 %s 等待手动触发", incident.ID)
 	}
+}
+
+func (s *Scheduler) syncIncidentSkipped(ctx context.Context, incidentID uuid.UUID) error {
+	scanned := true
+	return s.incidentRepo.SyncState(ctx, repository.IncidentSyncOptions{
+		IncidentID:    incidentID,
+		HealingStatus: "skipped",
+		Scanned:       &scanned,
+	})
 }
 
 func (s *Scheduler) matchIncidentRule(ctx context.Context, incident *model.Incident, rules []model.HealingRule) *model.HealingRule {
@@ -100,11 +110,6 @@ func (s *Scheduler) processAutoTriggeredIncident(ctx context.Context, incident *
 		if markErr := s.markIncidentScanned(ctx, incident.ID, &rule.ID, nil); markErr != nil {
 			logger.Sched("HEAL").Error("创建流程实例失败后标记工单 %s 已扫描失败: %v", incident.ID, markErr)
 		}
-		return
-	}
-
-	if err := s.markIncidentScanned(ctx, incident.ID, &rule.ID, &instance.ID); err != nil {
-		logger.Sched("HEAL").Error("标记工单 %s 自动触发实例失败: %v", incident.ID, err)
 		return
 	}
 	s.ruleRepo.UpdateLastRunAt(ctx, rule.ID)
@@ -131,14 +136,17 @@ func (s *Scheduler) createFlowInstance(ctx context.Context, incident *model.Inci
 		Status:     model.FlowInstanceStatusPending,
 		Context:    model.JSON{"incident": incidentToMap(incident)},
 	}
-	if err := s.instanceRepo.Create(ctx, instance); err != nil {
+	scanned := true
+	if err := s.instanceRepo.CreateWithIncidentSync(ctx, instance, repository.IncidentSyncOptions{
+		IncidentID:     incident.ID,
+		HealingStatus:  "processing",
+		MatchedRuleID:  &rule.ID,
+		FlowInstanceID: &instance.ID,
+		Scanned:        &scanned,
+	}); err != nil {
 		return nil, err
 	}
-
 	incident.HealingStatus = "processing"
-	if err := s.persistIncident(ctx, incident, "更新工单 processing 状态"); err != nil {
-		return nil, err
-	}
 
 	logger.Sched("HEAL").Info("创建流程实例 %s（快照流程 %s）", instance.ID, flow.Name)
 	return instance, nil

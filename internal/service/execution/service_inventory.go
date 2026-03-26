@@ -23,8 +23,8 @@ func (s *Service) prepareRunInventory(ctx context.Context, runID uuid.UUID, task
 
 	providers := s.loadSecretProviders(ctx, runID, params.secretsSourceIDs)
 	if len(providers) == 0 {
-		s.persistRunResult(ctx, runID, -1, "", "没有可用的密钥源", nil)
-		s.appendLog(ctx, runID, "error", "prepare", "没有可用的密钥源", nil)
+		s.finalizeRunFailure(ctx, runID, "没有可用的密钥源", nil)
+		s.appendDetachedLog(ctx, runID, "error", "prepare", "没有可用的密钥源", nil)
 		return "", fmt.Errorf("没有可用的密钥源")
 	}
 	return s.prepareAuthenticatedInventory(ctx, runID, task, workDir, params.targetHosts, providers)
@@ -58,13 +58,15 @@ func (s *Service) loadSecretProviders(ctx context.Context, runID uuid.UUID, sour
 func (s *Service) prepareAuthenticatedInventory(ctx context.Context, runID uuid.UUID, task *model.ExecutionTask, workDir, targetHosts string, providers []sourceProvider) (string, error) {
 	credentials, err := s.buildHostCredentials(ctx, runID, task, workDir, targetHosts, providers)
 	if err != nil {
+		s.finalizeRunFailure(ctx, runID, err.Error(), nil)
+		s.appendDetachedLog(ctx, runID, "error", "prepare", fmt.Sprintf("构建主机凭据失败: %v", err), nil)
 		return "", err
 	}
 
 	inventoryPath, err := ansible.WriteInventoryFile(workDir, ansible.GenerateInventoryWithAuth(credentials, "targets"))
 	if err != nil {
-		s.persistRunResult(ctx, runID, -1, "", err.Error(), nil)
-		s.appendLog(ctx, runID, "error", "prepare", fmt.Sprintf("生成 inventory 失败: %v", err), nil)
+		s.finalizeRunFailure(ctx, runID, err.Error(), nil)
+		s.appendDetachedLog(ctx, runID, "error", "prepare", fmt.Sprintf("生成 inventory 失败: %v", err), nil)
 		return "", err
 	}
 	s.appendLog(ctx, runID, "info", "prepare", fmt.Sprintf("Inventory 已生成（含 %d 台主机认证信息）", len(credentials)), nil)
@@ -82,7 +84,6 @@ func (s *Service) buildHostCredentials(ctx context.Context, runID uuid.UUID, tas
 
 		credential, err := s.resolveHostCredential(ctx, runID, task, workDir, host, providers)
 		if err != nil {
-			s.appendLog(ctx, runID, "error", "prepare", fmt.Sprintf("写入密钥文件失败: %v", err), nil)
 			return nil, err
 		}
 		credentials = append(credentials, credential)
@@ -95,7 +96,10 @@ func (s *Service) resolveHostCredential(ctx context.Context, runID uuid.UUID, ta
 		query := s.buildSecretQuery(ctx, host, sp.source.AuthType)
 		secret, err := sp.provider.GetSecret(ctx, query)
 		if err != nil {
-			continue
+			if err == secrets.ErrSecretNotFound {
+				continue
+			}
+			return ansible.HostCredential{}, fmt.Errorf("查询主机 %s 的密钥源 %s 失败: %w", host, sp.source.Name, err)
 		}
 
 		credential, err := s.buildCredentialFromSecret(task, workDir, host, secret)
@@ -158,8 +162,8 @@ func (s *Service) buildCredentialFromSecret(task *model.ExecutionTask, workDir, 
 func (s *Service) prepareBasicInventory(ctx context.Context, runID uuid.UUID, workDir, targetHosts string) (string, error) {
 	inventoryPath, err := ansible.WriteInventoryFile(workDir, ansible.GenerateInventory(targetHosts, "targets", nil))
 	if err != nil {
-		s.persistRunResult(ctx, runID, -1, "", err.Error(), nil)
-		s.appendLog(ctx, runID, "error", "prepare", fmt.Sprintf("生成 inventory 失败: %v", err), nil)
+		s.finalizeRunFailure(ctx, runID, err.Error(), nil)
+		s.appendDetachedLog(ctx, runID, "error", "prepare", fmt.Sprintf("生成 inventory 失败: %v", err), nil)
 		return "", err
 	}
 	s.appendLog(ctx, runID, "info", "prepare", "Inventory 已生成", nil)

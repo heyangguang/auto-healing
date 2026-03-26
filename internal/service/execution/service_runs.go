@@ -60,7 +60,10 @@ func (s *Service) ExecuteTask(ctx context.Context, taskID uuid.UUID, opts *Execu
 		return nil, fmt.Errorf("仓库不存在: %w", err)
 	}
 
-	secretsSourceIDs := resolveSecretsSourceIDs(task, opts)
+	secretsSourceIDs, err := resolveSecretsSourceIDs(task, opts)
+	if err != nil {
+		return nil, err
+	}
 	run := &model.ExecutionRun{
 		TaskID:                  taskID,
 		Status:                  "pending",
@@ -90,27 +93,30 @@ func defaultTriggeredBy(triggeredBy string) string {
 	return triggeredBy
 }
 
-func resolveSecretsSourceIDs(task *model.ExecutionTask, opts *ExecuteOptions) []uuid.UUID {
+func resolveSecretsSourceIDs(task *model.ExecutionTask, opts *ExecuteOptions) ([]uuid.UUID, error) {
 	if len(opts.SecretsSourceIDs) > 0 {
-		return opts.SecretsSourceIDs
+		return opts.SecretsSourceIDs, nil
 	}
 	if len(task.SecretsSourceIDs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	result := make([]uuid.UUID, 0, len(task.SecretsSourceIDs))
 	for _, idStr := range task.SecretsSourceIDs {
-		if id, err := uuid.Parse(idStr); err == nil {
-			result = append(result, id)
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return nil, fmt.Errorf("任务模板 secrets_source_id 非法: %s: %w", idStr, err)
 		}
+		result = append(result, id)
 	}
-	return result
+	return result, nil
 }
 
 func (s *Service) scheduleExecution(runID uuid.UUID, task *model.ExecutionTask, playbook *model.Playbook, gitRepo *model.GitRepository, params *executeParams) {
 	lifecycle := s.ensureLifecycle()
 	lifecycle.Go(func(rootCtx context.Context) {
 		if !lifecycle.Acquire(rootCtx) {
+			s.markPendingRunInterrupted(runID, withTenantContext(rootCtx, task.TenantID))
 			logger.Exec("RUN").Warn("[%s] 执行未启动，服务正在停止", shortRunID(runID))
 			return
 		}
@@ -157,37 +163,6 @@ func (s *Service) ListAllRuns(ctx context.Context, opts *repository.RunListOptio
 // GetRunLogs 获取执行日志
 func (s *Service) GetRunLogs(ctx context.Context, runID uuid.UUID) ([]model.ExecutionLog, error) {
 	return s.repo.GetLogsByRunID(ctx, runID)
-}
-
-// CancelRun 取消执行
-func (s *Service) CancelRun(ctx context.Context, id uuid.UUID) error {
-	run, err := s.repo.GetRunByID(ctx, id)
-	if err != nil {
-		return err
-	}
-	if run.Status != "pending" && run.Status != "running" {
-		return fmt.Errorf("执行状态不允许取消: %s", run.Status)
-	}
-	if err := s.repo.UpdateRunStatus(ctx, id, "cancelled"); err != nil {
-		return err
-	}
-
-	s.cancelRunningExecution(id)
-	s.appendLog(ctx, id, "warn", "control", "执行已被取消", nil)
-	logger.Exec("RUN").Warn("已取消: %s", id)
-	return nil
-}
-
-func (s *Service) cancelRunningExecution(id uuid.UUID) {
-	cancelFunc, ok := s.runningExecutions.Load(id)
-	if !ok {
-		return
-	}
-	if cancel, ok := cancelFunc.(context.CancelFunc); ok {
-		cancel()
-		logger.Exec("RUN").Warn("已发送取消信号: %s", id)
-	}
-	s.runningExecutions.Delete(id)
 }
 
 func (s *Service) Shutdown() {

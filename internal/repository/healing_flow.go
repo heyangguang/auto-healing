@@ -47,10 +47,13 @@ func (r *HealingFlowRepository) Update(ctx context.Context, flow *model.HealingF
 // Delete 删除自愈流程
 func (r *HealingFlowRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := TenantDB(r.db, ctx).Delete(&model.HealingFlow{}, "id = ?", id)
+	if result.Error != nil {
+		return result.Error
+	}
 	if result.RowsAffected == 0 {
 		return ErrHealingFlowNotFound
 	}
-	return result.Error
+	return nil
 }
 
 // List 获取自愈流程列表
@@ -64,7 +67,7 @@ func (r *HealingFlowRepository) List(ctx context.Context, page, pageSize int, is
 		return nil, 0, err
 	}
 	err := q.Preload("Creator").
-		Offset((page-1)*pageSize).
+		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		Order(healingFlowOrderClause(sortBy, sortOrder)).
 		Find(&flows).Error

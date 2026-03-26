@@ -45,6 +45,15 @@ func (r *IncidentRepository) Update(ctx context.Context, incident *model.Inciden
 	return UpdateTenantScopedModel(r.db, ctx, incident.ID, incident)
 }
 
+// UpdateHealingStatus 仅更新工单自愈状态，避免整行覆盖并发修改。
+func (r *IncidentRepository) UpdateHealingStatus(ctx context.Context, id uuid.UUID, healingStatus string) error {
+	return TenantDB(r.db, ctx).
+		Model(&model.Incident{}).
+		Where("id = ?", id).
+		Update("healing_status", healingStatus).
+		Error
+}
+
 // List 获取工单列表
 func (r *IncidentRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity string, sourcePluginName, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, externalID query.StringFilter, scopes ...func(*gorm.DB) *gorm.DB) ([]model.Incident, int64, error) {
 	var incidents []model.Incident
@@ -121,8 +130,18 @@ func (r *IncidentRepository) UpsertByExternalID(ctx context.Context, incident *m
 	if err != nil {
 		return false, err
 	}
-	incident.ID = existing.ID
+	preserveIncidentManagedFields(incident, &existing)
 	return false, r.Update(ctx, incident)
+}
+
+func preserveIncidentManagedFields(incoming, existing *model.Incident) {
+	incoming.ID = existing.ID
+	incoming.TenantID = existing.TenantID
+	incoming.HealingStatus = existing.HealingStatus
+	incoming.WorkflowInstanceID = existing.WorkflowInstanceID
+	incoming.Scanned = existing.Scanned
+	incoming.MatchedRuleID = existing.MatchedRuleID
+	incoming.HealingFlowInstanceID = existing.HealingFlowInstanceID
 }
 
 // ListUnscanned 获取未扫描的工单列表（跨租户，自愈引擎调度器专用）

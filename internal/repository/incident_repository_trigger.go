@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
@@ -66,6 +67,20 @@ func (r *IncidentRepository) MarkScanned(ctx context.Context, id uuid.UUID, matc
 		updates["healing_flow_instance_id"] = *flowInstanceID
 	}
 	return TenantDB(r.db, ctx).Model(&model.Incident{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *IncidentRepository) SyncState(ctx context.Context, opts IncidentSyncOptions) error {
+	result := TenantDB(r.db, ctx).
+		Model(&model.Incident{}).
+		Where("id = ?", opts.IncidentID).
+		Updates(incidentSyncUpdates(opts))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("工单不存在: %s", opts.IncidentID)
+	}
+	return nil
 }
 
 // ResetScan 重置工单扫描状态

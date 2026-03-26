@@ -112,8 +112,12 @@ func TestExecutionRepositoryCancelledRunIsNotOverwritten(t *testing.T) {
 	if err != nil || !started {
 		t.Fatalf("UpdateRunStarted() started=%v err=%v", started, err)
 	}
-	if err := repo.UpdateRunStatus(ctx, runID, "cancelled"); err != nil {
+	cancelled, err := repo.UpdateRunStatus(ctx, runID, "cancelled")
+	if err != nil {
 		t.Fatalf("UpdateRunStatus(cancelled): %v", err)
+	}
+	if !cancelled {
+		t.Fatal("UpdateRunStatus(cancelled) should update running run")
 	}
 	if err := repo.UpdateRunResult(ctx, runID, 0, "ok", "", nil); err != nil {
 		t.Fatalf("UpdateRunResult(): %v", err)

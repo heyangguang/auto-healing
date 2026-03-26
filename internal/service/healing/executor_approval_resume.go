@@ -10,17 +10,26 @@ import (
 )
 
 // ResumeAfterApproval 审批后恢复执行
-func (e *FlowExecutor) ResumeAfterApproval(ctx context.Context, instanceID uuid.UUID, approved bool) error {
+func (e *FlowExecutor) ResumeAfterApproval(ctx context.Context, instanceID uuid.UUID, approved bool) (err error) {
 	instance, err := e.instanceRepo.GetByID(ctx, instanceID)
 	if err != nil {
 		return err
 	}
+	shouldFailOnError := true
+	defer func() {
+		if err == nil || !shouldFailOnError {
+			return
+		}
+		e.handleApprovalResumeError(detachContext(ctx), instance, err)
+	}()
+
 	nodes, edges, err := e.parseFlowSnapshot(instance)
 	if err != nil {
 		return err
 	}
 	currentNode := currentApprovalNode(nodes, instance.CurrentNodeID)
 	if currentNode == nil {
+		shouldFailOnError = false
 		return e.failApprovalResume(ctx, instance, instanceID, "找不到当前节点")
 	}
 	if currentNode.Type != model.NodeTypeApproval {
@@ -39,6 +48,7 @@ func (e *FlowExecutor) ResumeAfterApproval(ctx context.Context, instanceID uuid.
 	nextNode := e.findNextNodeByHandle(nodes, edges, currentNode.ID, outputHandle)
 	if nextNode == nil {
 		if !approved {
+			shouldFailOnError = false
 			return e.failApprovalResume(ctx, instance, instanceID, "审批被拒绝")
 		}
 		return e.complete(runCtx, instance)
@@ -67,26 +77,35 @@ func startApprovalResumeContext(ctx context.Context, instanceID uuid.UUID) (cont
 }
 
 func (e *FlowExecutor) failApprovalResume(ctx context.Context, instance *model.FlowInstance, instanceID uuid.UUID, message string) error {
-	updated, err := e.instanceRepo.UpdateStatusIfCurrent(ctx, instanceID, []string{model.FlowInstanceStatusWaitingApproval, model.FlowInstanceStatusRunning}, model.FlowInstanceStatusFailed, message)
+	updated, err := e.instanceRepo.UpdateStatusWithIncidentSync(
+		ctx,
+		instanceID,
+		[]string{model.FlowInstanceStatusWaitingApproval, model.FlowInstanceStatusRunning},
+		model.FlowInstanceStatusFailed,
+		message,
+		instanceIncidentSyncOptions(instance, "failed"),
+	)
 	if err != nil {
 		return err
 	}
-	if updated {
-		return e.updateApprovalIncidentStatus(ctx, instance, "failed")
+	if !updated {
+		return nil
 	}
 	return nil
 }
 
-func (e *FlowExecutor) updateApprovalIncidentStatus(ctx context.Context, instance *model.FlowInstance, status string) error {
-	if instance.IncidentID == nil {
-		return nil
-	}
-	incident, err := e.incidentRepo.GetByID(ctx, *instance.IncidentID)
+func (e *FlowExecutor) handleApprovalResumeError(ctx context.Context, instance *model.FlowInstance, resumeErr error) {
+	status, err := e.flowInstanceStatus(ctx, instance.ID)
 	if err != nil {
-		return err
+		logger.Exec("FLOW").Error("[%s] 查询审批恢复状态失败: %v", instance.ID.String()[:8], err)
+		return
 	}
-	incident.HealingStatus = status
-	return e.persistIncident(ctx, incident, "更新审批关联工单状态")
+	if status != model.FlowInstanceStatusWaitingApproval && status != model.FlowInstanceStatusRunning {
+		return
+	}
+	if err := e.failApprovalResume(ctx, instance, instance.ID, "审批恢复失败: "+resumeErr.Error()); err != nil {
+		logger.Exec("FLOW").Error("[%s] 审批恢复失败后更新状态异常: %v", instance.ID.String()[:8], err)
+	}
 }
 
 func currentApprovalNode(nodes []model.FlowNode, currentNodeID string) *model.FlowNode {

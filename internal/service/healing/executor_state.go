@@ -34,25 +34,26 @@ func (e *FlowExecutor) setNodeState(ctx context.Context, instance *model.FlowIns
 					existing["duration_ms"] = now.Sub(startedAt).Milliseconds()
 				}
 			}
-			}
-			instance.NodeStates[nodeID] = existing
-		} else {
+		}
+		instance.NodeStates[nodeID] = existing
+	} else {
 		if status != "running" {
 			state["duration_ms"] = int64(0)
-			}
-			instance.NodeStates[nodeID] = state
 		}
+		instance.NodeStates[nodeID] = state
+	}
 	return e.persistNodeStates(ctx, instance, "更新节点状态")
 }
 
 // complete 完成流程
 func (e *FlowExecutor) complete(ctx context.Context, instance *model.FlowInstance) error {
-	updated, err := e.instanceRepo.UpdateStatusIfCurrent(
+	updated, err := e.instanceRepo.UpdateStatusWithIncidentSync(
 		ctx,
 		instance.ID,
 		[]string{model.FlowInstanceStatusPending, model.FlowInstanceStatusRunning, model.FlowInstanceStatusWaitingApproval},
 		model.FlowInstanceStatusCompleted,
 		"",
+		instanceIncidentSyncOptions(instance, "healed"),
 	)
 	if err != nil {
 		return err
@@ -64,17 +65,18 @@ func (e *FlowExecutor) complete(ctx context.Context, instance *model.FlowInstanc
 
 	logger.Exec("FLOW").Info("[%s] 流程实例完成", instance.ID.String()[:8])
 	e.eventBus.PublishFlowComplete(instance.ID, true, model.FlowInstanceStatusCompleted, "流程执行完成")
-	return e.updateIncidentHealingStatus(ctx, instance, "healed")
+	return nil
 }
 
 // fail 失败流程
 func (e *FlowExecutor) fail(ctx context.Context, instance *model.FlowInstance, errMsg string) {
-	updated, err := e.instanceRepo.UpdateStatusIfCurrent(
+	updated, err := e.instanceRepo.UpdateStatusWithIncidentSync(
 		ctx,
 		instance.ID,
 		[]string{model.FlowInstanceStatusPending, model.FlowInstanceStatusRunning, model.FlowInstanceStatusWaitingApproval},
 		model.FlowInstanceStatusFailed,
 		errMsg,
+		instanceIncidentSyncOptions(instance, "failed"),
 	)
 	if err != nil {
 		logger.Exec("FLOW").Error("[%s] 更新失败状态异常: %v", instance.ID.String()[:8], err)
@@ -87,23 +89,4 @@ func (e *FlowExecutor) fail(ctx context.Context, instance *model.FlowInstance, e
 
 	logger.Exec("FLOW").Error("[%s] 流程实例失败: %s", instance.ID.String()[:8], errMsg)
 	e.eventBus.PublishFlowComplete(instance.ID, false, model.FlowInstanceStatusFailed, errMsg)
-	if err := e.updateIncidentHealingStatus(ctx, instance, "failed"); err != nil {
-		logger.Exec("FLOW").Error("[%s] 更新工单失败状态异常: %v", instance.ID.String()[:8], err)
-	}
-}
-
-func (e *FlowExecutor) updateIncidentHealingStatus(ctx context.Context, instance *model.FlowInstance, status string) error {
-	if instance.IncidentID == nil {
-		return nil
-	}
-	incident, err := e.incidentRepo.GetByID(ctx, *instance.IncidentID)
-	if err != nil {
-		return err
-	}
-	incident.HealingStatus = status
-	if err := e.persistIncident(ctx, incident, "更新工单自愈状态"); err != nil {
-		return err
-	}
-	logger.Exec("FLOW").Info("[%s] 工单 %s 自愈状态已更新为 %s", instance.ID.String()[:8], incident.ID.String()[:8], status)
-	return nil
 }

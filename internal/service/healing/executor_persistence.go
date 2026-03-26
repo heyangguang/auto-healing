@@ -27,7 +27,7 @@ func (e *FlowExecutor) persistInstance(ctx context.Context, instance *model.Flow
 }
 
 func (e *FlowExecutor) persistIncident(ctx context.Context, incident *model.Incident, action string) error {
-	if err := e.incidentRepo.Update(ctx, incident); err != nil {
+	if err := e.incidentRepo.UpdateHealingStatus(ctx, incident.ID, incident.HealingStatus); err != nil {
 		return fmt.Errorf("%s: %w", action, err)
 	}
 	return nil

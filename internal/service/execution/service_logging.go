@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
@@ -11,6 +12,8 @@ import (
 
 // ==================== 内部方法 ====================
 
+var executionLogWriteMu sync.Mutex
+
 func (s *Service) appendLog(ctx context.Context, runID uuid.UUID, level, stage, message string, details map[string]any) {
 	if err := s.appendLogErr(ctx, runID, level, stage, message, details); err != nil {
 		logger.Exec("RUN").Error("追加执行日志失败: run=%s stage=%s err=%v", runID, stage, err)
@@ -18,6 +21,9 @@ func (s *Service) appendLog(ctx context.Context, runID uuid.UUID, level, stage, 
 }
 
 func (s *Service) appendLogErr(ctx context.Context, runID uuid.UUID, level, stage, message string, details map[string]any) error {
+	executionLogWriteMu.Lock()
+	defer executionLogWriteMu.Unlock()
+
 	seq, err := s.repo.GetNextLogSequence(ctx, runID)
 	if err != nil {
 		return err

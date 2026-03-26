@@ -53,6 +53,7 @@ func (s *Service) executeInBackground(rootCtx context.Context, runID uuid.UUID, 
 	executor := s.selectExecutor(task.ExecutorType)
 	result, execErr := s.executePlaybook(ctx, runID, task, playbook, workDir, inventoryPath, params.extraVars, executor)
 	if ctx.Err() != nil {
+		s.interruptRunningRun(runID, context.WithoutCancel(ctx))
 		logger.Exec("RUN").Warn("执行被取消，跳过结果更新: %s", runID)
 		return
 	}
@@ -77,7 +78,7 @@ func (s *Service) bindRunContext(rootCtx context.Context, runID uuid.UUID) (cont
 func (s *Service) recoverRunPanic(ctx context.Context, runID uuid.UUID) {
 	if rec := recover(); rec != nil {
 		logger.Exec("RUN").Error("[%s] executeInBackground panic: %v", shortRunID(runID), rec)
-		s.persistRunResult(ctx, runID, -1, "", fmt.Sprintf("内部错误: %v", rec), nil)
+		s.finalizeRunFailure(ctx, runID, fmt.Sprintf("内部错误: %v", rec), nil)
 	}
 }
 
@@ -126,8 +127,8 @@ func (s *Service) prepareRunWorkspace(ctx context.Context, runID uuid.UUID, loca
 	s.appendLog(ctx, runID, "info", "prepare", "开始准备执行环境", nil)
 	workDir, cleanup, err := s.workspaceManager.PrepareWorkspace(runID, localPath)
 	if err != nil {
-		s.persistRunResult(ctx, runID, -1, "", err.Error(), nil)
-		s.appendLog(ctx, runID, "error", "prepare", fmt.Sprintf("准备工作空间失败: %v", err), nil)
+		s.finalizeRunFailure(ctx, runID, err.Error(), nil)
+		s.appendDetachedLog(ctx, runID, "error", "prepare", fmt.Sprintf("准备工作空间失败: %v", err), nil)
 		return "", nil, err
 	}
 	s.appendLog(ctx, runID, "info", "prepare", fmt.Sprintf("工作空间已准备: %s", workDir), nil)
@@ -147,7 +148,7 @@ func (s *Service) abortOnSecurityViolations(ctx context.Context, runID uuid.UUID
 	}
 
 	s.logSecurityViolations(ctx, runID, violations)
-	s.persistRunResult(ctx, runID, -2, "", fmt.Sprintf("安全拦截：检测到 %d 个高危指令", len(violations)), nil)
+	s.finalizeRunFailure(ctx, runID, fmt.Sprintf("安全拦截：检测到 %d 个高危指令", len(violations)), nil)
 	logger.Exec("SECURITY").Warn("[%s] 检测到 %d 个高危指令，执行已拦截", shortRunID(runID), len(violations))
 	return true
 }
