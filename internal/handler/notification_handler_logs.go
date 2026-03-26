@@ -21,7 +21,7 @@ func (h *NotificationHandler) SendNotification(c *gin.Context) {
 
 	logs, err := h.svc.Send(c.Request.Context(), req)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		writeNotificationSendError(c, err, logs)
 		return
 	}
 	response.Success(c, gin.H{
@@ -113,7 +113,7 @@ func (h *NotificationHandler) GetNotification(c *gin.Context) {
 
 	log, err := h.svc.GetNotification(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "通知记录不存在")
+		writeNotificationLookupError(c, err, "通知记录不存在", "获取通知记录失败")
 		return
 	}
 	response.Success(c, log)

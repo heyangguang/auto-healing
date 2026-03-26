@@ -1,8 +1,12 @@
 package handler
 
 import (
+	"errors"
+
+	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -29,13 +33,18 @@ func (h *DashboardHandler) CreateSystemWorkspace(c *gin.Context) {
 		respondInternalError(c, "DASHBOARD", "failed to load user roles", err)
 		return
 	}
+	tenantRoleIDs, err := h.filterTenantRoleIDs(c, roleIDs)
+	if err != nil {
+		respondInternalError(c, "DASHBOARD", "failed to validate tenant roles", err)
+		return
+	}
 	workspace := &model.SystemWorkspace{
 		Name:        body.Name,
 		Description: body.Description,
 		Config:      body.Config,
 		CreatedBy:   &uid,
 	}
-	if err := h.wsRepo.CreateAndAssignToRoles(c.Request.Context(), workspace, roleIDs); err != nil {
+	if err := h.wsRepo.CreateAndAssignToRoles(c.Request.Context(), workspace, tenantRoleIDs); err != nil {
 		respondInternalError(c, "DASHBOARD", "failed to create workspace", err)
 		return
 	}
@@ -44,6 +53,9 @@ func (h *DashboardHandler) CreateSystemWorkspace(c *gin.Context) {
 
 // ListSystemWorkspaces 获取所有系统工作区
 func (h *DashboardHandler) ListSystemWorkspaces(c *gin.Context) {
+	if !requireDashboardWorkspaceManage(c) {
+		return
+	}
 	workspaces, err := h.wsRepo.List(c.Request.Context())
 	if err != nil {
 		respondInternalError(c, "DASHBOARD", "failed to list workspaces", err)
@@ -114,6 +126,10 @@ func (h *DashboardHandler) AssignRoleWorkspaces(c *gin.Context) {
 		response.BadRequest(c, "invalid role ID")
 		return
 	}
+	if _, err := h.requireTenantRole(c, roleID); err != nil {
+		writeDashboardRoleScopeError(c, err)
+		return
+	}
 
 	var body struct {
 		WorkspaceIDs []string `json:"workspace_ids" binding:"required"`
@@ -140,9 +156,16 @@ func (h *DashboardHandler) AssignRoleWorkspaces(c *gin.Context) {
 
 // GetRoleWorkspaces 获取角色关联的工作区
 func (h *DashboardHandler) GetRoleWorkspaces(c *gin.Context) {
+	if !requireDashboardWorkspaceManage(c) {
+		return
+	}
 	roleID, err := uuid.Parse(c.Param("roleId"))
 	if err != nil {
 		response.BadRequest(c, "invalid role ID")
+		return
+	}
+	if _, err := h.requireTenantRole(c, roleID); err != nil {
+		writeDashboardRoleScopeError(c, err)
 		return
 	}
 	ids, err := h.wsRepo.GetRoleWorkspaceIDs(c.Request.Context(), roleID)
@@ -151,4 +174,45 @@ func (h *DashboardHandler) GetRoleWorkspaces(c *gin.Context) {
 		return
 	}
 	response.Success(c, map[string]interface{}{"workspace_ids": ids})
+}
+
+func requireDashboardWorkspaceManage(c *gin.Context) bool {
+	if middleware.HasPermission(middleware.GetPermissions(c), "dashboard:workspace:manage") {
+		return true
+	}
+	response.Forbidden(c, "dashboard workspace manage permission required")
+	return false
+}
+
+func (h *DashboardHandler) filterTenantRoleIDs(c *gin.Context, roleIDs []uuid.UUID) ([]uuid.UUID, error) {
+	tenantRoleIDs := make([]uuid.UUID, 0, len(roleIDs))
+	for _, roleID := range roleIDs {
+		role, err := h.requireTenantRole(c, roleID)
+		if errors.Is(err, repository.ErrRoleNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if role != nil {
+			tenantRoleIDs = append(tenantRoleIDs, role.ID)
+		}
+	}
+	return tenantRoleIDs, nil
+}
+
+func (h *DashboardHandler) requireTenantRole(c *gin.Context, roleID uuid.UUID) (*model.Role, error) {
+	tenantID, ok := requireTenantID(c, "DASHBOARD")
+	if !ok {
+		return nil, repository.ErrTenantContextRequired
+	}
+	return h.roleRepo.GetTenantRoleByID(c.Request.Context(), tenantID, roleID)
+}
+
+func writeDashboardRoleScopeError(c *gin.Context, err error) {
+	if errors.Is(err, repository.ErrRoleNotFound) {
+		response.NotFound(c, "role not found in current tenant")
+		return
+	}
+	respondInternalError(c, "DASHBOARD", "failed to validate role scope", err)
 }

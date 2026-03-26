@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
@@ -45,7 +46,9 @@ func (r *WorkbenchRepository) appendCronScheduleCalendar(ctx context.Context, re
 
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 	for _, schedule := range schedules {
-		r.appendCronScheduleEntries(result, parser, schedule, startOfMonth, endOfMonth)
+		if err := r.appendCronScheduleEntries(result, parser, schedule, startOfMonth, endOfMonth); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -76,21 +79,21 @@ func (r *WorkbenchRepository) appendOnceScheduleCalendar(ctx context.Context, re
 	return nil
 }
 
-func (r *WorkbenchRepository) appendCronScheduleEntries(result map[string][]CalendarTask, parser cron.Parser, schedule model.ExecutionSchedule, startOfMonth, endOfMonth time.Time) {
+func (r *WorkbenchRepository) appendCronScheduleEntries(result map[string][]CalendarTask, parser cron.Parser, schedule model.ExecutionSchedule, startOfMonth, endOfMonth time.Time) error {
 	if schedule.ScheduleExpr == nil || *schedule.ScheduleExpr == "" {
-		return
+		return nil
 	}
 
 	parsed, err := parser.Parse(*schedule.ScheduleExpr)
 	if err != nil {
-		return
+		return fmt.Errorf("invalid cron schedule %s (%s): %w", schedule.ID, schedule.Name, err)
 	}
 
 	current := startOfMonth.Add(-time.Second)
 	for {
 		nextRun := parsed.Next(current)
 		if !nextRun.Before(endOfMonth) {
-			return
+			return nil
 		}
 
 		dateKey := nextRun.Format("2006-01-02")

@@ -51,7 +51,7 @@ type TriggerItem struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-func (r *DashboardRepository) GetHealingSection(ctx context.Context) (*HealingSection, error) {
+func (r *DashboardRepository) GetHealingSection(ctx context.Context, permissions []string) (*HealingSection, error) {
 	section := &HealingSection{}
 	db := r.tenantDB(ctx)
 	tenantID, err := RequireTenantID(ctx)
@@ -59,23 +59,72 @@ func (r *DashboardRepository) GetHealingSection(ctx context.Context) (*HealingSe
 		return nil, err
 	}
 
-	countModel(db, &model.HealingFlow{}, &section.FlowsTotal)
-	countModel(db.Where("is_active = ?", true), &model.HealingFlow{}, &section.FlowsActive)
-	countModel(db, &model.HealingRule{}, &section.RulesTotal)
-	countModel(db.Where("is_active = ?", true), &model.HealingRule{}, &section.RulesActive)
-	countModel(db, &model.FlowInstance{}, &section.InstancesTotal)
-	countModel(db.Where("status = ?", "running"), &model.FlowInstance{}, &section.InstancesRunning)
-	countModel(db.Where("status = ?", "pending"), &model.ApprovalTask{}, &section.PendingApprovals)
-	countModel(pendingTriggerQuery(db), &model.Incident{}, &section.PendingTriggers)
-
-	scanStatusCounts(db, &model.FlowInstance{}, "status", &section.InstancesByStatus)
-	scanTrendPoints(db, &model.FlowInstance{}, "created_at", time.Now().AddDate(0, 0, -7), &section.InstanceTrend7d)
-	scanStatusCounts(db, &model.ApprovalTask{}, "status", &section.ApprovalsByStatus)
-	scanStatusCounts(db, &model.HealingRule{}, "trigger_mode", &section.RulesByTriggerMode)
-	section.FlowTop10 = listTopHealingFlows(r.db.WithContext(ctx), tenantID)
-	section.RecentInstances = listRecentInstances(db.Order("created_at DESC").Limit(10))
-	section.PendingApprovalList = listPendingApprovals(db.Where("status = ?", "pending").Order("created_at DESC").Limit(10))
-	section.PendingTriggerList = listPendingTriggers(pendingTriggerQuery(db).Order("created_at DESC").Limit(10))
+	if repoHasPermission(permissions, "healing:flows:view") {
+		if err := countModel(db, &model.HealingFlow{}, &section.FlowsTotal); err != nil {
+			return nil, err
+		}
+		if err := countModel(db.Where("is_active = ?", true), &model.HealingFlow{}, &section.FlowsActive); err != nil {
+			return nil, err
+		}
+		flowTop, err := listTopHealingFlows(r.db.WithContext(ctx), tenantID)
+		if err != nil {
+			return nil, err
+		}
+		section.FlowTop10 = flowTop
+	}
+	if repoHasPermission(permissions, "healing:rules:view") {
+		if err := countModel(db, &model.HealingRule{}, &section.RulesTotal); err != nil {
+			return nil, err
+		}
+		if err := countModel(db.Where("is_active = ?", true), &model.HealingRule{}, &section.RulesActive); err != nil {
+			return nil, err
+		}
+		if err := scanStatusCounts(db, &model.HealingRule{}, "trigger_mode", &section.RulesByTriggerMode); err != nil {
+			return nil, err
+		}
+	}
+	if repoHasPermission(permissions, "healing:instances:view") {
+		if err := countModel(db, &model.FlowInstance{}, &section.InstancesTotal); err != nil {
+			return nil, err
+		}
+		if err := countModel(db.Where("status = ?", "running"), &model.FlowInstance{}, &section.InstancesRunning); err != nil {
+			return nil, err
+		}
+		if err := scanStatusCounts(db, &model.FlowInstance{}, "status", &section.InstancesByStatus); err != nil {
+			return nil, err
+		}
+		if err := scanTrendPoints(db, &model.FlowInstance{}, "created_at", time.Now().AddDate(0, 0, -7), &section.InstanceTrend7d); err != nil {
+			return nil, err
+		}
+		recent, err := listRecentInstances(db.Order("created_at DESC").Limit(10))
+		if err != nil {
+			return nil, err
+		}
+		section.RecentInstances = recent
+	}
+	if repoHasPermission(permissions, "healing:approvals:view") {
+		if err := countModel(db.Where("status = ?", "pending"), &model.ApprovalTask{}, &section.PendingApprovals); err != nil {
+			return nil, err
+		}
+		if err := scanStatusCounts(db, &model.ApprovalTask{}, "status", &section.ApprovalsByStatus); err != nil {
+			return nil, err
+		}
+		approvals, err := listPendingApprovals(db.Where("status = ?", "pending").Order("created_at DESC").Limit(10))
+		if err != nil {
+			return nil, err
+		}
+		section.PendingApprovalList = approvals
+	}
+	if repoHasPermission(permissions, "healing:trigger:view") {
+		if err := countModel(pendingTriggerQuery(db), &model.Incident{}, &section.PendingTriggers); err != nil {
+			return nil, err
+		}
+		triggers, err := listPendingTriggers(pendingTriggerQuery(db).Order("created_at DESC").Limit(10))
+		if err != nil {
+			return nil, err
+		}
+		section.PendingTriggerList = triggers
+	}
 	return section, nil
 }
 
@@ -83,22 +132,26 @@ func pendingTriggerQuery(db *gorm.DB) *gorm.DB {
 	return db.Where("scanned = ? AND matched_rule_id IS NOT NULL AND healing_flow_instance_id IS NULL", true)
 }
 
-func listTopHealingFlows(db *gorm.DB, tenantID uuid.UUID) []RankItem {
+func listTopHealingFlows(db *gorm.DB, tenantID uuid.UUID) ([]RankItem, error) {
 	var items []RankItem
-	db.Where("fi.tenant_id = ?", tenantID).
+	if err := db.Where("fi.tenant_id = ?", tenantID).
 		Table("flow_instances fi").
 		Select("hf.name as name, count(*) as count").
-		Joins("JOIN healing_flows hf ON fi.flow_id = hf.id").
+		Joins("JOIN healing_flows hf ON fi.flow_id = hf.id AND hf.tenant_id = ?", tenantID).
 		Group("hf.name").
 		Order("count DESC").
 		Limit(10).
-		Scan(&items)
-	return items
+		Scan(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-func listRecentInstances(query *gorm.DB) []InstanceItem {
+func listRecentInstances(query *gorm.DB) ([]InstanceItem, error) {
 	var instances []model.FlowInstance
-	query.Find(&instances)
+	if err := query.Find(&instances).Error; err != nil {
+		return nil, err
+	}
 	items := make([]InstanceItem, 0, len(instances))
 	for _, instance := range instances {
 		items = append(items, InstanceItem{
@@ -108,12 +161,14 @@ func listRecentInstances(query *gorm.DB) []InstanceItem {
 			CreatedAt: instance.CreatedAt,
 		})
 	}
-	return items
+	return items, nil
 }
 
-func listPendingApprovals(query *gorm.DB) []ApprovalItem {
+func listPendingApprovals(query *gorm.DB) ([]ApprovalItem, error) {
 	var approvals []model.ApprovalTask
-	query.Find(&approvals)
+	if err := query.Find(&approvals).Error; err != nil {
+		return nil, err
+	}
 	items := make([]ApprovalItem, 0, len(approvals))
 	for _, approval := range approvals {
 		items = append(items, ApprovalItem{
@@ -124,12 +179,14 @@ func listPendingApprovals(query *gorm.DB) []ApprovalItem {
 			CreatedAt:      approval.CreatedAt,
 		})
 	}
-	return items
+	return items, nil
 }
 
-func listPendingTriggers(query *gorm.DB) []TriggerItem {
+func listPendingTriggers(query *gorm.DB) ([]TriggerItem, error) {
 	var incidents []model.Incident
-	query.Find(&incidents)
+	if err := query.Find(&incidents).Error; err != nil {
+		return nil, err
+	}
 	items := make([]TriggerItem, 0, len(incidents))
 	for _, incident := range incidents {
 		items = append(items, TriggerItem{
@@ -140,5 +197,5 @@ func listPendingTriggers(query *gorm.DB) []TriggerItem {
 			CreatedAt:  incident.CreatedAt,
 		})
 	}
-	return items
+	return items, nil
 }

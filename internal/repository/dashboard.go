@@ -88,19 +88,19 @@ type RankItem struct {
 	Count int64  `json:"count" gorm:"column:count"`
 }
 
-func countModel(query *gorm.DB, model any, dest *int64) {
-	query.Model(model).Count(dest)
+func countModel(query *gorm.DB, model any, dest *int64) error {
+	return query.Model(model).Count(dest).Error
 }
 
-func scanStatusCounts(query *gorm.DB, model any, column string, dest *[]StatusCount) {
-	query.Model(model).Select(column + " as status, count(*) as count").Group(column).Scan(dest)
+func scanStatusCounts(query *gorm.DB, model any, column string, dest *[]StatusCount) error {
+	return query.Model(model).Select(column + " as status, count(*) as count").Group(column).Scan(dest).Error
 }
 
-func scanTrendPoints(query *gorm.DB, model any, timeColumn string, since time.Time, dest *[]TrendPoint) {
-	query.Model(model).
+func scanTrendPoints(query *gorm.DB, model any, timeColumn string, since time.Time, dest *[]TrendPoint) error {
+	return query.Model(model).
 		Select("DATE("+timeColumn+") as date, count(*) as count").
 		Where(timeColumn+" >= ?", since).
 		Group("DATE(" + timeColumn + ")").
 		Order("date").
-		Scan(dest)
+		Scan(dest).Error
 }

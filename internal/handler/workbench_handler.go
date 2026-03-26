@@ -2,7 +2,7 @@ package handler
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,16 +55,14 @@ func (h *WorkbenchHandler) GetOverview(c *gin.Context) {
 
 func (h *WorkbenchHandler) loadWorkbenchOverviewSections(ctx context.Context, permissions []string) (map[string]interface{}, error) {
 	sections := h.workbenchOverviewSections(ctx, permissions)
-	result := make(map[string]interface{})
-	var mu sync.Mutex
+	state := newConcurrentSectionState(len(sections))
 	var wg sync.WaitGroup
-	var lastErr error
 	for _, sec := range sections {
 		wg.Add(1)
-		go h.runWorkbenchSection(sec, &wg, &mu, result, &lastErr)
+		go h.runWorkbenchSection(sec, &wg, state)
 	}
 	wg.Wait()
-	return result, lastErr
+	return state.resultAndError()
 }
 
 func (h *WorkbenchHandler) workbenchOverviewSections(ctx context.Context, permissions []string) []workbenchSection {
@@ -84,23 +82,14 @@ func (h *WorkbenchHandler) workbenchOverviewSections(ctx context.Context, permis
 	return sections
 }
 
-func (h *WorkbenchHandler) runWorkbenchSection(sec workbenchSection, wg *sync.WaitGroup, mu *sync.Mutex, result map[string]interface{}, lastErr *error) {
+func (h *WorkbenchHandler) runWorkbenchSection(sec workbenchSection, wg *sync.WaitGroup, state *concurrentSectionState) {
 	defer wg.Done()
-	defer func() {
-		if rec := recover(); rec != nil {
-			mu.Lock()
-			*lastErr = fmt.Errorf("section %s panic: %v", sec.key, rec)
-			mu.Unlock()
-		}
-	}()
-	data, err := sec.fn()
-	mu.Lock()
-	defer mu.Unlock()
+	data, err := safeSectionLoad(sec.fn)
 	if err != nil {
-		*lastErr = err
+		state.addError(sec.key, err)
 		return
 	}
-	result[sec.key] = data
+	state.addResult(sec.key, data)
 }
 
 // GetActivities 获取活动动态
@@ -180,7 +169,12 @@ func (h *WorkbenchHandler) GetAnnouncements(c *gin.Context) {
 	// 获取用户创建时间，不显示注册前的公告
 	var userCreatedAt time.Time
 	if userID, err := uuid.Parse(middleware.GetUserID(c)); err == nil {
-		if user, err := h.userRepo.GetByID(c.Request.Context(), userID); err == nil {
+		user, err := h.userRepo.GetByID(c.Request.Context(), userID)
+		if err != nil && !errors.Is(err, repository.ErrUserNotFound) {
+			respondInternalError(c, "WORKBENCH", "获取系统公告失败", err)
+			return
+		}
+		if err == nil {
 			userCreatedAt = user.CreatedAt
 		}
 	}

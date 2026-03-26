@@ -52,29 +52,58 @@ func (r *DashboardRepository) GetCMDBSection(ctx context.Context) (*CMDBSection,
 	}
 	db := r.tenantDB(ctx)
 
-	countModel(db, &model.CMDBItem{}, &section.Total)
-	countModel(db.Where("status = ?", "active"), &model.CMDBItem{}, &section.Active)
-	countModel(db.Where("status = ?", "maintenance"), &model.CMDBItem{}, &section.Maintenance)
-	countModel(db.Where("status = ?", "offline"), &model.CMDBItem{}, &section.Offline)
+	if err := countModel(db, &model.CMDBItem{}, &section.Total); err != nil {
+		return nil, err
+	}
+	if err := countModel(db.Where("status = ?", "active"), &model.CMDBItem{}, &section.Active); err != nil {
+		return nil, err
+	}
+	if err := countModel(db.Where("status = ?", "maintenance"), &model.CMDBItem{}, &section.Maintenance); err != nil {
+		return nil, err
+	}
+	if err := countModel(db.Where("status = ?", "offline"), &model.CMDBItem{}, &section.Offline); err != nil {
+		return nil, err
+	}
 	if section.Total > 0 {
 		section.ActiveRate = float64(section.Active) / float64(section.Total) * 100
 	}
 
-	scanStatusCounts(db, &model.CMDBItem{}, "status", &section.ByStatus)
-	scanStatusCounts(db, &model.CMDBItem{}, "environment", &section.ByEnvironment)
-	scanStatusCounts(db, &model.CMDBItem{}, "type", &section.ByType)
-	scanStatusCounts(db, &model.CMDBItem{}, "os", &section.ByOS)
-	scanStatusCounts(db, &model.CMDBItem{}, "department", &section.ByDepartment)
-	scanStatusCounts(db, &model.CMDBItem{}, "manufacturer", &section.ByManufacturer)
-
-	section.RecentMaintenance = listRecentMaintenance(db.Order("created_at DESC").Limit(10))
-	section.OfflineAssets = listOfflineAssets(db.Where("status = ?", "offline").Order("updated_at DESC").Limit(10))
+	if err := scanStatusCounts(db, &model.CMDBItem{}, "status", &section.ByStatus); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(db, &model.CMDBItem{}, "environment", &section.ByEnvironment); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(db, &model.CMDBItem{}, "type", &section.ByType); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(db, &model.CMDBItem{}, "os", &section.ByOS); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(db, &model.CMDBItem{}, "department", &section.ByDepartment); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(db, &model.CMDBItem{}, "manufacturer", &section.ByManufacturer); err != nil {
+		return nil, err
+	}
+	recent, err := listRecentMaintenance(db.Order("created_at DESC").Limit(10))
+	if err != nil {
+		return nil, err
+	}
+	section.RecentMaintenance = recent
+	offline, err := listOfflineAssets(db.Where("status = ?", "offline").Order("updated_at DESC").Limit(10))
+	if err != nil {
+		return nil, err
+	}
+	section.OfflineAssets = offline
 	return section, nil
 }
 
-func listRecentMaintenance(query *gorm.DB) []MaintenanceItem {
+func listRecentMaintenance(query *gorm.DB) ([]MaintenanceItem, error) {
 	var logs []model.CMDBMaintenanceLog
-	query.Find(&logs)
+	if err := query.Find(&logs).Error; err != nil {
+		return nil, err
+	}
 	items := make([]MaintenanceItem, 0, len(logs))
 	for _, log := range logs {
 		items = append(items, MaintenanceItem{
@@ -85,12 +114,14 @@ func listRecentMaintenance(query *gorm.DB) []MaintenanceItem {
 			CreatedAt:    log.CreatedAt,
 		})
 	}
-	return items
+	return items, nil
 }
 
-func listOfflineAssets(query *gorm.DB) []AssetItem {
+func listOfflineAssets(query *gorm.DB) ([]AssetItem, error) {
 	var assets []model.CMDBItem
-	query.Find(&assets)
+	if err := query.Find(&assets).Error; err != nil {
+		return nil, err
+	}
 	items := make([]AssetItem, 0, len(assets))
 	for _, asset := range assets {
 		items = append(items, AssetItem{
@@ -101,5 +132,5 @@ func listOfflineAssets(query *gorm.DB) []AssetItem {
 			Environment: asset.Environment,
 		})
 	}
-	return items
+	return items, nil
 }

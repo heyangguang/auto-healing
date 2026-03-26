@@ -32,30 +32,58 @@ func (r *DashboardRepository) GetNotificationSection(ctx context.Context) (*Noti
 	section := &NotificationSection{}
 	db := r.tenantDB(ctx)
 
-	countModel(db, &model.NotificationChannel{}, &section.ChannelsTotal)
-	countModel(db, &model.NotificationTemplate{}, &section.TemplatesTotal)
-	countModel(db, &model.NotificationLog{}, &section.LogsTotal)
-	section.DeliveryRate = calculateDeliveryRate(db, section.LogsTotal)
-	scanStatusCounts(db, &model.NotificationChannel{}, "type", &section.ByChannelType)
-	scanStatusCounts(db, &model.NotificationLog{}, "status", &section.ByLogStatus)
-	scanTrendPoints(db, &model.NotificationLog{}, "created_at", time.Now().AddDate(0, 0, -7), &section.Trend7d)
-	section.RecentLogs = listNotificationLogs(db.Order("created_at DESC").Limit(10))
-	section.FailedLogs = listNotificationLogs(db.Where("status = ?", "failed").Order("created_at DESC").Limit(10))
+	if err := countModel(db, &model.NotificationChannel{}, &section.ChannelsTotal); err != nil {
+		return nil, err
+	}
+	if err := countModel(db, &model.NotificationTemplate{}, &section.TemplatesTotal); err != nil {
+		return nil, err
+	}
+	if err := countModel(db, &model.NotificationLog{}, &section.LogsTotal); err != nil {
+		return nil, err
+	}
+	rate, err := calculateDeliveryRate(db, section.LogsTotal)
+	if err != nil {
+		return nil, err
+	}
+	section.DeliveryRate = rate
+	if err := scanStatusCounts(db, &model.NotificationChannel{}, "type", &section.ByChannelType); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(db, &model.NotificationLog{}, "status", &section.ByLogStatus); err != nil {
+		return nil, err
+	}
+	if err := scanTrendPoints(db, &model.NotificationLog{}, "created_at", time.Now().AddDate(0, 0, -7), &section.Trend7d); err != nil {
+		return nil, err
+	}
+	recentLogs, err := listNotificationLogs(db.Order("created_at DESC").Limit(10))
+	if err != nil {
+		return nil, err
+	}
+	section.RecentLogs = recentLogs
+	failedLogs, err := listNotificationLogs(db.Where("status = ?", "failed").Order("created_at DESC").Limit(10))
+	if err != nil {
+		return nil, err
+	}
+	section.FailedLogs = failedLogs
 	return section, nil
 }
 
-func calculateDeliveryRate(db *gorm.DB, total int64) float64 {
+func calculateDeliveryRate(db *gorm.DB, total int64) (float64, error) {
 	if total == 0 {
-		return 0
+		return 0, nil
 	}
 	var sentCount int64
-	countModel(db.Where("status IN ?", []string{"sent", "delivered"}), &model.NotificationLog{}, &sentCount)
-	return float64(sentCount) / float64(total) * 100
+	if err := countModel(db.Where("status IN ?", []string{"sent", "delivered"}), &model.NotificationLog{}, &sentCount); err != nil {
+		return 0, err
+	}
+	return float64(sentCount) / float64(total) * 100, nil
 }
 
-func listNotificationLogs(query *gorm.DB) []NotifLogItem {
+func listNotificationLogs(query *gorm.DB) ([]NotifLogItem, error) {
 	var logs []model.NotificationLog
-	query.Find(&logs)
+	if err := query.Find(&logs).Error; err != nil {
+		return nil, err
+	}
 	items := make([]NotifLogItem, 0, len(logs))
 	for _, log := range logs {
 		items = append(items, NotifLogItem{
@@ -65,7 +93,7 @@ func listNotificationLogs(query *gorm.DB) []NotifLogItem {
 			CreatedAt: log.CreatedAt,
 		})
 	}
-	return items
+	return items, nil
 }
 
 type GitSection struct {
@@ -93,28 +121,52 @@ type GitSyncItem struct {
 
 func (r *DashboardRepository) GetGitSection(ctx context.Context) (*GitSection, error) {
 	section := &GitSection{}
-	db := r.tenantDB(ctx)
+	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
+	tenantID, err := RequireTenantID(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	countModel(db, &model.GitRepository{}, &section.ReposTotal)
-	section.SyncSuccessRate = calculateGitSyncRate(db)
-	section.Repos = listGitRepos(db.Order("name"))
-	section.RecentSyncs = listGitSyncs(db.Preload("Repository").Order("created_at DESC").Limit(10))
+	if err := countModel(newDB(), &model.GitRepository{}, &section.ReposTotal); err != nil {
+		return nil, err
+	}
+	rate, err := calculateGitSyncRate(newDB())
+	if err != nil {
+		return nil, err
+	}
+	section.SyncSuccessRate = rate
+	repos, err := listGitRepos(newDB().Order("name"))
+	if err != nil {
+		return nil, err
+	}
+	section.Repos = repos
+	syncs, err := listGitSyncs(newDB().Preload("Repository", "tenant_id = ?", tenantID).Order("created_at DESC").Limit(10))
+	if err != nil {
+		return nil, err
+	}
+	section.RecentSyncs = syncs
 	return section, nil
 }
 
-func calculateGitSyncRate(db *gorm.DB) float64 {
+func calculateGitSyncRate(db *gorm.DB) (float64, error) {
 	var total, success int64
-	countModel(db, &model.GitSyncLog{}, &total)
-	if total == 0 {
-		return 0
+	if err := countModel(db, &model.GitSyncLog{}, &total); err != nil {
+		return 0, err
 	}
-	countModel(db.Where("status = ?", "success"), &model.GitSyncLog{}, &success)
-	return float64(success) / float64(total) * 100
+	if total == 0 {
+		return 0, nil
+	}
+	if err := countModel(db.Where("status = ?", "success"), &model.GitSyncLog{}, &success); err != nil {
+		return 0, err
+	}
+	return float64(success) / float64(total) * 100, nil
 }
 
-func listGitRepos(query *gorm.DB) []GitRepoItem {
+func listGitRepos(query *gorm.DB) ([]GitRepoItem, error) {
 	var repos []model.GitRepository
-	query.Find(&repos)
+	if err := query.Find(&repos).Error; err != nil {
+		return nil, err
+	}
 	items := make([]GitRepoItem, 0, len(repos))
 	for _, repo := range repos {
 		items = append(items, GitRepoItem{
@@ -126,12 +178,14 @@ func listGitRepos(query *gorm.DB) []GitRepoItem {
 			LastSyncAt: repo.LastSyncAt,
 		})
 	}
-	return items
+	return items, nil
 }
 
-func listGitSyncs(query *gorm.DB) []GitSyncItem {
+func listGitSyncs(query *gorm.DB) ([]GitSyncItem, error) {
 	var syncs []model.GitSyncLog
-	query.Find(&syncs)
+	if err := query.Find(&syncs).Error; err != nil {
+		return nil, err
+	}
 	items := make([]GitSyncItem, 0, len(syncs))
 	for _, sync := range syncs {
 		repoName := ""
@@ -145,7 +199,7 @@ func listGitSyncs(query *gorm.DB) []GitSyncItem {
 			CreatedAt: sync.CreatedAt,
 		})
 	}
-	return items
+	return items, nil
 }
 
 type PlaybookSection struct {
@@ -164,18 +218,34 @@ type ScanItem struct {
 
 func (r *DashboardRepository) GetPlaybookSection(ctx context.Context) (*PlaybookSection, error) {
 	section := &PlaybookSection{}
-	db := r.tenantDB(ctx)
+	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
+	tenantID, err := RequireTenantID(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	countModel(db, &model.Playbook{}, &section.Total)
-	countModel(db.Where("status = ?", "ready"), &model.Playbook{}, &section.Ready)
-	scanStatusCounts(db, &model.Playbook{}, "status", &section.ByStatus)
-	section.RecentScans = listPlaybookScans(db.Preload("Playbook").Order("created_at DESC").Limit(10))
+	if err := countModel(newDB(), &model.Playbook{}, &section.Total); err != nil {
+		return nil, err
+	}
+	if err := countModel(newDB().Where("status = ?", "ready"), &model.Playbook{}, &section.Ready); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(newDB(), &model.Playbook{}, "status", &section.ByStatus); err != nil {
+		return nil, err
+	}
+	scans, err := listPlaybookScans(newDB().Preload("Playbook", "tenant_id = ?", tenantID).Order("created_at DESC").Limit(10))
+	if err != nil {
+		return nil, err
+	}
+	section.RecentScans = scans
 	return section, nil
 }
 
-func listPlaybookScans(query *gorm.DB) []ScanItem {
+func listPlaybookScans(query *gorm.DB) ([]ScanItem, error) {
 	var scans []model.PlaybookScanLog
-	query.Find(&scans)
+	if err := query.Find(&scans).Error; err != nil {
+		return nil, err
+	}
 	items := make([]ScanItem, 0, len(scans))
 	for _, scan := range scans {
 		playbookName := ""
@@ -189,7 +259,7 @@ func listPlaybookScans(query *gorm.DB) []ScanItem {
 			CreatedAt:    scan.CreatedAt,
 		})
 	}
-	return items
+	return items, nil
 }
 
 type SecretsSection struct {
@@ -201,11 +271,19 @@ type SecretsSection struct {
 
 func (r *DashboardRepository) GetSecretsSection(ctx context.Context) (*SecretsSection, error) {
 	section := &SecretsSection{}
-	db := r.tenantDB(ctx)
-	countModel(db, &model.SecretsSource{}, &section.Total)
-	countModel(db.Where("status = ?", "active"), &model.SecretsSource{}, &section.Active)
-	scanStatusCounts(db, &model.SecretsSource{}, "type", &section.ByType)
-	scanStatusCounts(db, &model.SecretsSource{}, "auth_type", &section.ByAuthType)
+	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
+	if err := countModel(newDB(), &model.SecretsSource{}, &section.Total); err != nil {
+		return nil, err
+	}
+	if err := countModel(newDB().Where("status = ?", "active"), &model.SecretsSource{}, &section.Active); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(newDB(), &model.SecretsSource{}, "type", &section.ByType); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(newDB(), &model.SecretsSource{}, "auth_type", &section.ByAuthType); err != nil {
+		return nil, err
+	}
 	return section, nil
 }
 
@@ -232,32 +310,41 @@ func (r *DashboardRepository) GetUsersSection(ctx context.Context) (*UsersSectio
 	}
 	db := r.db.WithContext(ctx)
 
-	db.Table("users").
+	if err := countModel(db.Table("users").
 		Joins("JOIN user_tenant_roles utr ON utr.user_id = users.id").
 		Where("utr.tenant_id = ?", tenantID).
-		Distinct("users.id").
-		Count(&section.Total)
-	db.Table("users").
+		Distinct("users.id"), &model.User{}, &section.Total); err != nil {
+		return nil, err
+	}
+	if err := countModel(db.Table("users").
 		Joins("JOIN user_tenant_roles utr ON utr.user_id = users.id").
 		Where("utr.tenant_id = ? AND users.status = ?", tenantID, "active").
-		Distinct("users.id").
-		Count(&section.Active)
-	db.Model(&model.Role{}).
+		Distinct("users.id"), &model.User{}, &section.Active); err != nil {
+		return nil, err
+	}
+	if err := countModel(db.Model(&model.Role{}).
 		Where("scope = ?", "tenant").
-		Where("tenant_id IS NULL OR tenant_id = ?", tenantID).
-		Count(&section.RolesTotal)
-	section.RecentLogins = listRecentLogins(db.Table("users").
+		Where("tenant_id IS NULL OR tenant_id = ?", tenantID), &model.Role{}, &section.RolesTotal); err != nil {
+		return nil, err
+	}
+	recentLogins, err := listRecentLogins(db.Table("users").
 		Joins("JOIN user_tenant_roles utr ON utr.user_id = users.id").
 		Where("utr.tenant_id = ? AND users.last_login_at IS NOT NULL", tenantID).
 		Distinct("users.id").
 		Order("users.last_login_at DESC").
 		Limit(10))
+	if err != nil {
+		return nil, err
+	}
+	section.RecentLogins = recentLogins
 	return section, nil
 }
 
-func listRecentLogins(query *gorm.DB) []LoginItem {
+func listRecentLogins(query *gorm.DB) ([]LoginItem, error) {
 	var users []model.User
-	query.Find(&users)
+	if err := query.Find(&users).Error; err != nil {
+		return nil, err
+	}
 	items := make([]LoginItem, 0, len(users))
 	for _, user := range users {
 		items = append(items, LoginItem{
@@ -268,5 +355,5 @@ func listRecentLogins(query *gorm.DB) []LoginItem {
 			LastLoginIP: user.LastLoginIP,
 		})
 	}
-	return items
+	return items, nil
 }

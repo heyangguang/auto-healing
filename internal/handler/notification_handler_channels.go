@@ -31,7 +31,7 @@ func (h *NotificationHandler) CreateChannel(c *gin.Context) {
 
 	channel, err := h.svc.CreateChannel(c.Request.Context(), req)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		writeNotificationMutationError(c, err, "渠道不存在", "创建通知渠道失败")
 		return
 	}
 	response.Created(c, channel)
@@ -47,7 +47,7 @@ func (h *NotificationHandler) GetChannel(c *gin.Context) {
 
 	channel, err := h.svc.GetChannel(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "渠道不存在")
+		writeNotificationLookupError(c, err, "渠道不存在", "获取通知渠道失败")
 		return
 	}
 	response.Success(c, channel)
@@ -69,7 +69,7 @@ func (h *NotificationHandler) UpdateChannel(c *gin.Context) {
 
 	channel, err := h.svc.UpdateChannel(c.Request.Context(), id, req)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		writeNotificationMutationError(c, err, "渠道不存在", "更新通知渠道失败")
 		return
 	}
 	response.Success(c, channel)
@@ -84,7 +84,7 @@ func (h *NotificationHandler) DeleteChannel(c *gin.Context) {
 	}
 
 	if err := h.svc.DeleteChannel(c.Request.Context(), id); err != nil {
-		respondInternalError(c, "NOTIFY", "删除通知渠道失败", err)
+		writeNotificationMutationError(c, err, "渠道不存在", "删除通知渠道失败")
 		return
 	}
 	response.Message(c, "删除成功")
@@ -99,7 +99,7 @@ func (h *NotificationHandler) TestChannel(c *gin.Context) {
 	}
 
 	if err := h.svc.TestChannel(c.Request.Context(), id); err != nil {
-		response.BadRequest(c, err.Error())
+		writeNotificationMutationError(c, err, "渠道不存在", "测试通知渠道失败")
 		return
 	}
 	response.Message(c, "测试成功")

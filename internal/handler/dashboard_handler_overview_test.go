@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -41,5 +42,25 @@ func TestLoadDashboardSectionsFromLoadersReturnsFirstError(t *testing.T) {
 	}
 	if _, ok := result["git"]; !ok {
 		t.Fatalf("loadDashboardSectionsFromLoaders() missing successful section result: %#v", result)
+	}
+}
+
+func TestLoadDashboardSectionsFromLoadersJoinsErrorsAndRecoversPanics(t *testing.T) {
+	expected := errors.New("boom")
+	loaders := map[string]dashboardSectionFunc{
+		"users": func(context.Context) (interface{}, error) { return nil, expected },
+		"git":   func(context.Context) (interface{}, error) { panic("panic-boom") },
+		"cmdb":  func(context.Context) (interface{}, error) { return "ok", nil },
+	}
+
+	result, err := loadDashboardSectionsFromLoaders(context.Background(), loaders)
+	if !errors.Is(err, expected) {
+		t.Fatalf("loadDashboardSectionsFromLoaders() error = %v, want joined error containing %v", err, expected)
+	}
+	if err == nil || !strings.Contains(err.Error(), "panic: panic-boom") {
+		t.Fatalf("loadDashboardSectionsFromLoaders() error = %v, want panic details", err)
+	}
+	if result["cmdb"] != "ok" {
+		t.Fatalf("loadDashboardSectionsFromLoaders() result = %#v, want successful section preserved", result)
 	}
 }

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -100,7 +101,7 @@ func (r *SearchRepository) searchCategories(ctx context.Context, like string, li
 	var (
 		wg         sync.WaitGroup
 		mu         sync.Mutex
-		firstErr   error
+		errs       []error
 		totalCount int64
 	)
 
@@ -113,9 +114,7 @@ func (r *SearchRepository) searchCategories(ctx context.Context, like string, li
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				if firstErr == nil {
-					firstErr = fmt.Errorf("search %s failed: %w", def.category, err)
-				}
+				errs = append(errs, fmt.Errorf("search %s failed: %w", def.category, err))
 				return
 			}
 			if total == 0 {
@@ -133,10 +132,19 @@ func (r *SearchRepository) searchCategories(ctx context.Context, like string, li
 	}
 	wg.Wait()
 
-	if firstErr != nil {
-		return nil, 0, firstErr
+	if len(errs) > 0 {
+		return nil, 0, errors.Join(errs...)
 	}
 	return results, totalCount, nil
+}
+
+func searchCount(db *gorm.DB, entity any, condition string, args ...any) (int64, error) {
+	var total int64
+	query := db.Model(entity)
+	if condition != "" {
+		query = query.Where(condition, args...)
+	}
+	return total, query.Count(&total).Error
 }
 
 func compactSearchResults(results []SearchResultCategory) []SearchResultCategory {

@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	"errors"
 
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/model"
@@ -105,7 +106,11 @@ type SendNotificationRequest struct {
 }
 
 func (s *Service) GetChannel(ctx context.Context, id uuid.UUID) (*model.NotificationChannel, error) {
-	return s.repo.GetChannelByID(ctx, id)
+	channel, err := s.repo.GetChannelByID(ctx, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotificationChannelNotFound
+	}
+	return channel, err
 }
 
 func (s *Service) ListChannels(ctx context.Context, page, pageSize int, channelType string, name query.StringFilter) ([]model.NotificationChannel, int64, error) {
@@ -113,7 +118,11 @@ func (s *Service) ListChannels(ctx context.Context, page, pageSize int, channelT
 }
 
 func (s *Service) GetTemplate(ctx context.Context, id uuid.UUID) (*model.NotificationTemplate, error) {
-	return s.repo.GetTemplateByID(ctx, id)
+	template, err := s.repo.GetTemplateByID(ctx, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotificationTemplateNotFound
+	}
+	return template, err
 }
 
 func (s *Service) ListTemplates(ctx context.Context, opts *repository.TemplateListOptions) ([]model.NotificationTemplate, int64, error) {
@@ -126,7 +135,11 @@ func (s *Service) GetAvailableVariables() []VariableInfo {
 
 // GetNotification 获取通知日志
 func (s *Service) GetNotification(ctx context.Context, id uuid.UUID) (*model.NotificationLog, error) {
-	return s.repo.GetLogByID(ctx, id)
+	log, err := s.repo.GetLogByID(ctx, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotificationLogNotFound
+	}
+	return log, err
 }
 
 // ListNotifications 获取通知日志列表

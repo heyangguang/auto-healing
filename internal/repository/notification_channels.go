@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/query"
@@ -14,7 +15,20 @@ func (r *NotificationRepository) CreateChannel(ctx context.Context, channel *mod
 	if err := FillTenantID(ctx, &channel.TenantID); err != nil {
 		return err
 	}
-	return r.db.WithContext(ctx).Create(channel).Error
+	if channel.ID == uuid.Nil {
+		channel.ID = uuid.New()
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if channel.IsDefault {
+			if err := lockNotificationChannelDefaults(tx); err != nil {
+				return err
+			}
+			if err := clearNotificationChannelDefaults(tx, channel.TenantID, uuid.Nil); err != nil {
+				return err
+			}
+		}
+		return tx.Create(channel).Error
+	})
 }
 
 // GetChannelByID 根据 ID 获取渠道
@@ -54,7 +68,17 @@ func (r *NotificationRepository) ListChannels(ctx context.Context, page, pageSiz
 
 // UpdateChannel 更新渠道
 func (r *NotificationRepository) UpdateChannel(ctx context.Context, channel *model.NotificationChannel) error {
-	return UpdateTenantScopedModel(r.db, ctx, channel.ID, channel)
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if channel.IsDefault {
+			if err := lockNotificationChannelDefaults(tx); err != nil {
+				return err
+			}
+			if err := clearNotificationChannelDefaults(tx, channel.TenantID, channel.ID); err != nil {
+				return err
+			}
+		}
+		return UpdateTenantScopedModel(tx, ctx, channel.ID, channel)
+	})
 }
 
 // DeleteChannel 删除渠道
@@ -80,20 +104,24 @@ func (r *NotificationRepository) GetChannelsByIDs(ctx context.Context, ids []uui
 	return channels, nil
 }
 
-// CountTemplatesUsingChannelType 统计使用指定渠道类型的模板数量
-func (r *NotificationRepository) CountTemplatesUsingChannelType(ctx context.Context, channelType string) (int64, error) {
-	var count int64
-	err := r.tenantDB(ctx).Model(&model.NotificationTemplate{}).
-		Where("supported_channels @> ?", `["`+channelType+`"]`).
-		Count(&count).Error
-	return count, err
-}
-
 // CountTasksUsingTemplate 统计使用指定模板的任务模板数量
 func (r *NotificationRepository) CountTasksUsingTemplate(ctx context.Context, templateID uuid.UUID) (int64, error) {
 	var count int64
-	err := r.tenantDB(ctx).Model(&model.ExecutionTask{}).
-		Where("notification_config->>'template_id' = ?", templateID.String()).
+	query := r.tenantDB(ctx).Model(&model.ExecutionTask{})
+	if r.db.Dialector.Name() == "sqlite" {
+		err := query.Where(`(
+			json_extract(notification_config, '$.on_start.template_id') = ? OR
+			json_extract(notification_config, '$.on_success.template_id') = ? OR
+			json_extract(notification_config, '$.on_failure.template_id') = ?)`,
+			templateID.String(), templateID.String(), templateID.String()).
+			Count(&count).Error
+		return count, err
+	}
+	err := query.Where(`(
+		notification_config->'on_start'->>'template_id' = ? OR
+		notification_config->'on_success'->>'template_id' = ? OR
+		notification_config->'on_failure'->>'template_id' = ?)`,
+		templateID.String(), templateID.String(), templateID.String()).
 		Count(&count).Error
 	return count, err
 }
@@ -101,8 +129,22 @@ func (r *NotificationRepository) CountTasksUsingTemplate(ctx context.Context, te
 // CountTasksUsingChannel 统计使用指定渠道的任务模板数量
 func (r *NotificationRepository) CountTasksUsingChannel(ctx context.Context, channelID uuid.UUID) (int64, error) {
 	var count int64
-	err := r.tenantDB(ctx).Model(&model.ExecutionTask{}).
-		Where("notification_config->'channel_ids' @> ?", `["`+channelID.String()+`"]`).
+	query := r.tenantDB(ctx).Model(&model.ExecutionTask{})
+	if r.db.Dialector.Name() == "sqlite" {
+		err := query.Where(`(
+			EXISTS (SELECT 1 FROM json_each(COALESCE(json_extract(notification_config, '$.on_start.channel_ids'), '[]')) WHERE value = ?) OR
+			EXISTS (SELECT 1 FROM json_each(COALESCE(json_extract(notification_config, '$.on_success.channel_ids'), '[]')) WHERE value = ?) OR
+			EXISTS (SELECT 1 FROM json_each(COALESCE(json_extract(notification_config, '$.on_failure.channel_ids'), '[]')) WHERE value = ?))`,
+			channelID.String(), channelID.String(), channelID.String()).
+			Count(&count).Error
+		return count, err
+	}
+	channelIDsJSON := `["` + channelID.String() + `"]`
+	err := query.Where(`(
+		COALESCE(notification_config->'on_start'->'channel_ids', '[]'::jsonb) @> ?::jsonb OR
+		COALESCE(notification_config->'on_success'->'channel_ids', '[]'::jsonb) @> ?::jsonb OR
+		COALESCE(notification_config->'on_failure'->'channel_ids', '[]'::jsonb) @> ?::jsonb)`,
+		channelIDsJSON, channelIDsJSON, channelIDsJSON).
 		Count(&count).Error
 	return count, err
 }
@@ -119,4 +161,27 @@ func (r *NotificationRepository) applyChannelFilters(db *gorm.DB, channelType st
 	}
 	pattern := "%" + name.Value + "%"
 	return db.Where("(name ILIKE ? OR description ILIKE ?)", pattern, pattern)
+}
+
+func clearNotificationChannelDefaults(tx *gorm.DB, tenantID *uuid.UUID, excludeID uuid.UUID) error {
+	query := tx.Model(&model.NotificationChannel{})
+	if tenantID == nil {
+		query = query.Where("tenant_id IS NULL")
+	} else {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	if excludeID != uuid.Nil {
+		query = query.Where("id <> ?", excludeID)
+	}
+	if err := query.Where("is_default = ?", true).Update("is_default", false).Error; err != nil {
+		return fmt.Errorf("clear default channels: %w", err)
+	}
+	return nil
+}
+
+func lockNotificationChannelDefaults(tx *gorm.DB) error {
+	if tx.Dialector.Name() != "postgres" {
+		return nil
+	}
+	return tx.Exec("LOCK TABLE notification_channels IN SHARE ROW EXCLUSIVE MODE").Error
 }

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/query"
@@ -14,13 +15,20 @@ func (r *NotificationRepository) CreateLog(ctx context.Context, log *model.Notif
 	if err := FillTenantID(ctx, &log.TenantID); err != nil {
 		return err
 	}
+	if log.ID == uuid.Nil {
+		log.ID = uuid.New()
+	}
 	return r.db.WithContext(ctx).Create(log).Error
 }
 
 // GetLogByID 根据 ID 获取日志
 func (r *NotificationRepository) GetLogByID(ctx context.Context, id uuid.UUID) (*model.NotificationLog, error) {
 	var log model.NotificationLog
-	err := r.preloadNotificationLogs(r.tenantDB(ctx)).Where("id = ?", id).First(&log).Error
+	queryBuilder, err := r.notificationLogsBaseQuery(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.preloadNotificationLogs(ctx, queryBuilder).Where("id = ?", id).First(&log).Error
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +49,7 @@ func (r *NotificationRepository) ListLogs(ctx context.Context, opts *Notificatio
 	}
 
 	offset := (opts.Page - 1) * opts.PageSize
-	err = r.preloadNotificationLogs(queryBuilder.Select("notification_logs.*")).
+	err = r.preloadNotificationLogs(ctx, queryBuilder.Select("notification_logs.*")).
 		Offset(offset).
 		Limit(opts.PageSize).
 		Order(notificationLogOrderClause(opts)).
@@ -61,7 +69,7 @@ func (r *NotificationRepository) UpdateLog(ctx context.Context, log *model.Notif
 func (r *NotificationRepository) GetPendingRetryLogs(ctx context.Context) ([]model.NotificationLog, error) {
 	var logs []model.NotificationLog
 	err := r.tenantDB(ctx).Preload("Channel").
-		Where("status = ? AND next_retry_at IS NOT NULL AND next_retry_at <= NOW()", "failed").
+		Where("status = ? AND next_retry_at IS NOT NULL AND next_retry_at <= ?", "failed", time.Now()).
 		Find(&logs).Error
 	return logs, err
 }
@@ -70,7 +78,7 @@ func (r *NotificationRepository) GetPendingRetryLogs(ctx context.Context) ([]mod
 func (r *NotificationRepository) GetPendingRetryLogsGlobal(ctx context.Context) ([]model.NotificationLog, error) {
 	var logs []model.NotificationLog
 	err := r.db.WithContext(ctx).
-		Where("status = ? AND next_retry_at IS NOT NULL AND next_retry_at <= NOW()", "failed").
+		Where("status = ? AND next_retry_at IS NOT NULL AND next_retry_at <= ?", "failed", time.Now()).
 		Find(&logs).Error
 	return logs, err
 }
@@ -169,6 +177,16 @@ func notificationLogOrderClause(opts *NotificationLogListOptions) string {
 	return orderClause
 }
 
-func (r *NotificationRepository) preloadNotificationLogs(db *gorm.DB) *gorm.DB {
-	return db.Preload("Template").Preload("Channel").Preload("ExecutionRun.Task")
+func (r *NotificationRepository) preloadNotificationLogs(ctx context.Context, db *gorm.DB) *gorm.DB {
+	tenantID, err := RequireTenantID(ctx)
+	if err != nil {
+		scoped := db.Session(&gorm.Session{})
+		scoped.AddError(err)
+		return scoped
+	}
+	return db.
+		Preload("Template", "tenant_id = ?", tenantID).
+		Preload("Channel", "tenant_id = ?", tenantID).
+		Preload("ExecutionRun", "tenant_id = ?", tenantID).
+		Preload("ExecutionRun.Task", "tenant_id = ?", tenantID)
 }

@@ -37,58 +37,113 @@ type RunItem struct {
 
 func (r *DashboardRepository) GetExecutionSection(ctx context.Context) (*ExecutionSection, error) {
 	section := &ExecutionSection{}
-	db := r.tenantDB(ctx)
+	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
 	tenantID, err := RequireTenantID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now()
 
-	countModel(db, &model.ExecutionTask{}, &section.TasksTotal)
-	countModel(db, &model.ExecutionRun{}, &section.RunsTotal)
-	countModel(db.Where("status = ?", "running"), &model.ExecutionRun{}, &section.Running)
-	section.SuccessRate = calculateExecutionSuccessRate(db, section.RunsTotal)
-	db.Model(&model.ExecutionRun{}).
-		Where("started_at IS NOT NULL AND completed_at IS NOT NULL").
-		Select("COALESCE(AVG(EXTRACT(EPOCH FROM (completed_at - started_at))), 0)").
-		Scan(&section.AvgDurationSec)
-	countModel(db, &model.ExecutionSchedule{}, &section.SchedulesTotal)
-	countModel(db.Where("enabled = ?", true), &model.ExecutionSchedule{}, &section.SchedulesEnabled)
-	scanStatusCounts(db, &model.ExecutionRun{}, "status", &section.RunsByStatus)
-	scanTrendPoints(db, &model.ExecutionRun{}, "created_at", now.AddDate(0, 0, -7), &section.Trend7d)
-	scanTrendPoints(db, &model.ExecutionRun{}, "created_at", now.AddDate(0, 0, -30), &section.Trend30d)
-	scanStatusCounts(db, &model.ExecutionSchedule{}, "schedule_type", &section.SchedulesByType)
-	section.TaskTop10 = listTopExecutionTasks(r.db.WithContext(ctx), tenantID)
-	section.RecentRuns = listRunItems(db.Preload("Task").Order("created_at DESC").Limit(10))
-	section.FailedRuns = listRunItems(db.Preload("Task").Where("status = ?", "failed").Order("created_at DESC").Limit(10))
+	if err := countModel(newDB(), &model.ExecutionTask{}, &section.TasksTotal); err != nil {
+		return nil, err
+	}
+	if err := countModel(newDB(), &model.ExecutionRun{}, &section.RunsTotal); err != nil {
+		return nil, err
+	}
+	if err := countModel(newDB().Where("status = ?", "running"), &model.ExecutionRun{}, &section.Running); err != nil {
+		return nil, err
+	}
+	rate, err := calculateExecutionSuccessRate(newDB(), section.RunsTotal)
+	if err != nil {
+		return nil, err
+	}
+	section.SuccessRate = rate
+	avgDuration, err := executionAvgDurationSeconds(newDB())
+	if err != nil {
+		return nil, err
+	}
+	section.AvgDurationSec = avgDuration
+	if err := countModel(newDB(), &model.ExecutionSchedule{}, &section.SchedulesTotal); err != nil {
+		return nil, err
+	}
+	if err := countModel(newDB().Where("enabled = ?", true), &model.ExecutionSchedule{}, &section.SchedulesEnabled); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(newDB(), &model.ExecutionRun{}, "status", &section.RunsByStatus); err != nil {
+		return nil, err
+	}
+	if err := scanTrendPoints(newDB(), &model.ExecutionRun{}, "created_at", now.AddDate(0, 0, -7), &section.Trend7d); err != nil {
+		return nil, err
+	}
+	if err := scanTrendPoints(newDB(), &model.ExecutionRun{}, "created_at", now.AddDate(0, 0, -30), &section.Trend30d); err != nil {
+		return nil, err
+	}
+	if err := scanStatusCounts(newDB(), &model.ExecutionSchedule{}, "schedule_type", &section.SchedulesByType); err != nil {
+		return nil, err
+	}
+	top10, err := listTopExecutionTasks(r.db.WithContext(ctx), tenantID)
+	if err != nil {
+		return nil, err
+	}
+	section.TaskTop10 = top10
+	recent, err := listRunItems(newDB().Preload("Task", "tenant_id = ?", tenantID).Order("created_at DESC").Limit(10))
+	if err != nil {
+		return nil, err
+	}
+	section.RecentRuns = recent
+	failed, err := listRunItems(newDB().Preload("Task", "tenant_id = ?", tenantID).Where("status = ?", "failed").Order("created_at DESC").Limit(10))
+	if err != nil {
+		return nil, err
+	}
+	section.FailedRuns = failed
 	return section, nil
 }
 
-func calculateExecutionSuccessRate(db *gorm.DB, total int64) float64 {
+func calculateExecutionSuccessRate(db *gorm.DB, total int64) (float64, error) {
 	if total == 0 {
-		return 0
+		return 0, nil
 	}
 	var success int64
-	countModel(db.Where("status = ?", "success"), &model.ExecutionRun{}, &success)
-	return float64(success) / float64(total) * 100
+	if err := countModel(db.Where("status = ?", "success"), &model.ExecutionRun{}, &success); err != nil {
+		return 0, err
+	}
+	return float64(success) / float64(total) * 100, nil
 }
 
-func listTopExecutionTasks(db *gorm.DB, tenantID uuid.UUID) []RankItem {
+func executionAvgDurationSeconds(db *gorm.DB) (float64, error) {
+	var avgDuration float64
+	query := db.Model(&model.ExecutionRun{}).
+		Where("started_at IS NOT NULL AND completed_at IS NOT NULL")
+	if db.Dialector.Name() == "sqlite" {
+		err := query.Select("COALESCE(AVG((julianday(completed_at) - julianday(started_at)) * 86400.0), 0)").
+			Scan(&avgDuration).Error
+		return avgDuration, err
+	}
+	err := query.Select("COALESCE(AVG(EXTRACT(EPOCH FROM (completed_at - started_at))), 0)").
+		Scan(&avgDuration).Error
+	return avgDuration, err
+}
+
+func listTopExecutionTasks(db *gorm.DB, tenantID uuid.UUID) ([]RankItem, error) {
 	var items []RankItem
-	db.Where("er.tenant_id = ?", tenantID).
+	if err := db.Where("er.tenant_id = ?", tenantID).
 		Table("execution_runs er").
 		Select("et.name as name, count(*) as count").
-		Joins("JOIN execution_tasks et ON er.task_id = et.id").
+		Joins("JOIN execution_tasks et ON er.task_id = et.id AND et.tenant_id = ?", tenantID).
 		Group("et.name").
 		Order("count DESC").
 		Limit(10).
-		Scan(&items)
-	return items
+		Scan(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-func listRunItems(query *gorm.DB) []RunItem {
+func listRunItems(query *gorm.DB) ([]RunItem, error) {
 	var runs []model.ExecutionRun
-	query.Find(&runs)
+	if err := query.Find(&runs).Error; err != nil {
+		return nil, err
+	}
 	items := make([]RunItem, 0, len(runs))
 	for _, run := range runs {
 		taskName := ""
@@ -104,5 +159,5 @@ func listRunItems(query *gorm.DB) []RunItem {
 			CreatedAt:   run.CreatedAt,
 		})
 	}
-	return items
+	return items, nil
 }

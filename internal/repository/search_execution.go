@@ -10,14 +10,16 @@ import (
 )
 
 func (r *SearchRepository) searchPlaybooks(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	var total int64
-	db.Model(&model.Playbook{}).Where("name ILIKE ? OR description ILIKE ?", like, like).Count(&total)
+	total, err := searchCount(db, &model.Playbook{}, "name ILIKE ? OR description ILIKE ?", like, like)
+	if err != nil {
+		return nil, 0, err
+	}
 	if total == 0 {
 		return nil, 0, nil
 	}
 
 	var items []model.Playbook
-	err := db.Model(&model.Playbook{}).
+	err = db.Model(&model.Playbook{}).
 		Select("id, name, description, status").
 		Where("name ILIKE ? OR description ILIKE ?", like, like).
 		Order("name").Limit(limit).Find(&items).Error
@@ -39,14 +41,16 @@ func (r *SearchRepository) searchPlaybooks(ctx context.Context, db *gorm.DB, lik
 }
 
 func (r *SearchRepository) searchTemplates(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	var total int64
-	db.Model(&model.ExecutionTask{}).Where("name ILIKE ? OR description ILIKE ?", like, like).Count(&total)
+	total, err := searchCount(db, &model.ExecutionTask{}, "name ILIKE ? OR description ILIKE ?", like, like)
+	if err != nil {
+		return nil, 0, err
+	}
 	if total == 0 {
 		return nil, 0, nil
 	}
 
 	var items []model.ExecutionTask
-	err := db.Model(&model.ExecutionTask{}).
+	err = db.Model(&model.ExecutionTask{}).
 		Select("id, name, description").
 		Where("name ILIKE ? OR description ILIKE ?", like, like).
 		Order("name").Limit(limit).Find(&items).Error
@@ -67,14 +71,16 @@ func (r *SearchRepository) searchTemplates(ctx context.Context, db *gorm.DB, lik
 }
 
 func (r *SearchRepository) searchSchedules(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	var total int64
-	db.Model(&model.ExecutionSchedule{}).Where("name ILIKE ? OR description ILIKE ?", like, like).Count(&total)
+	total, err := searchCount(db, &model.ExecutionSchedule{}, "name ILIKE ? OR description ILIKE ?", like, like)
+	if err != nil {
+		return nil, 0, err
+	}
 	if total == 0 {
 		return nil, 0, nil
 	}
 
 	var items []model.ExecutionSchedule
-	err := db.Model(&model.ExecutionSchedule{}).
+	err = db.Model(&model.ExecutionSchedule{}).
 		Select("id, name, enabled, schedule_expr, description").
 		Where("name ILIKE ? OR description ILIKE ?", like, like).
 		Order("name").Limit(limit).Find(&items).Error
@@ -100,16 +106,16 @@ func (r *SearchRepository) searchSchedules(ctx context.Context, db *gorm.DB, lik
 }
 
 func (r *SearchRepository) searchExecutionRuns(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	var total int64
-	db.Model(&model.ExecutionRun{}).
-		Where("triggered_by ILIKE ? OR status ILIKE ? OR id::text ILIKE ?", like, like, like).
-		Count(&total)
+	total, err := searchCount(db, &model.ExecutionRun{}, "triggered_by ILIKE ? OR status ILIKE ? OR id::text ILIKE ?", like, like, like)
+	if err != nil {
+		return nil, 0, err
+	}
 	if total == 0 {
 		return nil, 0, nil
 	}
 
 	var items []model.ExecutionRun
-	err := db.Model(&model.ExecutionRun{}).
+	err = db.Model(&model.ExecutionRun{}).
 		Select("id, task_id, status, triggered_by, created_at").
 		Where("triggered_by ILIKE ? OR status ILIKE ? OR id::text ILIKE ?", like, like, like).
 		Order("created_at DESC").Limit(limit).Find(&items).Error
@@ -117,7 +123,7 @@ func (r *SearchRepository) searchExecutionRuns(ctx context.Context, db *gorm.DB,
 		return nil, 0, err
 	}
 
-	taskNameMap, err := r.loadExecutionTaskNames(items)
+	taskNameMap, err := r.loadExecutionTaskNames(db, items)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -138,7 +144,7 @@ func (r *SearchRepository) searchExecutionRuns(ctx context.Context, db *gorm.DB,
 	return results, total, nil
 }
 
-func (r *SearchRepository) loadExecutionTaskNames(items []model.ExecutionRun) (map[uuid.UUID]string, error) {
+func (r *SearchRepository) loadExecutionTaskNames(db *gorm.DB, items []model.ExecutionRun) (map[uuid.UUID]string, error) {
 	taskIDs := make([]uuid.UUID, 0, len(items))
 	for _, item := range items {
 		if item.TaskID != uuid.Nil {
@@ -154,7 +160,7 @@ func (r *SearchRepository) loadExecutionTaskNames(items []model.ExecutionRun) (m
 		Name string    `gorm:"column:name"`
 	}
 	var tasks []taskInfo
-	if err := r.db.Model(&model.ExecutionTask{}).
+	if err := db.Model(&model.ExecutionTask{}).
 		Select("id, name").
 		Where("id IN ?", taskIDs).
 		Find(&tasks).Error; err != nil {

@@ -35,36 +35,38 @@ type ResourceOverview struct {
 // GetResourceOverview 获取各模块资源总数（按权限过滤子模块）
 func (r *WorkbenchRepository) GetResourceOverview(ctx context.Context, permissions []string) (*ResourceOverview, error) {
 	overview := &ResourceOverview{}
-	tenantDB := r.tenantDB(ctx)
+	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
 
 	if repoHasPermission(permissions, "healing:flows:view") {
-		if err := workbenchFillEnabledCount(tenantDB, &model.HealingFlow{}, "is_active = ?", &overview.Flows, true); err != nil {
+		if err := workbenchFillEnabledCount(newDB(), &model.HealingFlow{}, "is_active = ?", &overview.Flows, true); err != nil {
 			return nil, err
 		}
 	}
 	if repoHasPermission(permissions, "healing:rules:view") {
-		if err := workbenchFillEnabledCount(tenantDB, &model.HealingRule{}, "is_active = ?", &overview.Rules, true); err != nil {
+		if err := workbenchFillEnabledCount(newDB(), &model.HealingRule{}, "is_active = ?", &overview.Rules, true); err != nil {
 			return nil, err
 		}
 	}
 	if repoHasPermission(permissions, "plugin:list") {
-		if err := workbenchFillOfflineCount(tenantDB, &model.CMDBItem{}, "status != ?", &overview.Hosts, "active"); err != nil {
+		if err := workbenchFillOfflineCount(newDB(), &model.CMDBItem{}, "status != ?", &overview.Hosts, "active"); err != nil {
 			return nil, err
 		}
-		if err := workbenchFillNeedsReviewCount(tenantDB, &model.Playbook{}, "status = ?", &overview.Playbooks, "draft"); err != nil {
+		if err := workbenchFillSecretsOverview(newDB(), &overview.Secrets); err != nil {
 			return nil, err
 		}
-		if err := workbenchFillSecretsOverview(tenantDB, &overview.Secrets); err != nil {
+	}
+	if repoHasPermission(permissions, "playbook:list") {
+		if err := workbenchFillNeedsReviewCount(newDB(), &model.Playbook{}, "status = ?", &overview.Playbooks, "draft"); err != nil {
 			return nil, err
 		}
 	}
 	if repoHasPermission(permissions, "task:list") {
-		if err := workbenchFillEnabledCount(tenantDB, &model.ExecutionSchedule{}, "enabled = ?", &overview.Schedules, true); err != nil {
+		if err := workbenchFillEnabledCount(newDB(), &model.ExecutionSchedule{}, "enabled = ?", &overview.Schedules, true); err != nil {
 			return nil, err
 		}
 	}
 	if repoHasPermission(permissions, "template:list") {
-		if err := workbenchFillTemplateOverview(tenantDB, &overview.NotificationTemplates); err != nil {
+		if err := workbenchFillTemplateOverview(newDB(), &overview.NotificationTemplates); err != nil {
 			return nil, err
 		}
 	}
@@ -129,7 +131,7 @@ func workbenchFillSecretsOverview(db *gorm.DB, dest *ResourceCount) error {
 	}
 
 	var secretTypes []string
-	if err := db.Model(&model.SecretsSource{}).Distinct("type").Pluck("type", &secretTypes).Error; err != nil {
+	if err := db.Session(&gorm.Session{}).Model(&model.SecretsSource{}).Distinct("type").Pluck("type", &secretTypes).Error; err != nil {
 		return err
 	}
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -18,8 +19,14 @@ func (h *DashboardHandler) GetOverview(c *gin.Context) {
 		response.BadRequest(c, "sections parameter is required")
 		return
 	}
+	sections := strings.Split(sectionsParam, ",")
+	unauthorized := dashboardUnauthorizedSections(sections, middleware.GetPermissions(c))
+	if len(unauthorized) > 0 {
+		response.Forbidden(c, fmt.Sprintf("no permission to access dashboard sections: %s", strings.Join(unauthorized, ", ")))
+		return
+	}
 
-	result, err := h.loadDashboardSections(c.Request.Context(), strings.Split(sectionsParam, ","))
+	result, err := h.loadDashboardSections(c.Request.Context(), sections, middleware.GetPermissions(c))
 	if err != nil {
 		respondInternalError(c, "DASHBOARD", "failed to get dashboard overview", err)
 		return
@@ -27,11 +34,11 @@ func (h *DashboardHandler) GetOverview(c *gin.Context) {
 	response.Success(c, result)
 }
 
-func (h *DashboardHandler) loadDashboardSections(ctx context.Context, sections []string) (map[string]interface{}, error) {
+func (h *DashboardHandler) loadDashboardSections(ctx context.Context, sections []string, permissions []string) (map[string]interface{}, error) {
 	loaders := make(map[string]dashboardSectionFunc)
 	for _, rawSection := range sections {
 		section := strings.TrimSpace(rawSection)
-		loader := dashboardSectionLoader(h, section)
+		loader := dashboardSectionLoader(h, section, permissions)
 		if section == "" || loader == nil {
 			continue
 		}
@@ -40,40 +47,27 @@ func (h *DashboardHandler) loadDashboardSections(ctx context.Context, sections [
 	return loadDashboardSectionsFromLoaders(ctx, loaders)
 }
 
-func safeDashboardLoad(ctx context.Context, section string, loader dashboardSectionFunc) (data interface{}, err error) {
-	defer func() {
-		if rec := recover(); rec != nil {
-			err = fmt.Errorf("section %s panic: %v", section, rec)
-		}
-	}()
-	return loader(ctx)
-}
-
 func loadDashboardSectionsFromLoaders(ctx context.Context, loaders map[string]dashboardSectionFunc) (map[string]interface{}, error) {
-	result := make(map[string]interface{})
-	var (
-		mu      sync.Mutex
-		wg      sync.WaitGroup
-		lastErr error
-	)
+	state := newConcurrentSectionState(len(loaders))
+	var wg sync.WaitGroup
 
 	for section, loader := range loaders {
 		wg.Add(1)
 		go func(section string, loader dashboardSectionFunc) {
 			defer wg.Done()
-			data, err := safeDashboardLoad(ctx, section, loader)
-			mu.Lock()
-			defer mu.Unlock()
+			data, err := safeSectionLoad(func() (interface{}, error) {
+				return loader(ctx)
+			})
 			if err != nil {
-				lastErr = err
+				state.addError(section, err)
 				return
 			}
-			result[section] = data
+			state.addResult(section, data)
 		}(section, loader)
 	}
 
 	wg.Wait()
-	return result, lastErr
+	return state.resultAndError()
 }
 
 // GetConfig 获取用户 Dashboard 配置（合并角色分配的系统工作区）
