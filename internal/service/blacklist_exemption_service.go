@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -72,7 +73,7 @@ func (s *BlacklistExemptionService) Approve(ctx context.Context, id uuid.UUID, a
 	now := time.Now()
 	expiresAt := now.AddDate(0, 0, item.ValidityDays)
 
-	return s.repo.UpdateStatus(ctx, id, map[string]interface{}{
+	err = s.repo.UpdateStatus(ctx, id, map[string]interface{}{
 		"status":        "approved",
 		"approved_by":   approvedBy,
 		"approver_name": approverName,
@@ -80,6 +81,7 @@ func (s *BlacklistExemptionService) Approve(ctx context.Context, id uuid.UUID, a
 		"expires_at":    expiresAt,
 		"updated_at":    now,
 	})
+	return normalizeBlacklistExemptionMutationError(err)
 }
 
 // Reject 审批拒绝
@@ -96,7 +98,7 @@ func (s *BlacklistExemptionService) Reject(ctx context.Context, id uuid.UUID, ap
 	}
 
 	now := time.Now()
-	return s.repo.UpdateStatus(ctx, id, map[string]interface{}{
+	err = s.repo.UpdateStatus(ctx, id, map[string]interface{}{
 		"status":        "rejected",
 		"approved_by":   approvedBy,
 		"approver_name": approverName,
@@ -104,6 +106,7 @@ func (s *BlacklistExemptionService) Reject(ctx context.Context, id uuid.UUID, ap
 		"reject_reason": rejectReason,
 		"updated_at":    now,
 	})
+	return normalizeBlacklistExemptionMutationError(err)
 }
 
 // GetApprovedByTaskID 获取任务的有效豁免规则ID列表
@@ -119,4 +122,11 @@ func (s *BlacklistExemptionService) ListPending(ctx context.Context, opts reposi
 // ExpireOverdue 过期处理
 func (s *BlacklistExemptionService) ExpireOverdue(ctx context.Context) (int64, error) {
 	return s.repo.ExpireOverdue(ctx)
+}
+
+func normalizeBlacklistExemptionMutationError(err error) error {
+	if errors.Is(err, repository.ErrBlacklistExemptionNotPending) {
+		return fmt.Errorf("%w: 该豁免申请已被其他审批人处理", repository.ErrBlacklistExemptionNotPending)
+	}
+	return err
 }

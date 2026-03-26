@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
@@ -35,7 +36,13 @@ func (r *ImpersonationRepository) GetByID(ctx context.Context, id uuid.UUID) (*m
 	}
 	if req.ApprovedBy != nil {
 		var approverName string
-		r.db.WithContext(ctx).Table("users").Select("username").Where("id = ?", *req.ApprovedBy).Scan(&approverName)
+		if err := r.db.WithContext(ctx).
+			Table("users").
+			Select("username").
+			Where("id = ?", *req.ApprovedBy).
+			Scan(&approverName).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
 		req.ApproverName = approverName
 	}
 	return &req, nil

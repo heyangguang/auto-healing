@@ -2,12 +2,15 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+var ErrImpersonationRequestNotPending = errors.New("impersonation request is no longer pending")
 
 // UpdateStatus 更新申请状态
 func (r *ImpersonationRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string, approvedBy *uuid.UUID) error {
@@ -21,7 +24,17 @@ func (r *ImpersonationRepository) UpdateStatus(ctx context.Context, id uuid.UUID
 		now := time.Now()
 		updates["completed_at"] = &now
 	}
-	return r.db.WithContext(ctx).Model(&model.ImpersonationRequest{}).Where("id = ?", id).Updates(updates).Error
+	result := r.db.WithContext(ctx).
+		Model(&model.ImpersonationRequest{}).
+		Where("id = ? AND status = ?", id, model.ImpersonationStatusPending).
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrImpersonationRequestNotPending
+	}
+	return nil
 }
 
 // StartSession 开始 Impersonation 会话
@@ -62,13 +75,23 @@ func (r *ImpersonationRepository) ResumeSession(ctx context.Context, id uuid.UUI
 }
 
 // GetActiveSession 获取指定用户在指定租户的活跃会话
-func (r *ImpersonationRepository) GetActiveSession(ctx context.Context, requesterID, tenantID uuid.UUID) (*model.ImpersonationRequest, error) {
+func (r *ImpersonationRepository) GetOpenRequest(ctx context.Context, requesterID, tenantID uuid.UUID) (*model.ImpersonationRequest, error) {
 	var req model.ImpersonationRequest
+	now := time.Now()
 	err := r.db.WithContext(ctx).
-		Where("requester_id = ? AND tenant_id = ? AND status = ? AND session_expires_at > ?",
-			requesterID, tenantID, model.ImpersonationStatusActive, time.Now()).
+		Where("requester_id = ? AND tenant_id = ?", requesterID, tenantID).
+		Where(
+			`status = ? OR (status = ? AND (session_expires_at IS NULL OR session_expires_at > ?)) OR (status = ? AND session_expires_at > ?)`,
+			model.ImpersonationStatusPending,
+			model.ImpersonationStatusApproved, now,
+			model.ImpersonationStatusActive, now,
+		).
+		Order("created_at DESC").
 		First(&req).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &req, nil

@@ -2,10 +2,12 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -37,7 +39,12 @@ func (h *ImpersonationHandler) ListHistory(c *gin.Context) {
 		"status":         c.Query("status"),
 	}
 
-	if affected, err := h.repo.ExpireOverdueSessions(c.Request.Context()); err == nil && affected > 0 {
+	affected, err := h.repo.ExpireOverdueSessions(c.Request.Context())
+	if err != nil {
+		respondInternalError(c, "IMPERSONATION", "查询审批记录失败", err)
+		return
+	}
+	if affected > 0 {
 		logger.API("IMPERSONATION").Info("查询审批记录时自动过期 impersonation 会话: affected=%d", affected)
 	}
 	requests, total, err := h.repo.ListByTenant(c.Request.Context(), tenantID, page, pageSize, filters)
@@ -55,6 +62,10 @@ func (h *ImpersonationHandler) Approve(c *gin.Context) {
 		return
 	}
 	if err := h.repo.UpdateStatus(c.Request.Context(), req.ID, model.ImpersonationStatusApproved, &userID); err != nil {
+		if errors.Is(err, repository.ErrImpersonationRequestNotPending) {
+			response.Conflict(c, "该申请已被其他审批人处理")
+			return
+		}
 		respondInternalError(c, "IMPERSONATION", "审批失败", err)
 		return
 	}
@@ -71,6 +82,10 @@ func (h *ImpersonationHandler) Reject(c *gin.Context) {
 		return
 	}
 	if err := h.repo.UpdateStatus(c.Request.Context(), req.ID, model.ImpersonationStatusRejected, &userID); err != nil {
+		if errors.Is(err, repository.ErrImpersonationRequestNotPending) {
+			response.Conflict(c, "该申请已被其他审批人处理")
+			return
+		}
 		respondInternalError(c, "IMPERSONATION", "拒绝失败", err)
 		return
 	}
@@ -87,7 +102,7 @@ func (h *ImpersonationHandler) loadTenantApprovalRequest(c *gin.Context) (*model
 	}
 	req, err := h.repo.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "申请不存在")
+		respondImpersonationLookupError(c, err)
 		return nil, uuid.Nil, false
 	}
 
@@ -100,9 +115,16 @@ func (h *ImpersonationHandler) loadTenantApprovalRequest(c *gin.Context) (*model
 		return nil, uuid.Nil, false
 	}
 
-	userID, _ := uuid.Parse(middleware.GetUserID(c))
+	userID, ok := requireImpersonationUserID(c)
+	if !ok {
+		return nil, uuid.Nil, false
+	}
 	isApprover, err := h.repo.IsApprover(c.Request.Context(), tenantID, userID)
-	if err != nil || !isApprover {
+	if err != nil {
+		respondInternalError(c, "IMPERSONATION", "校验审批权限失败", err)
+		return nil, uuid.Nil, false
+	}
+	if !isApprover {
 		response.Forbidden(c, "您没有审批权限")
 		return nil, uuid.Nil, false
 	}

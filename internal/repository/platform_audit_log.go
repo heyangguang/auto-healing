@@ -144,27 +144,78 @@ type PlatformAuditStats struct {
 
 // GetStats 获取平台审计统计
 func (r *PlatformAuditLogRepository) GetStats(ctx context.Context) (*PlatformAuditStats, error) {
-	stats := &PlatformAuditStats{}
+	totalCount, loginCount, operCount, successCount, failedCount, err := r.platformAuditSummaryCounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	todayCount, weekCount, err := r.platformAuditPeriodCounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	actionStats, err := r.platformAuditActionStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &PlatformAuditStats{
+		TotalCount:   totalCount,
+		LoginCount:   loginCount,
+		OperCount:    operCount,
+		SuccessCount: successCount,
+		FailedCount:  failedCount,
+		TodayCount:   todayCount,
+		WeekCount:    weekCount,
+		ActionStats:  actionStats,
+	}, nil
+}
 
-	newDB := func() *gorm.DB { return r.db.WithContext(ctx) }
-	newDB().Model(&model.PlatformAuditLog{}).Count(&stats.TotalCount)
-	newDB().Model(&model.PlatformAuditLog{}).Where("category = ?", "login").Count(&stats.LoginCount)
-	newDB().Model(&model.PlatformAuditLog{}).Where("category = ?", "operation").Count(&stats.OperCount)
-	newDB().Model(&model.PlatformAuditLog{}).Where("status = ?", "success").Count(&stats.SuccessCount)
-	newDB().Model(&model.PlatformAuditLog{}).Where("status = ?", "failed").Count(&stats.FailedCount)
+func (r *PlatformAuditLogRepository) platformAuditSummaryCounts(ctx context.Context) (int64, int64, int64, int64, int64, error) {
+	newDB := func() *gorm.DB { return r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}) }
+	totalCount, err := auditCount(newDB())
+	if err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+	loginCount, err := auditCount(newDB().Where("category = ?", "login"))
+	if err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+	operCount, err := auditCount(newDB().Where("category = ?", "operation"))
+	if err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+	successCount, err := auditCount(newDB().Where("status = ?", "success"))
+	if err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+	failedCount, err := auditCount(newDB().Where("status = ?", "failed"))
+	if err != nil {
+		return 0, 0, 0, 0, 0, err
+	}
+	return totalCount, loginCount, operCount, successCount, failedCount, nil
+}
 
+func (r *PlatformAuditLogRepository) platformAuditPeriodCounts(ctx context.Context) (int64, int64, error) {
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	weekStart := todayStart.AddDate(0, 0, -int(now.Weekday()))
-	newDB().Model(&model.PlatformAuditLog{}).Where("created_at >= ?", todayStart).Count(&stats.TodayCount)
-	newDB().Model(&model.PlatformAuditLog{}).Where("created_at >= ?", weekStart).Count(&stats.WeekCount)
+	todayCount, err := auditCount(r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}).Where("created_at >= ?", todayStart))
+	if err != nil {
+		return 0, 0, err
+	}
+	weekCount, err := auditCount(r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}).Where("created_at >= ?", weekStart))
+	if err != nil {
+		return 0, 0, err
+	}
+	return todayCount, weekCount, nil
+}
 
-	newDB().Model(&model.PlatformAuditLog{}).
+func (r *PlatformAuditLogRepository) platformAuditActionStats(ctx context.Context) ([]ActionStat, error) {
+	var actionStats []ActionStat
+	err := r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}).
 		Select("action, count(*) as count").
-		Group("action").Order("count DESC").
-		Scan(&stats.ActionStats)
-
-	return stats, nil
+		Group("action").
+		Order("count DESC").
+		Scan(&actionStats).Error
+	return actionStats, err
 }
 
 // GetTrend 获取平台审计趋势

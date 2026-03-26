@@ -6,7 +6,6 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -28,22 +27,10 @@ func NewCommandBlacklistHandler() *CommandBlacklistHandler {
 // GET /api/v1/command-blacklist
 func (h *CommandBlacklistHandler) List(c *gin.Context) {
 	page, pageSize := parsePagination(c, 20)
-
-	opts := &repository.CommandBlacklistListOptions{
-		Page:         page,
-		PageSize:     pageSize,
-		Name:         c.Query("name"),
-		NameExact:    c.Query("name__exact"),
-		Category:     c.Query("category"),
-		Severity:     c.Query("severity"),
-		Pattern:      c.Query("pattern"),
-		PatternExact: c.Query("pattern__exact"),
-	}
-
-	// is_active 筛选
-	if activeParam := c.Query("is_active"); activeParam != "" {
-		active := activeParam == "true"
-		opts.IsActive = &active
+	opts, err := buildCommandBlacklistListOptions(c, page, pageSize)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
 	}
 
 	rules, total, err := h.svc.List(c.Request.Context(), opts)
@@ -70,7 +57,7 @@ func (h *CommandBlacklistHandler) Create(c *gin.Context) {
 	}
 
 	if err := h.svc.Create(c.Request.Context(), &rule); err != nil {
-		response.BadRequest(c, err.Error())
+		respondCommandBlacklistError(c, "创建黑名单规则失败", err)
 		return
 	}
 
@@ -88,7 +75,7 @@ func (h *CommandBlacklistHandler) Get(c *gin.Context) {
 
 	rule, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "规则不存在")
+		respondCommandBlacklistError(c, "获取黑名单规则失败", err)
 		return
 	}
 
@@ -112,7 +99,7 @@ func (h *CommandBlacklistHandler) Update(c *gin.Context) {
 
 	rule, err := h.svc.Update(c.Request.Context(), id, &input)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		respondCommandBlacklistError(c, "更新黑名单规则失败", err)
 		return
 	}
 
@@ -129,7 +116,7 @@ func (h *CommandBlacklistHandler) Delete(c *gin.Context) {
 	}
 
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		response.BadRequest(c, err.Error())
+		respondCommandBlacklistError(c, "删除黑名单规则失败", err)
 		return
 	}
 
@@ -147,7 +134,7 @@ func (h *CommandBlacklistHandler) ToggleActive(c *gin.Context) {
 
 	rule, err := h.svc.ToggleActive(c.Request.Context(), id)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		respondCommandBlacklistError(c, "切换黑名单规则状态失败", err)
 		return
 	}
 
@@ -213,7 +200,7 @@ func (h *CommandBlacklistHandler) GetSearchSchema(c *gin.Context) {
 func (h *CommandBlacklistHandler) BatchToggle(c *gin.Context) {
 	var input struct {
 		IDs      []string `json:"ids" binding:"required"`
-		IsActive bool     `json:"is_active"`
+		IsActive *bool    `json:"is_active" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
@@ -230,14 +217,14 @@ func (h *CommandBlacklistHandler) BatchToggle(c *gin.Context) {
 		uuids = append(uuids, id)
 	}
 
-	count, err := h.svc.BatchToggle(c.Request.Context(), uuids, input.IsActive)
+	count, err := h.svc.BatchToggle(c.Request.Context(), uuids, *input.IsActive)
 	if err != nil {
 		respondInternalError(c, "BLACKLIST", "批量更新黑名单规则状态失败", err)
 		return
 	}
 
 	response.Success(c, gin.H{
-		"message": fmt.Sprintf("已%s %d 条规则", map[bool]string{true: "启用", false: "禁用"}[input.IsActive], count),
+		"message": fmt.Sprintf("已%s %d 条规则", map[bool]string{true: "启用", false: "禁用"}[*input.IsActive], count),
 		"count":   count,
 	})
 }

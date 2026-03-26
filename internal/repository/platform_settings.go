@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -52,11 +54,11 @@ func (r *PlatformSettingsRepository) GetByKey(ctx context.Context, key string) (
 func (r *PlatformSettingsRepository) GetIntValue(ctx context.Context, key string, defaultVal int) int {
 	setting, err := r.GetByKey(ctx, key)
 	if err != nil {
-		return defaultVal
+		return getPlatformSettingDefault(key, defaultVal, err)
 	}
 	val, err := strconv.Atoi(setting.Value)
 	if err != nil {
-		return defaultVal
+		panic(fmt.Errorf("平台设置 %s 不是合法整数: %w", key, err))
 	}
 	return val
 }
@@ -65,7 +67,7 @@ func (r *PlatformSettingsRepository) GetIntValue(ctx context.Context, key string
 func (r *PlatformSettingsRepository) GetStringValue(ctx context.Context, key string, defaultVal string) string {
 	setting, err := r.GetByKey(ctx, key)
 	if err != nil {
-		return defaultVal
+		return getPlatformSettingDefault(key, defaultVal, err)
 	}
 	return setting.Value
 }
@@ -74,13 +76,20 @@ func (r *PlatformSettingsRepository) GetStringValue(ctx context.Context, key str
 func (r *PlatformSettingsRepository) GetBoolValue(ctx context.Context, key string, defaultVal bool) bool {
 	setting, err := r.GetByKey(ctx, key)
 	if err != nil {
-		return defaultVal
+		return getPlatformSettingDefault(key, defaultVal, err)
 	}
 	val, err := strconv.ParseBool(setting.Value)
 	if err != nil {
-		return defaultVal
+		panic(fmt.Errorf("平台设置 %s 不是合法布尔值: %w", key, err))
 	}
 	return val
+}
+
+func getPlatformSettingDefault[T any](key string, defaultVal T, err error) T {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return defaultVal
+	}
+	panic(fmt.Errorf("读取平台设置 %s 失败: %w", key, err))
 }
 
 // Update 更新设置值

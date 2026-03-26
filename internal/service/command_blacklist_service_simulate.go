@@ -27,12 +27,10 @@ func (s *CommandBlacklistService) Simulate(req *SimulateRequest) ([]SimulateResu
 
 func simulateFiles(req *SimulateRequest, re *regexp.Regexp) []SimulateResult {
 	var results []SimulateResult
-	globalLine := 0
 	for _, file := range req.Files {
-		for _, line := range strings.Split(file.Content, "\n") {
-			globalLine++
+		for i, line := range strings.Split(file.Content, "\n") {
 			results = append(results, SimulateResult{
-				Line:    globalLine,
+				Line:    i + 1,
 				Content: truncateLine(line, 200),
 				Matched: matchLine(line, req.Pattern, req.MatchType, re),
 				File:    file.Path,

@@ -81,8 +81,33 @@ func (r *DictionaryRepository) GetByID(ctx context.Context, id uuid.UUID) (*mode
 
 // UpsertBatch 批量 Upsert（用于 Seed）
 func (r *DictionaryRepository) UpsertBatch(ctx context.Context, items []model.Dictionary) error {
-	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+	return r.db.WithContext(ctx).Table((model.Dictionary{}).TableName()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "dict_type"}, {Name: "dict_key"}},
-		DoUpdates: clause.AssignmentColumns([]string{"label", "label_en", "color", "tag_color", "badge", "icon", "bg", "extra", "sort_order", "is_system", "updated_at"}),
-	}).CreateInBatches(items, 100).Error
+		DoUpdates: clause.AssignmentColumns([]string{"label", "label_en", "color", "tag_color", "badge", "icon", "bg", "extra", "sort_order", "is_system", "is_active", "updated_at"}),
+	}).CreateInBatches(buildDictionaryUpsertPayloads(items), 100).Error
+}
+
+func buildDictionaryUpsertPayloads(items []model.Dictionary) []map[string]interface{} {
+	payloads := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		payloads = append(payloads, map[string]interface{}{
+			"id":         item.ID,
+			"dict_type":  item.DictType,
+			"dict_key":   item.DictKey,
+			"label":      item.Label,
+			"label_en":   item.LabelEn,
+			"color":      item.Color,
+			"tag_color":  item.TagColor,
+			"badge":      item.Badge,
+			"icon":       item.Icon,
+			"bg":         item.Bg,
+			"extra":      item.Extra,
+			"sort_order": item.SortOrder,
+			"is_system":  item.IsSystem,
+			"is_active":  item.IsActive,
+			"created_at": item.CreatedAt,
+			"updated_at": item.UpdatedAt,
+		})
+	}
+	return payloads
 }
