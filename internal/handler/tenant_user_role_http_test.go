@@ -162,7 +162,7 @@ func newTenantUserRoleHTTPTestRouter(t *testing.T, db *gorm.DB) *gin.Engine {
 		AccessTokenTTL:  time.Hour,
 		RefreshTokenTTL: 24 * time.Hour,
 		Issuer:          "tenant-user-role-test",
-	}, nil)
+	}, testBlacklistStore{})
 	authSvc := authService.NewService(jwtSvc)
 	tenantHandler := NewTenantHandler(authSvc)
 	tenantUserHandler := NewTenantUserHandler(authSvc)
