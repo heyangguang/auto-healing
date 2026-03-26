@@ -1,9 +1,17 @@
 package middleware
 
 import (
+	"bytes"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/company/auto-healing/internal/model"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestSanitizeAuditJSONMasksNestedSensitiveFields(t *testing.T) {
@@ -42,5 +50,52 @@ func TestSanitizeAuditJSONMasksNestedSensitiveFields(t *testing.T) {
 	}
 	if masked["safe"] != "value" {
 		t.Fatalf("safe field changed unexpectedly: %#v", masked["safe"])
+	}
+}
+
+func TestReadAuditRequestBodyCapsCapturedBytesWithoutBreakingRequestBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := bytes.Repeat([]byte("a"), maxAuditRequestBodyBytes+2048)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/plugins", bytes.NewReader(body))
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = req
+
+	captured := readAuditRequestBody(c)
+	if len(captured) != maxAuditRequestBodyBytes {
+		t.Fatalf("captured length = %d, want %d", len(captured), maxAuditRequestBodyBytes)
+	}
+
+	replayed, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		t.Fatalf("ReadAll(request body): %v", err)
+	}
+	if !bytes.Equal(replayed, body) {
+		t.Fatal("request body was not preserved for downstream handlers")
+	}
+}
+
+func TestResolveResourceNameReturnsQueryError(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:audit-resource-name-error?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite db: %v", err)
+	}
+
+	resourceID := uuid.New()
+	_, err = resolveResourceName(db, "/api/v1/plugins/"+resourceID.String(), &resourceID, "", nil, uuid.Nil)
+	if err == nil {
+		t.Fatal("resolveResourceName() error = nil, want query error")
+	}
+}
+
+func TestResolveResourceNameReturnsTenantLookupError(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:audit-tenant-name-error?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite db: %v", err)
+	}
+
+	body := model.JSON{"tenant_id": uuid.NewString()}
+	_, err = resolveResourceName(db, "/api/v1/platform/impersonation/requests", nil, "", body, uuid.Nil)
+	if err == nil {
+		t.Fatal("resolveResourceName() error = nil, want tenant lookup error")
 	}
 }

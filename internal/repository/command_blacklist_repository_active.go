@@ -16,47 +16,86 @@ func (r *CommandBlacklistRepository) GetActiveRules(ctx context.Context) ([]mode
 		return nil, err
 	}
 
-	var tenantRules []model.CommandBlacklist
-	if err := r.db.WithContext(ctx).Where("tenant_id = ? AND is_active = true", tenantID).Find(&tenantRules).Error; err != nil {
+	tenantRules, err := r.listTenantActiveRules(ctx, tenantID)
+	if err != nil {
 		return nil, fmt.Errorf("查询租户启用规则失败: %w", err)
 	}
 
-	var systemRules []model.CommandBlacklist
-	if err := r.db.WithContext(ctx).
-		Joins("JOIN tenant_blacklist_overrides tbo ON tbo.rule_id = command_blacklist.id AND tbo.tenant_id = ? AND tbo.is_active = true", tenantID).
-		Where("command_blacklist.tenant_id IS NULL").
-		Find(&systemRules).Error; err != nil {
+	systemRules, err := r.listSystemRules(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("查询系统启用规则失败: %w", err)
 	}
-	return append(tenantRules, systemRules...), nil
+
+	systemRules, err = r.applyOverrides(ctx, tenantID, systemRules)
+	if err != nil {
+		return nil, err
+	}
+
+	active := true
+	return append(tenantRules, applyCommandBlacklistActiveFilter(systemRules, &active)...), nil
 }
 
-func (r *CommandBlacklistRepository) applyOverrides(ctx context.Context, tenantID uuid.UUID, rules []model.CommandBlacklist) []model.CommandBlacklist {
-	var systemRuleIDs []uuid.UUID
+func (r *CommandBlacklistRepository) listTenantActiveRules(ctx context.Context, tenantID uuid.UUID) ([]model.CommandBlacklist, error) {
+	var tenantRules []model.CommandBlacklist
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND is_active = true", tenantID).
+		Find(&tenantRules).Error
+	return tenantRules, err
+}
+
+func (r *CommandBlacklistRepository) listSystemRules(ctx context.Context) ([]model.CommandBlacklist, error) {
+	var systemRules []model.CommandBlacklist
+	err := r.db.WithContext(ctx).
+		Where("tenant_id IS NULL").
+		Find(&systemRules).Error
+	return systemRules, err
+}
+
+func (r *CommandBlacklistRepository) applyOverrides(ctx context.Context, tenantID uuid.UUID, rules []model.CommandBlacklist) ([]model.CommandBlacklist, error) {
+	systemRuleIDs := collectSystemRuleIDs(rules)
+	if len(systemRuleIDs) == 0 {
+		return rules, nil
+	}
+
+	overrides, err := r.listTenantBlacklistOverrides(ctx, tenantID, systemRuleIDs)
+	if err != nil {
+		return nil, fmt.Errorf("查询黑名单覆盖配置失败: %w", err)
+	}
+	return mergeCommandBlacklistOverrides(rules, overrides), nil
+}
+
+func collectSystemRuleIDs(rules []model.CommandBlacklist) []uuid.UUID {
+	systemRuleIDs := make([]uuid.UUID, 0, len(rules))
 	for _, rule := range rules {
 		if rule.TenantID == nil {
 			systemRuleIDs = append(systemRuleIDs, rule.ID)
 		}
 	}
-	if len(systemRuleIDs) == 0 {
-		return rules
-	}
+	return systemRuleIDs
+}
 
+func (r *CommandBlacklistRepository) listTenantBlacklistOverrides(ctx context.Context, tenantID uuid.UUID, ruleIDs []uuid.UUID) ([]model.TenantBlacklistOverride, error) {
 	var overrides []model.TenantBlacklistOverride
-	r.db.WithContext(ctx).Where("tenant_id = ? AND rule_id IN ?", tenantID, systemRuleIDs).Find(&overrides)
+	err := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND rule_id IN ?", tenantID, ruleIDs).
+		Find(&overrides).Error
+	return overrides, err
+}
 
+func mergeCommandBlacklistOverrides(rules []model.CommandBlacklist, overrides []model.TenantBlacklistOverride) []model.CommandBlacklist {
+	merged := append([]model.CommandBlacklist(nil), rules...)
 	overrideMap := make(map[uuid.UUID]bool, len(overrides))
 	overrideExists := make(map[uuid.UUID]bool, len(overrides))
 	for _, override := range overrides {
 		overrideMap[override.RuleID] = override.IsActive
 		overrideExists[override.RuleID] = true
 	}
-	for i := range rules {
-		if rules[i].TenantID == nil && overrideExists[rules[i].ID] {
-			rules[i].IsActive = overrideMap[rules[i].ID]
+	for i := range merged {
+		if merged[i].TenantID == nil && overrideExists[merged[i].ID] {
+			merged[i].IsActive = overrideMap[merged[i].ID]
 		}
 	}
-	return rules
+	return merged
 }
 
 func (r *CommandBlacklistRepository) invalidateCache() {

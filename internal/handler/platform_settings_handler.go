@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/json"
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // ==================== 平台级设置 Handler ====================
@@ -113,7 +116,7 @@ func (h *PlatformSettingsHandler) UpdateSetting(c *gin.Context) {
 	// 获取当前设置，用于类型校验
 	existing, err := h.repo.GetByKey(c.Request.Context(), key)
 	if err != nil {
-		response.NotFound(c, "设置不存在: "+key)
+		respondPlatformSettingLookupError(c, key, err)
 		return
 	}
 
@@ -160,7 +163,9 @@ func validateSettingValue(settingType, value string) error {
 			return &settingValidationError{"布尔值必须为 true 或 false"}
 		}
 	case model.SettingTypeJSON:
-		// JSON 格式，暂不做严格校验
+		if !json.Valid([]byte(value)) {
+			return &settingValidationError{"值必须是合法 JSON"}
+		}
 	case model.SettingTypeString:
 		// 字符串无限制
 	}
@@ -174,4 +179,12 @@ type settingValidationError struct {
 
 func (e *settingValidationError) Error() string {
 	return e.msg
+}
+
+func respondPlatformSettingLookupError(c *gin.Context, key string, err error) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		response.NotFound(c, "设置不存在: "+key)
+		return
+	}
+	respondInternalError(c, "PLATFORM_SETTINGS", "查询平台设置失败", err)
 }

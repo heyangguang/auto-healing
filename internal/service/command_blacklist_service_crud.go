@@ -16,6 +16,7 @@ func (s *CommandBlacklistService) Create(ctx context.Context, rule *model.Comman
 	rule.ID = uuid.New()
 	rule.CreatedAt = time.Now()
 	rule.UpdatedAt = time.Now()
+	rule.IsSystem = false
 	if err := repository.FillTenantID(ctx, &rule.TenantID); err != nil {
 		return err
 	}
@@ -98,8 +99,12 @@ func applyCommandBlacklistUpdate(rule, input *model.CommandBlacklist) {
 	if input.Severity != "" {
 		rule.Severity = input.Severity
 	}
-	rule.Category = input.Category
-	rule.Description = input.Description
+	if input.Category != "" {
+		rule.Category = input.Category
+	}
+	if input.Description != "" {
+		rule.Description = input.Description
+	}
 }
 
 // Delete 删除规则

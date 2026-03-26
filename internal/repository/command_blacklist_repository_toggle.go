@@ -15,11 +15,17 @@ func (r *CommandBlacklistRepository) BatchToggle(ctx context.Context, ids []uuid
 	if err != nil {
 		return 0, err
 	}
-	systemIDs, tenantIDs := r.splitSystemAndTenantRuleIDs(ctx, tenantID, ids)
+	systemIDs, tenantIDs, err := r.splitSystemAndTenantRuleIDs(ctx, tenantID, ids)
+	if err != nil {
+		return 0, err
+	}
 
 	var affected int64
 	if len(tenantIDs) > 0 {
-		result := r.db.WithContext(ctx).Model(&model.CommandBlacklist{}).Where("id IN ?", tenantIDs).Update("is_active", isActive)
+		result := r.db.WithContext(ctx).
+			Model(&model.CommandBlacklist{}).
+			Where("id IN ? AND tenant_id = ?", tenantIDs, tenantID).
+			Updates(map[string]interface{}{"is_active": isActive, "updated_at": time.Now()})
 		if result.Error != nil {
 			return 0, result.Error
 		}
@@ -35,9 +41,13 @@ func (r *CommandBlacklistRepository) BatchToggle(ctx context.Context, ids []uuid
 	return affected, nil
 }
 
-func (r *CommandBlacklistRepository) splitSystemAndTenantRuleIDs(ctx context.Context, tenantID uuid.UUID, ids []uuid.UUID) ([]uuid.UUID, []uuid.UUID) {
+func (r *CommandBlacklistRepository) splitSystemAndTenantRuleIDs(ctx context.Context, tenantID uuid.UUID, ids []uuid.UUID) ([]uuid.UUID, []uuid.UUID, error) {
 	var rules []model.CommandBlacklist
-	r.db.WithContext(ctx).Where("id IN ? AND (tenant_id = ? OR tenant_id IS NULL)", ids, tenantID).Find(&rules)
+	if err := r.db.WithContext(ctx).
+		Where("id IN ? AND (tenant_id = ? OR tenant_id IS NULL)", ids, tenantID).
+		Find(&rules).Error; err != nil {
+		return nil, nil, err
+	}
 
 	systemIDs := make([]uuid.UUID, 0, len(rules))
 	tenantIDs := make([]uuid.UUID, 0, len(rules))
@@ -48,7 +58,7 @@ func (r *CommandBlacklistRepository) splitSystemAndTenantRuleIDs(ctx context.Con
 			tenantIDs = append(tenantIDs, rule.ID)
 		}
 	}
-	return systemIDs, tenantIDs
+	return systemIDs, tenantIDs, nil
 }
 
 // ToggleSystemRule 为当前租户 upsert 系统规则的 override

@@ -9,7 +9,12 @@ import (
 // ListAuditLogs 获取审计日志列表
 func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 	page, pageSize := parsePagination(c, 20)
-	logs, total, err := h.repo.List(c.Request.Context(), buildAuditListOptions(c, page, pageSize))
+	opts, err := buildAuditListOptions(c, page, pageSize)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	logs, total, err := h.repo.List(c.Request.Context(), opts)
 	if err != nil {
 		respondInternalError(c, "AUDIT", "获取审计日志列表失败", err)
 		return
@@ -116,7 +121,11 @@ func (h *AuditHandler) GetHighRiskLogs(c *gin.Context) {
 
 // ExportAuditLogs 导出审计日志为 CSV
 func (h *AuditHandler) ExportAuditLogs(c *gin.Context) {
-	opts := buildAuditListOptions(c, 1, 10000)
+	opts, err := buildAuditListOptions(c, 1, 10000)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	opts.SortBy = "created_at"
 	opts.SortOrder = "desc"
 	logs, _, err := h.repo.List(c.Request.Context(), opts)

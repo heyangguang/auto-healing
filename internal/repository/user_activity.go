@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -11,6 +12,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+const maxRecentItems = 10
 
 // UserActivityRepository 用户活动数据仓库（收藏 + 最近访问）
 type UserActivityRepository struct {
@@ -74,7 +77,7 @@ func (r *UserActivityRepository) ListRecents(ctx context.Context, userID uuid.UU
 	var recents []model.UserRecent
 	query := r.db.WithContext(ctx).Where("user_id = ?", userID)
 	query = applyOptionalTenantFilter(query, ctx, "tenant_id")
-	err := query.Order("accessed_at DESC").Limit(10).Find(&recents).Error
+	err := query.Order("accessed_at DESC, id DESC").Limit(maxRecentItems).Find(&recents).Error
 	return recents, err
 }
 
@@ -88,51 +91,101 @@ func (r *UserActivityRepository) UpsertRecent(ctx context.Context, recent *model
 	}
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 尝试查找已有记录
-		var existing model.UserRecent
-		query := tx.Where("user_id = ? AND menu_key = ?", recent.UserID, recent.MenuKey)
-		query = applyOptionalTenantFilter(query, ctx, "tenant_id")
-		err := query.First(&existing).Error
-
+		existing, err := findExistingRecent(tx, ctx, recent.UserID, recent.MenuKey)
 		if err == nil {
-			// 已存在 → 更新访问时间和名称/路径
-			return tx.Model(&existing).Updates(map[string]interface{}{
-				"accessed_at": time.Now(),
-				"name":        recent.Name,
-				"path":        recent.Path,
-			}).Error
+			return updateExistingRecent(tx, existing, recent)
 		}
-
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
+		return upsertRecentRecord(tx, ctx, recent)
+	})
+}
 
-		// 不存在 → 插入新记录
-		recent.AccessedAt = time.Now()
-		if err := tx.Create(recent).Error; err != nil {
+func findExistingRecent(tx *gorm.DB, ctx context.Context, userID uuid.UUID, menuKey string) (*model.UserRecent, error) {
+	var existing model.UserRecent
+	query := tx.Where("user_id = ? AND menu_key = ?", userID, menuKey)
+	err := applyOptionalTenantFilter(query, ctx, "tenant_id").First(&existing).Error
+	if err != nil {
+		return nil, err
+	}
+	return &existing, nil
+}
+
+func updateExistingRecent(tx *gorm.DB, existing, recent *model.UserRecent) error {
+	accessedAt := time.Now()
+	if err := tx.Model(existing).Updates(map[string]interface{}{
+		"accessed_at": accessedAt,
+		"name":        recent.Name,
+		"path":        recent.Path,
+	}).Error; err != nil {
+		return err
+	}
+	recent.ID = existing.ID
+	recent.AccessedAt = accessedAt
+	recent.TenantID = existing.TenantID
+	return nil
+}
+
+func upsertRecentRecord(tx *gorm.DB, ctx context.Context, recent *model.UserRecent) error {
+	if recent.ID == uuid.Nil {
+		recent.ID = uuid.New()
+	}
+	recent.AccessedAt = time.Now()
+	if err := tx.Create(recent).Error; err != nil {
+		if !isRecentDuplicateError(err) {
 			return err
 		}
-
-		// 淘汰超过 10 条的旧记录
-		var count int64
-		countQuery := tx.Model(&model.UserRecent{}).Where("user_id = ?", recent.UserID)
-		applyOptionalTenantFilter(countQuery, ctx, "tenant_id").Count(&count)
-		if count > 10 {
-			// 找到第 10 条的访问时间，删除更旧的
-			var cutoff model.UserRecent
-			cutoffQuery := tx.Where("user_id = ?", recent.UserID)
-			applyOptionalTenantFilter(cutoffQuery, ctx, "tenant_id").
-				Order("accessed_at DESC").
-				Offset(10).
-				Limit(1).
-				First(&cutoff)
-
-			deleteQuery := tx.Where("user_id = ? AND accessed_at <= ?", recent.UserID, cutoff.AccessedAt)
-			applyOptionalTenantFilter(deleteQuery, ctx, "tenant_id").Delete(&model.UserRecent{})
+		existing, findErr := findExistingRecent(tx, ctx, recent.UserID, recent.MenuKey)
+		if findErr != nil {
+			return findErr
 		}
+		return updateExistingRecent(tx, existing, recent)
+	}
+	return trimOverflowRecents(tx, ctx, recent.UserID)
+}
 
-		return nil
-	})
+func isRecentDuplicateError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+	message := err.Error()
+	return strings.Contains(message, "UNIQUE constraint failed") || strings.Contains(message, "duplicate key value")
+}
+
+func trimOverflowRecents(tx *gorm.DB, ctx context.Context, userID uuid.UUID) error {
+	count, err := countUserRecents(tx, ctx, userID)
+	if err != nil || count <= maxRecentItems {
+		return err
+	}
+
+	staleIDs, err := staleRecentIDs(tx, ctx, userID)
+	if err != nil || len(staleIDs) == 0 {
+		return err
+	}
+
+	return applyOptionalTenantFilter(tx.Where("id IN ?", staleIDs), ctx, "tenant_id").
+		Delete(&model.UserRecent{}).Error
+}
+
+func countUserRecents(tx *gorm.DB, ctx context.Context, userID uuid.UUID) (int64, error) {
+	var count int64
+	query := tx.Model(&model.UserRecent{}).Where("user_id = ?", userID)
+	err := applyOptionalTenantFilter(query, ctx, "tenant_id").Count(&count).Error
+	return count, err
+}
+
+func staleRecentIDs(tx *gorm.DB, ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	var staleIDs []uuid.UUID
+	query := tx.Model(&model.UserRecent{}).Where("user_id = ?", userID)
+	err := applyOptionalTenantFilter(query, ctx, "tenant_id").
+		Order("accessed_at DESC, id DESC").
+		Offset(maxRecentItems).
+		Pluck("id", &staleIDs).Error
+	return staleIDs, err
 }
 
 func applyOptionalTenantFilter(db *gorm.DB, ctx context.Context, column string) *gorm.DB {

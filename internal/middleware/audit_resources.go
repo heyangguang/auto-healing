@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -55,19 +56,27 @@ var pathSegmentToTable = map[string]tableInfo{
 
 // resolveResourceName 根据 URL 路径和资源 ID 查询资源名称
 // 对平台级资源不使用 tenant_id 过滤
-func resolveResourceName(db *gorm.DB, path string, resourceID *uuid.UUID, resourceKey string, bodyJSON model.JSON, tenantID uuid.UUID) string {
+func resolveResourceName(db *gorm.DB, path string, resourceID *uuid.UUID, resourceKey string, bodyJSON model.JSON, tenantID uuid.UUID) (string, error) {
 	if info := matchTableInfo(path); info != nil {
-		if name, ok := queryResolvedResourceName(db, info, resourceID, resourceKey, tenantID); ok {
-			return name
+		name, ok, err := queryResolvedResourceName(db, info, resourceID, resourceKey, tenantID)
+		if err != nil {
+			return "", err
+		}
+		if ok {
+			return name, nil
 		}
 	}
-	if name, ok := extractResourceNameFromBody(db, bodyJSON); ok {
-		return name
+	name, ok, err := extractResourceNameFromBody(db, bodyJSON)
+	if err != nil {
+		return "", err
 	}
-	return ""
+	if ok {
+		return name, nil
+	}
+	return "", nil
 }
 
-func queryResolvedResourceName(db *gorm.DB, info *tableInfo, resourceID *uuid.UUID, resourceKey string, tenantID uuid.UUID) (string, bool) {
+func queryResolvedResourceName(db *gorm.DB, info *tableInfo, resourceID *uuid.UUID, resourceKey string, tenantID uuid.UUID) (string, bool, error) {
 	var name string
 	query := db.Table(info.table).Select(info.column)
 	switch {
@@ -78,21 +87,27 @@ func queryResolvedResourceName(db *gorm.DB, info *tableInfo, resourceID *uuid.UU
 	case resourceID != nil:
 		query = query.Where("id = ? AND tenant_id = ?", *resourceID, tenantID)
 	default:
-		return "", false
+		return "", false, nil
 	}
-	if err := query.Scan(&name).Error; err != nil || name == "" {
-		return "", false
+	if err := query.Scan(&name).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", false, nil
+		}
+		return "", false, err
 	}
-	return name, true
+	if name == "" {
+		return "", false, nil
+	}
+	return name, true, nil
 }
 
-func extractResourceNameFromBody(db *gorm.DB, bodyJSON model.JSON) (string, bool) {
+func extractResourceNameFromBody(db *gorm.DB, bodyJSON model.JSON) (string, bool, error) {
 	body, ok := decodeAuditBody(bodyJSON)
 	if !ok {
-		return "", false
+		return "", false, nil
 	}
 	if name := firstNamedField(body, []string{"name", "title", "username", "flow_name", "hostname"}); name != "" {
-		return name, true
+		return name, true, nil
 	}
 	return lookupTenantNameFromBody(db, body)
 }
@@ -118,20 +133,26 @@ func firstNamedField(body map[string]interface{}, fields []string) string {
 	return ""
 }
 
-func lookupTenantNameFromBody(db *gorm.DB, body map[string]interface{}) (string, bool) {
+func lookupTenantNameFromBody(db *gorm.DB, body map[string]interface{}) (string, bool, error) {
 	tidStr, ok := body["tenant_id"].(string)
 	if !ok || tidStr == "" {
-		return "", false
+		return "", false, nil
 	}
 	tenantUUID, err := uuid.Parse(tidStr)
 	if err != nil {
-		return "", false
+		return "", false, nil
 	}
 	var tenantName string
-	if err := db.Table("tenants").Select("name").Where("id = ?", tenantUUID).Scan(&tenantName).Error; err != nil || tenantName == "" {
-		return "", false
+	if err := db.Table("tenants").Select("name").Where("id = ?", tenantUUID).Scan(&tenantName).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", false, nil
+		}
+		return "", false, err
 	}
-	return tenantName, true
+	if tenantName == "" {
+		return "", false, nil
+	}
+	return tenantName, true, nil
 }
 
 // matchTableInfo 从 URL 路径匹配出对应的表信息

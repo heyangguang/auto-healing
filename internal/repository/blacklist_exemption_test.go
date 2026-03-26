@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -123,5 +124,27 @@ func TestBlacklistExemptionGetApprovedByTaskIDSkipsExpired(t *testing.T) {
 	}
 	if len(items) != 1 {
 		t.Fatalf("GetApprovedByTaskID len = %d, want 1", len(items))
+	}
+}
+
+func TestBlacklistExemptionUpdateStatusRejectsNonPendingRequest(t *testing.T) {
+	db := newSQLiteTestDB(t)
+	createBlacklistExemptionSchema(t, db)
+
+	repo := &BlacklistExemptionRepository{db: db}
+	tenantID := uuid.MustParse("55555555-5555-5555-5555-555555555555")
+	itemID := uuid.MustParse("66666666-6666-6666-6666-666666666666")
+	now := time.Now().UTC()
+	mustExec(t, db, `
+		INSERT INTO blacklist_exemptions (id, tenant_id, task_id, rule_id, reason, requested_by, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, itemID.String(), tenantID.String(), uuid.NewString(), uuid.NewString(), "done", uuid.NewString(), "approved", now, now)
+
+	err := repo.UpdateStatus(WithTenantID(context.Background(), tenantID), itemID, map[string]interface{}{
+		"status":     "rejected",
+		"updated_at": now,
+	})
+	if !errors.Is(err, ErrBlacklistExemptionNotPending) {
+		t.Fatalf("UpdateStatus() error = %v, want ErrBlacklistExemptionNotPending", err)
 	}
 }

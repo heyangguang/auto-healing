@@ -16,6 +16,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const maxAuditRequestBodyBytes = 10 * 1024
+
 type responseBodyWriter struct {
 	gin.ResponseWriter
 	body *bytes.Buffer
@@ -62,9 +64,17 @@ func readAuditRequestBody(c *gin.Context) []byte {
 	if c.Request.Body == nil {
 		return nil
 	}
-	body, _ := io.ReadAll(c.Request.Body)
-	c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
-	return body
+
+	probe, err := io.ReadAll(io.LimitReader(c.Request.Body, maxAuditRequestBodyBytes+1))
+	c.Request.Body = io.NopCloser(io.MultiReader(bytes.NewReader(probe), c.Request.Body))
+	if err != nil {
+		logger.API("AUDIT").Warn("读取审计请求体失败: %v", err)
+		return nil
+	}
+	if len(probe) > maxAuditRequestBodyBytes {
+		return probe[:maxAuditRequestBodyBytes]
+	}
+	return probe
 }
 
 func resolveAuditResourceID(c *gin.Context, path string) *uuid.UUID {
@@ -133,7 +143,10 @@ func recoverAuditPanic() {
 func buildAuditEvent(state *auditRequestState, actor auditActor, db *gorm.DB) auditEvent {
 	action, resourceType := inferActionAndResource(state.method, state.path)
 	bodyJSON := parseAuditRequestBody(state.requestBody)
-	resourceName := resolveResourceName(db, state.path, state.resourceID, state.resourceKey, bodyJSON, auditResourceTenantID(state.path, state.tenantID))
+	resourceName, resourceErr := resolveResourceName(db, state.path, state.resourceID, state.resourceKey, bodyJSON, auditResourceTenantID(state.path, state.tenantID))
+	if resourceErr != nil {
+		logger.API("AUDIT").Error("解析审计资源名失败: path=%s resource_type=%s resource_id=%v resource_key=%s err=%v", state.path, resourceType, state.resourceID, state.resourceKey, resourceErr)
+	}
 	status, errorMessage := auditStatus(actor.statusCode, actor.responseBody)
 	return auditEvent{
 		userID:          actor.userID,
@@ -159,7 +172,7 @@ func buildAuditEvent(state *auditRequestState, actor auditActor, db *gorm.DB) au
 }
 
 func parseAuditRequestBody(requestBody []byte) model.JSON {
-	if len(requestBody) == 0 || len(requestBody) >= 10240 {
+	if len(requestBody) == 0 || len(requestBody) > maxAuditRequestBodyBytes {
 		return nil
 	}
 	var bodyJSON model.JSON

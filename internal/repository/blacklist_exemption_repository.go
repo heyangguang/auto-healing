@@ -2,12 +2,15 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+var ErrBlacklistExemptionNotPending = errors.New("blacklist exemption is no longer pending")
 
 type BlacklistExemptionRepository struct {
 	db *gorm.DB
@@ -88,7 +91,17 @@ func (r *BlacklistExemptionRepository) Create(ctx context.Context, item *model.B
 
 // UpdateStatus 更新审批状态
 func (r *BlacklistExemptionRepository) UpdateStatus(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
-	return TenantDB(r.db, ctx).Model(&model.BlacklistExemption{}).Where("id = ?", id).Updates(updates).Error
+	result := TenantDB(r.db, ctx).
+		Model(&model.BlacklistExemption{}).
+		Where("id = ? AND status = ?", id, "pending").
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrBlacklistExemptionNotPending
+	}
+	return nil
 }
 
 // GetApprovedByTaskID 获取任务模板的有效豁免列表（status=approved AND 未过期）

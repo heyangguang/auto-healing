@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
@@ -26,7 +27,11 @@ func NewPlatformAuditHandler() *PlatformAuditHandler {
 // GET /api/v1/platform/audit-logs?page=1&page_size=20&category=login&action=create&...
 func (h *PlatformAuditHandler) ListPlatformAuditLogs(c *gin.Context) {
 	page, pageSize := parsePagination(c, 20)
-	opts := buildPlatformAuditListOptions(c, page, pageSize)
+	opts, err := buildPlatformAuditListOptions(c, page, pageSize)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	logs, total, err := h.repo.List(c.Request.Context(), opts)
 	if err != nil {
 		respondInternalError(c, "AUDIT", "获取平台审计日志列表失败", err)
@@ -35,7 +40,19 @@ func (h *PlatformAuditHandler) ListPlatformAuditLogs(c *gin.Context) {
 	response.List(c, formatPlatformAuditLogs(logs), total, page, pageSize)
 }
 
-func buildPlatformAuditListOptions(c *gin.Context, page, pageSize int) *repository.PlatformAuditListOptions {
+func buildPlatformAuditListOptions(c *gin.Context, page, pageSize int) (*repository.PlatformAuditListOptions, error) {
+	userID, err := parsePlatformAuditUserID(c.Query("user_id"))
+	if err != nil {
+		return nil, err
+	}
+	createdAfter, err := parseOptionalRFC3339Time(c.Query("created_after"), "created_after")
+	if err != nil {
+		return nil, err
+	}
+	createdBefore, err := parseOptionalRFC3339Time(c.Query("created_before"), "created_before")
+	if err != nil {
+		return nil, err
+	}
 	return &repository.PlatformAuditListOptions{
 		Page:          page,
 		PageSize:      pageSize,
@@ -48,21 +65,32 @@ func buildPlatformAuditListOptions(c *gin.Context, page, pageSize int) *reposito
 		RequestPath:   GetStringFilter(c, "request_path"),
 		SortBy:        c.Query("sort_by"),
 		SortOrder:     c.Query("sort_order"),
-		UserID:        parseOptionalUUID(c.Query("user_id")),
-		CreatedAfter:  parseOptionalRFC3339Time(c.Query("created_after")),
-		CreatedBefore: parseOptionalRFC3339Time(c.Query("created_before")),
-	}
+		UserID:        userID,
+		CreatedAfter:  createdAfter,
+		CreatedBefore: createdBefore,
+	}, nil
 }
 
-func parseOptionalRFC3339Time(value string) *time.Time {
+func parsePlatformAuditUserID(value string) (*uuid.UUID, error) {
 	if value == "" {
-		return nil
+		return nil, nil
+	}
+	parsed, err := uuid.Parse(value)
+	if err != nil {
+		return nil, fmt.Errorf("user_id 必须是合法 UUID")
+	}
+	return &parsed, nil
+}
+
+func parseOptionalRFC3339Time(value, key string) (*time.Time, error) {
+	if value == "" {
+		return nil, nil
 	}
 	parsed, err := time.Parse(time.RFC3339, value)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("%s 必须是合法 RFC3339 时间", key)
 	}
-	return &parsed
+	return &parsed, nil
 }
 
 func formatPlatformAuditLogs(logs []model.PlatformAuditLog) []gin.H {

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -125,5 +126,99 @@ func TestCommandBlacklistListFiltersAndPaginatesAfterOverrides(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].ID != systemRuleB {
 		t.Fatalf("inactive items = %#v, want only non-overridden inactive rule", items)
+	}
+}
+
+func TestCommandBlacklistGetActiveRulesHonorsDefaultStateAndOverrides(t *testing.T) {
+	db := newSQLiteTestDB(t)
+	createCommandBlacklistSchema(t, db)
+
+	repo := &CommandBlacklistRepository{db: db}
+	tenantID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	now := time.Now()
+
+	tenantRuleID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1")
+	systemDefaultID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2")
+	systemEnabledID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3")
+	systemDisabledID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb4")
+
+	mustExec(t, db, `
+		INSERT INTO command_blacklist (id, tenant_id, name, pattern, match_type, severity, category, description, is_active, is_system, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, tenantRuleID.String(), tenantID.String(), "租户规则", "curl", "contains", "high", "network", "tenant", true, false, now, now)
+	mustExec(t, db, `
+		INSERT INTO command_blacklist (id, tenant_id, name, pattern, match_type, severity, category, description, is_active, is_system, created_at, updated_at)
+		VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, systemDefaultID.String(), "默认启用系统规则", "rm -rf /", "contains", "critical", "system", "default active", true, true, now, now)
+	mustExec(t, db, `
+		INSERT INTO command_blacklist (id, tenant_id, name, pattern, match_type, severity, category, description, is_active, is_system, created_at, updated_at)
+		VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, systemEnabledID.String(), "被 override 启用", "shutdown", "contains", "critical", "system", "override active", false, true, now, now)
+	mustExec(t, db, `
+		INSERT INTO command_blacklist (id, tenant_id, name, pattern, match_type, severity, category, description, is_active, is_system, created_at, updated_at)
+		VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, systemDisabledID.String(), "被 override 禁用", "reboot", "contains", "critical", "system", "override disabled", true, true, now, now)
+	mustExec(t, db, `
+		INSERT INTO tenant_blacklist_overrides (id, tenant_id, rule_id, is_active, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, uuid.NewString(), tenantID.String(), systemEnabledID.String(), true, now, now)
+	mustExec(t, db, `
+		INSERT INTO tenant_blacklist_overrides (id, tenant_id, rule_id, is_active, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, uuid.NewString(), tenantID.String(), systemDisabledID.String(), false, now, now)
+
+	rules, err := repo.GetActiveRules(WithTenantID(context.Background(), tenantID))
+	if err != nil {
+		t.Fatalf("GetActiveRules: %v", err)
+	}
+
+	got := make(map[uuid.UUID]bool, len(rules))
+	for _, rule := range rules {
+		got[rule.ID] = true
+	}
+	for _, wantID := range []uuid.UUID{tenantRuleID, systemDefaultID, systemEnabledID} {
+		if !got[wantID] {
+			t.Fatalf("GetActiveRules missing %s: %#v", wantID, rules)
+		}
+	}
+	if got[systemDisabledID] {
+		t.Fatalf("GetActiveRules should exclude disabled override rule: %#v", rules)
+	}
+}
+
+func TestCommandBlacklistGetByIDPropagatesOverrideLookupError(t *testing.T) {
+	db := newSQLiteTestDB(t)
+	mustExec(t, db, `
+		CREATE TABLE command_blacklist (
+			id TEXT PRIMARY KEY NOT NULL,
+			tenant_id TEXT,
+			name TEXT NOT NULL,
+			pattern TEXT NOT NULL,
+			match_type TEXT NOT NULL,
+			severity TEXT NOT NULL,
+			category TEXT,
+			description TEXT,
+			is_active BOOLEAN NOT NULL DEFAULT FALSE,
+			is_system BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at DATETIME,
+			updated_at DATETIME
+		);
+	`)
+
+	repo := &CommandBlacklistRepository{db: db}
+	tenantID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	ruleID := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
+	now := time.Now()
+	mustExec(t, db, `
+		INSERT INTO command_blacklist (id, tenant_id, name, pattern, match_type, severity, category, description, is_active, is_system, created_at, updated_at)
+		VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, ruleID.String(), "系统规则", "DROP DATABASE", "contains", "critical", "database", "system", false, true, now, now)
+
+	_, err := repo.GetByID(WithTenantID(context.Background(), tenantID), ruleID)
+	if err == nil {
+		t.Fatal("GetByID error = nil, want override lookup error")
+	}
+	if !strings.Contains(err.Error(), "tenant_blacklist_overrides") {
+		t.Fatalf("GetByID error = %v, want missing override table detail", err)
 	}
 }

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ func NewAuditHandler() *AuditHandler {
 	return &AuditHandler{repo: repository.NewAuditLogRepository(database.DB)}
 }
 
-func buildAuditListOptions(c *gin.Context, page, pageSize int) *repository.AuditLogListOptions {
+func buildAuditListOptions(c *gin.Context, page, pageSize int) (*repository.AuditLogListOptions, error) {
 	opts := &repository.AuditLogListOptions{
 		Page:         page,
 		PageSize:     pageSize,
@@ -45,13 +46,34 @@ func buildAuditListOptions(c *gin.Context, page, pageSize int) *repository.Audit
 		opts.ExcludeResourceTypes = splitAndTrim(ert)
 	}
 	if userIDStr := c.Query("user_id"); userIDStr != "" {
-		if uid, err := uuid.Parse(userIDStr); err == nil {
-			opts.UserID = &uid
+		uid, err := uuid.Parse(userIDStr)
+		if err != nil {
+			return nil, errors.New("user_id 必须是合法 UUID")
 		}
+		opts.UserID = &uid
 	}
-	applyRFC3339Range(c, "created_after", &opts.CreatedAfter)
-	applyRFC3339Range(c, "created_before", &opts.CreatedBefore)
-	return opts
+	createdAfter, err := parseOptionalAuditTime(c.Query("created_after"), "created_after")
+	if err != nil {
+		return nil, err
+	}
+	createdBefore, err := parseOptionalAuditTime(c.Query("created_before"), "created_before")
+	if err != nil {
+		return nil, err
+	}
+	opts.CreatedAfter = createdAfter
+	opts.CreatedBefore = createdBefore
+	return opts, nil
+}
+
+func parseOptionalAuditTime(value, key string) (*time.Time, error) {
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, fmt.Errorf("%s 必须是合法 RFC3339 时间", key)
+	}
+	return &parsed, nil
 }
 
 func auditRiskFields(action, resourceType string) (string, string) {

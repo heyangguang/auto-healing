@@ -57,7 +57,10 @@ func (r *CommandBlacklistRepository) GetByID(ctx context.Context, id uuid.UUID) 
 		return nil, fmt.Errorf("黑名单规则不存在: %w", err)
 	}
 	if rule.IsSystem || rule.TenantID == nil {
-		rules := r.applyOverrides(ctx, tenantID, []model.CommandBlacklist{rule})
+		rules, err := r.applyOverrides(ctx, tenantID, []model.CommandBlacklist{rule})
+		if err != nil {
+			return nil, err
+		}
 		if len(rules) > 0 {
 			rule = rules[0]
 		}
@@ -91,7 +94,10 @@ func (r *CommandBlacklistRepository) List(ctx context.Context, opts *CommandBlac
 		Find(&rules).Error; err != nil {
 		return nil, 0, err
 	}
-	rules = r.applyOverrides(ctx, tenantID, rules)
+	rules, err = r.applyOverrides(ctx, tenantID, rules)
+	if err != nil {
+		return nil, 0, err
+	}
 	rules = applyCommandBlacklistActiveFilter(rules, opts.IsActive)
 	total := int64(len(rules))
 	return paginateCommandBlacklistRules(rules, total, opts), total, nil

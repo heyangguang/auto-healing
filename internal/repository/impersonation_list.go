@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // ListByRequester 查询指定平台管理员的申请列表
@@ -25,7 +27,9 @@ func (r *ImpersonationRepository) ListByRequester(ctx context.Context, requester
 	if err != nil {
 		return nil, 0, err
 	}
-	r.fillApproverNames(ctx, requests)
+	if err := r.fillApproverNames(ctx, requests); err != nil {
+		return nil, 0, err
+	}
 	return requests, total, nil
 }
 
@@ -60,11 +64,13 @@ func (r *ImpersonationRepository) ListByTenant(ctx context.Context, tenantID uui
 	if err != nil {
 		return nil, 0, err
 	}
-	r.fillApproverNames(ctx, requests)
+	if err := r.fillApproverNames(ctx, requests); err != nil {
+		return nil, 0, err
+	}
 	return requests, total, nil
 }
 
-func (r *ImpersonationRepository) fillApproverNames(ctx context.Context, requests []model.ImpersonationRequest) {
+func (r *ImpersonationRepository) fillApproverNames(ctx context.Context, requests []model.ImpersonationRequest) error {
 	approverIDs := make([]uuid.UUID, 0)
 	for _, req := range requests {
 		if req.ApprovedBy != nil {
@@ -72,14 +78,20 @@ func (r *ImpersonationRepository) fillApproverNames(ctx context.Context, request
 		}
 	}
 	if len(approverIDs) == 0 {
-		return
+		return nil
 	}
 
 	var users []struct {
 		ID       uuid.UUID `gorm:"column:id"`
 		Username string    `gorm:"column:username"`
 	}
-	r.db.WithContext(ctx).Table("users").Select("id, username").Where("id IN ?", approverIDs).Scan(&users)
+	if err := r.db.WithContext(ctx).
+		Table("users").
+		Select("id, username").
+		Where("id IN ?", approverIDs).
+		Scan(&users).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
 	nameMap := make(map[uuid.UUID]string, len(users))
 	for _, user := range users {
 		nameMap[user.ID] = user.Username
@@ -89,4 +101,5 @@ func (r *ImpersonationRepository) fillApproverNames(ctx context.Context, request
 			requests[i].ApproverName = nameMap[*requests[i].ApprovedBy]
 		}
 	}
+	return nil
 }
