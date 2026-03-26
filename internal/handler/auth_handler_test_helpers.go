@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,12 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+type testBlacklistStore struct{}
+
+func (testBlacklistStore) Add(context.Context, string, time.Time) error { return nil }
+
+func (testBlacklistStore) Exists(context.Context, string) (bool, error) { return false, nil }
 
 func attachPermissionToRole(t *testing.T, db *gorm.DB, roleID, permissionID uuid.UUID) {
 	t.Helper()
@@ -44,6 +51,14 @@ func assignTenantRole(t *testing.T, db *gorm.DB, userID, tenantID, roleID uuid.U
 	`, uuid.NewString(), userID.String(), tenantID.String(), roleID.String(), time.Now().UTC())
 }
 
+func insertTenantMembership(t *testing.T, db *gorm.DB, userID, tenantID uuid.UUID) {
+	t.Helper()
+	mustExecAuthSQL(t, db, `
+		INSERT INTO user_tenant_roles (id, user_id, tenant_id, role_id, created_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, uuid.NewString(), userID.String(), tenantID.String(), uuid.NewString(), time.Now().UTC())
+}
+
 func insertImpersonationRequest(t *testing.T, db *gorm.DB, requestID, requesterID, tenantID uuid.UUID, requesterName, tenantName string) {
 	t.Helper()
 	now := time.Now().UTC()
@@ -58,6 +73,20 @@ func insertImpersonationRequest(t *testing.T, db *gorm.DB, requestID, requesterI
 
 func newAuthHandlerTestRouter(t *testing.T, db *gorm.DB) (*gin.Engine, *jwt.Service) {
 	t.Helper()
+	jwtSvc := jwt.NewService(jwt.Config{
+		Secret:          "test-secret",
+		AccessTokenTTL:  time.Hour,
+		RefreshTokenTTL: 24 * time.Hour,
+		Issuer:          "handler-test",
+	}, testBlacklistStore{})
+	return newAuthHandlerTestRouterWithJWTService(t, db, jwtSvc), jwtSvc
+}
+
+func newAuthHandlerTestRouterWithJWTService(t *testing.T, db *gorm.DB, jwtSvc *jwt.Service) *gin.Engine {
+	t.Helper()
+	Cleanup()
+	t.Cleanup(Cleanup)
+
 	origDB := database.DB
 	database.DB = db
 	t.Cleanup(func() {
@@ -67,12 +96,6 @@ func newAuthHandlerTestRouter(t *testing.T, db *gorm.DB) (*gin.Engine, *jwt.Serv
 	gin.SetMode(gin.TestMode)
 	logger.Init(&config.LogConfig{})
 	router := gin.New()
-	jwtSvc := jwt.NewService(jwt.Config{
-		Secret:          "test-secret",
-		AccessTokenTTL:  time.Hour,
-		RefreshTokenTTL: 24 * time.Hour,
-		Issuer:          "handler-test",
-	}, nil)
 	handlers := &Handlers{
 		Auth: &AuthHandler{
 			authSvc:           authService.NewService(jwtSvc),
@@ -85,7 +108,7 @@ func newAuthHandlerTestRouter(t *testing.T, db *gorm.DB) (*gin.Engine, *jwt.Serv
 
 	api := router.Group("/api/v1")
 	setupAuthRoutes(api, handlers)
-	return router, jwtSvc
+	return router
 }
 
 func issueAuthMe(t *testing.T, router *gin.Engine, token string, headers map[string]string) authMeResponse {

@@ -580,6 +580,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                 "REDIS_DB": self.redis_db,
                 "JWT_SECRET": "acceptance-secret-key",
                 "JWT_ISSUER": "auto-healing-acceptance",
+                "INIT_ADMIN_PASSWORD": "admin123456",
                 "LOG_FILE_PATH": str(self.tmp_dir / "logs"),
                 "ANSIBLE_WORKSPACE_DIR": str(self.tmp_dir / "workspace"),
                 "GIT_REPOS_DIR": str(self.tmp_dir / "repos"),

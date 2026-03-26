@@ -24,6 +24,7 @@ func TestRegisterTxRollsBackWhenAttachTenantFails(t *testing.T) {
 			phone TEXT,
 			avatar_url TEXT,
 			status TEXT,
+			last_login_at DATETIME,
 			last_login_ip TEXT,
 			password_changed_at DATETIME,
 			failed_login_count INTEGER,

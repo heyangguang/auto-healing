@@ -32,7 +32,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	resp, err := h.authSvc.Login(c.Request.Context(), &req, clientIP)
 	if err != nil {
 		goHandlerTask(func(rootCtx context.Context) {
-			h.writeLoginAuditLog(rootCtx, nil, req.Username, clientIP, userAgent, "failed", err.Error(), startTime, false, "")
+			h.writeLoginAuditLog(rootCtx, nil, req.Username, clientIP, userAgent, "failed", loginAuditErrorMessage(err), startTime, loginFailureStatusCode(err), false, "")
 		})
 		if isLoginUnauthorizedError(err) {
 			response.Unauthorized(c, ToBusinessError(err))
@@ -44,7 +44,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	userID := resp.User.ID
 	goHandlerTask(func(rootCtx context.Context) {
-		h.writeLoginAuditLog(rootCtx, &userID, resp.User.Username, clientIP, userAgent, "success", "", startTime, resp.User.IsPlatformAdmin, resp.CurrentTenantID)
+		h.writeLoginAuditLog(rootCtx, &userID, resp.User.Username, clientIP, userAgent, "success", "", startTime, http.StatusOK, resp.User.IsPlatformAdmin, resp.CurrentTenantID)
 	})
 	c.JSON(http.StatusOK, resp)
 }
@@ -84,65 +84,16 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	response.Message(c, "登出成功")
 }
 
-func currentTenantOrNil(c *gin.Context) uuid.UUID {
-	if tenantID, ok := repository.TenantIDFromContextOK(c.Request.Context()); ok {
-		return tenantID
-	}
-	return uuid.Nil
-}
-
 var (
-	errLogoutRefreshTokenInvalid      = errors.New("刷新令牌无效")
-	errLogoutRefreshTokenExpired      = errors.New("刷新令牌已过期")
-	errLogoutRefreshTokenUserMismatch = errors.New("刷新令牌与当前用户不匹配")
+	errLogoutRefreshTokenInvalid         = errors.New("刷新令牌无效")
+	errLogoutRefreshTokenExpired         = errors.New("刷新令牌已过期")
+	errLogoutRefreshTokenUserMismatch    = errors.New("刷新令牌与当前用户不匹配")
+	errLogoutRefreshTokenSessionMismatch = errors.New("刷新令牌与当前会话不匹配")
+	errLogoutLegacyRefreshUnsupported    = errors.New("旧版会话同时注销刷新令牌不安全，请重新登录后再登出")
+	errLogoutSessionMetadataMissing      = errors.New("当前会话不支持原子登出，请重新登录后重试")
+	errRefreshTokenInvalid               = errors.New("无效的刷新令牌")
+	errRefreshUserInactive               = errors.New("账户已被禁用")
 )
-
-func (h *AuthHandler) revokeAuthTokens(c *gin.Context, refreshToken, userID string) error {
-	authHeader := c.GetHeader("Authorization")
-	if len(authHeader) > 7 {
-		if err := h.revokeAccessToken(c.Request.Context(), authHeader[7:]); err != nil {
-			return err
-		}
-	}
-	if refreshToken == "" {
-		return nil
-	}
-	return h.revokeRefreshToken(c.Request.Context(), refreshToken, userID)
-}
-
-func (h *AuthHandler) revokeAccessToken(ctx context.Context, token string) error {
-	claims, err := h.jwtSvc.ValidateToken(token)
-	if err != nil {
-		return fmt.Errorf("解析当前访问令牌失败: %w", err)
-	}
-	if err := h.authSvc.Logout(ctx, claims.ID, claims.ExpiresAt.Time); err != nil {
-		return fmt.Errorf("撤销访问令牌失败: %w", err)
-	}
-	return nil
-}
-
-func (h *AuthHandler) revokeRefreshToken(ctx context.Context, refreshToken, userID string) error {
-	refreshClaims, err := h.jwtSvc.ValidateRefreshTokenContext(ctx, refreshToken)
-	if err != nil {
-		return mapLogoutRefreshTokenError(err)
-	}
-	if refreshClaims.Subject != userID {
-		return errLogoutRefreshTokenUserMismatch
-	}
-	if err := h.authSvc.Logout(ctx, refreshClaims.ID, refreshClaims.ExpiresAt.Time); err != nil {
-		return fmt.Errorf("撤销刷新令牌失败: %w", err)
-	}
-	return nil
-}
-
-func mapLogoutRefreshTokenError(err error) error {
-	switch {
-	case errors.Is(err, jwt.ErrExpiredToken):
-		return errLogoutRefreshTokenExpired
-	default:
-		return errLogoutRefreshTokenInvalid
-	}
-}
 
 // RefreshToken 刷新令牌
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
@@ -154,17 +105,17 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 
 	refreshClaims, err := h.jwtSvc.ValidateRefreshTokenContext(c.Request.Context(), req.RefreshToken)
 	if err != nil {
+		if errors.Is(err, jwt.ErrBlacklistLookupFailed) {
+			response.InternalError(c, "刷新令牌状态校验失败")
+			return
+		}
 		response.Unauthorized(c, "无效或过期的刷新令牌")
-		return
-	}
-	if err := h.authSvc.Logout(c.Request.Context(), refreshClaims.ID, refreshClaims.ExpiresAt.Time); err != nil {
-		response.InternalError(c, "刷新令牌轮换失败")
 		return
 	}
 
 	userID, userInfo, err := h.refreshUserInfo(c, refreshClaims.Subject)
 	if err != nil {
-		response.Unauthorized(c, err.Error())
+		respondRefreshUserInfoError(c, err)
 		return
 	}
 	tenants, err := h.refreshUserTenants(c, userInfo, userID)
@@ -176,6 +127,10 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	tokenPair, defaultTenantID, tenantBriefs, err := h.issueRefreshTokenPair(userInfo, refreshClaims.Subject, tenants)
 	if err != nil {
 		response.InternalError(c, "生成令牌失败")
+		return
+	}
+	if err := h.blacklistRefreshClaims(c.Request.Context(), refreshClaims); err != nil {
+		response.InternalError(c, "刷新令牌轮换失败")
 		return
 	}
 	c.JSON(http.StatusOK, authService.LoginResponse{
@@ -190,16 +145,39 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 }
 
 func (h *AuthHandler) refreshUserInfo(c *gin.Context, userIDStr string) (uuid.UUID, *authService.UserInfo, error) {
-	userID, _ := uuid.Parse(userIDStr)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return uuid.Nil, nil, errRefreshTokenInvalid
+	}
 	userInfo, err := h.authSvc.GetCurrentUser(c.Request.Context(), userID)
 	if err != nil {
-		return uuid.Nil, nil, fmt.Errorf("用户不存在")
+		if errors.Is(err, repository.ErrUserNotFound) {
+			return uuid.Nil, nil, repository.ErrUserNotFound
+		}
+		return uuid.Nil, nil, fmt.Errorf("加载刷新用户信息失败: %w", err)
 	}
 	user, userErr := repository.NewUserRepository().GetByID(c.Request.Context(), userID)
-	if userErr != nil || user.Status != "active" {
-		return uuid.Nil, nil, fmt.Errorf("账户已被禁用")
+	if userErr != nil {
+		if errors.Is(userErr, repository.ErrUserNotFound) {
+			return uuid.Nil, nil, repository.ErrUserNotFound
+		}
+		return uuid.Nil, nil, fmt.Errorf("校验刷新用户状态失败: %w", userErr)
+	}
+	if user.Status != "active" {
+		return uuid.Nil, nil, errRefreshUserInactive
 	}
 	return userID, userInfo, nil
+}
+
+func respondRefreshUserInfoError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, errRefreshTokenInvalid),
+		errors.Is(err, repository.ErrUserNotFound),
+		errors.Is(err, errRefreshUserInactive):
+		response.Unauthorized(c, err.Error())
+	default:
+		respondInternalError(c, "AUTH", "刷新令牌失败", err)
+	}
 }
 
 func (h *AuthHandler) refreshUserTenants(c *gin.Context, userInfo *authService.UserInfo, userID uuid.UUID) ([]model.Tenant, error) {

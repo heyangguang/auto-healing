@@ -11,11 +11,15 @@ import (
 // CommonTenantMiddleware 公共路由的租户上下文解析。
 func CommonTenantMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-	tenantID, ok := resolveCommonRouteTenant(c)
-	if !ok {
-		return
-	}
+		tenantID, ok := resolveCommonRouteTenant(c)
+		if !ok {
+			return
+		}
 		if tenantID == uuid.Nil {
+			if err := reloadCommonRoutePermissions(c); err != nil {
+				abortInternalError(c, "刷新平台权限失败", ErrorCodePlatformPermissionReloadFailed)
+				return
+			}
 			c.Next()
 			return
 		}
@@ -33,6 +37,13 @@ func CommonTenantMiddleware() gin.HandlerFunc {
 }
 
 const ErrorCodeTenantPermissionReloadFailed = "TENANT_PERMISSION_RELOAD_FAILED"
+
+func reloadCommonRoutePermissions(c *gin.Context) error {
+	if !IsPlatformAdmin(c) || IsImpersonating(c) {
+		return nil
+	}
+	return reloadPlatformPermissions(c)
+}
 
 func resolveCommonRouteTenant(c *gin.Context) (uuid.UUID, bool) {
 	if IsImpersonating(c) {
@@ -52,6 +63,9 @@ func resolveCommonRouteTenant(c *gin.Context) (uuid.UUID, bool) {
 		tenantID, err := uuid.Parse(defaultTenantID)
 		if err != nil {
 			abortForbidden(c, "默认租户无效，请重新登录", ErrorCodeDefaultTenantInvalid)
+			return uuid.Nil, false
+		}
+		if !ensureTenantMembership(c, tenantIDs, defaultTenantID) {
 			return uuid.Nil, false
 		}
 		return tenantID, true

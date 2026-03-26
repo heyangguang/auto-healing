@@ -7,12 +7,11 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
 
 // writeLoginAuditLog 异步写入登录审计日志
-func (h *AuthHandler) writeLoginAuditLog(parentCtx context.Context, userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, isPlatformAdmin bool, defaultTenantID string) {
+func (h *AuthHandler) writeLoginAuditLog(parentCtx context.Context, userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, statusCode int, isPlatformAdmin bool, defaultTenantID string) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Auth("LOGIN").Error("登录审计日志记录失败 (panic): %v", r)
@@ -23,10 +22,6 @@ func (h *AuthHandler) writeLoginAuditLog(parentCtx context.Context, userID *uuid
 		h.resolveLoginAuditUser(parentCtx, &userID, username, &isPlatformAdmin, &defaultTenantID)
 	}
 
-	statusCode := http.StatusOK
-	if status == "failed" {
-		statusCode = http.StatusUnauthorized
-	}
 	ctx, cancel := detachedTimeoutContext(parentCtx, 5*time.Second)
 	defer cancel()
 
@@ -48,19 +43,11 @@ func (h *AuthHandler) resolveLoginAuditUser(parentCtx context.Context, userID **
 
 	*userID = &user.ID
 	*isPlatformAdmin = user.IsPlatformAdmin
-	if *isPlatformAdmin || *defaultTenantID != "" {
-		return
-	}
-
-	tenantRepo := repository.NewTenantRepository()
-	tenants, _ := tenantRepo.GetUserTenants(ctx, user.ID, "")
-	if len(tenants) > 0 {
-		*defaultTenantID = tenants[0].ID.String()
-	}
 }
 
 func (h *AuthHandler) writePlatformLoginAudit(ctx context.Context, userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, statusCode int) {
 	log := &model.PlatformAuditLog{
+		ID:             uuid.New(),
 		UserID:         userID,
 		Username:       username,
 		IPAddress:      ipAddress,
@@ -82,6 +69,7 @@ func (h *AuthHandler) writePlatformLoginAudit(ctx context.Context, userID *uuid.
 
 func (h *AuthHandler) writeTenantLoginAudit(ctx context.Context, userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, statusCode int, defaultTenantID string) {
 	log := &model.AuditLog{
+		ID:             uuid.New(),
 		UserID:         userID,
 		Username:       username,
 		IPAddress:      ipAddress,
@@ -145,6 +133,7 @@ func parseAuditUserID(userIDStr string) *uuid.UUID {
 
 func buildPlatformLogoutAuditLog(userID *uuid.UUID, username, ipAddress, userAgent string, createdAt time.Time, statusCode int) *model.PlatformAuditLog {
 	return &model.PlatformAuditLog{
+		ID:             uuid.New(),
 		UserID:         userID,
 		Username:       username,
 		IPAddress:      ipAddress,
@@ -162,6 +151,7 @@ func buildPlatformLogoutAuditLog(userID *uuid.UUID, username, ipAddress, userAge
 
 func buildTenantLogoutAuditLog(userID *uuid.UUID, username, ipAddress, userAgent string, createdAt time.Time, statusCode int, tenantID uuid.UUID) *model.AuditLog {
 	log := &model.AuditLog{
+		ID:             uuid.New(),
 		UserID:         userID,
 		Username:       username,
 		IPAddress:      ipAddress,

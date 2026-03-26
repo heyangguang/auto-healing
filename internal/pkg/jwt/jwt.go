@@ -10,19 +10,27 @@ import (
 )
 
 var (
-	ErrInvalidToken = errors.New("invalid token")
-	ErrExpiredToken = errors.New("token has expired")
+	ErrInvalidToken           = errors.New("invalid token")
+	ErrExpiredToken           = errors.New("token has expired")
+	ErrBlacklistStoreRequired = errors.New("blacklist store is required")
+	ErrBlacklistLookupFailed  = errors.New("blacklist lookup failed")
+)
+
+const (
+	tokenAudienceAccess  = "access"
+	tokenAudienceRefresh = "refresh"
 )
 
 // Claims JWT声明
 type Claims struct {
 	jwt.RegisteredClaims
-	Username        string   `json:"username"`
-	Roles           []string `json:"roles"`
-	Permissions     []string `json:"permissions"`
-	IsPlatformAdmin bool     `json:"is_platform_admin,omitempty"`
-	TenantIDs       []string `json:"tenant_ids,omitempty"`        // 用户所属的租户列表
-	DefaultTenantID string   `json:"default_tenant_id,omitempty"` // 用户的默认租户（第一个）
+	Username         string   `json:"username"`
+	Roles            []string `json:"roles"`
+	Permissions      []string `json:"permissions"`
+	IsPlatformAdmin  bool     `json:"is_platform_admin,omitempty"`
+	TenantIDs        []string `json:"tenant_ids,omitempty"`        // 用户所属的租户列表
+	DefaultTenantID  string   `json:"default_tenant_id,omitempty"` // 用户的默认租户（第一个）
+	SessionExpiresAt int64    `json:"session_expires_at,omitempty"`
 }
 
 // Service JWT服务
@@ -37,7 +45,7 @@ type Service struct {
 // BlacklistStore Token黑名单存储接口
 type BlacklistStore interface {
 	Add(ctx context.Context, jti string, exp time.Time) error
-	Exists(ctx context.Context, jti string) bool
+	Exists(ctx context.Context, jti string) (bool, error)
 }
 
 // TokenPair 令牌对
@@ -58,6 +66,9 @@ type Config struct {
 
 // NewService 创建JWT服务
 func NewService(cfg Config, blacklist BlacklistStore) *Service {
+	if blacklist == nil {
+		panic(ErrBlacklistStoreRequired)
+	}
 	return &Service{
 		secret:          []byte(cfg.Secret),
 		accessTokenTTL:  cfg.AccessTokenTTL,
@@ -70,20 +81,23 @@ func NewService(cfg Config, blacklist BlacklistStore) *Service {
 // GenerateTokenPair 生成令牌对
 func (s *Service) GenerateTokenPair(userID, username string, roles, permissions []string, opts ...func(*Claims)) (*TokenPair, error) {
 	now := time.Now()
+	sessionID := uuid.New().String()
+	sessionExpiresAt := now.Add(s.refreshTokenTTL)
 
 	// 生成 Access Token
-	accessTokenID := uuid.New().String()
 	accessClaims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        accessTokenID,
+			ID:        sessionID,
 			Subject:   userID,
 			Issuer:    s.issuer,
+			Audience:  jwt.ClaimStrings{tokenAudienceAccess},
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.accessTokenTTL)),
 		},
-		Username:    username,
-		Roles:       roles,
-		Permissions: permissions,
+		Username:         username,
+		Roles:            roles,
+		Permissions:      permissions,
+		SessionExpiresAt: sessionExpiresAt.Unix(),
 	}
 
 	// 应用可选配置（如 IsPlatformAdmin）
@@ -98,13 +112,13 @@ func (s *Service) GenerateTokenPair(userID, username string, roles, permissions 
 	}
 
 	// 生成 Refresh Token
-	refreshTokenID := uuid.New().String()
 	refreshClaims := jwt.RegisteredClaims{
-		ID:        refreshTokenID,
+		ID:        sessionID,
 		Subject:   userID,
 		Issuer:    s.issuer,
+		Audience:  jwt.ClaimStrings{tokenAudienceRefresh},
 		IssuedAt:  jwt.NewNumericDate(now),
-		ExpiresAt: jwt.NewNumericDate(now.Add(s.refreshTokenTTL)),
+		ExpiresAt: jwt.NewNumericDate(sessionExpiresAt),
 	}
 
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
@@ -138,7 +152,7 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 	}
 
 	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
+	if !ok || !token.Valid || !hasAudience(claims.Audience, tokenAudienceAccess) || claims.Issuer != s.issuer {
 		return nil, ErrInvalidToken
 	}
 
@@ -166,10 +180,14 @@ func (s *Service) ValidateRefreshTokenContext(ctx context.Context, tokenString s
 	}
 
 	claims, ok := token.Claims.(*jwt.RegisteredClaims)
-	if !ok || !token.Valid {
+	if !ok || !token.Valid || !hasAudience(claims.Audience, tokenAudienceRefresh) || claims.Issuer != s.issuer {
 		return nil, ErrInvalidToken
 	}
-	if s.IsBlacklisted(ctx, claims.ID) {
+	isBlacklisted, blacklistErr := s.IsBlacklisted(ctx, claims.ID)
+	if blacklistErr != nil {
+		return nil, ErrBlacklistLookupFailed
+	}
+	if isBlacklisted {
 		return nil, ErrInvalidToken
 	}
 
@@ -178,21 +196,24 @@ func (s *Service) ValidateRefreshTokenContext(ctx context.Context, tokenString s
 
 // Blacklist 将Token加入黑名单
 func (s *Service) Blacklist(ctx context.Context, jti string, exp time.Time) error {
-	if s.blacklist == nil {
-		return nil
-	}
 	return s.blacklist.Add(ctx, jti, exp)
 }
 
 // IsBlacklisted 检查Token是否在黑名单中
-func (s *Service) IsBlacklisted(ctx context.Context, jti string) bool {
-	if s.blacklist == nil {
-		return false
-	}
+func (s *Service) IsBlacklisted(ctx context.Context, jti string) (bool, error) {
 	return s.blacklist.Exists(ctx, jti)
 }
 
 // GetAccessTokenTTL 获取访问令牌有效期
 func (s *Service) GetAccessTokenTTL() time.Duration {
 	return s.accessTokenTTL
+}
+
+func hasAudience(audiences jwt.ClaimStrings, expected string) bool {
+	for _, audience := range audiences {
+		if audience == expected {
+			return true
+		}
+	}
+	return false
 }

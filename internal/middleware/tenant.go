@@ -1,10 +1,13 @@
 package middleware
 
 import (
+	"errors"
+
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const (
@@ -20,6 +23,7 @@ const (
 	ErrorCodeTenantIDInvalid            = "TENANT_ID_INVALID"
 	ErrorCodeTenantAccessDenied         = "TENANT_ACCESS_DENIED"
 	ErrorCodeTenantNotFound             = "TENANT_NOT_FOUND"
+	ErrorCodeTenantLookupFailed         = "TENANT_LOOKUP_FAILED"
 	ErrorCodeTenantDisabled             = "TENANT_DISABLED"
 	ErrorCodePlatformAdminRequired      = "PLATFORM_ADMIN_REQUIRED"
 	ErrorCodeDefaultTenantInvalid       = "DEFAULT_TENANT_INVALID"
@@ -28,7 +32,15 @@ const (
 func ensureActiveTenant(c *gin.Context, tenantID uuid.UUID) bool {
 	tenantRepo := repository.NewTenantRepository()
 	tenant, tenantErr := tenantRepo.GetByID(c.Request.Context(), tenantID)
-	if tenantErr != nil || tenant == nil {
+	if tenantErr != nil {
+		if errors.Is(tenantErr, gorm.ErrRecordNotFound) {
+			abortForbidden(c, "租户不存在", ErrorCodeTenantNotFound)
+			return false
+		}
+		abortInternalError(c, "租户状态校验失败", ErrorCodeTenantLookupFailed)
+		return false
+	}
+	if tenant == nil {
 		abortForbidden(c, "租户不存在", ErrorCodeTenantNotFound)
 		return false
 	}
