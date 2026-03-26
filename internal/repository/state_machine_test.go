@@ -101,7 +101,7 @@ func TestExecutionRepositoryCancelledRunIsNotOverwritten(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = originalDB })
 
-	repo := &ExecutionRepository{}
+	repo := NewExecutionRepository()
 	tenantID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	runID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 	ctx := WithTenantID(context.Background(), tenantID)
