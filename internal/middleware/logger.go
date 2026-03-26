@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -15,7 +16,11 @@ const (
 	colorRed    = "\033[31m"
 	colorGreen  = "\033[32m"
 	colorYellow = "\033[33m"
+
+	redactedQueryValue = "REDACTED"
 )
+
+var sensitiveQueryKeys = []string{"token", "access_token", "refresh_token"}
 
 // Logger 日志中间件 - 使用统一日志格式
 func Logger() gin.HandlerFunc {
@@ -71,16 +76,46 @@ func Logger() gin.HandlerFunc {
 }
 
 func redactRawQuery(raw string) string {
-	values, err := url.ParseQuery(raw)
-	if err != nil {
-		return raw
+	if raw == "" {
+		return ""
 	}
-	for _, key := range []string{"token", "access_token", "refresh_token"} {
+
+	values, err := url.ParseQuery(raw)
+	if err == nil {
+		return redactParsedQuery(values)
+	}
+
+	parts := strings.Split(raw, "&")
+	for i, part := range parts {
+		parts[i] = redactRawQueryPart(part)
+	}
+	return strings.Join(parts, "&")
+}
+
+func redactParsedQuery(values url.Values) string {
+	for _, key := range sensitiveQueryKeys {
 		if _, ok := values[key]; ok {
-			values.Set(key, "REDACTED")
+			values.Set(key, redactedQueryValue)
 		}
 	}
 	return values.Encode()
+}
+
+func redactRawQueryPart(part string) string {
+	key, _, found := strings.Cut(part, "=")
+	if !found || !isSensitiveQueryKey(key) {
+		return part
+	}
+	return key + "=" + redactedQueryValue
+}
+
+func isSensitiveQueryKey(key string) bool {
+	for _, sensitiveKey := range sensitiveQueryKeys {
+		if key == sensitiveKey {
+			return true
+		}
+	}
+	return false
 }
 
 // formatLatency 格式化延迟时间

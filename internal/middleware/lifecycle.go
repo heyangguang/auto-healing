@@ -9,6 +9,8 @@ type asyncLifecycle struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+	mu     sync.Mutex
+	closed bool
 }
 
 var (
@@ -16,22 +18,52 @@ var (
 	middlewareLifecycle   *asyncLifecycle
 )
 
+func newAsyncLifecycle() *asyncLifecycle {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &asyncLifecycle{ctx: ctx, cancel: cancel}
+}
+
 func ensureMiddlewareLifecycle() *asyncLifecycle {
 	middlewareLifecycleMu.Lock()
 	defer middlewareLifecycleMu.Unlock()
 	if middlewareLifecycle == nil || middlewareLifecycle.ctx.Err() != nil {
-		ctx, cancel := context.WithCancel(context.Background())
-		middlewareLifecycle = &asyncLifecycle{ctx: ctx, cancel: cancel}
+		middlewareLifecycle = newAsyncLifecycle()
 	}
 	return middlewareLifecycle
 }
 
 func (l *asyncLifecycle) Go(fn func(context.Context)) {
+	if fn == nil {
+		return
+	}
+
+	l.mu.Lock()
+	if l.closed || l.ctx.Err() != nil {
+		l.mu.Unlock()
+		return
+	}
 	l.wg.Add(1)
+	ctx := l.ctx
+	l.mu.Unlock()
+
 	go func() {
 		defer l.wg.Done()
-		fn(l.ctx)
+		fn(ctx)
 	}()
+}
+
+func (l *asyncLifecycle) Stop() {
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return
+	}
+	l.closed = true
+	cancel := l.cancel
+	l.mu.Unlock()
+
+	cancel()
+	l.wg.Wait()
 }
 
 func Shutdown() {
@@ -42,6 +74,5 @@ func Shutdown() {
 	if lifecycle == nil {
 		return
 	}
-	lifecycle.cancel()
-	lifecycle.wg.Wait()
+	lifecycle.Stop()
 }

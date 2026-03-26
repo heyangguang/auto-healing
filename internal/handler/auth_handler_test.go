@@ -116,3 +116,60 @@ func TestSetupAuthRoutesAuthMeReturnsInternalErrorWhenPermissionQueryFails(t *te
 		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusInternalServerError, recorder.Body.String())
 	}
 }
+
+func TestSetupAuthRoutesAuthMeRejectsStaleDefaultTenant(t *testing.T) {
+	db := newAuthHandlerTestDB(t)
+	createAuthHandlerSchema(t, db)
+
+	tenantAID := uuid.New()
+	tenantBID := uuid.New()
+	userID := uuid.New()
+	roleAID := uuid.New()
+	permAID := uuid.New()
+
+	insertTenant(t, db, tenantAID, "Tenant A", "tenant-a")
+	insertTenant(t, db, tenantBID, "Tenant B", "tenant-b")
+	insertUser(t, db, userID, "tenant-user", false)
+	insertRole(t, db, roleAID, "tenant_a_operator", "tenant")
+	insertPermission(t, db, permAID, "task:list")
+	attachPermissionToRole(t, db, roleAID, permAID)
+	assignTenantRole(t, db, userID, tenantAID, roleAID)
+
+	router, jwtSvc := newAuthHandlerTestRouter(t, db)
+	token := mustAccessToken(t, jwtSvc, userID, "tenant-user", nil, nil, func(claims *jwt.Claims) {
+		claims.TenantIDs = []string{tenantAID.String(), tenantBID.String()}
+		claims.DefaultTenantID = tenantBID.String()
+	})
+
+	recorder := issueAuthRequest(t, router, http.MethodGet, "/api/v1/auth/me", token, nil, nil)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusForbidden, recorder.Body.String())
+	}
+}
+
+func TestSetupAuthRoutesProfileActivitiesRejectsStaleDefaultTenant(t *testing.T) {
+	db := newAuthHandlerTestDB(t)
+	createAuthHandlerSchema(t, db)
+
+	tenantAID := uuid.New()
+	tenantBID := uuid.New()
+	userID := uuid.New()
+	roleAID := uuid.New()
+
+	insertTenant(t, db, tenantAID, "Tenant A", "tenant-a")
+	insertTenant(t, db, tenantBID, "Tenant B", "tenant-b")
+	insertUser(t, db, userID, "tenant-user", false)
+	insertRole(t, db, roleAID, "tenant_a_operator", "tenant")
+	assignTenantRole(t, db, userID, tenantAID, roleAID)
+
+	router, jwtSvc := newAuthHandlerTestRouter(t, db)
+	token := mustAccessToken(t, jwtSvc, userID, "tenant-user", nil, nil, func(claims *jwt.Claims) {
+		claims.TenantIDs = []string{tenantAID.String(), tenantBID.String()}
+		claims.DefaultTenantID = tenantBID.String()
+	})
+
+	recorder := issueAuthRequest(t, router, http.MethodGet, "/api/v1/auth/profile/activities", token, nil, nil)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusForbidden, recorder.Body.String())
+	}
+}

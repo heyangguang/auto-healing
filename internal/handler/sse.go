@@ -56,8 +56,12 @@ func (s *SSEWriter) WriteEvent(event string, data interface{}) error {
 	}
 
 	// SSE 格式: event: xxx\ndata: {json}\n\n
-	fmt.Fprintf(s.w, "event: %s\n", event)
-	fmt.Fprintf(s.w, "data: %s\n\n", jsonData)
+	if err := s.writeString("event: %s\n", event); err != nil {
+		return err
+	}
+	if err := s.writeString("data: %s\n\n", jsonData); err != nil {
+		return err
+	}
 	s.flusher.Flush()
 
 	return nil
@@ -70,7 +74,9 @@ func (s *SSEWriter) WriteData(data interface{}) error {
 		return err
 	}
 
-	fmt.Fprintf(s.w, "data: %s\n\n", jsonData)
+	if err := s.writeString("data: %s\n\n", jsonData); err != nil {
+		return err
+	}
 	s.flusher.Flush()
 
 	return nil
@@ -78,12 +84,19 @@ func (s *SSEWriter) WriteData(data interface{}) error {
 
 // WriteComment 写入注释（心跳）
 func (s *SSEWriter) WriteComment(comment string) {
-	fmt.Fprintf(s.w, ": %s\n\n", comment)
+	if err := s.writeString(": %s\n\n", comment); err != nil {
+		return
+	}
 	s.flusher.Flush()
 }
 
 // Close 关闭连接
 func (s *SSEWriter) Close() {
 	// 发送关闭事件
-	s.WriteEvent("close", map[string]string{"message": "stream closed"})
+	_ = s.WriteEvent("close", map[string]string{"message": "stream closed"})
+}
+
+func (s *SSEWriter) writeString(format string, value interface{}) error {
+	_, err := fmt.Fprintf(s.w, format, value)
+	return err
 }

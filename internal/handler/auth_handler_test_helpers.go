@@ -13,6 +13,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	"github.com/company/auto-healing/internal/repository"
 	authService "github.com/company/auto-healing/internal/service/auth"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -74,8 +75,11 @@ func newAuthHandlerTestRouter(t *testing.T, db *gorm.DB) (*gin.Engine, *jwt.Serv
 	}, nil)
 	handlers := &Handlers{
 		Auth: &AuthHandler{
-			authSvc: authService.NewService(jwtSvc),
-			jwtSvc:  jwtSvc,
+			authSvc:           authService.NewService(jwtSvc),
+			jwtSvc:            jwtSvc,
+			auditRepo:         repository.NewAuditLogRepository(db),
+			platformAuditRepo: repository.NewPlatformAuditLogRepository(),
+			userRepo:          repository.NewUserRepository(),
 		},
 	}
 
