@@ -1,6 +1,6 @@
 #!/bin/bash
 # 异步执行 + SSE 实时日志流测试
-set -e
+set -euo pipefail
 URL="http://localhost:8080/api/v1"
 
 echo "🔐 登录..."
@@ -31,8 +31,12 @@ echo "📡 SSE 实时日志流..."
 echo "   (按 Ctrl+C 取消)"
 echo "================================================"
 
+EVENT=""
+FINAL_STATUS=""
+EXIT_CODE=""
+
 # SSE 实时日志
-curl -N -s "$URL/execution-runs/$RUN_ID/stream" -H "Authorization: Bearer $TOKEN" | while read -r line; do
+while read -r line; do
     if [[ $line == event:* ]]; then
         EVENT="${line#event:}"
     elif [[ $line == data:* ]]; then
@@ -60,7 +64,17 @@ curl -N -s "$URL/execution-runs/$RUN_ID/stream" -H "Authorization: Bearer $TOKEN
             break
         fi
     fi
-done
+done < <(curl -N -s "$URL/execution-runs/$RUN_ID/stream" -H "Authorization: Bearer $TOKEN")
+
+if [[ -z "$FINAL_STATUS" ]]; then
+    echo "❌ 未收到 SSE done 终态事件"
+    exit 1
+fi
+
+if [[ "$FINAL_STATUS" != "success" ]]; then
+    echo "❌ SSE 测试失败，终态不是 success: $FINAL_STATUS (exit_code=$EXIT_CODE)"
+    exit 1
+fi
 
 echo ""
 echo "🎉 测试完成！"

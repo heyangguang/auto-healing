@@ -11,7 +11,7 @@
 
 **GET** `/api/v1/playbooks`
 
-**权限**: `plugin:list`
+**权限**: `playbook:list`
 
 ### 查询参数
 
@@ -40,7 +40,7 @@
 
 **POST** `/api/v1/playbooks`
 
-**权限**: `plugin:create`
+**权限**: `playbook:create`
 
 ### 请求体
 
@@ -58,7 +58,7 @@
 
 **GET** `/api/v1/playbooks/stats`
 
-**权限**: `plugin:list`
+**权限**: `playbook:list`
 
 ### 响应
 
@@ -81,7 +81,7 @@
 
 **GET** `/api/v1/playbooks/:id`
 
-**权限**: `plugin:list`
+**权限**: `playbook:list`
 
 ---
 
@@ -89,7 +89,7 @@
 
 **PUT** `/api/v1/playbooks/:id`
 
-**权限**: `plugin:update`
+**权限**: `playbook:update`
 
 ### 请求体
 
@@ -104,7 +104,7 @@
 
 **DELETE** `/api/v1/playbooks/:id`
 
-**权限**: `plugin:delete`
+**权限**: `playbook:delete`
 
 ---
 
@@ -112,7 +112,7 @@
 
 **POST** `/api/v1/playbooks/:id/scan`
 
-**权限**: `plugin:update`
+**权限**: `playbook:update`
 
 从 Playbook 文件中提取变量定义。
 
@@ -122,7 +122,7 @@
 
 **PUT** `/api/v1/playbooks/:id/variables`
 
-**权限**: `plugin:update`
+**权限**: `playbook:update`
 
 手动配置 Playbook 的变量定义（`enhanced` 模式下使用）。
 
@@ -164,7 +164,7 @@
 
 **POST** `/api/v1/playbooks/:id/ready`
 
-**权限**: `plugin:update`
+**权限**: `playbook:update`
 
 将 Playbook 从 `pending` 状态切换为 `ready`，使其可被执行任务引用。
 
@@ -174,7 +174,7 @@
 
 **POST** `/api/v1/playbooks/:id/offline`
 
-**权限**: `plugin:update`
+**权限**: `playbook:update`
 
 将 Playbook 切换为 `pending` 状态（下线）。
 
@@ -184,7 +184,7 @@
 
 **GET** `/api/v1/playbooks/:id/files`
 
-**权限**: `plugin:list`
+**权限**: `playbook:list`
 
 获取该 Playbook 所在仓库中所有可用的 Playbook 文件路径。
 
@@ -194,7 +194,7 @@
 
 **GET** `/api/v1/playbooks/:id/scan-logs`
 
-**权限**: `plugin:list`
+**权限**: `playbook:list`
 
 ---
 

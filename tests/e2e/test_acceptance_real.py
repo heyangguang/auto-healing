@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BIN_DIR = ROOT / ".bin"
 PG_CONTAINER = os.environ.get("ACCEPTANCE_PG_CONTAINER", "auto-healing-postgres")
 REDIS_CONTAINER = os.environ.get("ACCEPTANCE_REDIS_CONTAINER", "auto-healing-redis")
+DEFAULT_INIT_ADMIN_PASSWORD = "admin123456"
 
 EXPOSED_PHASES = [
     "auth",
@@ -36,6 +37,7 @@ EXPOSED_PHASES = [
     "git_execution",
     "plugin_cmdb",
     "execution_queries",
+    "interface_contract_smoke",
     "notifications_audit",
     "notification_variables",
     "notification_failures",
@@ -72,6 +74,7 @@ PHASE_DEPENDENCIES = {
     "git_execution": ["tenant_setup"],
     "plugin_cmdb": ["tenant_setup", "settings_secrets_dictionaries"],
     "execution_queries": ["git_execution"],
+    "interface_contract_smoke": ["git_execution"],
     "notifications_audit": ["tenant_setup", "platform_tenants", "impersonation"],
     "notification_variables": ["git_execution"],
     "notification_failures": ["tenant_setup"],
@@ -554,6 +557,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                 "GIT_REPOS_DIR": str(self.tmp_dir / "repos"),
                 "NOTIFICATION_RETRY_INTERVAL": "2s",
                 "BLACKLIST_EXEMPTION_INTERVAL": "2s",
+                "INIT_ADMIN_PASSWORD": os.environ.get("INIT_ADMIN_PASSWORD", DEFAULT_INIT_ADMIN_PASSWORD),
             }
         )
         self.server_env = env
@@ -596,6 +600,32 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                 return last
             time.sleep(interval)
         raise AssertionError(f"timeout waiting for {description}")
+
+    def wait_pending_trigger_items(self, token):
+        def pending_items():
+            payload = curl_json([f"{self.api_base()}/tenant/healing/pending/trigger", "-H", f"Authorization: Bearer {token}"])
+            data = payload.get("data")
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict) and data.get("items"):
+                return data["items"]
+            return None
+
+        return self.wait_until(pending_items, timeout=40, interval=2, description="pending trigger incidents")
+
+    def pick_pending_incident(self, items, exclude_ids=None, allow_fail=False):
+        blocked = set(exclude_ids or [])
+        for item in items:
+            if item.get("id") in blocked:
+                continue
+            title = item.get("title", "")
+            if not allow_fail and "FAIL" in title:
+                continue
+            return item
+        for item in items:
+            if item.get("id") not in blocked:
+                return item
+        raise AssertionError("no pending incident available")
 
     def psql(self, sql):
         run(
@@ -2826,6 +2856,268 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
         assert_eq([x["name"] for x in list_b["data"]], [ws_b["data"]["name"]], "dashboard workspaces tenant B")
         self.results["dashboard"] = {"status": "passed"}
 
+    def _assert_git_contract_endpoints(self, token):
+        view_headers = self.auth_args(token)
+        existing_logs = curl_json([f"{self.api_base()}/tenant/git-repos/{self.git_repo['id']}/logs?page=1&page_size=20", *view_headers])
+        existing_items = self.list_items(existing_logs)
+        known_log_ids = {item["id"] for item in existing_items}
+        curl_json(["-X", "POST", f"{self.api_base()}/tenant/git-repos/{self.git_repo['id']}/sync", *view_headers])
+        logs_payload = self.wait_until(
+            lambda: (
+                lambda payload: payload
+                if any(item["id"] not in known_log_ids for item in self.list_items(payload))
+                else None
+            )(curl_json([f"{self.api_base()}/tenant/git-repos/{self.git_repo['id']}/logs?page=1&page_size=20", *view_headers])),
+            timeout=20,
+            interval=1,
+            description="git sync logs",
+        )
+        new_logs = [item for item in self.list_items(logs_payload) if item["id"] not in known_log_ids]
+        assert_true(len(new_logs) >= 1, "git repo logs should include a newly created sync record")
+        assert_true(new_logs[0].get("status") in ("pending", "running", "success", "failed"), "git sync log should expose status")
+        reset_error = curl_json(["-X", "POST", f"{self.api_base()}/tenant/git-repos/{self.git_repo['id']}/reset-status?status=error", *view_headers])
+        assert_eq(reset_error["message"], "状态已重置为 error", "git reset-status should acknowledge error")
+        repo_after_error = curl_json([f"{self.api_base()}/tenant/git-repos/{self.git_repo['id']}", *view_headers])["data"]
+        assert_eq(repo_after_error["status"], "error", "git repo status should become error after reset-status")
+        reset_pending = curl_json(["-X", "POST", f"{self.api_base()}/tenant/git-repos/{self.git_repo['id']}/reset-status?status=pending", *view_headers])
+        assert_eq(reset_pending["message"], "状态已重置为 pending", "git reset-status should acknowledge pending")
+        repo_after_pending = curl_json([f"{self.api_base()}/tenant/git-repos/{self.git_repo['id']}", *view_headers])["data"]
+        assert_eq(repo_after_pending["status"], "pending", "git repo status should become pending after reset-status")
+        scan_logs = curl_json([f"{self.api_base()}/tenant/playbooks/{self.local_playbook['id']}/scan-logs?page=1&page_size=20", *view_headers])
+        assert_true(len(self.list_items(scan_logs)) >= 1, "playbook scan logs should be queryable")
+
+    def _assert_batch_confirm_review(self, token):
+        view_headers = self.auth_args(token)
+        headers = self.auth_args(token, json_content=True)
+        playbook_detail = curl_json([f"{self.api_base()}/tenant/playbooks/{self.local_playbook['id']}", *view_headers])["data"]
+        variables = list(playbook_detail.get("variables") or [])
+        variables.append({"name": f"acceptance_contract_{int(time.time())}", "type": "string", "required": False})
+        curl_json(
+            [
+                "-X",
+                "PUT",
+                f"{self.api_base()}/tenant/playbooks/{self.local_playbook['id']}/variables",
+                *headers,
+                "-d",
+                json.dumps({"variables": variables}),
+            ]
+        )
+        review_task = self.wait_until(
+            lambda: (
+                lambda payload: payload["data"] if payload["data"]["needs_review"] else None
+            )(curl_json([f"{self.api_base()}/tenant/execution-tasks/{self.local_task['id']}", *view_headers])),
+            timeout=20,
+            interval=1,
+            description="execution task review flag",
+        )
+        assert_true(len(review_task.get("changed_variables") or []) >= 1, "task should expose changed variables after playbook update")
+        batch_payload = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/execution-tasks/batch-confirm-review",
+                *headers,
+                "-d",
+                json.dumps({"playbook_id": self.local_playbook["id"]}),
+            ]
+        )["data"]
+        assert_true(batch_payload["confirmed_count"] >= 1, "batch confirm review should confirm at least one task")
+        cleared_task = self.wait_until(
+            lambda: (
+                lambda payload: payload["data"] if not payload["data"]["needs_review"] else None
+            )(curl_json([f"{self.api_base()}/tenant/execution-tasks/{self.local_task['id']}", *view_headers])),
+            timeout=20,
+            interval=1,
+            description="execution task review cleared",
+        )
+        assert_eq(len(cleared_task.get("changed_variables") or []), 0, "changed variables should be cleared after batch confirm review")
+
+    def _assert_healing_retry_contract(self, token):
+        view_headers = self.auth_args(token)
+        headers = self.auth_args(token, json_content=True)
+        suffix = str(time.time_ns())[-8:]
+        plugin = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/plugins",
+                *headers,
+                "-d",
+                json.dumps(
+                    {
+                        "name": f"acc-retry-plugin-{suffix}",
+                        "type": "itsm",
+                        "config": {"url": f"http://127.0.0.1:{self.itsm_port}/api/now/table/incident", "auth_type": "none", "response_data_path": "result"},
+                        "field_mapping": {
+                            "incident_mapping": {
+                                "external_id": "sys_id",
+                                "title": "short_description",
+                                "description": "description",
+                                "priority": "priority",
+                                "status": "state",
+                                "category": "category",
+                                "affected_ci": "cmdb_ci",
+                                "affected_service": "business_service",
+                                "assignee": "assigned_to",
+                                "reporter": "opened_by",
+                            }
+                        },
+                        "sync_enabled": False,
+                    }
+                ),
+            ]
+        )["data"]
+        flow = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/healing/flows",
+                *headers,
+                "-d",
+                json.dumps(
+                    {
+                        "name": f"acc-retry-flow-{suffix}",
+                        "description": "retry contract flow",
+                        "nodes": [
+                            {"id": "start1", "type": "start", "name": "开始", "position": {"x": 0, "y": 0}, "config": {}},
+                            {
+                                "id": "exec_fail",
+                                "type": "execution",
+                                "name": "失败执行",
+                                "position": {"x": 220, "y": 0},
+                                "config": {"task_template_id": str(uuid.uuid4())},
+                            },
+                        ],
+                        "edges": [{"source": "start1", "target": "exec_fail"}],
+                        "is_active": True,
+                    }
+                ),
+            ]
+        )["data"]
+        curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/healing/rules",
+                *headers,
+                "-d",
+                json.dumps(
+                    {
+                        "name": f"acc-retry-rule-{suffix}",
+                        "description": "retry contract rule",
+                        "priority": 999,
+                        "trigger_mode": "manual",
+                        "match_mode": "all",
+                        "flow_id": flow["id"],
+                        "is_active": True,
+                        "conditions": [{"type": "condition", "field": "title", "operator": "contains", "value": "E2E-HEALING"}],
+                    }
+                ),
+            ]
+        )
+        curl_json(["-X", "POST", f"{self.api_base()}/tenant/plugins/{plugin['id']}/sync", *view_headers])
+        pending_incident = self.wait_until(
+            lambda: (
+                lambda payload: self.list_items(payload)[0] if self.list_items(payload) else None
+            )(curl_json([f"{self.api_base()}/tenant/healing/pending/trigger?page=1&page_size=20", *view_headers])),
+            timeout=30,
+            interval=2,
+            description="retry pending incident",
+        )
+        failed_instance = curl_json(["-X", "POST", f"{self.api_base()}/tenant/incidents/{pending_incident['id']}/trigger", *view_headers])["data"]
+        failed_terminal = self.wait_until(
+            lambda: (
+                lambda payload: payload["data"] if payload["data"]["status"] in ("failed", "completed", "cancelled") else None
+            )(curl_json([f"{self.api_base()}/tenant/healing/instances/{failed_instance['id']}", *view_headers])),
+            timeout=30,
+            interval=1,
+            description="retry failed instance",
+        )
+        assert_eq(failed_terminal["status"], "failed", "retry smoke should first create a failed instance")
+        previous_updated_at = failed_terminal.get("updated_at")
+        retry_payload = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/healing/instances/{failed_instance['id']}/retry",
+                *headers,
+                "-d",
+                "{}",
+            ]
+        )
+        assert_eq(retry_payload["message"], "流程实例正在重试", "healing retry should acknowledge async retry")
+        retried_terminal = self.wait_until(
+            lambda: (
+                lambda payload: payload["data"]
+                if payload["data"]["status"] == "failed" and payload["data"].get("updated_at") != previous_updated_at
+                else None
+            )(curl_json([f"{self.api_base()}/tenant/healing/instances/{failed_instance['id']}", *view_headers])),
+            timeout=30,
+            interval=1,
+            description="retry should re-run failed instance",
+        )
+        assert_eq(retried_terminal["status"], "failed", "retry contract should re-run and return terminal failed state for invalid task id")
+
+    def _assert_dashboard_contract_endpoints(self, token):
+        view_headers = self.auth_args(token)
+        headers = self.auth_args(token, json_content=True)
+        suffix = str(time.time_ns())[-6:]
+        role = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/roles",
+                *headers,
+                "-d",
+                json.dumps({"name": f"acc_dashboard_contract_{suffix}", "display_name": f"Acceptance Dashboard Role {suffix}", "description": "dashboard contract role"}),
+            ]
+        )["data"]
+        workspace = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/dashboard/workspaces",
+                *headers,
+                "-d",
+                json.dumps({"name": f"Contract WS {suffix}", "description": "interface smoke", "config": {"widgets": [], "layouts": []}}),
+            ]
+        )["data"]
+        updated = curl_json(
+            [
+                "-X",
+                "PUT",
+                f"{self.api_base()}/tenant/dashboard/workspaces/{workspace['id']}",
+                *headers,
+                "-d",
+                json.dumps({"name": f"Contract WS {suffix} Updated", "description": "updated", "config": {"widgets": [], "layouts": []}}),
+            ]
+        )["data"]
+        assert_eq(updated["name"], f"Contract WS {suffix} Updated", "dashboard workspace update should persist")
+        curl_json(
+            [
+                "-X",
+                "PUT",
+                f"{self.api_base()}/tenant/dashboard/roles/{role['id']}/workspaces",
+                *headers,
+                "-d",
+                json.dumps({"workspace_ids": [workspace["id"]]}),
+            ]
+        )
+        role_workspaces = curl_json([f"{self.api_base()}/tenant/dashboard/roles/{role['id']}/workspaces", *view_headers])["data"]["workspace_ids"]
+        assert_true(workspace["id"] in role_workspaces, "dashboard role-workspaces should include assigned workspace")
+        curl_json(["-X", "DELETE", f"{self.api_base()}/tenant/dashboard/workspaces/{workspace['id']}", *headers])
+        remaining = curl_json([f"{self.api_base()}/tenant/dashboard/workspaces", *view_headers])["data"]
+        assert_true(all(item["id"] != workspace["id"] for item in remaining), "dashboard workspace delete should remove workspace from list")
+
+    def run_interface_contract_smoke(self):
+        info("==> interface contract smoke")
+        token = self.tenant_admin_token
+        self._assert_git_contract_endpoints(token)
+        self._assert_batch_confirm_review(token)
+        self._assert_healing_retry_contract(token)
+        self._assert_dashboard_contract_endpoints(token)
+        self.results["interface_contract_smoke"] = {"status": "passed"}
+
     def run_tenant_boundaries(self):
         info("==> tenant user/role boundaries")
         token = self.tenant_admin_token
@@ -3082,15 +3374,9 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
             ]
         )["data"]
         curl_json(["-X", "POST", f"{self.api_base()}/tenant/plugins/{plugin['id']}/sync", "-H", f"Authorization: Bearer {token}"])
-        pending_items = []
-        for _ in range(12):
-            time.sleep(2)
-            pending = curl_json([f"{self.api_base()}/tenant/healing/pending/trigger", "-H", f"Authorization: Bearer {token}"])
-            pending_items = pending["data"] if isinstance(pending["data"], list) else pending["data"]["items"]
-            if pending_items:
-                break
-        assert_true(pending_items, "pending trigger incidents should exist after sync")
-        incident_id = pending_items[0]["id"]
+        pending_items = self.wait_pending_trigger_items(token)
+        success_incident = self.pick_pending_incident(pending_items)
+        incident_id = success_incident["id"]
         instance = curl_json(["-X", "POST", f"{self.api_base()}/tenant/incidents/{incident_id}/trigger", "-H", f"Authorization: Bearer {token}"])["data"]
         approvals = []
         for _ in range(12):
@@ -3102,18 +3388,22 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                 break
         assert_true(approvals, "approval task should be created")
         curl_json(["-X", "POST", f"{self.api_base()}/tenant/healing/approvals/{approvals[0]['id']}/approve", "-H", f"Authorization: Bearer {token}", "-H", "Content-Type: application/json", "-d", json.dumps({"comment": "approved"})])
-        final = None
-        for _ in range(12):
-            time.sleep(1)
-            final = curl_json([f"{self.api_base()}/tenant/healing/instances/{instance['id']}", "-H", f"Authorization: Bearer {token}"])
-            if final["data"]["status"] in ("completed", "failed", "cancelled"):
-                break
+        final = self.wait_until(
+            lambda: (
+                lambda payload: payload
+                if payload["data"]["status"] in ("completed", "failed", "cancelled")
+                else None
+            )(curl_json([f"{self.api_base()}/tenant/healing/instances/{instance['id']}", "-H", f"Authorization: Bearer {token}"])),
+            timeout=30,
+            interval=1,
+            description="approved healing flow terminal state",
+        )
         assert_eq(final["data"]["status"], "completed", "approved healing flow should complete")
 
         # cancel path
-        pending = curl_json([f"{self.api_base()}/tenant/healing/pending/trigger", "-H", f"Authorization: Bearer {token}"])
-        pending_items = pending["data"] if isinstance(pending["data"], list) else pending["data"]["items"]
-        incident_id = pending_items[0]["id"]
+        pending_items = self.wait_pending_trigger_items(token)
+        cancel_incident = self.pick_pending_incident(pending_items, exclude_ids={incident_id}, allow_fail=True)
+        incident_id = cancel_incident["id"]
         instance2 = curl_json(["-X", "POST", f"{self.api_base()}/tenant/incidents/{incident_id}/trigger", "-H", f"Authorization: Bearer {token}"])["data"]
         approval2 = None
         for _ in range(12):
@@ -3396,7 +3686,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
         assert_true("event: done" in stream_body, "execution stream should finish with done")
 
         # once schedule should not complete before terminal run
-        scheduled_at = (time.gmtime(time.time() + 8))
+        scheduled_at = time.gmtime(time.time() + 20)
         scheduled_at_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", scheduled_at)
         schedule = curl_json(
             [
@@ -3409,14 +3699,30 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
             ]
         )["data"]
         snapshots = []
-        for _ in range(22):
-            current = curl_json([f"{self.api_base()}/tenant/execution-schedules/{schedule['id']}", "-H", f"Authorization: Bearer {token}"])["data"]
-            runs = curl_json([f"{self.api_base()}/tenant/execution-runs?triggered_by=scheduler:once&task_id={long_task['id']}", "-H", f"Authorization: Bearer {token}"])
-            run_items = runs["data"] if isinstance(runs["data"], list) else runs["data"]["items"]
-            snapshots.append((current["status"], run_items[0]["status"] if run_items else None))
-            time.sleep(1)
+        terminal_run_state = self.wait_until(
+            lambda: (
+                lambda current, run_items: (
+                    snapshots.append((current["status"], run_items[0]["status"] if run_items else None)),
+                    (current["status"], run_items[0]["status"])
+                    if run_items and run_items[0]["status"] in ("success", "failed", "partial", "cancelled") and current["status"] == "completed"
+                    else None
+                )[1]
+            )(
+                curl_json([f"{self.api_base()}/tenant/execution-schedules/{schedule['id']}", "-H", f"Authorization: Bearer {token}"])["data"],
+                (
+                    lambda payload: payload["data"] if isinstance(payload["data"], list) else payload["data"]["items"]
+                )(curl_json([f"{self.api_base()}/tenant/execution-runs?triggered_by=scheduler:once&task_id={long_task['id']}", "-H", f"Authorization: Bearer {token}"])),
+            ),
+            timeout=60,
+            interval=1,
+            description="terminal once schedule run",
+        )
         bad = [s for s in snapshots if s[1] in (None, "pending", "running") and s[0] == "completed"]
         assert_true(not bad, "once schedule should not be completed before run terminal state")
+        observed_scheduler_runs = [run_status for _, run_status in snapshots if run_status is not None]
+        assert_true(observed_scheduler_runs, "once schedule should create at least one scheduler-triggered run")
+        assert_true(terminal_run_state[1] in ("success", "failed", "partial", "cancelled"), "once schedule should eventually produce a terminal scheduler-triggered run")
+        assert_true(terminal_run_state[0] == "completed", "once schedule should eventually become completed")
         self.git_repo = repo
         self.local_playbook = playbook
         self.long_playbook = long_playbook
@@ -5010,6 +5316,7 @@ def resolve_phases(selected):
         "git_execution",
         "plugin_cmdb",
         "execution_queries",
+        "interface_contract_smoke",
         "workbench_site_messages",
         "notifications_audit",
         "notification_variables",
@@ -5095,6 +5402,7 @@ def main():
         "git_execution": runner.run_git_playbook_execution,
         "plugin_cmdb": runner.run_plugin_cmdb,
         "execution_queries": runner.run_execution_queries,
+        "interface_contract_smoke": runner.run_interface_contract_smoke,
         "notifications_audit": runner.run_notifications_audit,
         "notification_variables": runner.run_notification_variables,
         "notification_failures": runner.run_notification_failures,

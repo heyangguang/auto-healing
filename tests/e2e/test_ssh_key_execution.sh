@@ -2,13 +2,15 @@
 # 端到端测试 - SSH 密钥认证
 # 使用 SSH 私钥而非密码连接目标主机
 
-set -e
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 API_BASE="${API_BASE:-http://localhost:8080/api/v1}"
 USERNAME="${USERNAME:-admin}"
 PASSWORD="${PASSWORD:-admin123456}"
 MOCK_SECRETS="${MOCK_SECRETS:-http://localhost:5001}"
-PLAYBOOK_PATH="/root/auto-healing/tests/playbooks"
+PLAYBOOK_PATH="${PLAYBOOK_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/playbooks}"
 
 # SSH 密钥认证的目标主机（3台）
 TARGET_HOSTS="192.168.31.100,192.168.31.101,192.168.31.102"
@@ -67,7 +69,7 @@ SECRETS_RESULT=$(curl -s -X POST "$API_BASE/secrets-sources" \
       \"body_template\": \"{\\\"hostname\\\": \\\"{hostname}\\\", \\\"auth_type\\\": \\\"ssh_key\\\"}\"
     }
   }")
-SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id // .id')
+SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id')
 echo "✅ 密钥源创建成功 (ID: $SECRETS_SOURCE_ID)"
 echo "   类型: webhook"
 echo "   认证方式: ssh_key"
@@ -81,9 +83,9 @@ QUERY_RESULT=$(curl -s -X POST "$API_BASE/secrets/query" \
   -H "Content-Type: application/json" \
   -d "{\"hostname\":\"$FIRST_HOST\",\"source_id\":\"$SECRETS_SOURCE_ID\"}")
 
-AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type // .auth_type')
-USERNAME_VAL=$(echo "$QUERY_RESULT" | jq -r '.data.username // .username')
-PRIVATE_KEY=$(echo "$QUERY_RESULT" | jq -r '.data.private_key // .private_key')
+AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type')
+USERNAME_VAL=$(echo "$QUERY_RESULT" | jq -r '.data.username')
+PRIVATE_KEY=$(echo "$QUERY_RESULT" | jq -r '.data.private_key')
 
 echo "认证类型: $AUTH_TYPE"
 echo "用户名: $USERNAME_VAL"
@@ -106,7 +108,7 @@ REPO_RESULT=$(curl -s -X POST "$API_BASE/git-repos" \
     \"url\": \"file://$PLAYBOOK_PATH\",
     \"default_branch\": \"master\"
   }")
-REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id // .id')
+REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id')
 echo "✅ Git 仓库创建成功"
 
 curl -s -X POST "$API_BASE/git-repos/$REPO_ID/sync" -H "Authorization: Bearer $TOKEN" > /dev/null
@@ -117,6 +119,8 @@ curl -s -X POST "$API_BASE/git-repos/$REPO_ID/activate" \
   -d '{"main_playbook": "test_ping.yml", "config_mode": "manual"}' > /dev/null
 echo "✅ 仓库同步并激活"
 
+PLAYBOOK_ID=$(select_playbook_id "$API_BASE" "$TOKEN" "$REPO_ID")
+
 # ==================== 2. 创建任务 ====================
 echo ""
 echo "========== 2. 创建任务 =========="
@@ -126,12 +130,12 @@ TASK_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks" \
   -H "Content-Type: application/json" \
   -d "{
     \"name\": \"E2E SSH Key Ping Test\",
-    \"repository_id\": \"$REPO_ID\",
+    \"playbook_id\": \"$PLAYBOOK_ID\",
     \"target_hosts\": \"$TARGET_HOSTS\",
     \"executor_type\": \"local\"
   }")
 
-TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id // .id')
+TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id')
 echo "✅ 任务创建成功 (ID: $TASK_ID)"
 echo "   目标主机: $TARGET_HOSTS"
 echo "   认证方式: SSH 私钥"
@@ -145,7 +149,7 @@ EXEC_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks/$TASK_ID/execute" \
   -H "Content-Type: application/json" \
   -d "{\"secrets_source_id\": \"$SECRETS_SOURCE_ID\"}")
 
-RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id // .id')
+RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id')
 echo "✅ 执行已启动 (Run ID: $RUN_ID)"
 
 # SSE 实时日志
@@ -197,5 +201,6 @@ if [ "$STATUS" == "success" ]; then
   echo "    4. ✅ 执行成功"
 else
   echo "  ❌ SSH 密钥认证测试失败"
+  exit 1
 fi
 echo "=========================================="

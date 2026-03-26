@@ -41,7 +41,7 @@ echo ""
 echo_info "=== 0. 清理旧测试数据 ==="
 
 # 删除旧测试渠道 (忽略错误)
-OLD_CHANNELS=$(curl -s "$BASE_URL/channels" -H "$AUTH_HEADER" 2>/dev/null | jq -r '.items[]? | select(.name? | startswith("Test ")) | .id // empty' 2>/dev/null || echo "")
+OLD_CHANNELS=$(curl -s "$BASE_URL/channels" -H "$AUTH_HEADER" 2>/dev/null | jq -r '.data[]? | select(.name? | startswith("Test ")) | .id // empty' 2>/dev/null || echo "")
 for id in $OLD_CHANNELS; do
   if [ -n "$id" ] && [ "$id" != "null" ]; then
     echo "删除旧渠道: $id"
@@ -50,7 +50,7 @@ for id in $OLD_CHANNELS; do
 done
 
 # 删除旧测试模板 (忽略错误)
-OLD_TEMPLATES=$(curl -s "$BASE_URL/templates" -H "$AUTH_HEADER" 2>/dev/null | jq -r '.items[]? | select(.name? | startswith("Test ")) | .id // empty' 2>/dev/null || echo "")
+OLD_TEMPLATES=$(curl -s "$BASE_URL/templates" -H "$AUTH_HEADER" 2>/dev/null | jq -r '.data[]? | select(.name? | startswith("Test ")) | .id // empty' 2>/dev/null || echo "")
 for id in $OLD_TEMPLATES; do
   if [ -n "$id" ] && [ "$id" != "null" ]; then
     echo "删除旧模板: $id"
@@ -79,14 +79,14 @@ CHANNEL_RESP=$(curl -s -X POST "$BASE_URL/channels" \
       "method": "POST",
       "timeout_seconds": 10
     },
-    "default_recipients": ["test@example.com"],
+    "recipients": ["test@example.com"],
     "retry_config": {
       "max_retries": 3,
       "retry_intervals": [1, 5, 15]
     }
   }')
 
-CHANNEL_ID=$(echo "$CHANNEL_RESP" | jq -r '.id')
+CHANNEL_ID=$(echo "$CHANNEL_RESP" | jq -r '.data.id')
 echo "Channel ID: $CHANNEL_ID"
 echo "$CHANNEL_RESP" | jq .
 
@@ -124,7 +124,7 @@ TEMPLATE_RESP=$(curl -s -X POST "$BASE_URL/templates" \
     "supported_channels": ["webhook", "dingtalk"]
   }')
 
-TEMPLATE_ID=$(echo "$TEMPLATE_RESP" | jq -r '.id')
+TEMPLATE_ID=$(echo "$TEMPLATE_RESP" | jq -r '.data.id')
 echo "Template ID: $TEMPLATE_ID"
 echo "$TEMPLATE_RESP" | jq .
 
@@ -167,7 +167,7 @@ PREVIEW_RESP=$(curl -s -X POST "$BASE_URL/templates/$TEMPLATE_ID/preview" \
 echo "$PREVIEW_RESP" | jq .
 
 # 检查变量是否被正确替换
-BODY=$(echo "$PREVIEW_RESP" | jq -r '.body')
+BODY=$(echo "$PREVIEW_RESP" | jq -r '.data.body')
 if echo "$BODY" | grep -q "{{"; then
   echo_error "模板变量未完全替换！"
   echo "$BODY"
@@ -208,7 +208,7 @@ SEND_RESP=$(curl -s -X POST "$BASE_URL/notifications/send" \
   }')
 echo "$SEND_RESP" | jq .
 
-NOTIFICATION_ID=$(echo "$SEND_RESP" | jq -r '.notification_ids[0]')
+NOTIFICATION_ID=$(echo "$SEND_RESP" | jq -r '.data.notification_ids[0]')
 echo "Notification ID: $NOTIFICATION_ID"
 
 echo ""

@@ -32,7 +32,7 @@ echo "✅ 登录成功"
 echo ""
 echo "--- 2. 获取当前用户 ---"
 ME_RESULT=$(curl -s "$API_BASE/auth/me" -H "Authorization: Bearer $ACCESS_TOKEN")
-ME_USERNAME=$(echo "$ME_RESULT" | jq -r '.username')
+ME_USERNAME=$(echo "$ME_RESULT" | jq -r '.data.username')
 
 if [ "$ME_USERNAME" != "$USERNAME" ]; then
   echo "❌ 获取用户失败: $ME_RESULT"

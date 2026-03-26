@@ -2,7 +2,7 @@
 # 端到端测试 - 工单关闭/回写模块
 # 测试: 获取工单、关闭工单、验证状态
 
-set -e
+set -euo pipefail
 
 API_BASE="${API_BASE:-http://localhost:8080/api/v1}"
 USERNAME="${USERNAME:-admin}"
@@ -25,13 +25,13 @@ fi
 # 1. 获取一个工单
 echo ""
 echo "--- 1. 获取工单 ---"
-INCIDENT=$(curl -s "$API_BASE/incidents?page_size=1" -H "Authorization: Bearer $TOKEN" | jq -r '.data[0]')
+INCIDENT=$(curl -s "$API_BASE/incidents?page_size=1" -H "Authorization: Bearer $TOKEN" | jq -c '.data[0] // empty')
 INCIDENT_ID=$(echo "$INCIDENT" | jq -r '.id')
 CURRENT_STATUS=$(echo "$INCIDENT" | jq -r '.status')
 
 if [ "$INCIDENT_ID" == "null" ] || [ -z "$INCIDENT_ID" ]; then
-  echo "⚠️ 没有可用的工单，跳过测试"
-  exit 0
+  echo "❌ 没有可用的工单，测试无法验证关闭接口"
+  exit 1
 fi
 echo "✅ 获取工单: $INCIDENT_ID (当前状态: $CURRENT_STATUS)"
 
@@ -48,8 +48,8 @@ CLOSE_RESULT=$(curl -s -X POST "$API_BASE/incidents/$INCIDENT_ID/close" \
     "close_status": "resolved"
   }')
 
-if echo "$CLOSE_RESULT" | jq -e '.message' > /dev/null 2>&1; then
-  SOURCE_UPDATED=$(echo "$CLOSE_RESULT" | jq -r '.source_updated')
+if echo "$CLOSE_RESULT" | jq -e '.code == 0' > /dev/null 2>&1; then
+  SOURCE_UPDATED=$(echo "$CLOSE_RESULT" | jq -r '.data.source_updated')
   echo "✅ 关闭成功 (源系统更新: $SOURCE_UPDATED)"
 else
   echo "❌ 关闭失败: $CLOSE_RESULT"
@@ -59,7 +59,11 @@ fi
 # 3. 验证状态
 echo ""
 echo "--- 3. 验证状态 ---"
-NEW_STATUS=$(curl -s "$API_BASE/incidents/$INCIDENT_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.status')
+NEW_STATUS=$(curl -s "$API_BASE/incidents/$INCIDENT_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.data.status')
+if [ "$NEW_STATUS" != "resolved" ] && [ "$NEW_STATUS" != "closed" ]; then
+  echo "❌ 工单状态校验失败: $NEW_STATUS"
+  exit 1
+fi
 echo "✅ 工单新状态: $NEW_STATUS"
 
 echo ""

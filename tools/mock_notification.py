@@ -79,4 +79,4 @@ if __name__ == '__main__':
     print("失败测试:     http://localhost:9999/fail")
     print("查看记录:     http://localhost:9999/notifications")
     print("=" * 50)
-    app.run(host='0.0.0.0', port=9999, debug=True)
+    app.run(host='0.0.0.0', port=9999, debug=False, use_reloader=False)

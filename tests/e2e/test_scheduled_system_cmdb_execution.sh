@@ -2,13 +2,15 @@
 # 端到端测试 - 定时执行 + 系统 CMDB + SSE 实时日志
 # 从系统 CMDB 获取主机 → 创建定时任务 → 执行 → SSE 实时日志
 
-set -e
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 API_BASE="${API_BASE:-http://localhost:8080/api/v1}"
 USERNAME="${USERNAME:-admin}"
 PASSWORD="${PASSWORD:-admin123456}"
 MOCK_SECRETS="${MOCK_SECRETS:-http://localhost:5001}"
-PLAYBOOK_PATH="/root/auto-healing/tests/playbooks"
+PLAYBOOK_PATH="${PLAYBOOK_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/playbooks}"
 
 echo "=========================================="
 echo "  定时执行 + 系统 CMDB + SSE 实时日志"
@@ -81,7 +83,7 @@ SECRETS_RESULT=$(curl -s -X POST "$API_BASE/secrets-sources" \
       \"body_template\": \"{\\\"hostname\\\": \\\"{hostname}\\\", \\\"auth_type\\\": \\\"password\\\"}\"
     }
   }")
-SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id // .id')
+SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id')
 echo "✅ 密钥源创建成功"
 
 # 创建仓库
@@ -93,7 +95,7 @@ REPO_RESULT=$(curl -s -X POST "$API_BASE/git-repos" \
     \"url\": \"file://$PLAYBOOK_PATH\",
     \"default_branch\": \"master\"
   }")
-REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id // .id')
+REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id')
 echo "✅ Git 仓库创建成功"
 
 curl -s -X POST "$API_BASE/git-repos/$REPO_ID/sync" -H "Authorization: Bearer $TOKEN" > /dev/null
@@ -103,6 +105,8 @@ curl -s -X POST "$API_BASE/git-repos/$REPO_ID/activate" \
   -H "Content-Type: application/json" \
   -d '{"main_playbook": "test_ping.yml", "config_mode": "manual"}' > /dev/null
 echo "✅ 仓库同步并激活"
+
+PLAYBOOK_ID=$(select_playbook_id "$API_BASE" "$TOKEN" "$REPO_ID")
 
 # ==================== 2. 创建定时任务 ====================
 echo ""
@@ -116,14 +120,14 @@ TASK_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks" \
   -H "Content-Type: application/json" \
   -d "{
     \"name\": \"E2E Scheduled System CMDB Ping\",
-    \"repository_id\": \"$REPO_ID\",
+    \"playbook_id\": \"$PLAYBOOK_ID\",
     \"target_hosts\": \"$TARGET_HOST\",
     \"executor_type\": \"local\",
     \"schedule_expr\": \"30s\",
     \"is_recurring\": false
   }")
 
-TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id // .id')
+TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id')
 echo "✅ 定时任务创建成功 (ID: $TASK_ID)"
 
 # ==================== 3. 执行 + SSE ====================
@@ -135,7 +139,7 @@ EXEC_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks/$TASK_ID/execute" \
   -H "Content-Type: application/json" \
   -d "{\"secrets_source_id\": \"$SECRETS_SOURCE_ID\"}")
 
-RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id // .id')
+RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id')
 echo "✅ 执行已启动 (Run ID: $RUN_ID)"
 
 echo ""
@@ -187,5 +191,6 @@ if [ "$STATUS" == "success" ]; then
   echo "    5. ✅ 执行成功"
 else
   echo "  ❌ 测试失败"
+  exit 1
 fi
 echo "=========================================="

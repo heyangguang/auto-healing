@@ -1,7 +1,7 @@
 # 平台用户管理 API 文档
 
 **路径前缀**: `/api/v1/platform/users`  
-**权限**: 平台管理员
+**权限**: 平台管理员；各接口还需满足对应 `platform:*` 权限
 
 ---
 
@@ -9,7 +9,7 @@
 
 **GET** `/api/v1/platform/users`
 
-**权限**: `user:list`
+**权限**: `platform:users:list`
 
 ### 查询参数
 
@@ -17,12 +17,11 @@
 |------|------|------|------|
 | `page` | int | ❌ | 页码，默认 1 |
 | `page_size` | int | ❌ | 每页数量，默认 20 |
-| `search` | string | ❌ | 模糊搜索（用户名、邮箱、昵称） |
+| `search` | string | ❌ | 模糊搜索（用户名、邮箱、显示名称） |
 | `status` | string | ❌ | 状态：`active` / `inactive` |
 | `username` | string | ❌ | 按用户名精确筛选 |
 | `email` | string | ❌ | 按邮箱精确筛选 |
 | `display_name` | string | ❌ | 按显示名称筛选 |
-| `role_id` | uuid | ❌ | 按角色筛选 |
 | `created_from` | string | ❌ | 创建时间起始（ISO 8601） |
 | `created_to` | string | ❌ | 创建时间截止（ISO 8601） |
 | `sort_field` | string | ❌ | 排序字段：`username` / `created_at` / `last_login_at` |
@@ -33,8 +32,8 @@
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
+  "message": "success",
+  "data": [
       {
         "id": "uuid",
         "username": "admin",
@@ -46,11 +45,10 @@
         "last_login_at": "2026-02-18T09:00:00Z",
         "created_at": "2026-01-01T00:00:00Z"
       }
-    ],
-    "total": 50,
-    "page": 1,
-    "page_size": 20
-  }
+  ],
+  "total": 50,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
@@ -60,7 +58,7 @@
 
 **POST** `/api/v1/platform/users`
 
-**权限**: 平台管理员（`RequirePlatformAdmin`）
+**权限**: `platform:users:create`
 
 ### 请求体
 
@@ -71,7 +69,7 @@
 | `password` | string | ✅ | 初始密码（至少 8 位） |
 | `display_name` | string | ❌ | 显示名称 |
 | `phone` | string | ❌ | 手机号 |
-| `role_ids` | []uuid | ❌ | 初始分配的角色 ID 列表 |
+| `role_id` | uuid | ❌ | 初始分配的平台角色 ID |
 | `status` | string | ❌ | 状态：`active` / `inactive`，默认 `active` |
 | `is_platform_admin` | bool | ❌ | 是否为平台管理员，默认 false |
 
@@ -81,15 +79,15 @@
 
 **GET** `/api/v1/platform/users/simple`
 
-**权限**: `user:list`
+**权限**: `platform:users:list`
 
-返回用户的 ID、用户名、昵称，不含分页，用于下拉选择器等场景。
+返回用户的 ID、用户名、显示名称，不含分页，用于下拉选择器等场景。
 
 ### 查询参数
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `search` | string | ❌ | 模糊搜索（用户名、邮箱、昵称） |
+| `name` | string | ❌ | 模糊搜索（用户名、显示名称） |
 | `status` | string | ❌ | 状态筛选，默认 `active` |
 
 ### 响应
@@ -98,7 +96,7 @@
 {
   "code": 0,
   "data": [
-    {"id": "uuid", "username": "admin", "nickname": "管理员"}
+    {"id": "uuid", "username": "admin", "display_name": "管理员"}
   ]
 }
 ```
@@ -109,7 +107,7 @@
 
 **GET** `/api/v1/platform/users/:id`
 
-**权限**: `user:list`
+**权限**: `platform:users:list`
 
 ---
 
@@ -117,7 +115,7 @@
 
 **PUT** `/api/v1/platform/users/:id`
 
-**权限**: `user:update`
+**权限**: `platform:users:update`
 
 ### 请求体（所有字段可选）
 
@@ -133,7 +131,7 @@
 
 **DELETE** `/api/v1/platform/users/:id`
 
-**权限**: `user:delete`
+**权限**: `platform:users:delete`
 
 ---
 
@@ -141,7 +139,7 @@
 
 **POST** `/api/v1/platform/users/:id/reset-password`
 
-**权限**: `user:reset_password`
+**权限**: `platform:users:reset_password`
 
 ### 请求体
 
@@ -155,29 +153,10 @@
 
 **PUT** `/api/v1/platform/users/:id/roles`
 
-**权限**: `role:assign`
+**权限**: `platform:roles:manage`
 
 ### 请求体
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `role_ids` | []uuid | ✅ | 角色 ID 列表（全量替换） |
-
----
-
-## 租户级用户创建
-
-**POST** `/api/v1/tenant/users`
-
-**权限**: `user:create`
-
-在当前租户内创建用户（非平台级）。
-
-### 请求体
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `username` | string | ✅ | 用户名 |
-| `email` | string | ✅ | 邮箱 |
-| `password` | string | ✅ | 初始密码 |
-| `nickname` | string | ❌ | 昵称 |

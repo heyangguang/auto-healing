@@ -37,8 +37,8 @@
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
+  "message": "success",
+  "data": [
       {
         "id": "uuid",
         "name": "每日磁盘清理",
@@ -60,11 +60,10 @@
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-02-18T10:00:00Z"
       }
-    ],
-    "total": 10,
-    "page": 1,
-    "page_size": 20
-  }
+  ],
+  "total": 10,
+  "page": 1,
+  "page_size": 20
 }
 ```
 

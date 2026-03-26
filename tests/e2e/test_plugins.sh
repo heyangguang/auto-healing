@@ -49,8 +49,8 @@ ITSM_RESULT=$(curl -s -X POST "$API_BASE/plugins" \
     \"sync_interval_minutes\": 5
   }")
 
-ITSM_ID=$(echo "$ITSM_RESULT" | jq -r '.id')
-ITSM_ADAPTER=$(echo "$ITSM_RESULT" | jq -r '.adapter')
+ITSM_ID=$(echo "$ITSM_RESULT" | jq -r '.data.id')
+ITSM_ADAPTER=$(echo "$ITSM_RESULT" | jq -r '.data.adapter')
 
 if [ "$ITSM_ID" == "null" ] || [ -z "$ITSM_ID" ]; then
   echo "❌ 创建 ITSM 插件失败: $ITSM_RESULT"
@@ -70,7 +70,7 @@ fi
 
 echo ""
 echo "--- 3. 验证插件状态 (应为 active) ---"
-STATUS=$(curl -s "$API_BASE/plugins/$ITSM_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.status')
+STATUS=$(curl -s "$API_BASE/plugins/$ITSM_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.data.status')
 if [ "$STATUS" == "active" ]; then
   echo "✅ 状态正确: $STATUS"
 else
@@ -81,7 +81,7 @@ fi
 echo ""
 echo "--- 4. 手动同步 ---"
 SYNC_RESULT=$(curl -s -X POST "$API_BASE/plugins/$ITSM_ID/sync" -H "Authorization: Bearer $TOKEN")
-SYNC_STATUS=$(echo "$SYNC_RESULT" | jq -r '.status')
+SYNC_STATUS=$(echo "$SYNC_RESULT" | jq -r '.data.status')
 echo "✅ 同步触发成功 (状态: $SYNC_STATUS)"
 
 sleep 2
@@ -109,7 +109,7 @@ CMDB_RESULT=$(curl -s -X POST "$API_BASE/plugins" \
     \"sync_interval_minutes\": 5
   }")
 
-CMDB_ID=$(echo "$CMDB_RESULT" | jq -r '.id')
+CMDB_ID=$(echo "$CMDB_RESULT" | jq -r '.data.id')
 if [ "$CMDB_ID" == "null" ] || [ -z "$CMDB_ID" ]; then
   echo "❌ 创建 CMDB 插件失败: $CMDB_RESULT"
   exit 1
@@ -135,7 +135,7 @@ echo "✅ 同步触发成功"
 echo ""
 echo "--- 4. 查看 CMDB 统计 ---"
 STATS=$(curl -s "$API_BASE/cmdb/stats" -H "Authorization: Bearer $TOKEN")
-TOTAL=$(echo "$STATS" | jq -r '.total // 0')
+TOTAL=$(echo "$STATS" | jq -r '.data.total // 0')
 echo "✅ CMDB 配置项总数: $TOTAL"
 
 echo ""

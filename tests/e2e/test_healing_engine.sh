@@ -27,6 +27,20 @@ if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
 fi
 echo "✅ 登录成功"
 
+list_total_or_fail() {
+  local response="$1"
+  local label="$2"
+  local total
+
+  total=$(echo "$response" | jq -er '.total')
+  if [ -z "$total" ] || [ "$total" = "null" ]; then
+    echo "❌ ${label}缺少顶层 total"
+    echo "$response" | jq
+    exit 1
+  fi
+  printf '%s' "$total"
+}
+
 # ==================== 清理旧数据 ====================
 echo ""
 echo "========== 清理旧数据 =========="
@@ -74,7 +88,7 @@ FLOW_RESULT=$(curl -s -X POST "$API_BASE/healing/flows" \
     "is_active": true
   }')
 
-FLOW_ID=$(echo "$FLOW_RESULT" | jq -r '.data.id // .id')
+FLOW_ID=$(echo "$FLOW_RESULT" | jq -r '.data.id')
 if [ "$FLOW_ID" == "null" ] || [ -z "$FLOW_ID" ]; then
   echo "❌ 创建流程失败"
   echo "$FLOW_RESULT" | jq
@@ -101,7 +115,7 @@ RULE_RESULT=$(curl -s -X POST "$API_BASE/healing/rules" \
     \"is_active\": false
   }")
 
-RULE_ID=$(echo "$RULE_RESULT" | jq -r '.data.id // .id')
+RULE_ID=$(echo "$RULE_RESULT" | jq -r '.data.id')
 if [ "$RULE_ID" == "null" ] || [ -z "$RULE_ID" ]; then
   echo "❌ 创建规则失败"
   echo "$RULE_RESULT" | jq
@@ -113,11 +127,11 @@ echo "✅ 规则创建成功 (ID: $RULE_ID)"
 echo ""
 echo "--- 1.3 查询列表 ---"
 FLOWS_LIST=$(curl -s "$API_BASE/healing/flows" -H "Authorization: Bearer $TOKEN")
-FLOW_COUNT=$(echo "$FLOWS_LIST" | jq '.pagination.total')
+FLOW_COUNT=$(list_total_or_fail "$FLOWS_LIST" "流程列表响应")
 echo "流程总数: $FLOW_COUNT"
 
 RULES_LIST=$(curl -s "$API_BASE/healing/rules" -H "Authorization: Bearer $TOKEN")
-RULE_COUNT=$(echo "$RULES_LIST" | jq '.pagination.total')
+RULE_COUNT=$(list_total_or_fail "$RULES_LIST" "规则列表响应")
 echo "规则总数: $RULE_COUNT"
 
 # 1.4 更新规则
@@ -128,11 +142,12 @@ UPDATE_RESULT=$(curl -s -X PUT "$API_BASE/healing/rules/$RULE_ID" \
   -H "Content-Type: application/json" \
   -d '{"priority": 200}')
 
-NEW_PRIORITY=$(echo "$UPDATE_RESULT" | jq -r '.data.priority // .priority')
+NEW_PRIORITY=$(echo "$UPDATE_RESULT" | jq -r '.data.priority')
 if [ "$NEW_PRIORITY" == "200" ]; then
   echo "✅ 规则更新成功 (优先级: 200)"
 else
-  echo "⚠️ 规则更新结果: 优先级=$NEW_PRIORITY"
+  echo "❌ 规则更新失败: 优先级=$NEW_PRIORITY"
+  exit 1
 fi
 
 # 1.5 启用规则
@@ -144,11 +159,12 @@ echo "$ACTIVATE_RESULT" | jq -r '.message // "操作完成"'
 
 # 验证状态
 RULE_DETAIL=$(curl -s "$API_BASE/healing/rules/$RULE_ID" -H "Authorization: Bearer $TOKEN")
-IS_ACTIVE=$(echo "$RULE_DETAIL" | jq -r '.data.is_active // .is_active')
+IS_ACTIVE=$(echo "$RULE_DETAIL" | jq -r '.data.is_active')
 if [ "$IS_ACTIVE" == "true" ]; then
   echo "✅ 规则已启用"
 else
-  echo "⚠️ 规则启用状态: $IS_ACTIVE"
+  echo "❌ 规则启用失败: $IS_ACTIVE"
+  exit 1
 fi
 
 # 1.6 停用规则
@@ -157,11 +173,12 @@ echo "--- 1.6 停用规则 ---"
 curl -s -X POST "$API_BASE/healing/rules/$RULE_ID/deactivate" \
   -H "Authorization: Bearer $TOKEN" > /dev/null
 RULE_DETAIL=$(curl -s "$API_BASE/healing/rules/$RULE_ID" -H "Authorization: Bearer $TOKEN")
-IS_ACTIVE=$(echo "$RULE_DETAIL" | jq -r '.data.is_active // .is_active')
+IS_ACTIVE=$(echo "$RULE_DETAIL" | jq -r '.data.is_active')
 if [ "$IS_ACTIVE" == "false" ]; then
   echo "✅ 规则已停用"
 else
-  echo "⚠️ 规则停用状态: $IS_ACTIVE"
+  echo "❌ 规则停用失败: $IS_ACTIVE"
+  exit 1
 fi
 
 echo ""
@@ -179,21 +196,21 @@ echo "=========================================="
 echo ""
 echo "--- 2.1 查询流程实例列表 ---"
 INSTANCES_LIST=$(curl -s "$API_BASE/healing/instances" -H "Authorization: Bearer $TOKEN")
-INSTANCE_COUNT=$(echo "$INSTANCES_LIST" | jq '.pagination.total')
+INSTANCE_COUNT=$(list_total_or_fail "$INSTANCES_LIST" "流程实例列表响应")
 echo "流程实例总数: $INSTANCE_COUNT"
 
 # 2.2 查询待审批任务
 echo ""
 echo "--- 2.2 查询待审批任务 ---"
 PENDING_LIST=$(curl -s "$API_BASE/healing/approvals/pending" -H "Authorization: Bearer $TOKEN")
-PENDING_COUNT=$(echo "$PENDING_LIST" | jq '.pagination.total')
+PENDING_COUNT=$(list_total_or_fail "$PENDING_LIST" "待审批列表响应")
 echo "待审批任务数: $PENDING_COUNT"
 
 # 2.3 查询所有审批任务
 echo ""
 echo "--- 2.3 查询所有审批任务 ---"
 APPROVALS_LIST=$(curl -s "$API_BASE/healing/approvals" -H "Authorization: Bearer $TOKEN")
-APPROVAL_COUNT=$(echo "$APPROVALS_LIST" | jq '.pagination.total')
+APPROVAL_COUNT=$(list_total_or_fail "$APPROVALS_LIST" "审批列表响应")
 echo "审批任务总数: $APPROVAL_COUNT"
 
 echo ""

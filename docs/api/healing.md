@@ -274,7 +274,7 @@
 | `flow_id` | uuid | ❌ | 按流程筛选 |
 | `rule_id` | uuid | ❌ | 按规则筛选 |
 | `incident_id` | uuid | ❌ | 按工单筛选 |
-| `status` | string | ❌ | 状态：`running` / `success` / `failed` / `cancelled` / `pending_approval` |
+| `status` | string | ❌ | 状态：`pending` / `running` / `waiting_approval` / `completed` / `failed` / `cancelled` |
 | `search` | string | ❌ | 模糊搜索 |
 | `flow_name` | string | ❌ | 按流程名称筛选 |
 | `rule_name` | string | ❌ | 按规则名称筛选 |
@@ -282,6 +282,7 @@
 | `current_node_id` | string | ❌ | 当前节点 ID |
 | `error_message` | string | ❌ | 错误信息关键词 |
 | `has_error` | bool | ❌ | 是否有错误：`true` / `false` |
+| `approval_status` | string | ❌ | 审批结果筛选：`approved` / `rejected` |
 | `created_from` | string | ❌ | 创建时间起始（RFC3339 或 `YYYY-MM-DD`） |
 | `created_to` | string | ❌ | 创建时间结束 |
 | `started_from` | string | ❌ | 开始时间起始 |
@@ -308,14 +309,17 @@
 ```json
 {
   "code": 0,
+  "message": "success",
   "data": {
     "total": 500,
-    "running": 5,
-    "success": 450,
-    "failed": 30,
-    "cancelled": 10,
-    "pending_approval": 5,
-    "success_rate": 0.9375
+    "by_status": [
+      {"status": "pending", "count": 8},
+      {"status": "running", "count": 5},
+      {"status": "waiting_approval", "count": 7},
+      {"status": "completed", "count": 450},
+      {"status": "failed", "count": 20},
+      {"status": "cancelled", "count": 10}
+    ]
   }
 }
 ```
@@ -334,7 +338,7 @@
 
 **POST** `/api/v1/healing/instances/:id/cancel`
 
-**权限**: `healing:instances:view`
+**权限**: `healing:flows:update`
 
 ---
 
@@ -342,7 +346,7 @@
 
 **POST** `/api/v1/healing/instances/:id/retry`
 
-**权限**: `healing:instances:view`
+**权限**: `healing:flows:update`
 
 #### 请求体（可选）
 
@@ -379,7 +383,7 @@
 | `page` | int | ❌ | 页码，默认 1 |
 | `page_size` | int | ❌ | 每页数量，默认 20 |
 | `flow_instance_id` | uuid | ❌ | 按流程实例筛选 |
-| `status` | string | ❌ | 状态：`pending` / `approved` / `rejected` / `timeout` |
+| `status` | string | ❌ | 状态：`pending` / `approved` / `rejected` / `expired` |
 
 ---
 
@@ -389,7 +393,7 @@
 
 **权限**: `healing:approvals:view`
 
-返回当前用户待处理的审批任务。
+返回当前租户下待处理的审批任务。
 
 #### 查询参数
 
@@ -397,7 +401,7 @@
 |------|------|------|------|
 | `page` | int | ❌ | 页码，默认 1 |
 | `page_size` | int | ❌ | 每页数量，默认 20 |
-| `search` | string | ❌ | 模糊搜索（node_id、flow_instance_id） |
+| `node_name` | string | ❌ | 按节点名称模糊筛选（匹配 `node_id`） |
 | `date_from` | string | ❌ | 创建时间起始（`YYYY-MM-DD`） |
 | `date_to` | string | ❌ | 创建时间结束 |
 
@@ -457,16 +461,37 @@
 |------|------|------|------|
 | `page` | int | ❌ | 页码，默认 1 |
 | `page_size` | int | ❌ | 每页数量，默认 20 |
-| `search` | string | ❌ | 模糊搜索（标题、external_id、affected_ci） |
+| `title` | string | ❌ | 模糊搜索（标题、external_id、affected_ci） |
 | `severity` | string | ❌ | 严重级别：`critical` / `high` / `medium` / `low` |
 | `date_from` | string | ❌ | 创建时间起始（`YYYY-MM-DD`） |
 | `date_to` | string | ❌ | 创建时间结束 |
 
 ---
 
-## 工单手动触发
+### 30. 获取已忽略工单列表
 
-### 30. 手动触发工单自愈
+**GET** `/api/v1/healing/pending/dismissed`
+
+**权限**: `healing:trigger:view`
+
+返回已被人工忽略的待触发工单列表。
+
+#### 查询参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `page` | int | ❌ | 页码，默认 1 |
+| `page_size` | int | ❌ | 每页数量，默认 20 |
+| `title` | string | ❌ | 模糊搜索（标题、external_id、affected_ci） |
+| `severity` | string | ❌ | 严重级别：`critical` / `high` / `medium` / `low` |
+| `date_from` | string | ❌ | 创建时间起始（`YYYY-MM-DD`） |
+| `date_to` | string | ❌ | 创建时间结束 |
+
+---
+
+## 工单手动触发与忽略
+
+### 31. 手动触发工单自愈
 
 **POST** `/api/v1/incidents/:id/trigger`
 
@@ -474,15 +499,23 @@
 
 对指定工单手动触发自愈流程。
 
+### 32. 忽略待触发工单
+
+**POST** `/api/v1/incidents/:id/dismiss`
+
+**权限**: `healing:trigger:execute`
+
+将待触发工单标记为 `dismissed`，用于人工确认不再触发自愈。
+
 ---
 
 ## 实例状态说明
 
 | 状态 | 说明 |
 |------|------|
+| `pending` | 等待执行 |
 | `running` | 执行中 |
-| `success` | 执行成功 |
+| `waiting_approval` | 等待审批 |
+| `completed` | 已完成 |
 | `failed` | 执行失败 |
 | `cancelled` | 已取消 |
-| `pending_approval` | 等待审批 |
-| `pending_trigger` | 等待触发（手动触发模式） |

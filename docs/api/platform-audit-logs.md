@@ -1,7 +1,7 @@
 # 平台审计日志 API 文档
 
 **Base URL**: `/api/v1/platform/audit-logs`  
-**权限**: 平台管理员（`is_platform_admin = true`）
+**权限**: `platform:audit:list`（且需要平台管理员）
 
 > 平台审计日志记录平台级别的操作（租户管理、用户管理、平台设置等），与租户级审计日志分开存储。
 
@@ -34,8 +34,8 @@
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
+  "message": "success",
+  "data": [
       {
         "id": "uuid",
         "user_id": "uuid",
@@ -61,11 +61,10 @@
         "risk_reason": "",
         "created_at": "2026-02-18T10:00:00Z"
       }
-    ],
-    "total": 500,
-    "page": 1,
-    "page_size": 20
-  }
+  ],
+  "total": 500,
+  "page": 1,
+  "page_size": 20
 }
 ```
 

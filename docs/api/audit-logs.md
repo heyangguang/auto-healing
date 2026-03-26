@@ -1,7 +1,7 @@
 # 租户审计日志 API 文档
 
 **Base URL**: `/api/v1/audit-logs`  
-**权限**: 已登录用户（租户内数据隔离）
+**权限**: `audit:list`（导出接口除外，导出需要 `audit:export`）
 
 > 租户审计日志记录当前租户内的所有操作行为，与平台审计日志分开存储。
 
@@ -37,8 +37,8 @@
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
+  "message": "success",
+  "data": [
       {
         "id": "uuid",
         "user_id": "uuid",
@@ -56,7 +56,7 @@
         "response_status": 201,
         "changes": {
           "before": null,
-          "after": {"name": "Zabbix 监控插件", "type": "monitoring"}
+          "after": {"name": "Zabbix 监控插件", "type": "itsm"}
         },
         "status": "success",
         "error_message": "",
@@ -69,11 +69,10 @@
           "display_name": "张三"
         }
       }
-    ],
-    "total": 1000,
-    "page": 1,
-    "page_size": 20
-  }
+  ],
+  "total": 1000,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
@@ -235,6 +234,8 @@
 ## 9. 导出审计日志（CSV）
 
 **GET** `/api/v1/audit-logs/export`
+
+**权限**: `audit:export`
 
 支持与列表接口相同的过滤参数（除 `page` / `page_size` 外），最多导出 10000 条。
 

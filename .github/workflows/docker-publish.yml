@@ -33,6 +33,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Quality surface checks
+        run: bash tools/quality_surface_checks.sh
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 

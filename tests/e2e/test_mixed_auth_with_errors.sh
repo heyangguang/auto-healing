@@ -2,13 +2,15 @@
 # 端到端测试 - 混合认证 + 错误主机
 # 4台正确主机 + 2台错误主机
 
-set -e
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 API_BASE="${API_BASE:-http://localhost:8080/api/v1}"
 USERNAME="${USERNAME:-admin}"
 PASSWORD="${PASSWORD:-admin123456}"
 MOCK_SECRETS="${MOCK_SECRETS:-http://localhost:5001}"
-PLAYBOOK_PATH="/root/auto-healing/tests/playbooks"
+PLAYBOOK_PATH="${PLAYBOOK_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/playbooks}"
 
 # 混合认证 + 错误主机
 # SSH 密钥: 192.168.31.100, 101, 102
@@ -72,7 +74,7 @@ SECRETS_RESULT_SSH=$(curl -s -X POST "$API_BASE/secrets-sources" \
       \"body_template\": \"{\\\"hostname\\\": \\\"{hostname}\\\"}\"
     }
   }")
-SSH_SOURCE_ID=$(echo "$SECRETS_RESULT_SSH" | jq -r '.data.id // .id')
+SSH_SOURCE_ID=$(echo "$SECRETS_RESULT_SSH" | jq -r '.data.id')
 echo "✅ SSH 密钥源创建成功 (ID: $SSH_SOURCE_ID)"
 
 echo ""
@@ -90,7 +92,7 @@ SECRETS_RESULT_PWD=$(curl -s -X POST "$API_BASE/secrets-sources" \
       \"body_template\": \"{\\\"hostname\\\": \\\"{hostname}\\\"}\"
     }
   }")
-PWD_SOURCE_ID=$(echo "$SECRETS_RESULT_PWD" | jq -r '.data.id // .id')
+PWD_SOURCE_ID=$(echo "$SECRETS_RESULT_PWD" | jq -r '.data.id')
 echo "✅ 密码密钥源创建成功 (ID: $PWD_SOURCE_ID)"
 
 # 创建仓库
@@ -104,7 +106,7 @@ REPO_RESULT=$(curl -s -X POST "$API_BASE/git-repos" \
     \"url\": \"file://$PLAYBOOK_PATH\",
     \"default_branch\": \"master\"
   }")
-REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id // .id')
+REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id')
 echo "✅ Git 仓库创建成功"
 
 curl -s -X POST "$API_BASE/git-repos/$REPO_ID/sync" -H "Authorization: Bearer $TOKEN" > /dev/null
@@ -115,6 +117,8 @@ curl -s -X POST "$API_BASE/git-repos/$REPO_ID/activate" \
   -d '{"main_playbook": "test_ping.yml", "config_mode": "manual"}' > /dev/null
 echo "✅ 仓库同步并激活"
 
+PLAYBOOK_ID=$(select_playbook_id "$API_BASE" "$TOKEN" "$REPO_ID")
+
 # ==================== 2. 创建任务 ====================
 echo ""
 echo "========== 2. 创建任务 =========="
@@ -124,12 +128,12 @@ TASK_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks" \
   -H "Content-Type: application/json" \
   -d "{
     \"name\": \"E2E Error Test Mixed Auth\",
-    \"repository_id\": \"$REPO_ID\",
+    \"playbook_id\": \"$PLAYBOOK_ID\",
     \"target_hosts\": \"$TARGET_HOSTS\",
     \"executor_type\": \"local\"
   }")
 
-TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id // .id')
+TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id')
 echo "✅ 任务创建成功 (ID: $TASK_ID)"
 echo "   目标主机: $TARGET_HOSTS"
 echo "   预期: 4台成功, 2台失败(unreachable)"
@@ -143,7 +147,7 @@ EXEC_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks/$TASK_ID/execute" \
   -H "Content-Type: application/json" \
   -d "{\"secrets_source_ids\": [\"$SSH_SOURCE_ID\", \"$PWD_SOURCE_ID\"]}")
 
-RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id // .id')
+RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id')
 echo "✅ 执行已启动 (Run ID: $RUN_ID)"
 
 # SSE 实时日志
@@ -207,6 +211,7 @@ if [ "$UNREACHABLE" == "2" ] && [ "$OK" == "12" ]; then
   echo "    - 正确主机成功执行"
   echo "    - 错误主机正确报告 unreachable"
 else
-  echo "  ⚠️ 结果与预期不完全匹配，请检查"
+  echo "  ❌ 结果与预期不完全匹配"
+  exit 1
 fi
 echo "=========================================="

@@ -7,11 +7,17 @@
 #   ./start.sh ui         # 只重启 ui 容器
 #   ./start.sh infra      # 只重启 postgres + redis
 
+set -euo pipefail
+
 export DOCKER_HOST=unix:///run/podman/podman.sock
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
+
+SERVER_BIN="/data/server"
+SERVER_LOG="/data/logs/server.log"
+SERVER_STARTUP_WAIT_SECONDS=2
 
 start_server() {
     echo -e "${BLUE}▶ 启动 server 二进制...${NC}"
@@ -21,8 +27,19 @@ start_server() {
     export ANSIBLE_EXECUTOR_IMAGE="auto-healing-executor:${EXECUTOR_VERSION:-v1.0.0}"
     export ANSIBLE_WORKSPACE_DIR="/data/workspace"
     mkdir -p /data/workspace
-    nohup /data/server > /data/logs/server.log 2>&1 &
-    echo -e "${GREEN}  ✅ server 已启动 (PID: $!)${NC}"
+    if [ ! -x "$SERVER_BIN" ]; then
+        echo "server 二进制不存在或不可执行: $SERVER_BIN" >&2
+        return 1
+    fi
+    nohup "$SERVER_BIN" > "$SERVER_LOG" 2>&1 &
+    local server_pid=$!
+    sleep "$SERVER_STARTUP_WAIT_SECONDS"
+    if ! kill -0 "$server_pid" 2>/dev/null; then
+        echo "server 启动失败，请检查日志: $SERVER_LOG" >&2
+        tail -n 20 "$SERVER_LOG" 2>/dev/null || true
+        return 1
+    fi
+    echo -e "${GREEN}  ✅ server 已启动 (PID: $server_pid)${NC}"
 }
 
 start_infra() {

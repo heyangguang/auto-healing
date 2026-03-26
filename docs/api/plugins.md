@@ -16,7 +16,7 @@
 | `page` | int | ❌ | 页码，默认 1 |
 | `page_size` | int | ❌ | 每页数量，默认 20 |
 | `search` | string | ❌ | 模糊搜索（名称、描述） |
-| `type` | string | ❌ | 插件类型：`monitoring` / `cmdb` / `ticketing` / `custom` 等 |
+| `type` | string | ❌ | 插件类型：`itsm` / `cmdb` |
 | `status` | string | ❌ | 状态：`active` / `inactive` / `error` |
 | `sort_by` | string | ❌ | 排序字段：`name` / `created_at` |
 | `sort_order` | string | ❌ | 排序方向：`asc` / `desc` |
@@ -26,31 +26,31 @@
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "name": "Zabbix 监控",
-        "description": "Zabbix 监控系统集成插件",
-        "type": "monitoring",
-        "status": "active",
-        "is_enabled": true,
-        "config": {
-          "url": "http://zabbix.example.com",
-          "username": "admin"
-        },
-        "last_sync_at": "2026-02-18T09:00:00Z",
-        "sync_interval": 300,
-        "cmdb_count": 150,
-        "incident_count": 25,
-        "created_at": "2026-01-01T00:00:00Z",
-        "updated_at": "2026-02-18T10:00:00Z"
-      }
-    ],
-    "total": 5,
-    "page": 1,
-    "page_size": 20
-  }
+  "message": "success",
+  "data": [
+    {
+      "id": "uuid",
+      "name": "Zabbix 监控",
+      "description": "Zabbix 监控系统集成插件",
+      "type": "itsm",
+      "status": "active",
+      "sync_enabled": true,
+      "config": {
+        "url": "http://zabbix.example.com",
+        "username": "admin"
+      },
+      "last_sync_at": "2026-02-18T09:00:00Z",
+      "next_sync_at": "2026-02-18T09:05:00Z",
+      "sync_interval_minutes": 5,
+      "max_failures": 5,
+      "consecutive_failures": 0,
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-02-18T10:00:00Z"
+    }
+  ],
+  "total": 5,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
@@ -79,12 +79,11 @@
 {
   "name": "Zabbix 监控",
   "description": "生产环境 Zabbix 监控",
-  "type": "monitoring",
+  "type": "itsm",
   "config": {
     "url": "http://zabbix.example.com",
-    "username": "admin",
-    "password": "secret",
-    "api_token": "xxxxx"
+    "auth_type": "bearer",
+    "token": "xxxxx"
   },
   "sync_enabled": true,
   "sync_interval_minutes": 5
@@ -209,24 +208,28 @@
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "plugin_id": "uuid",
-        "status": "success",
-        "message": "同步成功，新增 5 条，更新 10 条",
-        "synced_count": 15,
-        "error_count": 0,
-        "started_at": "2026-02-18T09:00:00Z",
-        "completed_at": "2026-02-18T09:00:05Z",
-        "duration_ms": 5000
-      }
-    ],
-    "total": 100,
-    "page": 1,
-    "page_size": 20
-  }
+  "message": "success",
+  "data": [
+    {
+      "id": "uuid",
+      "plugin_id": "uuid",
+      "status": "success",
+      "sync_type": "manual",
+      "records_fetched": 20,
+      "records_processed": 15,
+      "records_failed": 0,
+      "details": {
+        "new_count": 5,
+        "updated_count": 10
+      },
+      "started_at": "2026-02-18T09:00:00Z",
+      "completed_at": "2026-02-18T09:00:05Z",
+      "error_message": ""
+    }
+  ],
+  "total": 100,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
@@ -247,10 +250,8 @@
     "inactive": 1,
     "error": 0,
     "by_type": {
-      "monitoring": 2,
-      "cmdb": 1,
-      "ticketing": 1,
-      "custom": 1
+      "itsm": 4,
+      "cmdb": 1
     }
   }
 }
@@ -275,7 +276,7 @@
 | `plugin_id` | uuid | ❌ | 按插件筛选 |
 | `status` | string | ❌ | 工单状态：`open` / `resolved` / `closed` 等 |
 | `severity` | string | ❌ | 严重程度：`critical` / `high` / `medium` / `low` |
-| `healing_status` | string | ❌ | 自愈状态：`pending` / `triggered` / `success` / `failed` / `skipped` |
+| `healing_status` | string | ❌ | 自愈状态：`pending` / `processing` / `healed` / `failed` / `skipped` / `dismissed` |
 | `search` | string | ❌ | 模糊搜索（标题、外部 ID、受影响 CI） |
 
 #### 响应
@@ -283,34 +284,33 @@
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "plugin_id": "uuid",
-        "external_id": "INC-12345",
-        "title": "服务器 CPU 使用率过高",
-        "description": "生产服务器 CPU 持续超过 90%",
-        "severity": "high",
-        "priority": "P1",
-        "status": "open",
-        "category": "performance",
-        "affected_ci": "prod-server-01",
-        "affected_service": "payment-service",
-        "assignee": "zhangsan",
-        "reporter": "zabbix-system",
-        "healing_status": "triggered",
-        "matched_rule_id": "uuid",
-        "healing_flow_instance_id": "uuid",
-        "raw_data": {},
-        "created_at": "2026-02-18T08:00:00Z",
-        "updated_at": "2026-02-18T10:00:00Z"
-      }
-    ],
-    "total": 50,
-    "page": 1,
-    "page_size": 20
-  }
+  "message": "success",
+  "data": [
+    {
+      "id": "uuid",
+      "plugin_id": "uuid",
+      "external_id": "INC-12345",
+      "title": "服务器 CPU 使用率过高",
+      "description": "生产服务器 CPU 持续超过 90%",
+      "severity": "high",
+      "priority": "P1",
+      "status": "open",
+      "category": "performance",
+      "affected_ci": "prod-server-01",
+      "affected_service": "payment-service",
+      "assignee": "zhangsan",
+      "reporter": "zabbix-system",
+      "healing_status": "processing",
+      "matched_rule_id": "uuid",
+      "healing_flow_instance_id": "uuid",
+      "raw_data": {},
+      "created_at": "2026-02-18T08:00:00Z",
+      "updated_at": "2026-02-18T10:00:00Z"
+    }
+  ],
+  "total": 50,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
@@ -335,7 +335,7 @@
 | `affected_service` | string | 受影响的服务 |
 | `assignee` | string | 负责人 |
 | `reporter` | string | 上报人 |
-| `healing_status` | string | 自愈状态：`pending` / `triggered` / `success` / `failed` / `skipped` |
+| `healing_status` | string | 自愈状态：`pending` / `processing` / `healed` / `failed` / `skipped` / `dismissed` |
 | `matched_rule_id` | uuid | 匹配的自愈规则 ID |
 | `healing_flow_instance_id` | uuid | 触发的自愈流程实例 ID |
 | `raw_data` | object | 原始数据（来自外部系统） |

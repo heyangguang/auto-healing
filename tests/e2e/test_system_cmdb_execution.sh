@@ -2,13 +2,15 @@
 # 端到端测试 - 使用系统 CMDB 执行（非定时）
 # 从系统 CMDB API 获取主机 → 创建密钥源 → Git 仓库 → 任务模板 → 执行
 
-set -e
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 API_BASE="${API_BASE:-http://localhost:8080/api/v1}"
 USERNAME="${USERNAME:-admin}"
 PASSWORD="${PASSWORD:-admin123456}"
 MOCK_SECRETS="${MOCK_SECRETS:-http://localhost:5001}"
-PLAYBOOK_PATH="/root/auto-healing/tests/playbooks"
+PLAYBOOK_PATH="${PLAYBOOK_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/playbooks}"
 
 echo "=========================================="
 echo "  系统 CMDB 联动执行测试"
@@ -88,7 +90,7 @@ SECRETS_RESULT=$(curl -s -X POST "$API_BASE/secrets-sources" \
     }
   }")
 
-SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id // .id')
+SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id')
 echo "✅ 密钥源创建成功 (ID: $SECRETS_SOURCE_ID)"
 
 # 验证密钥源
@@ -99,7 +101,7 @@ QUERY_RESULT=$(curl -s -X POST "$API_BASE/secrets/query" \
   -H "Content-Type: application/json" \
   -d "{\"hostname\":\"$TARGET_HOST\",\"source_id\":\"$SECRETS_SOURCE_ID\"}")
 
-AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type // .auth_type')
+AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type')
 if [ "$AUTH_TYPE" == "password" ]; then
   echo "✅ 密钥源验证成功"
 else
@@ -127,7 +129,7 @@ REPO_RESULT=$(curl -s -X POST "$API_BASE/git-repos" \
     \"default_branch\": \"master\"
   }")
 
-REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id // .id')
+REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id')
 echo "✅ Git 仓库创建成功 (ID: $REPO_ID)"
 
 curl -s -X POST "$API_BASE/git-repos/$REPO_ID/sync" -H "Authorization: Bearer $TOKEN" > /dev/null
@@ -139,6 +141,8 @@ curl -s -X POST "$API_BASE/git-repos/$REPO_ID/activate" \
   -H "Content-Type: application/json" \
   -d '{"main_playbook": "test_ping.yml", "config_mode": "manual"}' > /dev/null
 echo "✅ 仓库已激活"
+
+PLAYBOOK_ID=$(select_playbook_id "$API_BASE" "$TOKEN" "$REPO_ID")
 
 # ==================== 3. 创建任务模板 ====================
 echo ""
@@ -157,12 +161,12 @@ TASK_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks" \
   -H "Content-Type: application/json" \
   -d "{
     \"name\": \"E2E System CMDB Ping Test\",
-    \"repository_id\": \"$REPO_ID\",
+    \"playbook_id\": \"$PLAYBOOK_ID\",
     \"target_hosts\": \"$TARGET_HOST\",
     \"executor_type\": \"local\"
   }")
 
-TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id // .id')
+TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id')
 echo "✅ 任务模板创建成功 (ID: $TASK_ID)"
 
 # ==================== 4. 执行任务 ====================
@@ -178,7 +182,7 @@ EXEC_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks/$TASK_ID/execute" \
   -H "Content-Type: application/json" \
   -d "{\"secrets_source_id\": \"$SECRETS_SOURCE_ID\"}")
 
-RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id // .id')
+RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id')
 echo "✅ 执行已启动 (Run ID: $RUN_ID)"
 
 # 等待完成
@@ -224,5 +228,6 @@ if [ "$FINAL_STATUS" == "success" ]; then
   echo "    4. ✅ 执行成功"
 else
   echo "  ❌ 测试失败"
+  exit 1
 fi
 echo "=========================================="

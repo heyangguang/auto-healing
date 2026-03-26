@@ -1,13 +1,17 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 URL="http://localhost:8080/api/v1"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 # 登录（保持原格式）
-TOKEN=$(curl -s -X POST "$URL/auth/login" -H "Content-Type: application/json" -d '{"username":"admin","password":"admin123456"}' | jq -r '.access_token')
+TOKEN=$(curl -s -X POST "$URL/auth/login" -H "Content-Type: application/json" -d '{"username":"admin","password":"admin123456"}' | jq -r '.access_token // empty')
 echo "✅ 登录成功"
 
+PLAYBOOK_ID=$(select_first_ready_playbook "$URL" "$TOKEN")
+
 # 创建任务（新格式：data 包装）
-TASK=$(curl -s -X POST "$URL/execution-tasks" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"name":"E2E测试任务","repository_id":"e345f89a-75ae-4dff-9aa1-2dad7dd278f5","target_hosts":"localhost","extra_vars":{"target_host":"localhost"},"executor_type":"local"}')
+TASK=$(curl -s -X POST "$URL/execution-tasks" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"name":"E2E测试任务","playbook_id":"'"$PLAYBOOK_ID"'","target_hosts":"localhost","extra_vars":{"target_host":"localhost"},"executor_type":"local"}')
 TASK_ID=$(echo $TASK | jq -r '.data.id')
 TASK_NAME=$(echo $TASK | jq -r '.data.name')
 echo "✅ 创建任务: $TASK_ID ($TASK_NAME)"

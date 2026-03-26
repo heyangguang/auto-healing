@@ -22,7 +22,7 @@
 | `page` | int | ❌ | 页码，默认 1 |
 | `page_size` | int | ❌ | 每页数量，默认 20 |
 | `search` | string | ❌ | 模糊搜索（名称、描述） |
-| `executor_type` | string | ❌ | 执行器类型：`ansible` / `shell` / `python` |
+| `executor_type` | string | ❌ | 执行器类型：`local` / `docker` |
 | `status` | string | ❌ | 状态：`active` / `inactive` |
 | `playbook_id` | uuid | ❌ | 按 Playbook 筛选 |
 | `playbook_name` | string | ❌ | 按 Playbook 名称模糊筛选 |
@@ -31,7 +31,7 @@
 | `needs_review` | bool | ❌ | 是否需要审核：`true` / `false` |
 | `has_runs` | bool | ❌ | 是否有执行记录 |
 | `min_run_count` | int | ❌ | 最少执行次数 |
-| `last_run_status` | string | ❌ | 最后执行状态：`success` / `failed` / `running` |
+| `last_run_status` | string | ❌ | 最后执行状态：`pending` / `running` / `success` / `failed` / `cancelled` / `timeout` |
 | `created_from` | string | ❌ | 创建时间起始（RFC3339） |
 | `created_to` | string | ❌ | 创建时间结束（RFC3339） |
 | `sort_by` | string | ❌ | 排序字段：`name` / `created_at` / `run_count` |
@@ -42,39 +42,38 @@
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
-      {
+  "message": "success",
+  "data": [
+    {
+      "id": "uuid",
+      "name": "磁盘清理任务",
+      "description": "清理 /tmp 目录下的临时文件",
+      "executor_type": "local",
+      "playbook_id": "uuid",
+      "playbook": {
         "id": "uuid",
-        "name": "磁盘清理任务",
-        "description": "清理 /tmp 目录下的临时文件",
-        "executor_type": "ansible",
-        "playbook_id": "uuid",
-        "playbook": {
-          "id": "uuid",
-          "name": "磁盘清理",
-          "file_path": "playbooks/disk_cleanup.yml"
-        },
-        "target_hosts": "prod-web-*",
-        "target_type": "pattern",
-        "extra_vars": {
-          "target_path": "/tmp",
-          "max_age_days": "30"
-        },
-        "secrets_source_ids": ["uuid1"],
-        "needs_review": false,
-        "status": "active",
-        "run_count": 50,
-        "last_run_at": "2026-02-18T09:00:00Z",
-        "last_run_status": "success",
-        "created_at": "2026-01-01T00:00:00Z",
-        "updated_at": "2026-02-18T10:00:00Z"
-      }
-    ],
-    "total": 20,
-    "page": 1,
-    "page_size": 20
-  }
+        "name": "磁盘清理",
+        "file_path": "playbooks/disk_cleanup.yml"
+      },
+      "target_hosts": "prod-web-*",
+      "target_type": "pattern",
+      "extra_vars": {
+        "target_path": "/tmp",
+        "max_age_days": "30"
+      },
+      "secrets_source_ids": ["uuid1"],
+      "needs_review": false,
+      "status": "active",
+      "run_count": 50,
+      "last_run_at": "2026-02-18T09:00:00Z",
+      "last_run_status": "success",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-02-18T10:00:00Z"
+    }
+  ],
+  "total": 20,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
@@ -84,7 +83,7 @@
 
 **POST** `/api/v1/execution-tasks`
 
-**权限**: `playbook:execute`
+**权限**: `task:create`
 
 #### 请求体
 
@@ -92,7 +91,7 @@
 |------|------|------|------|
 | `name` | string | ✅ | 任务名称 |
 | `description` | string | ❌ | 描述 |
-| `executor_type` | string | ✅ | 执行器类型：`ansible` |
+| `executor_type` | string | ✅ | 执行器类型：`local` / `docker` |
 | `playbook_id` | uuid | ✅ | Playbook ID |
 | `target_hosts` | string | ✅ | 目标主机（IP、主机名或模式） |
 | `target_type` | string | ❌ | 目标类型：`ip` / `hostname` / `pattern` / `cmdb_query` |

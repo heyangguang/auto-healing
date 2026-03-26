@@ -11,7 +11,7 @@
 
 **GET** `/api/v1/platform/roles`
 
-**权限**: `role:list`
+**权限**: `platform:roles:list`
 
 ### 查询参数
 
@@ -27,7 +27,7 @@
 
 **POST** `/api/v1/platform/roles`
 
-**权限**: `role:create`
+**权限**: `platform:roles:manage`
 
 #### 请求体
 
@@ -42,7 +42,7 @@
 
 **GET** `/api/v1/platform/roles/:id`
 
-**权限**: `role:list`
+**权限**: `platform:roles:list`
 
 ---
 
@@ -50,7 +50,7 @@
 
 **PUT** `/api/v1/platform/roles/:id`
 
-**权限**: `role:update`
+**权限**: `platform:roles:manage`
 
 ---
 
@@ -58,7 +58,7 @@
 
 **DELETE** `/api/v1/platform/roles/:id`
 
-**权限**: `role:delete`
+**权限**: `platform:roles:manage`
 
 ---
 
@@ -66,7 +66,7 @@
 
 **PUT** `/api/v1/platform/roles/:id/permissions`
 
-**权限**: `role:assign`
+**权限**: `platform:roles:manage`
 
 #### 请求体
 
@@ -82,7 +82,7 @@
 
 **GET** `/api/v1/platform/permissions`
 
-**权限**: 无特殊要求（已登录即可）
+**权限**: `platform:permissions:list`
 
 #### 查询参数
 
@@ -91,7 +91,7 @@
 | `search` | string | ❌ | 模糊搜索（名称、代码） |
 | `module` | string | ❌ | 按模块筛选（如 `user`、`role`、`plugin`） |
 | `name` | string | ❌ | 按权限名称精确筛选 |
-| `code` | string | ❌ | 按权限代码精确筛选（如 `user:list`） |
+| `code` | string | ❌ | 按权限代码精确筛选（如 `platform:users:list`） |
 
 ---
 
@@ -99,7 +99,7 @@
 
 **GET** `/api/v1/platform/permissions/tree`
 
-**权限**: 无特殊要求（已登录即可）
+**权限**: `platform:permissions:list`
 
 返回按模块分组的权限树结构，用于角色权限配置界面。
 
@@ -112,8 +112,8 @@
     {
       "module": "用户管理",
       "permissions": [
-        {"id": "uuid", "code": "user:list", "name": "查看用户"},
-        {"id": "uuid", "code": "user:create", "name": "创建用户"}
+        {"id": "uuid", "code": "platform:users:list", "name": "查看平台用户"},
+        {"id": "uuid", "code": "platform:users:create", "name": "创建平台用户"}
       ]
     }
   ]

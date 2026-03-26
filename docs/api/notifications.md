@@ -30,27 +30,27 @@
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "name": "运维钉钉群",
-        "description": "运维团队告警通知",
-        "type": "dingtalk",
-        "is_enabled": true,
-        "config": {
-          "webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=xxx",
-          "secret": "SEC..."
-        },
-        "template_count": 3,
-        "created_at": "2026-01-01T00:00:00Z",
-        "updated_at": "2026-02-18T10:00:00Z"
-      }
-    ],
-    "total": 5,
-    "page": 1,
-    "page_size": 20
-  }
+  "message": "success",
+  "data": [
+    {
+      "id": "uuid",
+      "name": "运维钉钉群",
+      "description": "运维团队告警通知",
+      "type": "dingtalk",
+      "retry_config": {
+        "max_retries": 3,
+        "retry_intervals": [1, 5, 15]
+      },
+      "recipients": ["ops-team@example.com"],
+      "is_active": true,
+      "is_default": false,
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-02-18T10:00:00Z"
+    }
+  ],
+  "total": 5,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
@@ -69,8 +69,11 @@
 | `name` | string | ✅ | 渠道名称 |
 | `description` | string | ❌ | 描述 |
 | `type` | string | ✅ | 渠道类型：`email` / `dingtalk` / `webhook` |
-| `is_enabled` | bool | ❌ | 是否启用，默认 true |
 | `config` | object | ✅ | 渠道配置（根据类型不同） |
+| `retry_config` | object | ❌ | 重试配置 |
+| `recipients` | []string | ❌ | 默认接收人列表 |
+| `is_default` | bool | ❌ | 是否默认渠道 |
+| `rate_limit_per_minute` | int | ❌ | 每分钟限流阈值 |
 
 **DingTalk 配置**:
 ```json
@@ -148,7 +151,7 @@
 
 **POST** `/api/v1/channels/:id/test`
 
-**权限**: `channel:list`
+**权限**: `channel:update`
 
 ---
 
@@ -168,8 +171,8 @@
 |------|------|------|------|
 | `page` | int | ❌ | 页码，默认 1 |
 | `page_size` | int | ❌ | 每页数量，默认 20 |
-| `search` | string | ❌ | 模糊搜索 |
-| `event_type` | string | ❌ | 事件类型筛选 |
+| `name` | string | ❌ | 按模板名称模糊搜索 |
+| `event_type` | string | ❌ | 事件类型筛选（见下方枚举） |
 | `format` | string | ❌ | 消息格式：`text` / `markdown` / `html` |
 | `supported_channel` | string | ❌ | 支持的渠道类型：`email` / `dingtalk` / `webhook` |
 | `is_active` | bool | ❌ | 是否启用：`true` / `false` |
@@ -190,11 +193,12 @@
 |------|------|------|------|
 | `name` | string | ✅ | 模板名称 |
 | `description` | string | ❌ | 描述 |
-| `channel_id` | uuid | ✅ | 渠道 ID |
-| `event_type` | string | ✅ | 事件类型（见下方枚举） |
+| `event_type` | string | ❌ | 事件类型（见下方枚举） |
+| `supported_channels` | []string | ❌ | 支持的渠道类型列表：`email` / `dingtalk` / `webhook` |
 | `subject_template` | string | ❌ | 主题模板（Email 类型） |
 | `body_template` | string | ✅ | 消息体模板（支持 Go 模板语法） |
-| `is_enabled` | bool | ❌ | 是否启用，默认 true |
+| `format` | string | ❌ | 消息格式：`text` / `markdown` / `html`，默认 `text` |
+| `is_active` | bool | ❌ | 是否启用 |
 
 ---
 
@@ -264,10 +268,10 @@
 |------|------|------|------|
 | `page` | int | ❌ | 页码，默认 1 |
 | `page_size` | int | ❌ | 每页数量，默认 20 |
-| `search` | string | ❌ | 模糊搜索（任务名、触发来源） |
-| `status` | string | ❌ | 状态：`pending` / `success` / `failed` / `retrying` |
+| `status` | string | ❌ | 状态：`pending` / `sent` / `delivered` / `failed` / `bounced` |
 | `task_name` | string | ❌ | 按任务名称筛选 |
 | `triggered_by` | string | ❌ | 触发来源筛选 |
+| `subject` | string | ❌ | 按通知标题模糊搜索 |
 | `channel_id` | uuid | ❌ | 按渠道筛选 |
 | `template_id` | uuid | ❌ | 按模板筛选 |
 | `task_id` | uuid | ❌ | 按执行任务筛选 |
@@ -297,17 +301,12 @@
 
 ## 事件类型（event_type）枚举
 
+可选值：`incident_created` / `incident_resolved` / `approval_required` / `execution_result` / `custom`
+
 | 值 | 说明 |
 |----|------|
-| `execution.started` | 任务开始执行 |
-| `execution.success` | 任务执行成功 |
-| `execution.failed` | 任务执行失败 |
-| `execution.cancelled` | 任务执行取消 |
-| `healing.triggered` | 自愈流程触发 |
-| `healing.success` | 自愈流程成功 |
-| `healing.failed` | 自愈流程失败 |
-| `healing.pending_approval` | 自愈流程等待审批 |
-| `healing.approved` | 自愈流程审批通过 |
-| `healing.rejected` | 自愈流程审批拒绝 |
-| `incident.created` | 工单创建 |
-| `incident.resolved` | 工单解决 |
+| `incident_created` | 工单创建 |
+| `incident_resolved` | 工单解决 |
+| `approval_required` | 自愈流程等待审批 |
+| `execution_result` | 任务执行结果 |
+| `custom` | 自定义通知事件 |

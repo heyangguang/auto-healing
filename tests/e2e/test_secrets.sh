@@ -63,7 +63,7 @@ SOURCE_RESULT=$(curl -s -X POST "$API_BASE/secrets-sources" \
     }
   }")
 
-SOURCE_ID=$(echo "$SOURCE_RESULT" | jq -r '.data.id // .id')
+SOURCE_ID=$(echo "$SOURCE_RESULT" | jq -r '.data.id')
 if [ "$SOURCE_ID" != "null" ] && [ -n "$SOURCE_ID" ]; then
   echo "✅ 创建成功 (ID: $SOURCE_ID)"
   
@@ -72,9 +72,9 @@ if [ "$SOURCE_ID" != "null" ] && [ -n "$SOURCE_ID" ]; then
     -H "Content-Type: application/json" \
     -d "{\"hostname\":\"test-server\",\"source_id\":\"$SOURCE_ID\"}")
   
-  AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type // .auth_type')
-  PRIVATE_KEY=$(echo "$QUERY_RESULT" | jq -r '.data.private_key // .private_key')
-  USER_NAME=$(echo "$QUERY_RESULT" | jq -r '.data.username // .username')
+  AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type')
+  PRIVATE_KEY=$(echo "$QUERY_RESULT" | jq -r '.data.private_key')
+  USER_NAME=$(echo "$QUERY_RESULT" | jq -r '.data.username')
   if [ "$AUTH_TYPE" == "ssh_key" ]; then
     echo "✅ 查询成功"
     echo "   auth_type: $AUTH_TYPE"
@@ -82,9 +82,11 @@ if [ "$SOURCE_ID" != "null" ] && [ -n "$SOURCE_ID" ]; then
     echo "   private_key: $PRIVATE_KEY"
   else
     echo "❌ 查询失败: $QUERY_RESULT"
+    exit 1
   fi
 else
   echo "❌ 创建失败: $SOURCE_RESULT"
+  exit 1
 fi
 
 # ==================== 2. Vault 类型密钥源（ssh_key + password）====================
@@ -111,7 +113,7 @@ if curl -s "$MOCK_SECRETS_ENDPOINT/v1/sys/health" > /dev/null 2>&1; then
       }
     }")
   
-  VAULT_KEY_ID=$(echo "$VAULT_KEY_RESULT" | jq -r '.data.id // .id')
+  VAULT_KEY_ID=$(echo "$VAULT_KEY_RESULT" | jq -r '.data.id')
   if [ "$VAULT_KEY_ID" != "null" ] && [ -n "$VAULT_KEY_ID" ]; then
     echo "✅ 创建成功 (ID: $VAULT_KEY_ID)"
     
@@ -121,14 +123,19 @@ if curl -s "$MOCK_SECRETS_ENDPOINT/v1/sys/health" > /dev/null 2>&1; then
       -H "Content-Type: application/json" \
       -d "{\"hostname\":\"test-server\",\"source_id\":\"$VAULT_KEY_ID\"}")
     
-    AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type // .auth_type')
-    PRIVATE_KEY=$(echo "$QUERY_RESULT" | jq -r '.data.private_key // .private_key')
-    USER_NAME=$(echo "$QUERY_RESULT" | jq -r '.data.username // .username')
+    AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type')
+    PRIVATE_KEY=$(echo "$QUERY_RESULT" | jq -r '.data.private_key')
+    USER_NAME=$(echo "$QUERY_RESULT" | jq -r '.data.username')
+    if [ "$AUTH_TYPE" != "ssh_key" ] || [ -z "$PRIVATE_KEY" ] || [ "$PRIVATE_KEY" = "null" ]; then
+      echo "❌ Vault SSH Key 查询失败: $QUERY_RESULT"
+      exit 1
+    fi
     echo "   auth_type: $AUTH_TYPE"
     echo "   username: $USER_NAME"
     echo "   private_key: $PRIVATE_KEY"
   else
     echo "❌ 创建失败: $VAULT_KEY_RESULT"
+    exit 1
   fi
   
   # 2.2 Vault Password
@@ -148,7 +155,7 @@ if curl -s "$MOCK_SECRETS_ENDPOINT/v1/sys/health" > /dev/null 2>&1; then
       }
     }")
   
-  VAULT_PWD_ID=$(echo "$VAULT_PWD_RESULT" | jq -r '.data.id // .id')
+  VAULT_PWD_ID=$(echo "$VAULT_PWD_RESULT" | jq -r '.data.id')
   if [ "$VAULT_PWD_ID" != "null" ] && [ -n "$VAULT_PWD_ID" ]; then
     echo "✅ 创建成功 (ID: $VAULT_PWD_ID)"
     
@@ -158,17 +165,23 @@ if curl -s "$MOCK_SECRETS_ENDPOINT/v1/sys/health" > /dev/null 2>&1; then
       -H "Content-Type: application/json" \
       -d "{\"hostname\":\"test-server\",\"source_id\":\"$VAULT_PWD_ID\"}")
     
-    AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type // .auth_type')
-    PASSWORD_VAL=$(echo "$QUERY_RESULT" | jq -r '.data.password // .password')
-    USER_NAME=$(echo "$QUERY_RESULT" | jq -r '.data.username // .username')
+    AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type')
+    PASSWORD_VAL=$(echo "$QUERY_RESULT" | jq -r '.data.password')
+    USER_NAME=$(echo "$QUERY_RESULT" | jq -r '.data.username')
+    if [ "$AUTH_TYPE" != "password" ] || [ -z "$PASSWORD_VAL" ] || [ "$PASSWORD_VAL" = "null" ]; then
+      echo "❌ Vault Password 查询失败: $QUERY_RESULT"
+      exit 1
+    fi
     echo "   auth_type: $AUTH_TYPE"
     echo "   username: $USER_NAME"
     echo "   password: $PASSWORD_VAL"
   else
     echo "❌ 创建失败: $VAULT_PWD_RESULT"
+    exit 1
   fi
 else
-  echo "⚠️ Mock Vault 服务不可用，跳过测试"
+  echo "❌ Mock Vault 服务不可用，测试无法覆盖 Vault 密钥源"
+  exit 1
 fi
 
 # ==================== 3. Webhook 类型密钥源（ssh_key + password）====================
@@ -195,7 +208,7 @@ if curl -s -I "$MOCK_SECRETS_ENDPOINT/api/secrets/query" > /dev/null 2>&1; then
       }
     }")
   
-  WEBHOOK_KEY_ID=$(echo "$WEBHOOK_KEY_RESULT" | jq -r '.data.id // .id')
+  WEBHOOK_KEY_ID=$(echo "$WEBHOOK_KEY_RESULT" | jq -r '.data.id')
   if [ "$WEBHOOK_KEY_ID" != "null" ] && [ -n "$WEBHOOK_KEY_ID" ]; then
     echo "✅ 创建成功 (ID: $WEBHOOK_KEY_ID)"
     
@@ -205,14 +218,19 @@ if curl -s -I "$MOCK_SECRETS_ENDPOINT/api/secrets/query" > /dev/null 2>&1; then
       -H "Content-Type: application/json" \
       -d "{\"hostname\":\"test-server\",\"source_id\":\"$WEBHOOK_KEY_ID\"}")
     
-    AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type // .auth_type')
-    PRIVATE_KEY=$(echo "$QUERY_RESULT" | jq -r '.data.private_key // .private_key')
-    USER_NAME=$(echo "$QUERY_RESULT" | jq -r '.data.username // .username')
+    AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type')
+    PRIVATE_KEY=$(echo "$QUERY_RESULT" | jq -r '.data.private_key')
+    USER_NAME=$(echo "$QUERY_RESULT" | jq -r '.data.username')
+    if [ "$AUTH_TYPE" != "ssh_key" ] || [ -z "$PRIVATE_KEY" ] || [ "$PRIVATE_KEY" = "null" ]; then
+      echo "❌ Webhook SSH Key 查询失败: $QUERY_RESULT"
+      exit 1
+    fi
     echo "   auth_type: $AUTH_TYPE"
     echo "   username: $USER_NAME"
     echo "   private_key: $PRIVATE_KEY"
   else
     echo "❌ 创建失败: $WEBHOOK_KEY_RESULT"
+    exit 1
   fi
   
   # 3.2 Webhook Password
@@ -232,7 +250,7 @@ if curl -s -I "$MOCK_SECRETS_ENDPOINT/api/secrets/query" > /dev/null 2>&1; then
       }
     }")
   
-  WEBHOOK_PWD_ID=$(echo "$WEBHOOK_PWD_RESULT" | jq -r '.data.id // .id')
+  WEBHOOK_PWD_ID=$(echo "$WEBHOOK_PWD_RESULT" | jq -r '.data.id')
   if [ "$WEBHOOK_PWD_ID" != "null" ] && [ -n "$WEBHOOK_PWD_ID" ]; then
     echo "✅ 创建成功 (ID: $WEBHOOK_PWD_ID)"
     
@@ -242,17 +260,23 @@ if curl -s -I "$MOCK_SECRETS_ENDPOINT/api/secrets/query" > /dev/null 2>&1; then
       -H "Content-Type: application/json" \
       -d "{\"hostname\":\"test-server\",\"source_id\":\"$WEBHOOK_PWD_ID\"}")
     
-    AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type // .auth_type')
-    PASSWORD_VAL=$(echo "$QUERY_RESULT" | jq -r '.data.password // .password')
-    USER_NAME=$(echo "$QUERY_RESULT" | jq -r '.data.username // .username')
+    AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type')
+    PASSWORD_VAL=$(echo "$QUERY_RESULT" | jq -r '.data.password')
+    USER_NAME=$(echo "$QUERY_RESULT" | jq -r '.data.username')
+    if [ "$AUTH_TYPE" != "password" ] || [ -z "$PASSWORD_VAL" ] || [ "$PASSWORD_VAL" = "null" ]; then
+      echo "❌ Webhook Password 查询失败: $QUERY_RESULT"
+      exit 1
+    fi
     echo "   auth_type: $AUTH_TYPE"
     echo "   username: $USER_NAME"
     echo "   password: $PASSWORD_VAL"
   else
     echo "❌ 创建失败: $WEBHOOK_PWD_RESULT"
+    exit 1
   fi
 else
-  echo "⚠️ Mock Webhook 服务不可用，跳过测试"
+  echo "❌ Mock Webhook 服务不可用，测试无法覆盖 Webhook 密钥源"
+  exit 1
 fi
 
 # 清理测试文件
