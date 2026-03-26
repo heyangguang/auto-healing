@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
@@ -45,6 +46,15 @@ func (r *IncidentRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.
 // Update 更新工单
 func (r *IncidentRepository) Update(ctx context.Context, incident *model.Incident) error {
 	return UpdateTenantScopedModel(r.db, ctx, incident.ID, incident)
+}
+
+// UpdateHealingStatus 仅更新工单自愈状态，避免整行覆盖并发修改。
+func (r *IncidentRepository) UpdateHealingStatus(ctx context.Context, id uuid.UUID, healingStatus string) error {
+	return TenantDB(r.db, ctx).
+		Model(&model.Incident{}).
+		Where("id = ?", id).
+		Update("healing_status", healingStatus).
+		Error
 }
 
 // List 获取工单列表
@@ -123,6 +133,7 @@ func (r *IncidentRepository) UpsertByExternalID(ctx context.Context, incident *m
 	if err != nil {
 		return false, err
 	}
+	preserveIncidentManagedFields(incident, &existing)
 	return false, r.updateFromSync(ctx, existing.ID, buildIncidentSyncUpdates(incident))
 }
 
@@ -147,8 +158,18 @@ func buildIncidentSyncUpdates(incident *model.Incident) map[string]any {
 		"raw_data":           incident.RawData,
 		"source_created_at":  incident.SourceCreatedAt,
 		"source_updated_at":  incident.SourceUpdatedAt,
-		"updated_at":         gorm.Expr("NOW()"),
+		"updated_at":         time.Now().UTC(),
 	}
+}
+
+func preserveIncidentManagedFields(incoming, existing *model.Incident) {
+	incoming.ID = existing.ID
+	incoming.TenantID = existing.TenantID
+	incoming.HealingStatus = existing.HealingStatus
+	incoming.WorkflowInstanceID = existing.WorkflowInstanceID
+	incoming.Scanned = existing.Scanned
+	incoming.MatchedRuleID = existing.MatchedRuleID
+	incoming.HealingFlowInstanceID = existing.HealingFlowInstanceID
 }
 
 // ListUnscanned 获取未扫描的工单列表（跨租户，自愈引擎调度器专用）

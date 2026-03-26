@@ -117,16 +117,23 @@ func applyRunListFilters(query *gorm.DB, opts *RunListOptions) *gorm.DB {
 }
 
 // UpdateRunStatus 更新执行状态
-func (r *ExecutionRepository) UpdateRunStatus(ctx context.Context, id uuid.UUID, status string) error {
+func (r *ExecutionRepository) UpdateRunStatus(ctx context.Context, id uuid.UUID, status string) (bool, error) {
 	updates := map[string]any{"status": status}
 	if status == "cancelled" {
 		updates["completed_at"] = time.Now()
 	}
 
-	return r.tenantDB(ctx).
-		Model(&model.ExecutionRun{}).
-		Where("id = ? AND status <> ?", id, "cancelled").
-		Updates(updates).Error
+	result := executionRunStatusScope(r.tenantDB(ctx).Model(&model.ExecutionRun{}), status).
+		Where("id = ?", id).
+		Updates(updates)
+	return result.RowsAffected > 0, result.Error
+}
+
+func executionRunStatusScope(query *gorm.DB, status string) *gorm.DB {
+	if status == "cancelled" {
+		return query.Where("status IN ?", []string{"pending", "running"})
+	}
+	return query
 }
 
 // UpdateRunStarted 更新执行开始
@@ -143,17 +150,27 @@ func (r *ExecutionRepository) UpdateRunStarted(ctx context.Context, id uuid.UUID
 
 // UpdateRunResult 更新执行结果
 func (r *ExecutionRepository) UpdateRunResult(ctx context.Context, id uuid.UUID, exitCode int, stdout, stderr string, stats model.JSON) error {
-	return r.tenantDB(ctx).
-		Model(&model.ExecutionRun{}).
-		Where("id = ? AND status <> ?", id, "cancelled").
-		Updates(map[string]any{
-			"status":       resolveRunStatus(exitCode, stats),
-			"exit_code":    exitCode,
-			"stdout":       stdout,
-			"stderr":       stderr,
-			"stats":        stats,
-			"completed_at": time.Now(),
-		}).Error
+	_, err := r.UpdateRunResultIfCurrent(ctx, id, nil, exitCode, stdout, stderr, stats)
+	return err
+}
+
+func (r *ExecutionRepository) UpdateRunResultIfCurrent(ctx context.Context, id uuid.UUID, currentStatuses []string, exitCode int, stdout, stderr string, stats model.JSON) (bool, error) {
+	query := r.tenantDB(ctx).Model(&model.ExecutionRun{}).Where("id = ?", id)
+	if len(currentStatuses) > 0 {
+		query = query.Where("status IN ?", currentStatuses)
+	} else {
+		query = query.Where("status <> ?", "cancelled")
+	}
+
+	result := query.Updates(map[string]any{
+		"status":       resolveRunStatus(exitCode, stats),
+		"exit_code":    exitCode,
+		"stdout":       stdout,
+		"stderr":       stderr,
+		"stats":        stats,
+		"completed_at": time.Now(),
+	})
+	return result.RowsAffected > 0, result.Error
 }
 
 func resolveRunStatus(exitCode int, stats model.JSON) string {

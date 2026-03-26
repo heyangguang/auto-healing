@@ -90,6 +90,9 @@ func (e *FlowExecutor) executeRegularNode(ctx context.Context, instance *model.F
 		e.fail(nodeCtx, instance, "节点执行失败: "+err.Error())
 		return err
 	}
+	if node.Type == model.NodeTypeEnd {
+		return nil
+	}
 
 	if err := e.setNodeState(nodeCtx, instance, node.ID, "completed", ""); err != nil {
 		return err

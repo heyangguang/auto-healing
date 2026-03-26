@@ -16,7 +16,7 @@ func (s *Scheduler) markIncidentScanned(ctx context.Context, incidentID uuid.UUI
 }
 
 func (s *Scheduler) persistIncident(ctx context.Context, incident *model.Incident, action string) error {
-	if err := s.incidentRepo.Update(ctx, incident); err != nil {
+	if err := s.incidentRepo.UpdateHealingStatus(ctx, incident.ID, incident.HealingStatus); err != nil {
 		return fmt.Errorf("%s: %w", action, err)
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Start 将 pending 实例原子切换为 running，并记录开始时间。
@@ -38,13 +39,32 @@ func (r *FlowInstanceRepository) UpdateStatusIfCurrent(ctx context.Context, id u
 	return r.updateLifecycleStatus(ctx, id, currentStatuses, status, errorMsg)
 }
 
-func (r *FlowInstanceRepository) updateLifecycleStatus(ctx context.Context, id uuid.UUID, currentStatuses []string, status string, errorMsg string) (bool, error) {
-	updates := flowInstanceStatusUpdates(status, errorMsg)
-	query := TenantDB(r.db, ctx).Model(&model.FlowInstance{}).Where("id = ?", id)
-	if len(currentStatuses) > 0 {
-		query = query.Where("status IN ?", currentStatuses)
+func (r *FlowInstanceRepository) UpdateStatusWithIncidentSync(ctx context.Context, id uuid.UUID, currentStatuses []string, status string, errorMsg string, opts *IncidentSyncOptions) (bool, error) {
+	var updated bool
+	err := TenantDB(r.db, ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		updated, err = updateLifecycleStatusOnDB(TenantDB(tx, ctx), id, currentStatuses, status, errorMsg)
+		if err != nil || !updated || opts == nil {
+			return err
+		}
+		return updateIncidentSyncTx(tx, ctx, *opts)
+	})
+	if err != nil {
+		return false, err
 	}
-	result := query.Updates(updates)
+	return updated, err
+}
+
+func (r *FlowInstanceRepository) updateLifecycleStatus(ctx context.Context, id uuid.UUID, currentStatuses []string, status string, errorMsg string) (bool, error) {
+	return updateLifecycleStatusOnDB(TenantDB(r.db, ctx), id, currentStatuses, status, errorMsg)
+}
+
+func updateLifecycleStatusOnDB(query *gorm.DB, id uuid.UUID, currentStatuses []string, status string, errorMsg string) (bool, error) {
+	scoped := query.Model(&model.FlowInstance{}).Where("id = ?", id)
+	if len(currentStatuses) > 0 {
+		scoped = scoped.Where("status IN ?", currentStatuses)
+	}
+	result := scoped.Updates(flowInstanceStatusUpdates(status, errorMsg))
 	return result.RowsAffected > 0, result.Error
 }
 

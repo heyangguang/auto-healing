@@ -72,10 +72,13 @@ func (r *HealingRuleRepository) Delete(ctx context.Context, id uuid.UUID, force 
 
 		// 删除规则
 		result := tx.Delete(&model.HealingRule{}, "id = ?", id)
+		if result.Error != nil {
+			return result.Error
+		}
 		if result.RowsAffected == 0 {
 			return ErrHealingRuleNotFound
 		}
-		return result.Error
+		return nil
 	})
 }
 
@@ -90,7 +93,7 @@ func (r *HealingRuleRepository) List(ctx context.Context, page, pageSize int, is
 		return nil, 0, err
 	}
 	err := q.Preload("Flow").Preload("Creator").
-		Offset((page-1)*pageSize).
+		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		Order(healingRuleOrderClause(sortBy, sortOrder)).
 		Find(&rules).Error

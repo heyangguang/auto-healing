@@ -2,11 +2,13 @@ package execution
 
 import (
 	"context"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
+	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -61,7 +63,7 @@ func TestWatchRunCancellationStopsOnTerminalSuccess(t *testing.T) {
 func TestAppendLogErrPersistsSequentialLogs(t *testing.T) {
 	t.Helper()
 
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "execution-logs.db")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -113,5 +115,19 @@ func TestAppendLogErrPersistsSequentialLogs(t *testing.T) {
 	}
 	if logs[0].Sequence != 1 || logs[1].Sequence != 2 {
 		t.Fatalf("log sequences = %d,%d, want 1,2", logs[0].Sequence, logs[1].Sequence)
+	}
+}
+
+func TestResolveSecretsSourceIDsRejectsInvalidTaskTemplateID(t *testing.T) {
+	task := &model.ExecutionTask{
+		SecretsSourceIDs: model.StringArray{"not-a-uuid"},
+	}
+
+	ids, err := resolveSecretsSourceIDs(task, &ExecuteOptions{})
+	if err == nil {
+		t.Fatal("resolveSecretsSourceIDs() should reject invalid UUID")
+	}
+	if ids != nil {
+		t.Fatalf("ids = %v, want nil", ids)
 	}
 }

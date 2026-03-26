@@ -101,14 +101,21 @@ func (e *FlowExecutor) markInstanceWaitingApproval(ctx context.Context, instance
 		"created_at":  now,
 		"started_at":  now,
 	}
-	updated, err := e.instanceRepo.EnterWaitingApproval(ctx, instance.ID)
+	if err := e.ensureWaitingApprovalStatus(ctx, instance.ID); err != nil {
+		return err
+	}
+	return e.persistNodeStates(ctx, instance, "持久化审批等待状态")
+}
+
+func (e *FlowExecutor) ensureWaitingApprovalStatus(ctx context.Context, instanceID uuid.UUID) error {
+	status, err := e.flowInstanceStatus(ctx, instanceID)
 	if err != nil {
 		return err
 	}
-	if !updated {
-		return fmt.Errorf("流程实例状态未能切换为 waiting_approval")
+	if status != model.FlowInstanceStatusWaitingApproval {
+		return fmt.Errorf("流程实例状态不是 waiting_approval: %s", status)
 	}
-	return e.instanceRepo.UpdateNodeStates(ctx, instance.ID, instance.NodeStates)
+	return nil
 }
 
 func (e *FlowExecutor) logApprovalWaiting(ctx context.Context, instance *model.FlowInstance, node *model.FlowNode, task *model.ApprovalTask, settings approvalSettings) {

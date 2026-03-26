@@ -38,26 +38,21 @@ func (s *Scheduler) failExpiredApprovalTask(ctx context.Context, task model.Appr
 	if task.TenantID != nil {
 		taskCtx = repository.WithTenantID(ctx, *task.TenantID)
 	}
-	updated, err := s.instanceRepo.UpdateStatusIfCurrent(
+	opts := incidentFailureSyncOptions(taskCtx, s.instanceRepo, task.FlowInstanceID)
+	updated, err := s.instanceRepo.UpdateStatusWithIncidentSync(
 		taskCtx,
 		task.FlowInstanceID,
 		[]string{model.FlowInstanceStatusWaitingApproval},
 		model.FlowInstanceStatusFailed,
 		"审批超时",
+		opts,
 	)
 	if err != nil || !updated {
 		return
 	}
-		if instance, err := s.instanceRepo.GetByID(taskCtx, task.FlowInstanceID); err == nil && instance.IncidentID != nil {
-			if incident, err := s.incidentRepo.GetByID(taskCtx, *instance.IncidentID); err == nil {
-				incident.HealingStatus = "failed"
-				if updateErr := s.persistIncident(taskCtx, incident, "更新审批超时工单状态"); updateErr != nil {
-					logger.Sched("HEAL").Error("审批超时后更新工单状态失败: %v", updateErr)
-					return
-				}
-				logger.Sched("HEAL").Info("审批超时，工单 %s 状态已更新为 failed", incident.ID.String()[:8])
-			}
-		}
+	if opts != nil {
+		logger.Sched("HEAL").Info("审批超时，工单 %s 状态已更新为 failed", opts.IncidentID.String()[:8])
+	}
 }
 
 // TriggerManual 手动触发流程
@@ -73,9 +68,6 @@ func (s *Scheduler) TriggerManual(ctx context.Context, incidentID string, ruleID
 
 	instance, err := s.createFlowInstance(ctx, incident, rule)
 	if err != nil {
-		return nil, err
-	}
-	if err := s.markIncidentScanned(ctx, incident.ID, &rule.ID, &instance.ID); err != nil {
 		return nil, err
 	}
 	s.scheduleManualFlowExecution(instance)
@@ -106,17 +98,21 @@ func (s *Scheduler) recoverOrphanedInstance(ctx context.Context, instance model.
 	if instance.TenantID != nil {
 		instanceCtx = repository.WithTenantID(ctx, *instance.TenantID)
 	}
-	if err := s.instanceRepo.UpdateStatus(instanceCtx, instance.ID, model.FlowInstanceStatusFailed, errMsg); err != nil {
+	updated, err := s.instanceRepo.UpdateStatusWithIncidentSync(
+		instanceCtx,
+		instance.ID,
+		[]string{model.FlowInstanceStatusRunning, model.FlowInstanceStatusPending},
+		model.FlowInstanceStatusFailed,
+		errMsg,
+		instanceIncidentSyncOptions(&instance, "failed"),
+	)
+	if err != nil {
 		logger.Sched("HEAL").Error("恢复实例 %s 失败: %v", instance.ID.String()[:8], err)
 		return
 	}
-		if instance.IncidentID != nil {
-			if incident, err := s.incidentRepo.GetByID(instanceCtx, *instance.IncidentID); err == nil {
-				incident.HealingStatus = "failed"
-				if updateErr := s.persistIncident(instanceCtx, incident, "更新孤儿实例关联工单状态"); updateErr != nil {
-					logger.Sched("HEAL").Error("恢复实例 %s 后更新工单状态失败: %v", instance.ID.String()[:8], updateErr)
-				}
-			}
-		}
+	if !updated {
+		logger.Sched("HEAL").Warn("孤儿实例 %s 状态已变化，跳过失败覆盖", instance.ID.String()[:8])
+		return
+	}
 	logger.Sched("HEAL").Warn("已恢复孤儿实例 %s (%s) -> failed", instance.ID.String()[:8], instance.FlowName)
 }
