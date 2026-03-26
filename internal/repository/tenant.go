@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -10,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+var ErrTenantNotFound = errors.New("租户不存在")
 
 // ==================== 租户 Repository ====================
 
@@ -80,6 +83,9 @@ func (r *TenantRepository) List(ctx context.Context, keyword string, name, code 
 func (r *TenantRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Tenant, error) {
 	var tenant model.Tenant
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&tenant).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrTenantNotFound
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +96,9 @@ func (r *TenantRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Te
 func (r *TenantRepository) GetByCode(ctx context.Context, code string) (*model.Tenant, error) {
 	var tenant model.Tenant
 	err := r.db.WithContext(ctx).Where("code = ?", code).First(&tenant).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrTenantNotFound
+	}
 	if err != nil {
 		return nil, err
 	}

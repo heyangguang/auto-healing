@@ -14,6 +14,7 @@ RESET_MODE=false
 [ "$1" = "--reset" ] && RESET_MODE=true
 
 GREEN='\033[0;32m'; BLUE='\033[0;34m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; NC='\033[0m'
+DEFAULT_ADMIN_PASSWORD="${INIT_ADMIN_PASSWORD:-admin123456}"
 
 echo ""
 echo -e "${BLUE}========================================${NC}"
@@ -76,14 +77,14 @@ EOF
     echo ""
 
     echo -e "${BLUE}👤 初始化平台管理员...${NC}"
-    /data/init-admin
+    INIT_ADMIN_PASSWORD="$DEFAULT_ADMIN_PASSWORD" /data/init-admin
     echo ""
 
     echo -e "${BLUE}========================================${NC}"
     echo -e "${GREEN}  ✅ 初始化完成！${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo ""
-    echo "账号: admin / admin123456"
+    echo "账号: admin / ${DEFAULT_ADMIN_PASSWORD}"
     echo ""
     exit 0
 fi

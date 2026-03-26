@@ -5,11 +5,12 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // ListWithFilter 带过滤条件获取角色列表
 func (r *RoleRepository) ListWithFilter(ctx context.Context, f RoleFilter) ([]model.Role, error) {
-	queryBuilder := r.db.WithContext(ctx).Preload("Permissions")
+	queryBuilder := r.db.WithContext(ctx).Preload("Permissions", rolePermissionPreloadScope(f.Scope))
 	if f.Name != "" {
 		like := "%" + f.Name + "%"
 		queryBuilder = queryBuilder.Where("name ILIKE ? OR display_name ILIKE ? OR description ILIKE ?", like, like, like)
@@ -24,6 +25,17 @@ func (r *RoleRepository) ListWithFilter(ctx context.Context, f RoleFilter) ([]mo
 	var roles []model.Role
 	err := queryBuilder.Order("is_system DESC, created_at ASC").Find(&roles).Error
 	return roles, err
+}
+
+func rolePermissionPreloadScope(scope string, args ...interface{}) func(*gorm.DB) *gorm.DB {
+	if scope != "tenant" {
+		return func(db *gorm.DB) *gorm.DB {
+			return db
+		}
+	}
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("code NOT LIKE ?", platformPermissionCodePrefix+"%")
+	}
 }
 
 // GetRoleUsers 获取角色下的关联用户（分页 + 搜索）

@@ -22,6 +22,7 @@ REDIS_CONTAINER = os.environ.get("ACCEPTANCE_REDIS_CONTAINER", "auto-healing-red
 EXPOSED_PHASES = [
     "auth",
     "platform_tenants",
+    "tenant_user_role_hardening",
     "settings_secrets_dictionaries",
     "common",
     "profile_rbac_misc",
@@ -58,6 +59,7 @@ EXPOSED_PHASES = [
 PHASE_DEPENDENCIES = {
     "auth": [],
     "platform_tenants": ["tenant_setup"],
+    "tenant_user_role_hardening": ["tenant_setup"],
     "settings_secrets_dictionaries": ["tenant_setup"],
     "common": ["tenant_setup"],
     "profile_rbac_misc": ["tenant_setup"],
@@ -549,6 +551,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                 "REDIS_DB": self.redis_db,
                 "JWT_SECRET": "acceptance-secret-key",
                 "JWT_ISSUER": "auto-healing-acceptance",
+                "INIT_ADMIN_PASSWORD": "admin123456",
                 "LOG_FILE_PATH": str(self.tmp_dir / "logs"),
                 "ANSIBLE_WORKSPACE_DIR": str(self.tmp_dir / "workspace"),
                 "GIT_REPOS_DIR": str(self.tmp_dir / "repos"),
@@ -976,12 +979,202 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
         assert_true(cancelled_inv is not None, "cancelled invitation should still be queryable")
         assert_eq(cancelled_inv["status"], "cancelled", "invitation status after cancel")
 
+        stale_invite = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/platform/tenants/{temp['id']}/invitations",
+                *headers,
+                "-d",
+                json.dumps(
+                    {
+                        "email": "stale-invite@example.com",
+                        "role_id": viewer_role["id"],
+                        "send_email": False,
+                    }
+                ),
+            ]
+        )["data"]
+        stale_token = stale_invite["invitation_url"].split("token=")[1]
+
         delete_status, _ = curl_status_json(["-X", "DELETE", f"{self.api_base()}/platform/tenants/{temp['id']}", *view_headers])
         assert_eq(delete_status, 200, "delete temp tenant status")
         deleted_status, _ = curl_status_json([f"{self.api_base()}/platform/tenants/{temp['id']}", *view_headers])
         assert_eq(deleted_status, 404, "deleted tenant should not be found")
+        deleted_members_status, _ = curl_status_json([f"{self.api_base()}/platform/tenants/{temp['id']}/members", *view_headers])
+        assert_eq(deleted_members_status, 404, "deleted tenant members list should return 404")
+        deleted_invitations_status, _ = curl_status_json([f"{self.api_base()}/platform/tenants/{temp['id']}/invitations", *view_headers])
+        assert_eq(deleted_invitations_status, 404, "deleted tenant invitations list should return 404")
+        stale_validate_status, _ = curl_status_json([f"{self.api_base()}/auth/invitation/{stale_token}"])
+        assert_eq(stale_validate_status, 400, "stale invitation validate should fail")
+        stale_register_status, _ = curl_status_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/auth/register",
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                json.dumps({"token": stale_token, "username": "staleinvitee", "password": "Tenant123456!", "display_name": "Stale Invitee"}),
+            ]
+        )
+        assert_eq(stale_register_status, 400, "stale invitation register should fail")
 
         self.results["platform_tenants"] = {"status": "passed"}
+
+    def run_tenant_user_role_hardening(self):
+        info("==> tenant user role hardening")
+        platform_headers = self.auth_args(self.platform_token, json_content=True)
+        platform_view_headers = self.auth_args(self.platform_token)
+        tenant_headers = self.auth_args(self.tenant_admin_token, json_content=True)
+        tenant_view_headers = self.auth_args(self.tenant_admin_token)
+
+        temp = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/platform/tenants",
+                *platform_headers,
+                "-d",
+                json.dumps(
+                    {
+                        "name": "Acceptance Tenant User Role Hardening",
+                        "code": f"acc_tur_{uuid.uuid4().hex[:8]}",
+                        "description": "tenant user role hardening",
+                        "icon": "shield",
+                    }
+                ),
+            ]
+        )["data"]
+
+        viewer_role = self.system_tenant_roles["viewer"]
+        invite = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/platform/tenants/{temp['id']}/invitations",
+                *platform_headers,
+                "-d",
+                json.dumps({"email": "hardening-invite@example.com", "role_id": viewer_role["id"], "send_email": False}),
+            ]
+        )["data"]
+        invite_token = invite["invitation_url"].split("token=")[1]
+
+        delete_status, _ = curl_status_json(["-X", "DELETE", f"{self.api_base()}/platform/tenants/{temp['id']}", *platform_view_headers])
+        assert_eq(delete_status, 200, "hardening temp tenant delete should succeed")
+
+        members_status, _ = curl_status_json([f"{self.api_base()}/platform/tenants/{temp['id']}/members", *platform_view_headers])
+        assert_eq(members_status, 404, "missing tenant members list should return 404")
+
+        invitations_status, _ = curl_status_json([f"{self.api_base()}/platform/tenants/{temp['id']}/invitations", *platform_view_headers])
+        assert_eq(invitations_status, 404, "missing tenant invitations list should return 404")
+
+        validate_status, _ = curl_status_json([f"{self.api_base()}/auth/invitation/{invite_token}"])
+        assert_eq(validate_status, 400, "stale invitation validate should return 400")
+
+        register_status, _ = curl_status_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/auth/register",
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                json.dumps({"token": invite_token, "username": "hardeninginvitee", "password": "Tenant123456!", "display_name": "Hardening Invitee"}),
+            ]
+        )
+        assert_eq(register_status, 400, "stale invitation register should return 400")
+
+        tenant_roles = curl_json([f"{self.api_base()}/tenant/roles", *tenant_view_headers])["data"]
+        temp_role = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/roles",
+                *tenant_headers,
+                "-d",
+                json.dumps(
+                    {
+                        "name": f"acc_hardening_role_{uuid.uuid4().hex[:8]}",
+                        "display_name": "Acceptance Hardening Role",
+                        "description": "hardening role",
+                    }
+                ),
+            ]
+        )["data"]
+
+        tenant_user = curl_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/users",
+                *tenant_headers,
+                "-d",
+                json.dumps(
+                    {
+                        "username": f"hardening{uuid.uuid4().hex[:8]}",
+                        "email": f"hardening{uuid.uuid4().hex[:8]}@example.com",
+                        "password": "Tenant123456!",
+                        "display_name": "Hardening Tenant User",
+                    }
+                ),
+            ]
+        )["data"]
+
+        update_status, _ = curl_status_json(
+            [
+                "-X",
+                "PUT",
+                f"{self.api_base()}/tenant/users/{tenant_user['id']}",
+                *tenant_headers,
+                "-d",
+                json.dumps({"display_name": "Blocked Update", "phone": "13700003333", "role_id": temp_role["id"]}),
+            ]
+        )
+        assert_eq(update_status, 403, "tenant user global profile update should be forbidden")
+
+        reset_status, _ = curl_status_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/tenant/users/{tenant_user['id']}/reset-password",
+                *tenant_headers,
+                "-d",
+                json.dumps({"new_password": "Reset123456!"}),
+            ]
+        )
+        assert_eq(reset_status, 403, "tenant user reset password should be forbidden")
+
+        curl_json(
+            [
+                "-X",
+                "PUT",
+                f"{self.api_base()}/tenant/users/{tenant_user['id']}/roles",
+                *tenant_headers,
+                "-d",
+                json.dumps({"role_ids": [temp_role["id"]]}),
+            ]
+        )
+
+        role_users = curl_json([f"{self.api_base()}/tenant/roles/{temp_role['id']}/users?page=1&page_size=20", *tenant_view_headers])
+        assert_true(any(item["id"] == tenant_user["id"] for item in self.list_items(role_users)), "hardening role users should include tenant user")
+
+        login_status, _ = curl_status_json(
+            [
+                "-X",
+                "POST",
+                f"{self.api_base()}/auth/login",
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                json.dumps({"username": tenant_user["username"], "password": "Tenant123456!"}),
+            ]
+        )
+        assert_eq(login_status, 200, "tenant user original password should still work")
+
+        curl_json(["-X", "DELETE", f"{self.api_base()}/tenant/users/{tenant_user['id']}", *tenant_view_headers])
+        curl_json(["-X", "DELETE", f"{self.api_base()}/tenant/roles/{temp_role['id']}", *tenant_view_headers])
+        self.results["tenant_user_role_hardening"] = {"status": "passed"}
 
     def run_settings_secrets_dictionaries(self):
         info("==> settings / secrets / dictionaries")
@@ -1482,7 +1675,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
         )["data"]
         tenant_users = curl_json([f"{self.api_base()}/tenant/users?page=1&page_size=100", *tenant_view_headers])
         assert_true(any(item["id"] == tenant_user["id"] for item in self.list_items(tenant_users)), "tenant user should be listed")
-        curl_json(
+        update_status, update_body = curl_status_json(
             [
                 "-X",
                 "PUT",
@@ -1492,6 +1685,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                 json.dumps({"display_name": "Acceptance Tenant User Updated", "phone": "13700003333"}),
             ]
         )
+        assert_eq(update_status, 403, f"tenant user global profile mutation should be forbidden: {update_body}")
         curl_json(
             [
                 "-X",
@@ -1502,7 +1696,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                 json.dumps({"role_ids": [tenant_role["id"]]}),
             ]
         )
-        curl_json(
+        reset_status, reset_body = curl_status_json(
             [
                 "-X",
                 "POST",
@@ -1512,12 +1706,13 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                 json.dumps({"new_password": "Reset123456!"}),
             ]
         )
+        assert_eq(reset_status, 403, f"tenant user reset password should be forbidden: {reset_body}")
         tenant_user_detail = curl_json([f"{self.api_base()}/tenant/users/{tenant_user['id']}", *tenant_view_headers])["data"]
-        assert_eq(tenant_user_detail["phone"], "13700003333", "tenant user phone should update")
+        assert_eq(tenant_user_detail.get("phone", ""), "", "tenant user phone should remain unchanged")
         tenant_role_users = curl_json([f"{self.api_base()}/tenant/roles/{tenant_role['id']}/users?page=1&page_size=20", *tenant_view_headers])
         assert_true(any(item["id"] == tenant_user["id"] for item in self.list_items(tenant_role_users)), "tenant role users should include created user")
-        relogin_tenant = self.login(f"acctenant{suffix}", "Reset123456!")
-        assert_eq(relogin_tenant["user"]["username"], f"acctenant{suffix}", "reset tenant password should work")
+        relogin_tenant = self.login(f"acctenant{suffix}", "Tenant123456!")
+        assert_eq(relogin_tenant["user"]["username"], f"acctenant{suffix}", "tenant user original password should still work")
         curl_json(["-X", "DELETE", f"{self.api_base()}/tenant/users/{tenant_user['id']}", *tenant_view_headers])
         curl_json(["-X", "DELETE", f"{self.api_base()}/tenant/roles/{tenant_role['id']}", *tenant_view_headers])
 
@@ -5081,6 +5276,7 @@ def main():
         "auth": runner.run_auth_scenarios,
         "tenant_setup": runner.setup_tenants_and_users,
         "platform_tenants": runner.run_platform_tenants,
+        "tenant_user_role_hardening": runner.run_tenant_user_role_hardening,
         "settings_secrets_dictionaries": runner.run_settings_secrets_dictionaries,
         "common": runner.run_common_isolation,
         "profile_rbac_misc": runner.run_profile_rbac_misc,

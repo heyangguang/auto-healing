@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"errors"
+
 	"github.com/company/auto-healing/internal/middleware"
-	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/repository"
 	authService "github.com/company/auto-healing/internal/service/auth"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -11,7 +13,7 @@ import (
 
 // UpdateTenantUser 更新当前租户下的用户信息
 func (h *TenantUserHandler) UpdateTenantUser(c *gin.Context) {
-	tenantID, user, _, _, err := h.loadTenantUser(c)
+	tenantID, _, member, _, err := h.loadTenantUser(c)
 	if err != nil {
 		response.NotFound(c, "用户不存在或不属于当前租户")
 		return
@@ -22,15 +24,25 @@ func (h *TenantUserHandler) UpdateTenantUser(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
+	if hasTenantUserGlobalMutation(req) {
+		response.Forbidden(c, "租户侧不能修改用户全局资料或状态，只能调整当前租户角色")
+		return
+	}
+	if req.RoleID == nil {
+		response.BadRequest(c, "租户侧仅支持调整当前租户角色，role_id 为必填")
+		return
+	}
 
 	targetRoleID, err := h.resolveTenantUserRoleUpdate(c, tenantID, req.RoleID)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	applyTenantUserUpdate(user, req)
-
-	if err := h.tenantRepo.UpdateMemberUserAndRole(c.Request.Context(), user, tenantID, targetRoleID); err != nil {
+	if err := h.tenantRepo.UpdateMemberRole(c.Request.Context(), member.UserID, tenantID, *targetRoleID); err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			response.NotFound(c, "用户不存在或不属于当前租户")
+			return
+		}
 		response.InternalError(c, "更新失败")
 		return
 	}
@@ -54,16 +66,8 @@ func (e businessError) Error() string {
 	return string(e)
 }
 
-func applyTenantUserUpdate(user *model.User, req UpdateUserRequest) {
-	if req.DisplayName != "" {
-		user.DisplayName = req.DisplayName
-	}
-	if req.Phone != "" {
-		user.Phone = req.Phone
-	}
-	if req.Status != "" {
-		user.Status = req.Status
-	}
+func hasTenantUserGlobalMutation(req UpdateUserRequest) bool {
+	return req.DisplayName != "" || req.Phone != "" || req.Status != ""
 }
 
 func (h *TenantUserHandler) respondUpdatedTenantUser(c *gin.Context) {
@@ -118,23 +122,12 @@ func (h *TenantUserHandler) ensureTenantAdminRemovable(c *gin.Context, tenantID,
 
 // ResetTenantUserPassword 重置当前租户下用户的密码
 func (h *TenantUserHandler) ResetTenantUserPassword(c *gin.Context) {
-	_, user, _, _, err := h.loadTenantUser(c)
+	_, _, _, _, err := h.loadTenantUser(c)
 	if err != nil {
 		response.NotFound(c, "用户不存在或不属于当前租户")
 		return
 	}
-
-	var req ResetPasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数错误")
-		return
-	}
-
-	if err := h.authSvc.ResetPassword(c.Request.Context(), user.ID, req.NewPassword); err != nil {
-		response.InternalError(c, "重置密码失败")
-		return
-	}
-	response.Message(c, "密码重置成功")
+	response.Forbidden(c, "租户侧不能重置用户全局密码")
 }
 
 // AssignTenantUserRoles 为当前租户成员更新租户角色
@@ -162,6 +155,10 @@ func (h *TenantUserHandler) AssignTenantUserRoles(c *gin.Context) {
 	}
 
 	if err := h.tenantRepo.UpdateMemberRole(c.Request.Context(), user.ID, tenantID, role.ID); err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			response.NotFound(c, "用户不存在或不属于当前租户")
+			return
+		}
 		response.InternalError(c, "分配角色失败")
 		return
 	}
@@ -173,6 +170,10 @@ func (h *TenantUserHandler) CreateTenantUser(c *gin.Context) {
 	var req authService.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
+		return
+	}
+	if err := validateTenantScopedRegisterRequest(&req); err != nil {
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -189,6 +190,13 @@ func (h *TenantUserHandler) CreateTenantUser(c *gin.Context) {
 		return
 	}
 	response.Created(c, user)
+}
+
+func validateTenantScopedRegisterRequest(req *authService.RegisterRequest) error {
+	if len(req.RoleIDs) > 0 {
+		return businessError("租户侧创建用户不能直接分配平台角色，请创建后在当前租户内分配租户角色")
+	}
+	return nil
 }
 
 func tenantIDFromMiddleware(c *gin.Context) (uuid.UUID, error) {

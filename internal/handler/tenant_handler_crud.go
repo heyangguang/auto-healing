@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // ListTenants 租户列表
@@ -38,7 +41,7 @@ func (h *TenantHandler) GetTenant(c *gin.Context) {
 
 	tenant, err := h.repo.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "租户不存在")
+		respondTenantLookupError(c, err)
 		return
 	}
 	response.Success(c, tenant)
@@ -51,7 +54,12 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误：name 和 code 为必填")
 		return
 	}
-	if existing, _ := h.repo.GetByCode(c.Request.Context(), req.Code); existing != nil {
+	existing, err := h.repo.GetByCode(c.Request.Context(), req.Code)
+	if err != nil && !errors.Is(err, repository.ErrTenantNotFound) {
+		respondInternalError(c, "TENANT", "检查租户编码失败", err)
+		return
+	}
+	if existing != nil {
 		response.Conflict(c, "租户编码已存在: "+req.Code)
 		return
 	}
@@ -80,7 +88,7 @@ func (h *TenantHandler) UpdateTenant(c *gin.Context) {
 
 	tenant, err := h.repo.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "租户不存在")
+		respondTenantLookupError(c, err)
 		return
 	}
 
@@ -110,7 +118,7 @@ func (h *TenantHandler) DeleteTenant(c *gin.Context) {
 
 	tenant, err := h.repo.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "租户不存在")
+		respondTenantLookupError(c, err)
 		return
 	}
 	if tenant.Code == "default" {
@@ -145,4 +153,12 @@ func applyTenantUpdate(tenant *model.Tenant, req *updateTenantRequest) error {
 		tenant.Status = req.Status
 	}
 	return nil
+}
+
+func respondTenantLookupError(c *gin.Context, err error) {
+	if errors.Is(err, repository.ErrTenantNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
+		response.NotFound(c, "租户不存在")
+		return
+	}
+	respondInternalError(c, "TENANT", "查询租户失败", err)
 }

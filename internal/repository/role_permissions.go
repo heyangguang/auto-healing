@@ -19,11 +19,15 @@ func (r *RoleRepository) AssignPermissions(ctx context.Context, roleID uuid.UUID
 	if role.IsSystem {
 		return errors.New("系统内置角色的权限不允许修改")
 	}
+	uniquePermissionIDs := uniquePermissionIDs(permissionIDs)
+	if err := r.validatePermissionAssignment(ctx, uniquePermissionIDs); err != nil {
+		return err
+	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("role_id = ?", roleID).Delete(&model.RolePermission{}).Error; err != nil {
 			return err
 		}
-		for _, permissionID := range permissionIDs {
+		for _, permissionID := range uniquePermissionIDs {
 			if err := tx.Create(&model.RolePermission{
 				ID:           uuid.New(),
 				RoleID:       roleID,
@@ -42,4 +46,11 @@ func (r *RoleRepository) loadRoleForPermissionMutation(ctx context.Context, role
 		return r.GetTenantRoleByID(ctx, tenantID, roleID)
 	}
 	return r.GetByID(ctx, roleID)
+}
+
+func (r *RoleRepository) validatePermissionAssignment(ctx context.Context, permissionIDs []uuid.UUID) error {
+	if _, ok := TenantIDFromContextOK(ctx); !ok {
+		return nil
+	}
+	return NewPermissionRepositoryWithDB(r.db).ValidateTenantPermissionIDs(ctx, permissionIDs)
 }

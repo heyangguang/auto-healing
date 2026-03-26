@@ -198,3 +198,23 @@ func TestScheduleRepositoryCreateRequiresTenantContext(t *testing.T) {
 		t.Fatalf("Create() error = %v, want %v", err, ErrTenantContextRequired)
 	}
 }
+
+func TestTenantRepositoryGetTrendByDayRejectsInvalidTable(t *testing.T) {
+	db := newStateTestDB(t)
+	repo := &TenantRepository{db: db}
+
+	_, _, err := repo.GetTrendByDay(context.Background(), "not_allowed_table", 7)
+	if !errors.Is(err, ErrTenantStatsTableNotAllowed) {
+		t.Fatalf("GetTrendByDay() error = %v, want %v", err, ErrTenantStatsTableNotAllowed)
+	}
+}
+
+func TestTenantRepositoryGetTrendByDayWhereRejectsInvalidTable(t *testing.T) {
+	db := newStateTestDB(t)
+	repo := &TenantRepository{db: db}
+
+	_, _, err := repo.GetTrendByDayWhere(context.Background(), "not_allowed_table", 7, "")
+	if !errors.Is(err, ErrTenantStatsTableNotAllowed) {
+		t.Fatalf("GetTrendByDayWhere() error = %v, want %v", err, ErrTenantStatsTableNotAllowed)
+	}
+}

@@ -21,6 +21,10 @@ func (h *TenantHandler) ListMembers(c *gin.Context) {
 		response.BadRequest(c, "无效的租户 ID")
 		return
 	}
+	if _, err := h.repo.GetByID(c.Request.Context(), tenantID); err != nil {
+		respondTenantLookupError(c, err)
+		return
+	}
 
 	members, err := h.repo.ListMembers(c.Request.Context(), tenantID)
 	if err != nil {
@@ -83,6 +87,9 @@ func (h *TenantHandler) assignTenantAdmin(c *gin.Context, userID, tenantID, admi
 	}
 	if existingMember != nil {
 		if updateErr := h.repo.UpdateMemberRole(c.Request.Context(), userID, tenantID, adminRoleID); updateErr != nil {
+			if errors.Is(updateErr, repository.ErrUserNotFound) {
+				return h.addTenantAdminMember(c, userID, tenantID, adminRoleID)
+			}
 			return fmt.Errorf("升级管理员角色失败")
 		}
 		return nil
@@ -113,6 +120,10 @@ func (h *TenantHandler) UpdateMemberRole(c *gin.Context) {
 		return
 	}
 	if err := h.repo.UpdateMemberRole(c.Request.Context(), userID, tenantID, roleID); err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			response.NotFound(c, "该用户不属于此租户")
+			return
+		}
 		response.InternalError(c, "变更角色失败")
 		return
 	}
@@ -154,7 +165,7 @@ func (h *TenantHandler) CreateTenantUser(c *gin.Context) {
 
 	tenant, err := h.repo.GetByID(c.Request.Context(), tenantID)
 	if err != nil {
-		response.NotFound(c, "租户不存在")
+		respondTenantLookupError(c, err)
 		return
 	}
 	if tenant.Status != model.TenantStatusActive {
@@ -165,6 +176,10 @@ func (h *TenantHandler) CreateTenantUser(c *gin.Context) {
 	var req authService.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
+		return
+	}
+	if err := validateTenantScopedRegisterRequest(&req); err != nil {
+		response.BadRequest(c, err.Error())
 		return
 	}
 	req.TenantID = &tenantID

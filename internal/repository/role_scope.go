@@ -19,7 +19,7 @@ func (r *RoleRepository) GetTenantRoleByName(ctx context.Context, tenantID uuid.
 func (r *RoleRepository) getTenantRole(ctx context.Context, tenantID uuid.UUID, predicate string, value any) (*model.Role, error) {
 	var role model.Role
 	err := r.db.WithContext(ctx).
-		Preload("Permissions").
+		Preload("Permissions", rolePermissionPreloadScope("tenant")).
 		Where("scope = ?", "tenant").
 		Where("(tenant_id IS NULL OR tenant_id = ?)", tenantID).
 		Where(predicate, value).

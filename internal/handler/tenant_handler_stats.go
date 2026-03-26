@@ -61,7 +61,11 @@ func (h *TenantHandler) GetTenantStats(c *gin.Context) {
 	stats := make([]TenantStatsItem, 0, len(tenants))
 	summary := TenantStatsSummary{TotalTenants: int64(len(tenants))}
 	for _, tenant := range tenants {
-		item := h.buildTenantStatsItem(ctx, tenant)
+		item, err := h.buildTenantStatsItem(ctx, tenant)
+		if err != nil {
+			respondInternalError(c, "TENANT", "查询租户统计失败", err)
+			return
+		}
 		updateTenantStatsSummary(&summary, tenant, item)
 		stats = append(stats, item)
 	}
@@ -72,7 +76,7 @@ func (h *TenantHandler) GetTenantStats(c *gin.Context) {
 	})
 }
 
-func (h *TenantHandler) buildTenantStatsItem(ctx context.Context, tenant model.Tenant) TenantStatsItem {
+func (h *TenantHandler) buildTenantStatsItem(ctx context.Context, tenant model.Tenant) (TenantStatsItem, error) {
 	item := TenantStatsItem{
 		ID:     tenant.ID,
 		Name:   tenant.Name,
@@ -80,26 +84,99 @@ func (h *TenantHandler) buildTenantStatsItem(ctx context.Context, tenant model.T
 		Status: tenant.Status,
 		Icon:   tenant.Icon,
 	}
-	item.MemberCount = h.repo.CountTenantMembers(ctx, tenant.ID)
-	item.RuleCount = h.repo.CountTenantTable(ctx, tenant.ID, "healing_rules")
-	item.InstanceCount = h.repo.CountTenantTable(ctx, tenant.ID, "flow_instances")
-	item.TemplateCount = h.repo.CountTenantTable(ctx, tenant.ID, "execution_tasks")
-	item.AuditLogCount = h.repo.CountTenantTable(ctx, tenant.ID, "audit_logs")
-	item.LastActivityAt = h.repo.GetTenantLastActivity(ctx, tenant.ID)
-	item.CmdbCount = h.repo.CountTenantTable(ctx, tenant.ID, "cmdb_items")
-	item.GitCount = h.repo.CountTenantTable(ctx, tenant.ID, "git_repositories")
-	item.PlaybookCount = h.repo.CountTenantTable(ctx, tenant.ID, "playbooks")
-	item.SecretCount = h.repo.CountTenantTable(ctx, tenant.ID, "secrets_sources")
-	item.PluginCount = h.repo.CountTenantTable(ctx, tenant.ID, "plugins")
-	item.IncidentCount = h.repo.CountTenantTable(ctx, tenant.ID, "incidents")
-	item.FlowCount = h.repo.CountTenantTable(ctx, tenant.ID, "healing_flows")
-	item.ScheduleCount = h.repo.CountTenantTable(ctx, tenant.ID, "execution_schedules")
-	item.NotificationChannelCount = h.repo.CountTenantTable(ctx, tenant.ID, "notification_channels")
-	item.NotificationTemplateCount = h.repo.CountTenantTable(ctx, tenant.ID, "notification_templates")
-	item.HealingSuccessCount = h.repo.CountTenantTableWhere(ctx, tenant.ID, "flow_instances", "status = 'completed'")
-	item.HealingTotalCount = h.repo.CountTenantTable(ctx, tenant.ID, "flow_instances")
-	item.IncidentCoveredCount = h.repo.CountTenantTableWhere(ctx, tenant.ID, "incidents", "matched_rule_id IS NOT NULL")
-	return item
+	if err := h.fillTenantStatsCore(ctx, tenant.ID, &item); err != nil {
+		return TenantStatsItem{}, err
+	}
+	if err := h.fillTenantStatsResources(ctx, tenant.ID, &item); err != nil {
+		return TenantStatsItem{}, err
+	}
+	if err := h.fillTenantStatsDerived(ctx, tenant.ID, &item); err != nil {
+		return TenantStatsItem{}, err
+	}
+	return item, nil
+}
+
+func (h *TenantHandler) fillTenantStatsCore(ctx context.Context, tenantID uuid.UUID, item *TenantStatsItem) error {
+	memberCount, err := h.repo.CountTenantMembers(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	ruleCount, err := h.repo.CountTenantTable(ctx, tenantID, "healing_rules")
+	if err != nil {
+		return err
+	}
+	instanceCount, err := h.repo.CountTenantTable(ctx, tenantID, "flow_instances")
+	if err != nil {
+		return err
+	}
+	templateCount, err := h.repo.CountTenantTable(ctx, tenantID, "execution_tasks")
+	if err != nil {
+		return err
+	}
+	auditLogCount, err := h.repo.CountTenantTable(ctx, tenantID, "audit_logs")
+	if err != nil {
+		return err
+	}
+	lastActivityAt, err := h.repo.GetTenantLastActivity(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	item.MemberCount = memberCount
+	item.RuleCount = ruleCount
+	item.InstanceCount = instanceCount
+	item.TemplateCount = templateCount
+	item.AuditLogCount = auditLogCount
+	item.LastActivityAt = lastActivityAt
+	return nil
+}
+
+func (h *TenantHandler) fillTenantStatsResources(ctx context.Context, tenantID uuid.UUID, item *TenantStatsItem) error {
+	var err error
+	if item.CmdbCount, err = h.repo.CountTenantTable(ctx, tenantID, "cmdb_items"); err != nil {
+		return err
+	}
+	if item.GitCount, err = h.repo.CountTenantTable(ctx, tenantID, "git_repositories"); err != nil {
+		return err
+	}
+	if item.PlaybookCount, err = h.repo.CountTenantTable(ctx, tenantID, "playbooks"); err != nil {
+		return err
+	}
+	if item.SecretCount, err = h.repo.CountTenantTable(ctx, tenantID, "secrets_sources"); err != nil {
+		return err
+	}
+	if item.PluginCount, err = h.repo.CountTenantTable(ctx, tenantID, "plugins"); err != nil {
+		return err
+	}
+	if item.IncidentCount, err = h.repo.CountTenantTable(ctx, tenantID, "incidents"); err != nil {
+		return err
+	}
+	if item.FlowCount, err = h.repo.CountTenantTable(ctx, tenantID, "healing_flows"); err != nil {
+		return err
+	}
+	if item.ScheduleCount, err = h.repo.CountTenantTable(ctx, tenantID, "execution_schedules"); err != nil {
+		return err
+	}
+	if item.NotificationChannelCount, err = h.repo.CountTenantTable(ctx, tenantID, "notification_channels"); err != nil {
+		return err
+	}
+	if item.NotificationTemplateCount, err = h.repo.CountTenantTable(ctx, tenantID, "notification_templates"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (h *TenantHandler) fillTenantStatsDerived(ctx context.Context, tenantID uuid.UUID, item *TenantStatsItem) error {
+	var err error
+	if item.HealingSuccessCount, err = h.repo.CountTenantTableWhere(ctx, tenantID, "flow_instances", "status = 'completed'"); err != nil {
+		return err
+	}
+	if item.HealingTotalCount, err = h.repo.CountTenantTable(ctx, tenantID, "flow_instances"); err != nil {
+		return err
+	}
+	if item.IncidentCoveredCount, err = h.repo.CountTenantTableWhere(ctx, tenantID, "incidents", "matched_rule_id IS NOT NULL"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func updateTenantStatsSummary(summary *TenantStatsSummary, tenant model.Tenant, item TenantStatsItem) {

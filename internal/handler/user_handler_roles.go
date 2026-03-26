@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/company/auto-healing/internal/model"
@@ -9,6 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+var errRoleCreateWithPermissions = errors.New("创建角色时不能直接提交 permissions，请先创建角色再分配权限")
 
 // ListSystemTenantRoles 平台级：获取系统级租户角色列表
 func (h *RoleHandler) ListSystemTenantRoles(c *gin.Context) {
@@ -37,7 +40,12 @@ func (h *RoleHandler) ListRoles(c *gin.Context) {
 		response.InternalError(c, "获取角色列表失败")
 		return
 	}
-	response.Success(c, h.buildRoleStats(c, roles))
+	items, err := h.buildRoleStats(c, roles)
+	if err != nil {
+		respondInternalError(c, "ROLE", "获取角色统计失败", err)
+		return
+	}
+	response.Success(c, items)
 }
 
 // ListTenantRoles 租户级：只返回租户可见角色，永远排除 platform_admin/super_admin
@@ -55,25 +63,36 @@ func (h *RoleHandler) ListTenantRoles(c *gin.Context) {
 		response.InternalError(c, "获取角色列表失败")
 		return
 	}
-	response.Success(c, h.buildTenantRoleStats(c, roles, tenantID))
+	items, err := h.buildTenantRoleStats(c, roles, tenantID)
+	if err != nil {
+		respondInternalError(c, "ROLE", "获取角色统计失败", err)
+		return
+	}
+	response.Success(c, items)
 }
 
-func (h *RoleHandler) buildRoleStats(c *gin.Context, roles []model.Role) []RoleWithStats {
-	stats, _ := h.roleRepo.GetRoleStats(c.Request.Context())
+func (h *RoleHandler) buildRoleStats(c *gin.Context, roles []model.Role) ([]RoleWithStats, error) {
+	stats, err := h.roleRepo.GetRoleStats(c.Request.Context())
+	if err != nil {
+		return nil, err
+	}
 	result := make([]RoleWithStats, len(roles))
 	for i, role := range roles {
 		result[i] = buildRoleWithStats(role, stats[role.ID.String()].UserCount)
 	}
-	return result
+	return result, nil
 }
 
-func (h *RoleHandler) buildTenantRoleStats(c *gin.Context, roles []model.Role, tenantID uuid.UUID) []RoleWithStats {
-	stats, _ := h.roleRepo.GetTenantRoleStats(c.Request.Context(), tenantID)
+func (h *RoleHandler) buildTenantRoleStats(c *gin.Context, roles []model.Role, tenantID uuid.UUID) ([]RoleWithStats, error) {
+	stats, err := h.roleRepo.GetTenantRoleStats(c.Request.Context(), tenantID)
+	if err != nil {
+		return nil, err
+	}
 	result := make([]RoleWithStats, len(roles))
 	for i, role := range roles {
 		result[i] = buildRoleWithStats(role, stats[role.ID.String()].UserCount)
 	}
-	return result
+	return result, nil
 }
 
 func buildRoleWithStats(role model.Role, userCount int64) RoleWithStats {
@@ -114,6 +133,10 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
+	if err := validateRoleCreatePayload(role); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
 	if isTenantRoleRequest(c) {
 		tenantID, ok := requireTenantID(c, "ROLE")
@@ -133,6 +156,13 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 		return
 	}
 	response.Created(c, role)
+}
+
+func validateRoleCreatePayload(role model.Role) error {
+	if len(role.Permissions) > 0 {
+		return errRoleCreateWithPermissions
+	}
+	return nil
 }
 
 // GetRole 获取角色详情
@@ -235,6 +265,10 @@ func (h *RoleHandler) AssignRolePermissions(c *gin.Context) {
 		return
 	}
 	if err := h.roleRepo.AssignPermissions(c.Request.Context(), id, req.PermissionIDs); err != nil {
+		if errors.Is(err, repository.ErrTenantPermissionScope) {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, "分配权限失败")
 		return
 	}
