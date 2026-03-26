@@ -2,12 +2,15 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // SecretsSourceRepository 密钥源仓储
@@ -22,18 +25,42 @@ func NewSecretsSourceRepository() *SecretsSourceRepository {
 	}
 }
 
+func (r *SecretsSourceRepository) withDB(db *gorm.DB) *SecretsSourceRepository {
+	return &SecretsSourceRepository{db: db}
+}
+
+func (r *SecretsSourceRepository) Transaction(ctx context.Context, fn func(repo *SecretsSourceRepository) error) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(r.withDB(tx))
+	}, &sql.TxOptions{Isolation: sql.LevelSerializable})
+}
+
 // Create 创建密钥源
 func (r *SecretsSourceRepository) Create(ctx context.Context, source *model.SecretsSource) error {
-	if err := FillTenantID(ctx, &source.TenantID); err != nil {
+	tenantID, err := RequireTenantID(ctx)
+	if err != nil {
 		return err
 	}
+	source.TenantID = &tenantID
 	return r.db.WithContext(ctx).Create(source).Error
 }
 
 // GetByID 根据ID获取密钥源
 func (r *SecretsSourceRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.SecretsSource, error) {
+	return r.getByID(ctx, id, false)
+}
+
+func (r *SecretsSourceRepository) GetByIDForUpdate(ctx context.Context, id uuid.UUID) (*model.SecretsSource, error) {
+	return r.getByID(ctx, id, true)
+}
+
+func (r *SecretsSourceRepository) getByID(ctx context.Context, id uuid.UUID, forUpdate bool) (*model.SecretsSource, error) {
 	var source model.SecretsSource
-	err := TenantDB(r.db, ctx).Where("id = ?", id).First(&source).Error
+	query := TenantDB(r.db, ctx)
+	if forUpdate && r.db.Dialector.Name() != "sqlite" {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	err := query.Where("id = ?", id).First(&source).Error
 	if err != nil {
 		return nil, err
 	}
@@ -52,12 +79,34 @@ func (r *SecretsSourceRepository) GetByName(ctx context.Context, name string) (*
 
 // Update 更新密钥源
 func (r *SecretsSourceRepository) Update(ctx context.Context, source *model.SecretsSource) error {
-	return UpdateTenantScopedModel(r.db, ctx, source.ID, source)
+	result := TenantDB(r.db, ctx).
+		Model(&model.SecretsSource{}).
+		Where("id = ?", source.ID).
+		Updates(map[string]interface{}{
+			"config":     source.Config,
+			"is_default": source.IsDefault,
+			"priority":   source.Priority,
+			"status":     source.Status,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // Delete 删除密钥源
 func (r *SecretsSourceRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return TenantDB(r.db, ctx).Delete(&model.SecretsSource{}, id).Error
+	result := TenantDB(r.db, ctx).Delete(&model.SecretsSource{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // List 获取密钥源列表
@@ -85,7 +134,7 @@ func (r *SecretsSourceRepository) GetDefault(ctx context.Context) (*model.Secret
 	err := TenantDB(r.db, ctx).Where("is_default = ? AND status = ?", true, "active").First(&source).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		// 没有默认的，返回优先级最高的活跃源
-		err = TenantDB(r.db, ctx).Where("status = ?", "active").Order("priority ASC").First(&source).Error
+		err = TenantDB(r.db, ctx).Where("status = ?", "active").Order("priority ASC, created_at ASC").First(&source).Error
 	}
 	if err != nil {
 		return nil, err
@@ -95,55 +144,124 @@ func (r *SecretsSourceRepository) GetDefault(ctx context.Context) (*model.Secret
 
 // SetDefault 设置默认密钥源
 func (r *SecretsSourceRepository) SetDefault(ctx context.Context, id uuid.UUID) error {
-	return TenantDB(r.db, ctx).Transaction(func(tx *gorm.DB) error {
-		// 先取消所有默认
-		if err := tx.Model(&model.SecretsSource{}).Where("is_default = ?", true).Update("is_default", false).Error; err != nil {
-			return err
-		}
-		// 设置新默认
-		return tx.Model(&model.SecretsSource{}).Where("id = ?", id).Update("is_default", true).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return r.setDefaultWithDB(ctx, tx, id)
 	})
+}
+
+func (r *SecretsSourceRepository) setDefaultWithDB(ctx context.Context, db *gorm.DB, id uuid.UUID) error {
+	tenantID, err := RequireTenantID(ctx)
+	if err != nil {
+		return err
+	}
+	if err := db.WithContext(ctx).Model(&model.SecretsSource{}).
+		Where("tenant_id = ? AND is_default = ?", tenantID, true).
+		Update("is_default", false).Error; err != nil {
+		return err
+	}
+	result := db.WithContext(ctx).Model(&model.SecretsSource{}).
+		Where("tenant_id = ? AND id = ?", tenantID, id).
+		Update("is_default", true)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r *SecretsSourceRepository) EnsureActiveDefault(ctx context.Context) error {
+	return r.ensureActiveDefaultWithDB(ctx, r.db)
+}
+
+func (r *SecretsSourceRepository) ensureActiveDefaultWithDB(ctx context.Context, db *gorm.DB) error {
+	tenantID, err := RequireTenantID(ctx)
+	if err != nil {
+		return err
+	}
+
+	var count int64
+	if err := db.WithContext(ctx).Model(&model.SecretsSource{}).
+		Where("tenant_id = ? AND is_default = ? AND status = ?", tenantID, true, "active").
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	var candidate model.SecretsSource
+	err = db.WithContext(ctx).Where("tenant_id = ? AND status = ?", tenantID, "active").
+		Order("priority ASC, created_at ASC").
+		First(&candidate).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return db.WithContext(ctx).Model(&model.SecretsSource{}).
+			Where("tenant_id = ? AND is_default = ?", tenantID, true).
+			Update("is_default", false).Error
+	}
+	if err != nil {
+		return err
+	}
+	return r.setDefaultWithDB(ctx, db, candidate.ID)
 }
 
 // UpdateTestResult 更新测试结果
 func (r *SecretsSourceRepository) UpdateTestResult(ctx context.Context, id uuid.UUID, success bool) error {
-	return TenantDB(r.db, ctx).Model(&model.SecretsSource{}).
+	result := TenantDB(r.db, ctx).Model(&model.SecretsSource{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"last_test_at":     gorm.Expr("NOW()"),
 			"last_test_result": success,
-		}).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // UpdateStatus 更新状态
 func (r *SecretsSourceRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
-	return TenantDB(r.db, ctx).Model(&model.SecretsSource{}).
+	result := TenantDB(r.db, ctx).Model(&model.SecretsSource{}).
 		Where("id = ?", id).
-		Update("status", status).Error
+		Update("status", status)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // UpdateTestTime 更新测试时间
 func (r *SecretsSourceRepository) UpdateTestTime(ctx context.Context, id uuid.UUID) error {
-	return TenantDB(r.db, ctx).Model(&model.SecretsSource{}).
+	result := TenantDB(r.db, ctx).Model(&model.SecretsSource{}).
 		Where("id = ?", id).
-		Update("last_test_at", gorm.Expr("NOW()")).Error
+		Update("last_test_at", gorm.Expr("NOW()"))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // CountTasksUsingSource 统计引用指定密钥源的任务模板数量
 func (r *SecretsSourceRepository) CountTasksUsingSource(ctx context.Context, sourceID string) (int64, error) {
 	var count int64
-	err := TenantDB(r.db, ctx).Model(&model.ExecutionTask{}).
-		Where("secrets_source_ids @> ?", `["`+sourceID+`"]`).
-		Count(&count).Error
+	err := countSecretsSourceUsage(TenantDB(r.db, ctx).Model(&model.ExecutionTask{}), r.db.Dialector.Name(), sourceID, &count)
 	return count, err
 }
 
 // CountSchedulesUsingSource 统计引用指定密钥源的调度任务数量
 func (r *SecretsSourceRepository) CountSchedulesUsingSource(ctx context.Context, sourceID string) (int64, error) {
 	var count int64
-	err := TenantDB(r.db, ctx).Model(&model.ExecutionSchedule{}).
-		Where("secrets_source_ids @> ?", `["`+sourceID+`"]`).
-		Count(&count).Error
+	err := countSecretsSourceUsage(TenantDB(r.db, ctx).Model(&model.ExecutionSchedule{}), r.db.Dialector.Name(), sourceID, &count)
 	return count, err
 }
 
@@ -187,4 +305,23 @@ func (r *SecretsSourceRepository) GetStats(ctx context.Context) (map[string]inte
 	stats["by_type"] = typeCounts
 
 	return stats, nil
+}
+
+func marshalSecretsSourceReference(sourceID string) ([]byte, error) {
+	return json.Marshal([]string{sourceID})
+}
+
+func countSecretsSourceUsage(query *gorm.DB, dialectName, sourceID string, count *int64) error {
+	switch dialectName {
+	case "sqlite":
+		return query.
+			Where("EXISTS (SELECT 1 FROM json_each(secrets_source_ids) WHERE json_each.value = ?)", sourceID).
+			Count(count).Error
+	default:
+		payload, err := marshalSecretsSourceReference(sourceID)
+		if err != nil {
+			return err
+		}
+		return query.Where("secrets_source_ids @> ?", payload).Count(count).Error
+	}
 }

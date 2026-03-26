@@ -23,23 +23,31 @@ type WebhookProvider struct {
 
 // NewWebhookProvider 创建 Webhook 密钥提供者
 func NewWebhookProvider(source *model.SecretsSource) (*WebhookProvider, error) {
+	if err := validateSecretAuthType(source.AuthType); err != nil {
+		return nil, err
+	}
+
 	var config model.WebhookConfig
 	configBytes, _ := json.Marshal(source.Config)
 	if err := json.Unmarshal(configBytes, &config); err != nil {
-		return nil, fmt.Errorf("解析 Webhook 配置失败: %w", err)
+		return nil, newConfigError(fmt.Sprintf("解析 Webhook 配置失败: %v", err))
 	}
 
 	if config.URL == "" {
-		return nil, fmt.Errorf("Webhook URL 不能为空")
+		return nil, newConfigError("Webhook URL 不能为空")
+	}
+	if err := validateProviderURL(config.URL, "Webhook URL"); err != nil {
+		return nil, err
 	}
 	if config.Method == "" {
-		return nil, fmt.Errorf("请求方法 (method) 不能为空，支持: GET, POST")
+		return nil, newConfigError("请求方法 (method) 不能为空")
 	}
+	config.Method = strings.ToUpper(config.Method)
 	if config.QueryKey == "" {
-		return nil, fmt.Errorf("查询键 (query_key) 不能为空，支持: ip, hostname")
+		return nil, newConfigError("查询键 (query_key) 不能为空")
 	}
 	if config.QueryKey != "ip" && config.QueryKey != "hostname" {
-		return nil, fmt.Errorf("query_key 只支持 'ip' 或 'hostname'")
+		return nil, newConfigError("query_key 只支持 'ip' 或 'hostname'")
 	}
 	if config.Timeout == 0 {
 		config.Timeout = 30
@@ -51,18 +59,18 @@ func NewWebhookProvider(source *model.SecretsSource) (*WebhookProvider, error) {
 		config.Auth.Type = "none"
 	case "basic":
 		if config.Auth.Username == "" || config.Auth.Password == "" {
-			return nil, fmt.Errorf("Basic 认证需要 username 和 password")
+			return nil, newConfigError("basic 认证需要 username 和 password")
 		}
 	case "bearer":
 		if config.Auth.Token == "" {
-			return nil, fmt.Errorf("Bearer 认证需要 token")
+			return nil, newConfigError("bearer 认证需要 token")
 		}
 	case "api_key":
 		if config.Auth.HeaderName == "" || config.Auth.APIKey == "" {
-			return nil, fmt.Errorf("API Key 认证需要 header_name 和 api_key")
+			return nil, newConfigError("api_key 认证需要 header_name 和 api_key")
 		}
 	default:
-		return nil, fmt.Errorf("不支持的认证类型: %s（支持: none, basic, bearer, api_key）", config.Auth.Type)
+		return nil, newConfigError(fmt.Sprintf("不支持的 Webhook 认证类型: %s（支持: none, basic, bearer, api_key）", config.Auth.Type))
 	}
 
 	return &WebhookProvider{
@@ -116,7 +124,7 @@ func (p *WebhookProvider) GetSecret(ctx context.Context, query model.SecretQuery
 func (p *WebhookProvider) newSecretRequest(ctx context.Context, query model.SecretQuery) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, p.config.Method, p.secretURL(query), nil)
 	if err != nil {
-		return nil, fmt.Errorf("创建请求失败: %w", err)
+		return nil, newConfigError(fmt.Sprintf("Webhook URL 无效: %v", err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 	p.applyAuth(req)
@@ -138,16 +146,15 @@ func (p *WebhookProvider) secretURL(query model.SecretQuery) string {
 func (p *WebhookProvider) executeSecretRequest(req *http.Request) (*http.Response, error) {
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Webhook 请求失败: %w", err)
+		return nil, newConnectionError("Webhook 请求失败", err)
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		resp.Body.Close()
 		return nil, ErrSecretNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("Webhook 返回错误: HTTP %d, %s", resp.StatusCode, string(body))
+		return nil, newHTTPStatusError("Webhook", resp.StatusCode)
 	}
 	return resp, nil
 }
@@ -155,7 +162,7 @@ func (p *WebhookProvider) executeSecretRequest(req *http.Request) (*http.Respons
 func (p *WebhookProvider) decodeSecretResponse(body io.Reader) (map[string]interface{}, error) {
 	var result map[string]interface{}
 	if err := json.NewDecoder(body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("解析 Webhook 响应失败: %w", err)
+		return nil, newInvalidResponseError("解析 Webhook 响应失败", err)
 	}
 	if p.config.ResponseDataPath == "" {
 		if data, ok := result["data"].(map[string]interface{}); ok {
@@ -171,38 +178,54 @@ func resolveWebhookResponseData(result map[string]interface{}, path string) (map
 	for _, part := range strings.Split(path, ".") {
 		next, ok := current[part].(map[string]interface{})
 		if !ok {
-			return nil, ErrSecretNotFound
+			return nil, newInvalidResponseError("Webhook 响应缺少配置的 response_data_path", nil)
 		}
 		current = next
 	}
 	return current, nil
 }
 
-// extractField 从 data 中提取字段（支持点分隔路径）
-func (p *WebhookProvider) extractField(data map[string]interface{}, path string) string {
-	return extractStringPath(data, path)
-}
-
 // TestConnection 测试连接
 func (p *WebhookProvider) TestConnection(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, "HEAD", p.config.URL, nil)
+	resp, err := p.connectionProbe(ctx, http.MethodHead)
 	if err != nil {
 		return err
 	}
-
-	p.applyAuth(req)
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("连接 Webhook 失败: %w", err)
+	if resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusNotImplemented {
+		resp.Body.Close()
+		resp, err = p.connectionProbe(ctx, p.config.Method)
+		if err != nil {
+			return err
+		}
 	}
 	defer resp.Body.Close()
+	return evaluateWebhookProbe(resp)
+}
 
-	if resp.StatusCode >= 500 {
-		return fmt.Errorf("Webhook 服务错误: HTTP %d", resp.StatusCode)
+func (p *WebhookProvider) connectionProbe(ctx context.Context, method string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, p.config.URL, nil)
+	if err != nil {
+		return nil, newConfigError(fmt.Sprintf("Webhook URL 无效: %v", err))
 	}
+	p.applyAuth(req)
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, newConnectionError("连接 Webhook 失败", err)
+	}
+	return resp, nil
+}
 
-	return nil
+func evaluateWebhookProbe(resp *http.Response) error {
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return newAuthError(fmt.Sprintf("Webhook 认证失败 (HTTP %d)", resp.StatusCode), nil)
+	case resp.StatusCode >= 500:
+		return newRequestError(fmt.Sprintf("Webhook 服务错误 (HTTP %d)", resp.StatusCode), nil)
+	case resp.StatusCode >= 400:
+		return newRequestError(fmt.Sprintf("Webhook 连接测试失败 (HTTP %d)", resp.StatusCode), nil)
+	default:
+		return nil
+	}
 }
 
 // Name 获取提供者名称

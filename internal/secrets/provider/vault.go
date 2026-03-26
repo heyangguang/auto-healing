@@ -18,36 +18,48 @@ type VaultProvider struct {
 	authType string // 从 SecretsSource.AuthType 获取
 	name     string
 	client   *http.Client
-	token    string // 运行时获取的 token（AppRole 方式）
 }
 
 // NewVaultProvider 创建 Vault 密钥提供者
 func NewVaultProvider(source *model.SecretsSource) (*VaultProvider, error) {
+	if err := validateSecretAuthType(source.AuthType); err != nil {
+		return nil, err
+	}
+
 	var config model.VaultConfig
 	configBytes, _ := json.Marshal(source.Config)
 	if err := json.Unmarshal(configBytes, &config); err != nil {
-		return nil, fmt.Errorf("解析 Vault 配置失败: %w", err)
+		return nil, newConfigError(fmt.Sprintf("解析 Vault 配置失败: %v", err))
 	}
 
 	if config.Address == "" {
-		return nil, fmt.Errorf("Vault 地址不能为空")
+		return nil, newConfigError("Vault 地址不能为空")
+	}
+	if err := validateProviderURL(config.Address, "Vault 地址"); err != nil {
+		return nil, err
 	}
 	if config.SecretPath == "" {
-		return nil, fmt.Errorf("secret_path 不能为空")
+		return nil, newConfigError("secret_path 不能为空")
+	}
+	if config.QueryKey == "" {
+		return nil, newConfigError("query_key 不能为空")
+	}
+	if config.QueryKey != "ip" && config.QueryKey != "hostname" {
+		return nil, newConfigError("query_key 只支持 'ip' 或 'hostname'")
 	}
 
 	// 验证认证配置
 	switch config.Auth.Type {
 	case "token":
 		if config.Auth.Token == "" {
-			return nil, fmt.Errorf("Token 不能为空")
+			return nil, newConfigError("token 认证需要提供 token")
 		}
 	case "approle":
 		if config.Auth.RoleID == "" || config.Auth.SecretID == "" {
-			return nil, fmt.Errorf("AppRole 需要 role_id 和 secret_id")
+			return nil, newConfigError("approle 认证需要提供 role_id 和 secret_id")
 		}
 	default:
-		return nil, fmt.Errorf("不支持的认证类型: %s（支持: token, approle）", config.Auth.Type)
+		return nil, newConfigError(fmt.Sprintf("不支持的 Vault 认证类型: %s（支持: token, approle）", config.Auth.Type))
 	}
 
 	return &VaultProvider{
@@ -68,7 +80,7 @@ func (p *VaultProvider) getToken(ctx context.Context) (string, error) {
 	case "approle":
 		return p.loginWithAppRole(ctx)
 	default:
-		return "", fmt.Errorf("不支持的认证类型: %s", p.config.Auth.Type)
+		return "", newConfigError(fmt.Sprintf("不支持的 Vault 认证类型: %s", p.config.Auth.Type))
 	}
 }
 
@@ -84,19 +96,21 @@ func (p *VaultProvider) loginWithAppRole(ctx context.Context) (string, error) {
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return "", fmt.Errorf("创建 AppRole 登录请求失败: %w", err)
+		return "", newConfigError(fmt.Sprintf("Vault 地址无效: %v", err))
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if p.config.Namespace != "" {
+		req.Header.Set("X-Vault-Namespace", p.config.Namespace)
+	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("AppRole 登录请求失败: %w", err)
+		return "", newConnectionError("Vault AppRole 登录请求失败", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("AppRole 登录失败: HTTP %d, %s", resp.StatusCode, string(respBody))
+		return "", newHTTPStatusError("Vault AppRole 登录", resp.StatusCode)
 	}
 
 	var result struct {
@@ -105,11 +119,11 @@ func (p *VaultProvider) loginWithAppRole(ctx context.Context) (string, error) {
 		} `json:"auth"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("解析 AppRole 响应失败: %w", err)
+		return "", newInvalidResponseError("解析 Vault AppRole 响应失败", err)
 	}
 
 	if result.Auth.ClientToken == "" {
-		return "", fmt.Errorf("AppRole 登录未返回 Token")
+		return "", newInvalidResponseError("Vault AppRole 响应缺少 client_token", nil)
 	}
 
 	return result.Auth.ClientToken, nil
@@ -142,7 +156,7 @@ func (p *VaultProvider) GetSecret(ctx context.Context, query model.SecretQuery) 
 func (p *VaultProvider) newSecretRequest(ctx context.Context, query model.SecretQuery, token string) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", p.secretURL(query), nil)
 	if err != nil {
-		return nil, fmt.Errorf("创建请求失败: %w", err)
+		return nil, newConfigError(fmt.Sprintf("Vault 地址无效: %v", err))
 	}
 	req.Header.Set("X-Vault-Token", token)
 	if p.config.Namespace != "" {
@@ -168,16 +182,15 @@ func (p *VaultProvider) secretURL(query model.SecretQuery) string {
 func (p *VaultProvider) executeSecretRequest(req *http.Request) (*http.Response, error) {
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("请求 Vault 失败: %w", err)
+		return nil, newConnectionError("请求 Vault 失败", err)
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		resp.Body.Close()
 		return nil, ErrSecretNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("Vault 返回错误: HTTP %d, %s", resp.StatusCode, string(body))
+		return nil, newHTTPStatusError("Vault", resp.StatusCode)
 	}
 	return resp, nil
 }
@@ -189,7 +202,10 @@ func (p *VaultProvider) decodeSecretResponse(body io.Reader) (map[string]interfa
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("解析 Vault 响应失败: %w", err)
+		return nil, newInvalidResponseError("解析 Vault 响应失败", err)
+	}
+	if result.Data.Data == nil {
+		return nil, newInvalidResponseError("Vault 响应缺少 data.data", nil)
 	}
 	return result.Data.Data, nil
 }
@@ -206,19 +222,22 @@ func (p *VaultProvider) TestConnection(ctx context.Context) error {
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return err
+		return newConfigError(fmt.Sprintf("Vault 地址无效: %v", err))
 	}
 
 	req.Header.Set("X-Vault-Token", token)
+	if p.config.Namespace != "" {
+		req.Header.Set("X-Vault-Namespace", p.config.Namespace)
+	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("连接 Vault 失败: %w", err)
+		return newConnectionError("连接 Vault 失败", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusTooManyRequests {
-		return fmt.Errorf("Vault 健康检查失败: HTTP %d", resp.StatusCode)
+	if !isHealthyVaultStatus(resp.StatusCode) {
+		return newHTTPStatusError("Vault 健康检查", resp.StatusCode)
 	}
 
 	return nil
@@ -229,7 +248,11 @@ func (p *VaultProvider) Name() string {
 	return p.name
 }
 
-// extractField 从 data 中提取字段（支持点分隔路径）
-func (p *VaultProvider) extractField(data map[string]interface{}, path string) string {
-	return extractStringPath(data, path)
+func isHealthyVaultStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusOK, http.StatusTooManyRequests, 472, 473:
+		return true
+	default:
+		return false
+	}
 }

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strconv"
+
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -11,7 +13,11 @@ import (
 func (h *SecretsHandler) ListSources(c *gin.Context) {
 	var isDefault *bool
 	if raw := c.Query("is_default"); raw != "" {
-		value := raw == "true"
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			response.BadRequest(c, "is_default 参数必须为 true 或 false")
+			return
+		}
 		isDefault = &value
 	}
 
@@ -36,7 +42,7 @@ func (h *SecretsHandler) CreateSource(c *gin.Context) {
 
 	source, err := h.svc.CreateSource(c.Request.Context(), req.ToModel())
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		writeSourceAdminError(c, err, "创建密钥源失败")
 		return
 	}
 	source.Config = maskConfig(source.Config)
@@ -62,7 +68,7 @@ func (h *SecretsHandler) loadSourceByID(c *gin.Context) (*model.SecretsSource, b
 
 	source, err := h.svc.GetSource(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "密钥源不存在")
+		writeSourceAdminError(c, err, "获取密钥源失败")
 		return nil, false
 	}
 	return source, true
@@ -111,7 +117,7 @@ func (h *SecretsHandler) TestConnection(c *gin.Context) {
 		return
 	}
 	if err := h.svc.TestConnection(c.Request.Context(), id); err != nil {
-		response.BadRequest(c, "连接测试失败: "+err.Error())
+		writeSourceProbeError(c, err)
 		return
 	}
 	response.Message(c, "连接测试成功")
@@ -124,7 +130,7 @@ func (h *SecretsHandler) Enable(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Enable(c.Request.Context(), id); err != nil {
-		response.BadRequest(c, err.Error())
+		writeSourceAdminError(c, err, "启用密钥源失败")
 		return
 	}
 	response.Message(c, "密钥源已启用")
@@ -137,7 +143,7 @@ func (h *SecretsHandler) Disable(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Disable(c.Request.Context(), id); err != nil {
-		response.BadRequest(c, err.Error())
+		writeSourceAdminError(c, err, "禁用密钥源失败")
 		return
 	}
 	response.Message(c, "密钥源已禁用")

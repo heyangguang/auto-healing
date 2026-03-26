@@ -68,6 +68,24 @@ func TestClassifySecretsError(t *testing.T) {
 			wantStatus: http.StatusNotFound,
 			wantMsg:    "密钥源不存在",
 		},
+		{
+			name:       "provider unavailable",
+			err:        fmt.Errorf("wrapped: %w", secretsSvc.ErrSecretsProviderConnectionFailed),
+			wantStatus: http.StatusBadGateway,
+			wantMsg:    "密钥提供方不可用",
+		},
+		{
+			name:       "already active",
+			err:        fmt.Errorf("%w: source-a", secretsSvc.ErrSecretsSourceAlreadyActive),
+			wantStatus: http.StatusConflict,
+			wantMsg:    "secrets source already active: source-a",
+		},
+		{
+			name:       "duplicate name",
+			err:        fmt.Errorf("UNIQUE constraint failed: secrets_sources.name"),
+			wantStatus: http.StatusConflict,
+			wantMsg:    "密钥源名称已存在",
+		},
 	}
 
 	for _, tt := range tests {

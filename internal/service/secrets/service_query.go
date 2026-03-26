@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -13,6 +14,9 @@ import (
 )
 
 func (s *Service) TestQuery(ctx context.Context, id uuid.UUID, hostname, ipAddress string) (*model.Secret, error) {
+	if err := validateSecretQueryTarget(hostname, ipAddress); err != nil {
+		return nil, err
+	}
 	source, err := s.GetSource(ctx, id)
 	if err != nil {
 		return nil, err
@@ -25,11 +29,14 @@ func (s *Service) TestQuery(ctx context.Context, id uuid.UUID, hostname, ipAddre
 	if err != nil {
 		return nil, fmt.Errorf("获取凭据失败: %w", err)
 	}
-	logger.Auth("SECRET").Info("测试成功: %s | 密钥源: %s", hostname, source.Name)
+	logSecretsInfo("测试成功: %s | 密钥源: %s", hostname, source.Name)
 	return secret, nil
 }
 
 func (s *Service) QuerySecret(ctx context.Context, query model.SecretQuery) (*model.Secret, error) {
+	if err := validateSecretQueryTarget(query.Hostname, query.IPAddress); err != nil {
+		return nil, err
+	}
 	source, err := s.resolveSecretsSource(ctx, query.SourceID)
 	if err != nil {
 		return nil, err
@@ -40,10 +47,10 @@ func (s *Service) QuerySecret(ctx context.Context, query model.SecretQuery) (*mo
 	}
 	secret, err := provider.GetSecret(ctx, query)
 	if err != nil {
-		logger.Auth("SECRET").Error("失败: %s | 密钥源: %s | 错误: %v", query.Hostname, source.Name, err)
+		logSecretsError("失败: %s | 密钥源: %s | 错误: %v", query.Hostname, source.Name, err)
 		return nil, err
 	}
-	logger.Auth("SECRET").Info("完成: %s | 源类型: %s | 来源: %s | 认证类型: %s", query.Hostname, source.Type, source.Name, secret.AuthType)
+	logSecretsInfo("完成: %s | 源类型: %s | 来源: %s | 认证类型: %s", query.Hostname, source.Type, source.Name, secret.AuthType)
 	return secret, nil
 }
 
@@ -56,7 +63,7 @@ func (s *Service) resolveSecretsSource(ctx context.Context, sourceID string) (*m
 			}
 			return nil, err
 		}
-		logger.Auth("SECRET").Info("使用默认密钥源: %s (ID: %s)", source.Name, source.ID)
+		logSecretsInfo("使用默认密钥源: %s (ID: %s)", source.Name, source.ID)
 		return source, nil
 	}
 
@@ -75,4 +82,25 @@ func (s *Service) resolveSecretsSource(ctx context.Context, sourceID string) (*m
 		return nil, fmt.Errorf("%w: %s", ErrSecretsSourceInactive, source.Name)
 	}
 	return source, nil
+}
+
+func logSecretsInfo(format string, args ...interface{}) {
+	if logger.GetZapLogger() == nil {
+		return
+	}
+	logger.Auth("SECRET").Info(format, args...)
+}
+
+func logSecretsError(format string, args ...interface{}) {
+	if logger.GetZapLogger() == nil {
+		return
+	}
+	logger.Auth("SECRET").Error(format, args...)
+}
+
+func validateSecretQueryTarget(hostname, ipAddress string) error {
+	if strings.TrimSpace(hostname) != "" || strings.TrimSpace(ipAddress) != "" {
+		return nil
+	}
+	return fmt.Errorf("%w: 请提供 hostname 或 ip_address", ErrSecretsQueryTargetRequired)
 }

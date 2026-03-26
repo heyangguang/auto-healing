@@ -8,6 +8,15 @@ import (
 
 type secretFieldExtractor func(string) string
 
+func validateSecretAuthType(authType string) error {
+	switch authType {
+	case "ssh_key", "password":
+		return nil
+	default:
+		return newConfigError("auth_type 只支持 ssh_key 或 password")
+	}
+}
+
 func buildMappedSecret(authType string, mapping model.FieldMapping, extractor secretFieldExtractor) (*model.Secret, error) {
 	secret := &model.Secret{
 		AuthType: authType,
@@ -20,7 +29,7 @@ func buildMappedSecret(authType string, mapping model.FieldMapping, extractor se
 		secret.Password = extractMappedField(extractor, mapping.Password, "password", "")
 	}
 	if secret.PrivateKey == "" && secret.Password == "" {
-		return nil, ErrSecretNotFound
+		return nil, newInvalidResponseError("提供方响应缺少凭据字段", nil)
 	}
 	return secret, nil
 }
