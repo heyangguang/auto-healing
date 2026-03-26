@@ -138,7 +138,7 @@ write_prompt() {
 
 \`${module_note}\`
 
-## Audit Scope
+## Module Scope
 
 \`${paths}\`
 
@@ -150,22 +150,24 @@ write_prompt() {
 
 \`${focus}\`
 
-## Audit Prompt
+## Work Prompt
 
-你只审计以下范围：
+你负责以下模块范围：
 ${paths}
 
 共享触点：
 ${shared_touchpoints}
 
 要求：
-1. 先只做审计，不要改代码
-2. 只看当前模块范围内的文件，不要越界
-3. 优先找：安全、隔离、事务、一致性、并发、错误语义、静默降级、测试缺口
+1. 先在当前模块范围内做审查，确认问题后直接修复
+2. 只改当前模块范围内的文件，不要越界；共享触点如必须修改，要在结果里说明
+3. 优先找并修：安全、隔离、事务、一致性、并发、错误语义、静默降级、测试缺口
 4. 每条 finding 必须带 file:line、触发条件、影响
-5. findings 写入 \`.parallel-review/${session}/findings/${module_id}.md\`
-6. 审计完成后，更新 \`.parallel-review/${session}/review_status.csv\` 中本模块的 status 和 notes
-7. 如果当前模块未发现明确问题，明确写“当前模块未发现新的明确问题”
+5. 修复后运行与本模块相关的最小必要验证，并记录验证命令和结果
+6. findings 写入 \`.parallel-review/${session}/findings/${module_id}.md\`
+7. 处理完成后，更新 \`.parallel-review/${session}/review_status.csv\` 中本模块的 status 和 notes
+8. 不要切换 main，不要 merge，不要 rebase；只在当前模块分支内工作
+9. 如果当前模块未发现明确问题，明确写“当前模块未发现新的明确问题”；如果已修复，明确列出修复项
 EOF
 }
 
@@ -179,6 +181,14 @@ write_findings_stub() {
 > ${module_note}
 
 ## Findings
+
+- TODO
+
+## Fixes
+
+- TODO
+
+## Validation
 
 - TODO
 EOF
@@ -312,7 +322,7 @@ write_readme() {
   local session_dir="$1"
   local session="$2"
   cat >"$session_dir/README.md" <<EOF
-# Parallel Review Session
+# Parallel Module Session
 
 - Session: \`${session}\`
 - Review status: \`review_status.csv\`
@@ -324,12 +334,13 @@ write_readme() {
 ## Recommended Flow
 
 1. 先看 \`repair_plan.csv\`，确认模块边界、分支名和 worktree 目录
-2. 如需先挑模块，可运行 \`./create_worktrees.sh --list\` 查看模块清单和备注
-3. 运行 \`./create_worktrees.sh auth_middleware tenant_user_role\` 或不带参数全量创建
+2. 运行 \`./create_worktrees.sh --list\` 查看模块清单和备注
+3. 运行 \`./create_worktrees.sh auth_middleware tenant_user_role\` 只创建本轮要处理的模块
 4. 手动开多个终端/SSH 会话，每个进程进入自己的 worktree
 5. 在每个进程里打开 \`prompts/<module>.md\`，把内容贴给对应的 Codex 会话
-6. findings 写入 \`findings/<module>.md\`
-7. 总控只维护 \`review_status.csv\`
+6. 每个模块进程在自己的分支里完成“先审再修 + 最小验证”
+7. findings 写入 \`findings/<module>.md\`
+8. 总控维护 \`review_status.csv\`
 EOF
 }
 
@@ -370,6 +381,7 @@ main() {
   printf '  2. %s --list\n' "$session_dir/create_worktrees.sh"
   printf '  3. %s auth_middleware tenant_user_role\n' "$session_dir/create_worktrees.sh"
   printf '  4. 手动开多个终端，分别进入各模块 worktree，并把 prompts/*.md 贴给对应进程\n'
+  printf '  5. 每个模块在自己的分支里先审再修，跑最小必要验证，再提交当前分支\n'
 }
 
 main "$@"

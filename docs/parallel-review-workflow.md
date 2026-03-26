@@ -1,6 +1,6 @@
-# 并行审计工作流
+# 并行模块修复工作流
 
-这套脚手架现在按“手动多进程 + 分模块审计”设计，不再依赖 `tmux`。
+这套脚手架现在按“手动多进程 + 分模块修复”设计，不再依赖 `tmux`。
 
 核心模型：
 
@@ -38,24 +38,25 @@ bash scripts/review/setup_parallel_review.sh dev-20260326
 - `.parallel-review/<session>/findings/*.md`
 - `.parallel-review/<session>/create_worktrees.sh`
 
-### 2. 创建独立 worktree
-
-```bash
-bash .parallel-review/<session>/create_worktrees.sh
-```
-
-如果你不想一次建 11 个模块，先看模块清单和备注：
-
-```bash
-bash .parallel-review/<session>/create_worktrees.sh --list
-```
-
-然后只创建你要的模块：
+### 2. 创建独立 worktree 和分支
 
 ```bash
 bash .parallel-review/<session>/create_worktrees.sh auth_middleware tenant_user_role
 ```
 
+先看模块清单和备注：
+
+```bash
+bash .parallel-review/<session>/create_worktrees.sh --list
+```
+
+然后只创建你这轮要处理的模块：
+
+```bash
+bash .parallel-review/<session>/create_worktrees.sh auth_middleware tenant_user_role
+```
+
+如果你确实要全量创建，再不带模块参数执行。  
 如果你当前是 detached HEAD，需要显式指定基线分支：
 
 ```bash
@@ -81,7 +82,7 @@ sed -n '1,200p' .parallel-review/<session>/repair_plan.csv
 
 ### 4. 手动开多个进程
 
-你自己开多个终端、标签页或 SSH 会话。每个进程只负责一个模块。
+你自己开多个终端、标签页或 SSH 会话。每个进程只负责一个模块，并在这个模块分支里完成“先审再修”。
 
 例如：
 
@@ -112,10 +113,11 @@ sed -n '1,200p' .parallel-review/dev-20260326/prompts/execution_healing.md
 
 这些 prompt 默认是：
 
-- 先只做审计
-- 不改代码
-- 只输出 findings
-- 带 file:line、触发条件、影响
+- 当前模块先审再修
+- 不越界改别的模块
+- findings 要带 `file:line`、触发条件、影响
+- 修完要跑最小必要验证
+- 不碰 `main`
 
 ## 你在每个模块进程里做什么
 
@@ -123,8 +125,11 @@ sed -n '1,200p' .parallel-review/dev-20260326/prompts/execution_healing.md
 2. 打开自己的 prompt 文件
 3. 启动该进程里的 Codex
 4. 把 prompt 内容贴进去
-5. 审计结果写回 `findings/<module>.md`
-6. 更新 `review_status.csv`
+5. 在当前模块分支里先审再修
+6. 跑本模块最小必要验证
+7. 把 findings / fixes / validation 写回 `findings/<module>.md`
+8. 更新 `review_status.csv`
+9. 提交并 push 当前模块分支
 
 ## 当前模块拆分
 
@@ -154,7 +159,7 @@ sed -n '1,200p' .parallel-review/dev-20260326/prompts/execution_healing.md
 ## 最实用的使用方式
 
 - 主仓库终端：只看 `repair_plan.csv` 和 `review_status.csv`
-- 模块终端：各自审计各自范围
+- 模块终端：各自负责自己的模块分支，先审再修
 - 公共文件：只指定一个模块负责
 
 像共享装配文件和跨模块接口，不要让多个模块同时处理。
