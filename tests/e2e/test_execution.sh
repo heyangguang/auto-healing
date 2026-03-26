@@ -2,14 +2,16 @@
 # 端到端测试 - 执行任务集成密钥服务
 # 完整流程：创建密钥源 → 创建Git仓库 → 创建任务模板 → 执行任务 → 查看日志
 
-set -e
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 API_BASE="${API_BASE:-http://localhost:8080/api/v1}"
 USERNAME="${USERNAME:-admin}"
 PASSWORD="${PASSWORD:-admin123456}"
 MOCK_SECRETS_ENDPOINT="${MOCK_SECRETS_ENDPOINT:-http://localhost:5001}"
 TARGET_HOST="${TARGET_HOST:-192.168.31.66}"
-PLAYBOOK_PATH="/root/auto-healing/tests/playbooks"
+PLAYBOOK_PATH="${PLAYBOOK_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/playbooks}"
 
 echo "=========================================="
 echo "  执行任务端到端测试（完整流程）"
@@ -61,7 +63,7 @@ SECRETS_RESULT=$(curl -s -X POST "$API_BASE/secrets-sources" \
     }
   }")
 
-SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id // .id')
+SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id')
 if [ "$SECRETS_SOURCE_ID" != "null" ] && [ -n "$SECRETS_SOURCE_ID" ]; then
   echo "✅ 密钥源创建成功 (ID: $SECRETS_SOURCE_ID)"
 else
@@ -77,9 +79,9 @@ QUERY_RESULT=$(curl -s -X POST "$API_BASE/secrets/query" \
   -H "Content-Type: application/json" \
   -d "{\"hostname\":\"$TARGET_HOST\",\"source_id\":\"$SECRETS_SOURCE_ID\"}")
 
-AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type // .auth_type')
-PASSWORD_VAL=$(echo "$QUERY_RESULT" | jq -r '.data.password // .password')
-USERNAME_VAL=$(echo "$QUERY_RESULT" | jq -r '.data.username // .username')
+AUTH_TYPE=$(echo "$QUERY_RESULT" | jq -r '.data.auth_type')
+PASSWORD_VAL=$(echo "$QUERY_RESULT" | jq -r '.data.password')
+USERNAME_VAL=$(echo "$QUERY_RESULT" | jq -r '.data.username')
 if [ "$AUTH_TYPE" == "password" ]; then
   echo "✅ 密钥源验证成功"
   echo "   主机: $TARGET_HOST"
@@ -117,7 +119,7 @@ REPO_RESULT=$(curl -s -X POST "$API_BASE/git-repos" \
     \"default_branch\": \"master\"
   }")
 
-REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id // .id')
+REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id')
 if [ "$REPO_ID" != "null" ] && [ -n "$REPO_ID" ]; then
   echo "✅ Git 仓库创建成功 (ID: $REPO_ID)"
 else
@@ -131,7 +133,7 @@ echo "--- 同步仓库 ---"
 curl -s -X POST "$API_BASE/git-repos/$REPO_ID/sync" -H "Authorization: Bearer $TOKEN" > /dev/null
 sleep 2
 
-REPO_STATUS=$(curl -s "$API_BASE/git-repos/$REPO_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.data.status // .status')
+REPO_STATUS=$(curl -s "$API_BASE/git-repos/$REPO_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.data.status')
 echo "✅ 仓库同步完成 (状态: $REPO_STATUS)"
 
 # 激活仓库
@@ -148,11 +150,14 @@ ACTIVATE_RESULT=$(curl -s -X POST "$API_BASE/git-repos/$REPO_ID/activate" \
     \"config_mode\": \"manual\"
   }")
 
-if echo "$ACTIVATE_RESULT" | grep -q "激活成功"; then
+if echo "$ACTIVATE_RESULT" | jq -e '.code == 0 or ((.message // "") | test("激活成功|success|activated"; "i"))' > /dev/null 2>&1; then
   echo "✅ 仓库已激活"
 else
-  echo "⚠️ 激活结果: $ACTIVATE_RESULT"
+  echo "❌ 仓库激活失败: $ACTIVATE_RESULT"
+  exit 1
 fi
+
+PLAYBOOK_ID=$(select_playbook_id "$API_BASE" "$TOKEN" "$REPO_ID")
 
 # ==================== 3. 创建执行任务模板 ====================
 echo ""
@@ -176,12 +181,12 @@ TASK_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks" \
   -H "Content-Type: application/json" \
   -d "{
     \"name\": \"E2E Ping Test\",
-    \"repository_id\": \"$REPO_ID\",
+    \"playbook_id\": \"$PLAYBOOK_ID\",
     \"target_hosts\": \"$TARGET_HOST\",
     \"executor_type\": \"local\"
   }")
 
-TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id // .id')
+TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id')
 if [ "$TASK_ID" != "null" ] && [ -n "$TASK_ID" ]; then
   echo "✅ 任务模板创建成功 (ID: $TASK_ID)"
 else
@@ -203,7 +208,7 @@ EXEC_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks/$TASK_ID/execute" \
     \"secrets_source_id\": \"$SECRETS_SOURCE_ID\"
   }")
 
-RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id // .id')
+RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id')
 if [ "$RUN_ID" != "null" ] && [ -n "$RUN_ID" ]; then
   echo "✅ 执行已启动 (Run ID: $RUN_ID)"
 else
@@ -217,7 +222,7 @@ echo "--- 等待执行完成 ---"
 FINAL_STATUS=""
 for i in {1..18}; do
   sleep 5
-  RUN_STATUS=$(curl -s "$API_BASE/execution-runs/$RUN_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.data.status // .status')
+  RUN_STATUS=$(curl -s "$API_BASE/execution-runs/$RUN_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.data.status')
   echo "   [$i] 状态: $RUN_STATUS"
   
   if [ "$RUN_STATUS" == "success" ] || [ "$RUN_STATUS" == "failed" ]; then
@@ -261,5 +266,6 @@ if [ "$FINAL_STATUS" == "success" ]; then
   echo "  ✅ 执行任务测试成功！"
 else
   echo "  ❌ 执行任务测试失败"
+  exit 1
 fi
 echo "=========================================="

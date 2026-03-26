@@ -30,7 +30,7 @@ LOGIN_RESULT=$(curl -s -X POST "$API_BASE/auth/login" \
   -H "Content-Type: application/json" \
   -d "{\"username\":\"$USERNAME\",\"password\":\"$PASSWORD\"}")
 
-TOKEN=$(echo "$LOGIN_RESULT" | jq -r '.access_token // .data.access_token')
+TOKEN=$(echo "$LOGIN_RESULT" | jq -r '.access_token // empty')
 
 if [ -z "$TOKEN" ] || [ "$TOKEN" == "null" ]; then
   echo "❌ 登录失败"
@@ -64,7 +64,7 @@ done
 # 删除旧的执行测试规则和流程
 OLD_RULES=$(curl -s "$API_BASE/healing/rules" -H "Authorization: Bearer $TOKEN" | jq -r '.data[].id // empty')
 for RULE_ID in $OLD_RULES; do
-  RULE_NAME=$(curl -s "$API_BASE/healing/rules/$RULE_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.data.name // .name')
+  RULE_NAME=$(curl -s "$API_BASE/healing/rules/$RULE_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.data.name')
   if [[ "$RULE_NAME" == E2E\ Execution* ]]; then
     curl -s -X DELETE "$API_BASE/healing/rules/$RULE_ID" -H "Authorization: Bearer $TOKEN" > /dev/null
   fi
@@ -72,7 +72,7 @@ done
 
 OLD_FLOWS=$(curl -s "$API_BASE/healing/flows" -H "Authorization: Bearer $TOKEN" | jq -r '.data[].id // empty')
 for FLOW_ID in $OLD_FLOWS; do
-  FLOW_NAME=$(curl -s "$API_BASE/healing/flows/$FLOW_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.data.name // .name')
+  FLOW_NAME=$(curl -s "$API_BASE/healing/flows/$FLOW_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.data.name')
   if [[ "$FLOW_NAME" == E2E\ Execution* ]]; then
     curl -s -X DELETE "$API_BASE/healing/flows/$FLOW_ID" -H "Authorization: Bearer $TOKEN" > /dev/null
   fi
@@ -114,7 +114,7 @@ FLOW_RESULT=$(curl -s -X POST "$API_BASE/healing/flows" \
     "is_active": true
   }')
 
-FLOW_ID=$(echo "$FLOW_RESULT" | jq -r '.data.id // .id')
+FLOW_ID=$(echo "$FLOW_RESULT" | jq -r '.data.id')
 if [ -z "$FLOW_ID" ] || [ "$FLOW_ID" == "null" ]; then
   echo "❌ 创建流程失败: $FLOW_RESULT"
   exit 1
@@ -155,7 +155,7 @@ RULE_RESULT=$(curl -s -X POST "$API_BASE/healing/rules" \
     \"is_active\": true
   }")
 
-RULE_ID=$(echo "$RULE_RESULT" | jq -r '.data.id // .id')
+RULE_ID=$(echo "$RULE_RESULT" | jq -r '.data.id')
 if [ -z "$RULE_ID" ] || [ "$RULE_ID" == "null" ]; then
   echo "❌ 创建规则失败: $RULE_RESULT"
   exit 1
@@ -217,7 +217,8 @@ echo "工单状态: $INCIDENT_STATUS"
 INSTANCE_ID=$(echo "$INCIDENT_STATUS" | awk -F'|' '{print $3}' | tr -d ' ')
 
 if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "" ]; then
-  echo "⚠️ 未创建流程实例"
+  echo "❌ 未创建流程实例"
+  exit 1
 else
   echo "✅ 流程实例 ID: $INSTANCE_ID"
 fi
@@ -231,7 +232,8 @@ APPROVAL_ID=$(docker exec $DB_CONTAINER psql -U postgres -d auto_healing -t -c "
 " | tr -d ' ')
 
 if [ -z "$APPROVAL_ID" ] || [ "$APPROVAL_ID" == "" ]; then
-  echo "⚠️ 未找到待审批任务"
+  echo "❌ 未找到待审批任务"
+  exit 1
 else
   echo "✅ 找到审批任务 ID: $APPROVAL_ID"
   echo ""
@@ -256,7 +258,7 @@ echo ""
 echo "========== 步骤 7: 验证执行节点结果 =========="
 
 INSTANCE_DETAIL=$(curl -s "$API_BASE/healing/instances/$INSTANCE_ID" -H "Authorization: Bearer $TOKEN")
-NODE_STATES=$(echo "$INSTANCE_DETAIL" | jq '.data.node_states // .node_states')
+NODE_STATES=$(echo "$INSTANCE_DETAIL" | jq '.data.node_states')
 EXEC_STATE=$(echo "$NODE_STATES" | jq '.execution // empty')
 
 echo ""
@@ -349,19 +351,22 @@ if [ "$EXEC_STATE" != "" ] && [ "$EXEC_STATE" != "null" ]; then
   if [ "$EXEC_STATUS" == "completed" ]; then
     echo "✅ 执行节点执行成功"
   else
-    echo "⚠️ 执行节点状态: $EXEC_STATUS"
+    echo "❌ 执行节点状态异常: $EXEC_STATUS"
+    exit 1
   fi
 else
   echo "│  (无执行节点状态记录)                                          │"
   echo "└─────────────────────────────────────────────────────────────────┘"
+  echo "❌ 缺少执行节点状态记录"
+  exit 1
 fi
 
 # ==================== 步骤 8: 验证流程最终状态 ====================
 echo ""
 echo "========== 步骤 8: 验证流程最终状态 =========="
 
-FINAL_STATUS=$(echo "$INSTANCE_DETAIL" | jq -r '.data.status // .status')
-FINAL_NODE=$(echo "$INSTANCE_DETAIL" | jq -r '.data.current_node_id // .current_node_id')
+FINAL_STATUS=$(echo "$INSTANCE_DETAIL" | jq -r '.data.status')
+FINAL_NODE=$(echo "$INSTANCE_DETAIL" | jq -r '.data.current_node_id')
 
 echo ""
 echo "┌─────────────────────────────────────────────┐"
@@ -386,7 +391,8 @@ echo "└───────────────────────�
 if [ "$FINAL_STATUS" == "completed" ]; then
   echo "✅ 流程已完成！"
 else
-  echo "⚠️ 流程状态: $FINAL_STATUS (节点: $FINAL_NODE)"
+  echo "❌ 流程状态异常: $FINAL_STATUS (节点: $FINAL_NODE)"
+  exit 1
 fi
 
 # ==================== 最终结果 ====================

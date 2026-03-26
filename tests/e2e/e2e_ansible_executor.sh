@@ -4,7 +4,9 @@
 # 测试新的任务模板 + 执行记录分离架构
 # =============================================================================
 
-set -e
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 # 配置
 BASE_URL="${BASE_URL:-http://localhost:8080/api/v1}"
@@ -99,7 +101,7 @@ echo -e "${YELLOW}[3] 创建任务模板${NC}"
 
 TASK_RESPONSE=$(api_call POST "/execution-tasks" "{
     \"name\": \"E2E 测试任务\",
-    \"repository_id\": \"$REPO_ID\",
+    \"playbook_id\": \"$(select_playbook_id "$BASE_URL" "$TOKEN" "$REPO_ID")\",
     \"target_hosts\": \"localhost\",
     \"extra_vars\": {
         \"target_host\": \"localhost\"
@@ -107,15 +109,15 @@ TASK_RESPONSE=$(api_call POST "/execution-tasks" "{
     \"executor_type\": \"local\"
 }")
 
-TASK_ID=$(echo "$TASK_RESPONSE" | jq -r '.id // empty')
+TASK_ID=$(echo "$TASK_RESPONSE" | jq -r '.data.id // empty')
 
 if [ -n "$TASK_ID" ]; then
     test_case "创建任务模板" "0"
     echo -e "     任务ID: $TASK_ID"
-    echo -e "     任务名称: $(echo "$TASK_RESPONSE" | jq -r '.name')"
+    echo -e "     任务名称: $(echo "$TASK_RESPONSE" | jq -r '.data.name')"
 else
     test_case "创建任务模板" "1"
-    echo -e "     错误: $(echo "$TASK_RESPONSE" | jq -r '.error // "未知错误"')"
+    echo -e "     错误: $(echo "$TASK_RESPONSE" | jq -r '.message // "未知错误"')"
     exit 1
 fi
 
@@ -141,9 +143,9 @@ RUN_RESPONSE=$(api_call POST "/execution-tasks/$TASK_ID/execute" "{
     \"triggered_by\": \"e2e-test\"
 }")
 
-RUN_ID=$(echo "$RUN_RESPONSE" | jq -r '.id // empty')
-RUN_STATUS=$(echo "$RUN_RESPONSE" | jq -r '.status // empty')
-EXIT_CODE=$(echo "$RUN_RESPONSE" | jq -r '.exit_code // "null"')
+RUN_ID=$(echo "$RUN_RESPONSE" | jq -r '.data.id // empty')
+RUN_STATUS=$(echo "$RUN_RESPONSE" | jq -r '.data.status // empty')
+EXIT_CODE=$(echo "$RUN_RESPONSE" | jq -r '.data.exit_code // "null"')
 
 if [ -n "$RUN_ID" ]; then
     test_case "执行任务" "0"
@@ -152,11 +154,11 @@ if [ -n "$RUN_ID" ]; then
     echo -e "     退出码: $EXIT_CODE"
     
     # 显示统计信息
-    STATS=$(echo "$RUN_RESPONSE" | jq '.stats // {}')
+    STATS=$(echo "$RUN_RESPONSE" | jq '.data.stats // {}')
     echo -e "     统计: $STATS"
 else
     test_case "执行任务" "1"
-    echo -e "     错误: $(echo "$RUN_RESPONSE" | jq -r '.error // "未知错误"')"
+    echo -e "     错误: $(echo "$RUN_RESPONSE" | jq -r '.message // "未知错误"')"
 fi
 
 # ==================== 6. 获取执行历史 ====================
@@ -179,12 +181,12 @@ echo -e "${YELLOW}[7] 获取执行记录详情${NC}"
 
 if [ -n "$RUN_ID" ]; then
     RUN_DETAIL=$(api_call GET "/execution-runs/$RUN_ID")
-    RUN_DETAIL_STATUS=$(echo "$RUN_DETAIL" | jq -r '.status // empty')
+    RUN_DETAIL_STATUS=$(echo "$RUN_DETAIL" | jq -r '.data.status // empty')
     
     if [ -n "$RUN_DETAIL_STATUS" ]; then
         test_case "获取执行记录详情" "0"
         echo -e "     状态: $RUN_DETAIL_STATUS"
-        echo -e "     触发者: $(echo "$RUN_DETAIL" | jq -r '.triggered_by')"
+        echo -e "     触发者: $(echo "$RUN_DETAIL" | jq -r '.data.triggered_by')"
     else
         test_case "获取执行记录详情" "1"
     fi
@@ -199,13 +201,13 @@ echo -e "${YELLOW}[8] 获取执行日志${NC}"
 
 if [ -n "$RUN_ID" ]; then
     LOGS_RESPONSE=$(api_call GET "/execution-runs/$RUN_ID/logs")
-    LOG_COUNT=$(echo "$LOGS_RESPONSE" | jq 'length // 0')
+    LOG_COUNT=$(echo "$LOGS_RESPONSE" | jq '.data | length')
     
     if [ "$LOG_COUNT" -gt 0 ]; then
         test_case "获取执行日志" "0"
         echo -e "     日志条数: $LOG_COUNT"
         echo -e "     日志示例:"
-        echo "$LOGS_RESPONSE" | jq -r '.[0:3] | .[] | "       [\(.stage)] \(.message)"'
+        echo "$LOGS_RESPONSE" | jq -r '.data[0:3] | .[] | "       [\(.stage)] \(.message)"'
     else
         test_case "获取执行日志" "1"
     fi
@@ -221,7 +223,7 @@ RUN2_RESPONSE=$(api_call POST "/execution-tasks/$TASK_ID/execute" "{
     \"triggered_by\": \"e2e-test-round2\"
 }")
 
-RUN2_ID=$(echo "$RUN2_RESPONSE" | jq -r '.id // empty')
+RUN2_ID=$(echo "$RUN2_RESPONSE" | jq -r '.data.id // empty')
 
 if [ -n "$RUN2_ID" ] && [ "$RUN2_ID" != "$RUN_ID" ]; then
     test_case "二次执行生成新记录" "0"
@@ -242,14 +244,14 @@ echo -e "${YELLOW}[10] 删除任务模板（级联删除执行记录和日志）
 DELETE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/execution-tasks/$TASK_ID" \
     -H "Authorization: Bearer $TOKEN")
 
-if [ "$DELETE_RESPONSE" == "204" ]; then
+if [ "$DELETE_RESPONSE" == "200" ]; then
     test_case "删除任务模板" "0"
     
     # 验证执行记录也被删除
     RUN_CHECK=$(api_call GET "/execution-runs/$RUN_ID")
-    RUN_CHECK_ERROR=$(echo "$RUN_CHECK" | jq -r '.error // empty')
-    
-    if [ -n "$RUN_CHECK_ERROR" ]; then
+    RUN_CHECK_CODE=$(echo "$RUN_CHECK" | jq -r '.code // empty')
+
+    if [ "$RUN_CHECK_CODE" == "40400" ]; then
         test_case "级联删除执行记录" "0"
     else
         test_case "级联删除执行记录" "1"

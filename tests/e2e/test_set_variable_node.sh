@@ -62,7 +62,7 @@ GIT_REPO_ID=$(curl -s "$API_BASE/api/v1/git-repos" \
 echo "  Git仓库ID: $GIT_REPO_ID"
 
 CHANNEL_ID=$(curl -s "$API_BASE/api/v1/channels" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.items[0].id // empty')
+  -H "Authorization: Bearer $TOKEN" | jq -r '.data[0].id // empty')
 echo "  通知渠道ID: $CHANNEL_ID"
 echo ""
 
@@ -356,5 +356,6 @@ else
     echo "  ❌ 测试失败"
     echo "  最终状态: $STATUS"
     echo "  最终节点: $FINAL_NODE"
+    exit 1
 fi
 echo ""

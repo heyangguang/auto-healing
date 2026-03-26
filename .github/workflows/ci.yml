@@ -7,6 +7,39 @@ on:
     branches: [main]
 
 jobs:
+  quality:
+    name: Contract & Script Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Quality surface checks
+        run: bash tools/quality_surface_checks.sh
+
+  acceptance-smoke:
+    name: Acceptance Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run acceptance auth smoke
+        env:
+          INIT_ADMIN_PASSWORD: admin123456
+        run: bash tests/e2e/run_acceptance_smoke_ci.sh
+
+      - name: Run acceptance interface contract smoke
+        env:
+          INIT_ADMIN_PASSWORD: admin123456
+          ACCEPTANCE_PHASE: interface_contract_smoke
+        run: bash tests/e2e/run_acceptance_smoke_ci.sh
+
   build:
     name: Build & Test
     runs-on: ubuntu-latest

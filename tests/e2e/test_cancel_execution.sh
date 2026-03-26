@@ -2,13 +2,15 @@
 # 端到端测试 - 取消任务
 # 启动一个长时间运行的任务，然后取消它
 
-set -e
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 API_BASE="${API_BASE:-http://localhost:8080/api/v1}"
 USERNAME="${USERNAME:-admin}"
 PASSWORD="${PASSWORD:-admin123456}"
 MOCK_SECRETS="${MOCK_SECRETS:-http://localhost:5001}"
-PLAYBOOK_PATH="/root/auto-healing/tests/playbooks"
+PLAYBOOK_PATH="${PLAYBOOK_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/playbooks}"
 
 TARGET_HOST="192.168.31.100"
 
@@ -65,7 +67,11 @@ SECRETS_RESULT=$(curl -s -X POST "$API_BASE/secrets-sources" \
       \"body_template\": \"{\\\"hostname\\\": \\\"{hostname}\\\"}\"
     }
   }")
-SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id // .id')
+SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id')
+if [ -z "$SECRETS_SOURCE_ID" ] || [ "$SECRETS_SOURCE_ID" = "null" ]; then
+  echo "❌ 密钥源创建失败: $SECRETS_RESULT"
+  exit 1
+fi
 echo "✅ 密钥源创建成功 (ID: $SECRETS_SOURCE_ID)"
 
 # 创建仓库（需要重新同步以获取新的 playbook）
@@ -79,7 +85,11 @@ REPO_RESULT=$(curl -s -X POST "$API_BASE/git-repos" \
     \"url\": \"file://$PLAYBOOK_PATH\",
     \"default_branch\": \"master\"
   }")
-REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id // .id')
+REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id')
+if [ -z "$REPO_ID" ] || [ "$REPO_ID" = "null" ]; then
+  echo "❌ Git 仓库创建失败: $REPO_RESULT"
+  exit 1
+fi
 echo "✅ Git 仓库创建成功 (ID: $REPO_ID)"
 
 curl -s -X POST "$API_BASE/git-repos/$REPO_ID/sync" -H "Authorization: Bearer $TOKEN" > /dev/null
@@ -91,6 +101,8 @@ curl -s -X POST "$API_BASE/git-repos/$REPO_ID/activate" \
   -d '{"main_playbook": "test_long_running.yml", "config_mode": "manual"}' > /dev/null
 echo "✅ 仓库同步并激活 (使用 test_long_running.yml)"
 
+PLAYBOOK_ID=$(select_playbook_id "$API_BASE" "$TOKEN" "$REPO_ID")
+
 # ==================== 2. 创建任务 ====================
 echo ""
 echo "========== 2. 创建任务 =========="
@@ -100,12 +112,16 @@ TASK_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks" \
   -H "Content-Type: application/json" \
   -d "{
     \"name\": \"E2E Cancel Long Running Task\",
-    \"repository_id\": \"$REPO_ID\",
+    \"playbook_id\": \"$PLAYBOOK_ID\",
     \"target_hosts\": \"$TARGET_HOST\",
     \"executor_type\": \"local\"
   }")
 
-TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id // .id')
+TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id')
+if [ -z "$TASK_ID" ] || [ "$TASK_ID" = "null" ]; then
+  echo "❌ 任务创建失败: $TASK_RESULT"
+  exit 1
+fi
 echo "✅ 任务创建成功 (ID: $TASK_ID)"
 echo "   Playbook: test_long_running.yml (sleep 60s)"
 
@@ -118,7 +134,11 @@ EXEC_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks/$TASK_ID/execute" \
   -H "Content-Type: application/json" \
   -d "{\"secrets_source_id\": \"$SECRETS_SOURCE_ID\"}")
 
-RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id // .id')
+RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id')
+if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+  echo "❌ 执行启动失败: $EXEC_RESULT"
+  exit 1
+fi
 echo "✅ 执行已启动 (Run ID: $RUN_ID)"
 echo ""
 echo "⏳ 等待 5 秒让任务开始运行..."
@@ -129,7 +149,8 @@ STATUS=$(curl -s "$API_BASE/execution-runs/$RUN_ID" -H "Authorization: Bearer $T
 echo "当前状态: $STATUS"
 
 if [ "$STATUS" != "running" ]; then
-  echo "⚠️ 任务未处于 running 状态，可能已完成或失败"
+  echo "❌ 任务未处于 running 状态: $STATUS"
+  exit 1
 fi
 
 # ==================== 4. 取消任务 ====================
@@ -170,7 +191,7 @@ if [ "$STATUS" == "cancelled" ]; then
   echo "    2. ✅ 任务状态变为 cancelled"
   echo "    3. ✅ 进程被终止（未等到 60s 就结束）"
 else
-  echo "  ⚠️ 取消测试结果: 状态=$STATUS"
-  echo "    可能需要检查取消功能的实现"
+  echo "  ❌ 取消测试结果异常: 状态=$STATUS"
+  exit 1
 fi
 echo "=========================================="

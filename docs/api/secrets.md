@@ -17,8 +17,8 @@
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `type` | string | ❌ | 类型：`ssh_key` / `username_password` / `api_token` / `vault` |
-| `status` | string | ❌ | 状态筛选 |
+| `type` | string | ❌ | 类型：`webhook` / `file` / `vault` |
+| `status` | string | ❌ | 状态：`active` / `inactive` |
 | `is_default` | bool | ❌ | 是否为默认密钥源：`true` / `false` |
 
 > 注意：此接口**不支持分页**，返回所有符合条件的密鑰源列表。
@@ -32,11 +32,11 @@
     {
       "id": "uuid",
       "name": "生产环境 SSH 密鑰",
-      "type": "ssh_key",
+      "type": "file",
       "auth_type": "ssh_key",
       "is_default": true,
       "priority": 1,
-      "status": "enabled",
+      "status": "active",
       "config": {"username": "ops", "private_key": "***"},
       "created_at": "2026-01-01T00:00:00Z",
       "updated_at": "2026-02-18T10:00:00Z"
@@ -60,7 +60,7 @@
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `name` | string | ✅ | 名称 |
-| `type` | string | ✅ | 类型：`ssh_key` / `username_password` / `api_token` / `vault` |
+| `type` | string | ✅ | 类型：`webhook` / `file` / `vault` |
 | `auth_type` | string | ✅ | 认证方式（与 type 一致或进一步区分） |
 | `config` | object | ✅ | 密钥配置（JSON 对象，根据 type 包含对应字段，如 `username`、`password`、`private_key`、`token` 等） |
 | `is_default` | bool | ❌ | 是否为默认密钥源，默认 false |
@@ -177,7 +177,7 @@
 
 **POST** `/api/v1/secrets/query`
 
-**权限**: `plugin:list`
+**权限**: `secrets:query`
 
 用于在执行任务时动态查询密钥值（如 Vault 中的密钥）。
 
@@ -185,6 +185,7 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `source_id` | uuid | ✅ | 密钥源 ID |
-| `path` | string | ❌ | 查询路径（Vault 类型） |
-| `key` | string | ❌ | 查询键名 |
+| `hostname` | string | ❌ | 主机名 |
+| `ip_address` | string | ❌ | IP 地址 |
+| `auth_type` | string | ❌ | 认证类型：`ssh_key` / `password` |
+| `source_id` | uuid | ❌ | 指定密钥源 ID；不传时按默认/优先级选择 |

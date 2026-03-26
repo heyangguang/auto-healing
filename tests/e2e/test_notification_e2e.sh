@@ -2,10 +2,12 @@
 # 通知模块端到端测试脚本
 # 完整流程：创建渠道 → 创建模板 → 创建任务(带通知配置) → 执行任务 → 验证通知发送
 
-set -e
+set -euo pipefail
 
 BASE_URL="http://localhost:8080/api/v1"
 MOCK_URL="http://localhost:9999"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -57,10 +59,10 @@ CHANNEL_RESP=$(curl -s -X POST "$BASE_URL/channels" \
       "url": "'$MOCK_URL'/webhook",
       "method": "POST"
     },
-    "default_recipients": ["ops-team@example.com"]
+    "recipients": ["ops-team@example.com"]
   }')
 
-CHANNEL_ID=$(echo "$CHANNEL_RESP" | jq -r '.id')
+CHANNEL_ID=$(echo "$CHANNEL_RESP" | jq -r '.data.id')
 if [ -z "$CHANNEL_ID" ] || [ "$CHANNEL_ID" == "null" ]; then
   echo_error "创建渠道失败: $CHANNEL_RESP"
   exit 1
@@ -83,7 +85,7 @@ TEMPLATE_RESP=$(curl -s -X POST "$BASE_URL/templates" \
     "format": "text"
   }')
 
-TEMPLATE_ID=$(echo "$TEMPLATE_RESP" | jq -r '.id')
+TEMPLATE_ID=$(echo "$TEMPLATE_RESP" | jq -r '.data.id')
 if [ -z "$TEMPLATE_ID" ] || [ "$TEMPLATE_ID" == "null" ]; then
   echo_error "创建模板失败: $TEMPLATE_RESP"
   exit 1
@@ -96,18 +98,19 @@ echo ""
 echo_info "=== 4. 获取已有 Git 仓库 ==="
 REPO_RESP=$(curl -s "$BASE_URL/git-repos" -H "$AUTH_HEADER")
 # 选择一个使用 test_ping.yml 的激活仓库（执行快）
-REPO_ID=$(echo "$REPO_RESP" | jq -r '(.items // .data)[] | select(.is_active == true and .main_playbook == "test_ping.yml") | .id' | head -1)
+REPO_ID=$(echo "$REPO_RESP" | jq -r '.data[] | select(.is_active == true and .main_playbook == "test_ping.yml") | .id' | head -1)
 
 if [ -z "$REPO_ID" ] || [ "$REPO_ID" == "null" ]; then
-  echo_warn "没有找到合适的 Git 仓库，跳过执行任务测试"
+  echo_error "没有找到合适的 Git 仓库，测试无法继续"
   echo_info "请先创建带 test_ping.yml 的 Git 仓库"
   
   # 清理
   curl -s -X DELETE "$BASE_URL/channels/$CHANNEL_ID" -H "$AUTH_HEADER" > /dev/null 2>&1 || true
   curl -s -X DELETE "$BASE_URL/templates/$TEMPLATE_ID" -H "$AUTH_HEADER" > /dev/null 2>&1 || true
-  exit 0
+  exit 1
 fi
 echo_info "使用仓库: $REPO_ID"
+PLAYBOOK_ID=$(select_playbook_id "$BASE_URL" "$TOKEN" "$REPO_ID")
 
 # ==================== 创建任务（带通知配置） ====================
 
@@ -118,7 +121,7 @@ TASK_RESP=$(curl -s -X POST "$BASE_URL/execution-tasks" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "E2E Notification Test Task '$SUFFIX'",
-    "repository_id": "'$REPO_ID'",
+    "playbook_id": "'$PLAYBOOK_ID'",
     "target_hosts": "localhost",
     "executor_type": "local",
     "notification_config": {
@@ -132,14 +135,13 @@ TASK_RESP=$(curl -s -X POST "$BASE_URL/execution-tasks" \
     }
   }')
 
-# API 可能返回 {code, data} 或直接返回对象
-TASK_ID=$(echo "$TASK_RESP" | jq -r '.id // .data.id // empty')
+TASK_ID=$(echo "$TASK_RESP" | jq -r '.data.id // empty')
 if [ -z "$TASK_ID" ] || [ "$TASK_ID" == "null" ]; then
   echo_error "创建任务失败: $TASK_RESP"
   exit 1
 fi
 echo_info "任务创建成功: $TASK_ID"
-echo "$TASK_RESP" | jq '.notification_config // .data.notification_config'
+echo "$TASK_RESP" | jq '.data.notification_config'
 
 # ==================== 执行任务 ====================
 
@@ -150,7 +152,7 @@ EXEC_RESP=$(curl -s -X POST "$BASE_URL/execution-tasks/$TASK_ID/execute" \
   -H "Content-Type: application/json" \
   -d '{"triggered_by": "e2e_test"}')
 
-RUN_ID=$(echo "$EXEC_RESP" | jq -r '.id // .data.id // empty')
+RUN_ID=$(echo "$EXEC_RESP" | jq -r '.data.id // empty')
 if [ -z "$RUN_ID" ] || [ "$RUN_ID" == "null" ]; then
   echo_error "执行任务失败: $EXEC_RESP"
   exit 1
@@ -165,7 +167,7 @@ MAX_WAIT=60
 WAITED=0
 
 while [ $WAITED -lt $MAX_WAIT ]; do
-  STATUS=$(curl -s "$BASE_URL/execution-runs/$RUN_ID" -H "$AUTH_HEADER" | jq -r '.status // .data.status // "pending"')
+  STATUS=$(curl -s "$BASE_URL/execution-runs/$RUN_ID" -H "$AUTH_HEADER" | jq -er '.data.status')
   echo "  状态: $STATUS (等待 ${WAITED}s)"
   
   if [ "$STATUS" == "success" ] || [ "$STATUS" == "failed" ] || [ "$STATUS" == "timeout" ]; then
@@ -202,7 +204,7 @@ if [ "$NOTIFICATION_COUNT" -ge 1 ]; then
 else
   echo_error "❌ 端到端测试失败！Mock 服务未收到通知"
   echo "检查执行日志:"
-  curl -s "$BASE_URL/execution-runs/$RUN_ID/logs" -H "$AUTH_HEADER" | jq '.[-3:]'
+  curl -s "$BASE_URL/execution-runs/$RUN_ID/logs" -H "$AUTH_HEADER" | jq '.data[-3:]'
   exit 1
 fi
 

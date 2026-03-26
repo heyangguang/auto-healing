@@ -3,11 +3,13 @@
 # 4 台正确主机 (192.168.31.100-103) + 2 台错误主机 (192.168.31.98-99)
 # 使用所有 35+ 变量的完整模板
 
-set -e
+set -euo pipefail
 
 BASE_URL="http://localhost:8080/api/v1"
 MOCK_URL="http://localhost:9999"
 MOCK_SECRETS="http://localhost:5001"  # mock_secrets.py
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 echo "=== 混合主机通知测试 (Docker + 4成功 + 2失败) ==="
 echo "  MOCK Secrets: $MOCK_SECRETS"
@@ -37,7 +39,7 @@ SSH_SOURCE_RESP=$(curl -s -X POST "$BASE_URL/secrets-sources" \
       "body_template": "{\"hostname\": \"{hostname}\"}"
     }
   }')
-SSH_SOURCE_ID=$(echo "$SSH_SOURCE_RESP" | jq -r '.data.id // .id')
+SSH_SOURCE_ID=$(echo "$SSH_SOURCE_RESP" | jq -r '.data.id')
 echo "SSH 密钥源: $SSH_SOURCE_ID"
 
 PWD_SOURCE_RESP=$(curl -s -X POST "$BASE_URL/secrets-sources" \
@@ -53,7 +55,7 @@ PWD_SOURCE_RESP=$(curl -s -X POST "$BASE_URL/secrets-sources" \
       "body_template": "{\"hostname\": \"{hostname}\"}"
     }
   }')
-PWD_SOURCE_ID=$(echo "$PWD_SOURCE_RESP" | jq -r '.data.id // .id')
+PWD_SOURCE_ID=$(echo "$PWD_SOURCE_RESP" | jq -r '.data.id')
 echo "密码密钥源: $PWD_SOURCE_ID"
 
 echo ""
@@ -61,7 +63,7 @@ echo "=== 2. 创建渠道 ==="
 CHANNEL_ID=$(curl -s -X POST "$BASE_URL/channels" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Mixed Notification Channel '$SUFFIX'", "type": "webhook", "config": {"url": "'$MOCK_URL'/webhook"}, "default_recipients": ["sre@example.com"]}' | jq -r '.id')
+  -d '{"name": "Mixed Notification Channel '$SUFFIX'", "type": "webhook", "config": {"url": "'$MOCK_URL'/webhook"}, "recipients": ["sre@example.com"]}' | jq -r '.data.id')
 echo "渠道: $CHANNEL_ID"
 
 echo ""
@@ -78,28 +80,29 @@ TEMPLATE_RESP=$(curl -s -X POST "$BASE_URL/templates" \
     \"format\": \"markdown\",
     \"supported_channels\": [\"webhook\", \"dingtalk\", \"email\"]
   }")
-TEMPLATE_ID=$(echo "$TEMPLATE_RESP" | jq -r '.id')
-VARIABLE_COUNT=$(echo "$TEMPLATE_RESP" | jq '.available_variables | length')
+TEMPLATE_ID=$(echo "$TEMPLATE_RESP" | jq -r '.data.id')
+VARIABLE_COUNT=$(echo "$TEMPLATE_RESP" | jq '.data.available_variables | length')
 echo "模板 ID: $TEMPLATE_ID"
 echo "变量数量: $VARIABLE_COUNT 个"
 
 echo ""
 echo "--- 创建模板的完整响应 ---"
-echo "$TEMPLATE_RESP" | jq '{id, name, description, event_type, subject_template, format, supported_channels}'
+echo "$TEMPLATE_RESP" | jq '.data | {id, name, description, event_type, subject_template, format, supported_channels}'
 
 echo ""
 echo "--- 模板正文 (body_template) ---"
-echo "$TEMPLATE_RESP" | jq -r '.body_template'
+echo "$TEMPLATE_RESP" | jq -r '.data.body_template'
 
 echo ""
 echo "--- 模板中使用的全部 $VARIABLE_COUNT 个变量 ---"
-echo "$TEMPLATE_RESP" | jq -r '.available_variables | to_entries | .[] | "\(.key + 1). \(.value)"'
+echo "$TEMPLATE_RESP" | jq -r '.data.available_variables | to_entries | .[] | "\(.key + 1). \(.value)"'
 
 # 查找仓库
 echo ""
 echo "=== 4. 获取仓库 ==="
-REPO_ID=$(curl -s "$BASE_URL/git-repos" -H "Authorization: Bearer $TOKEN" | jq -r '(.items // .data)[] | select(.is_active == true and .main_playbook == "test_ping.yml") | .id' | head -1)
+REPO_ID=$(curl -s "$BASE_URL/git-repos" -H "Authorization: Bearer $TOKEN" | jq -r '.data[] | select(.is_active == true and .main_playbook == "test_ping.yml") | .id' | head -1)
 echo "仓库: $REPO_ID"
+PLAYBOOK_ID=$(select_playbook_id "$BASE_URL" "$TOKEN" "$REPO_ID")
 
 echo ""
 echo "=== 5. 创建任务 (6主机: 4正确 + 2错误) ==="
@@ -109,7 +112,7 @@ TASK_RESP=$(curl -s -X POST "$BASE_URL/execution-tasks" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Mixed Notification Test '$SUFFIX'",
-    "repository_id": "'$REPO_ID'",
+    "playbook_id": "'$PLAYBOOK_ID'",
     "target_hosts": "'$TARGET_HOSTS'",
     "executor_type": "docker",
     "notification_config": {
@@ -121,7 +124,7 @@ TASK_RESP=$(curl -s -X POST "$BASE_URL/execution-tasks" \
       "extra_recipients": ["oncall@example.com"]
     }
   }')
-TASK_ID=$(echo "$TASK_RESP" | jq -r '.id // .data.id')
+TASK_ID=$(echo "$TASK_RESP" | jq -r '.data.id')
 echo "任务: $TASK_ID"
 echo "主机:"
 echo "  ✓ 192.168.31.100-103 (有密钥 - 应成功)"
@@ -133,13 +136,13 @@ EXEC_RESP=$(curl -s -X POST "$BASE_URL/execution-tasks/$TASK_ID/execute" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"triggered_by": "mixed_notification_test", "secrets_source_ids": ["'$SSH_SOURCE_ID'", "'$PWD_SOURCE_ID'"]}')
-RUN_ID=$(echo "$EXEC_RESP" | jq -r '.id // .data.id')
+RUN_ID=$(echo "$EXEC_RESP" | jq -r '.data.id')
 echo "执行 ID: $RUN_ID"
 
 echo ""
 echo "=== 7. 等待执行完成 ==="
 for i in $(seq 1 90); do
-  STATUS=$(curl -s "$BASE_URL/execution-runs/$RUN_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.status // .data.status')
+  STATUS=$(curl -s "$BASE_URL/execution-runs/$RUN_ID" -H "Authorization: Bearer $TOKEN" | jq -r '.data.status')
   printf "\r  状态: %-12s (%ds)" "$STATUS" "$i"
   if [ "$STATUS" == "success" ] || [ "$STATUS" == "failed" ] || [ "$STATUS" == "partial_success" ]; then
     echo ""
@@ -151,11 +154,11 @@ done
 echo ""
 echo "=== 8. 执行结果 ==="
 RUN_RESULT=$(curl -s "$BASE_URL/execution-runs/$RUN_ID" -H "Authorization: Bearer $TOKEN")
-echo "$RUN_RESULT" | jq '{status, exit_code, stats}'
+echo "$RUN_RESULT" | jq '.data | {status, exit_code, stats}'
 
 echo ""
 echo "=== 9. Ansible 输出 ==="
-curl -s "$BASE_URL/execution-runs/$RUN_ID/logs" -H "Authorization: Bearer $TOKEN" | jq -r '(.data // .)[] | select(.stage == "output") | .details.stdout // empty'
+curl -s "$BASE_URL/execution-runs/$RUN_ID/logs" -H "Authorization: Bearer $TOKEN" | jq -r '.data[] | select(.stage == "output") | .details.stdout // empty'
 
 echo ""
 echo "=== 10. 收到的通知 ==="

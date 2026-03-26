@@ -2,10 +2,12 @@
 # 通知模块完整功能演示
 # 展示所有变量参数 + Ansible 执行日志
 
-set -e
+set -euo pipefail
 
 BASE_URL="http://localhost:8080/api/v1"
 MOCK_URL="http://localhost:9999"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -31,12 +33,14 @@ curl -s -X POST "$MOCK_URL/notifications/clear" > /dev/null
 
 # 获取 Token
 echo_title "1. 登录认证"
-TOKEN=$(curl -s -X POST "$BASE_URL/auth/login" \
+login_response=$(curl -s -X POST "$BASE_URL/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "admin123456"}' | jq -r '.access_token')
+  -d '{"username": "admin", "password": "admin123456"}')
+TOKEN=$(echo "$login_response" | jq -r '.access_token // empty')
 
 if [ -z "$TOKEN" ] || [ "$TOKEN" == "null" ]; then
   echo_error "登录失败"
+  echo "$login_response"
   exit 1
 fi
 echo_info "Token 获取成功"
@@ -59,16 +63,16 @@ CHANNEL_RESP=$(curl -s -X POST "$BASE_URL/channels" \
       "headers": {"X-Source": "auto-healing", "X-Priority": "high"},
       "timeout_seconds": 30
     },
-    "default_recipients": ["ops-team@example.com", "sre@example.com"],
+    "recipients": ["ops-team@example.com", "sre@example.com"],
     "retry_config": {
       "max_retries": 3,
       "retry_intervals": [1, 5, 15]
     }
   }')
 
-CHANNEL_ID=$(echo "$CHANNEL_RESP" | jq -r '.id')
+CHANNEL_ID=$(json_created_id "$CHANNEL_RESP")
 echo "渠道配置:"
-echo "$CHANNEL_RESP" | jq '{id, name, type, is_active, default_recipients, retry_config}'
+echo "$CHANNEL_RESP" | jq '{id: (.data.id), name: (.data.name), type: (.data.type), is_active: (.data.is_active), recipients: (.data.recipients), retry_config: (.data.retry_config)}'
 
 # ==================== 创建综合模板（包含所有变量）====================
 echo_title "3. 创建综合通知模板（35+ 变量）"
@@ -87,48 +91,49 @@ TEMPLATE_RESP=$(curl -s -X POST "$BASE_URL/templates" \
     "supported_channels": ["webhook", "dingtalk", "email"]
   }')
 
-TEMPLATE_ID=$(echo "$TEMPLATE_RESP" | jq -r '.id')
+TEMPLATE_ID=$(echo "$TEMPLATE_RESP" | jq -r '.data.id')
 echo "模板基本信息:"
-echo "$TEMPLATE_RESP" | jq '{id, name, event_type, format}'
+echo "$TEMPLATE_RESP" | jq '.data | {id, name, event_type, format}'
 
 echo ""
 echo_info "--- 模板主题 (subject_template) ---"
-echo "$TEMPLATE_RESP" | jq -r '.subject_template'
+echo "$TEMPLATE_RESP" | jq -r '.data.subject_template'
 
 echo ""
 echo_info "--- 模板正文 (body_template) ---"
-echo "$TEMPLATE_RESP" | jq -r '.body_template'
+echo "$TEMPLATE_RESP" | jq -r '.data.body_template'
 
 echo ""
 echo_info "--- 模板中使用的变量 ---"
-echo "$TEMPLATE_RESP" | jq '.available_variables'
+echo "$TEMPLATE_RESP" | jq '.data.available_variables'
 
 # ==================== 查看可用变量 ====================
 echo_title "4. 查看系统支持的所有变量"
-curl -s "$BASE_URL/template-variables" -H "$AUTH_HEADER" | jq '.variables | group_by(.category) | .[] | {category: .[0].category, variables: [.[].name]}'
+curl -s "$BASE_URL/template-variables" -H "$AUTH_HEADER" | jq '.data.variables | group_by(.category) | .[] | {category: .[0].category, variables: [.[].name]}'
 
 # ==================== 获取 Git 仓库 ====================
 echo_title "5. 获取 Git 仓库"
 REPO_RESP=$(curl -s "$BASE_URL/git-repos" -H "$AUTH_HEADER")
-REPO_ID=$(echo "$REPO_RESP" | jq -r '(.items // .data)[] | select(.is_active == true and .main_playbook == "test_ping.yml") | .id' | head -1)
+REPO_ID=$(echo "$REPO_RESP" | jq -r '.data[] | select(.is_active == true and .main_playbook == "test_ping.yml") | .id' | head -1)
 
 if [ -z "$REPO_ID" ]; then
   echo_error "没有合适的仓库"
   exit 1
 fi
 
-REPO_INFO=$(echo "$REPO_RESP" | jq --arg id "$REPO_ID" '(.items // .data)[] | select(.id == $id) | {id, name, url, main_playbook, is_active}')
+REPO_INFO=$(echo "$REPO_RESP" | jq --arg id "$REPO_ID" '.data[] | select(.id == $id) | {id, name, url, main_playbook, is_active}')
 echo "$REPO_INFO"
 
 # ==================== 创建任务 ====================
 echo_title "6. 创建执行任务（带通知配置）"
+PLAYBOOK_ID=$(select_playbook_id "$BASE_URL" "$TOKEN" "$REPO_ID")
 
 TASK_RESP=$(curl -s -X POST "$BASE_URL/execution-tasks" \
   -H "$AUTH_HEADER" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Full Demo Task '$SUFFIX'",
-    "repository_id": "'$REPO_ID'",
+    "playbook_id": "'$PLAYBOOK_ID'",
     "target_hosts": "localhost",
     "executor_type": "local",
     "notification_config": {
@@ -142,14 +147,9 @@ TASK_RESP=$(curl -s -X POST "$BASE_URL/execution-tasks" \
     }
   }')
 
-TASK_ID=$(echo "$TASK_RESP" | jq -r '.id // .data.id')
+TASK_ID=$(json_created_id "$TASK_RESP")
 echo "任务配置:"
-# API 返回 {code, data} 或直接对象
-if echo "$TASK_RESP" | jq -e '.data' > /dev/null 2>&1; then
-  echo "$TASK_RESP" | jq '.data | {id, name, target_hosts, executor_type, notification_config}'
-else
-  echo "$TASK_RESP" | jq '{id, name, target_hosts, executor_type, notification_config}'
-fi
+echo "$TASK_RESP" | jq '.data | {id, name, target_hosts, executor_type, notification_config}'
 
 # ==================== 执行任务 ====================
 echo_title "7. 执行任务"
@@ -159,7 +159,7 @@ EXEC_RESP=$(curl -s -X POST "$BASE_URL/execution-tasks/$TASK_ID/execute" \
   -H "Content-Type: application/json" \
   -d '{"triggered_by": "demo_user"}')
 
-RUN_ID=$(echo "$EXEC_RESP" | jq -r '.id // .data.id')
+RUN_ID=$(echo "$EXEC_RESP" | jq -r '.data.id')
 echo_info "执行已启动: $RUN_ID"
 
 # ==================== 等待完成并显示进度 ====================
@@ -169,7 +169,7 @@ WAITED=0
 
 while [ $WAITED -lt $MAX_WAIT ]; do
   RUN_INFO=$(curl -s "$BASE_URL/execution-runs/$RUN_ID" -H "$AUTH_HEADER")
-  STATUS=$(echo "$RUN_INFO" | jq -r '.status // .data.status // "pending"')
+  STATUS=$(echo "$RUN_INFO" | jq -er '.data.status')
   
   printf "  ⏳ 状态: %-10s (等待 %ds)\r" "$STATUS" "$WAITED"
   
@@ -188,17 +188,17 @@ echo_info "任务执行完成: $STATUS"
 echo_title "9. Ansible 执行日志"
 
 LOGS=$(curl -s "$BASE_URL/execution-runs/$RUN_ID/logs" -H "$AUTH_HEADER")
-echo "$LOGS" | jq -r '(.data // .)[] | "\(.log_level | ascii_upcase)] [\(.stage)] \(.message)"' 2>/dev/null || echo "$LOGS" | jq '.'
+echo "$LOGS" | jq -r '.data[] | "[\(.log_level | ascii_upcase)] [\(.stage)] \(.message)"' 2>/dev/null || echo "$LOGS" | jq '.'
 
 # 显示 Ansible 输出
 echo ""
 echo_info "--- Ansible 标准输出 ---"
-echo "$LOGS" | jq -r '(.data // .)[] | select(.stage == "output") | .details.stdout // empty' 2>/dev/null
+echo "$LOGS" | jq -r '.data[] | select(.stage == "output") | .details.stdout // empty' 2>/dev/null
 
 # 显示统计信息
 echo ""
 echo_info "--- 执行统计 ---"
-echo "$LOGS" | jq '(.data // .)[] | select(.message | contains("执行成功") or contains("执行失败")) | .details' 2>/dev/null || true
+echo "$LOGS" | jq '.data[] | select(.message | contains("执行成功") or contains("执行失败")) | .details' 2>/dev/null || true
 
 # ==================== 验证通知 ====================
 echo_title "10. 验证 Mock 服务收到的通知"
@@ -230,7 +230,7 @@ echo "$NOTIFICATION" | jq -r '.body.body'
 
 # ==================== 查看通知记录 ====================
 echo_title "11. 系统通知记录"
-curl -s "$BASE_URL/notifications?page_size=1" -H "$AUTH_HEADER" | jq '(.items // .data)[0] | {id, status, sent_at, recipients, subject, channel: .channel.name, template: .template.name}'
+curl -s "$BASE_URL/notifications?page_size=1" -H "$AUTH_HEADER" | jq '.data[0] | {id, status, sent_at, recipients, subject, channel: .channel.name, template: .template.name}'
 
 # ==================== 清理 ====================
 echo_title "12. 清理"

@@ -1,13 +1,13 @@
 # 站内信 API 文档
 
-**路径前缀**: `/api/v1/site-messages`  
-**权限**: 已登录用户
+**路径前缀**: 租户侧 `/api/v1/tenant/site-messages`，公共枚举 `/api/v1/common/site-messages`，平台管理 `/api/v1/platform/site-messages`  
+**权限**: 已登录用户；部分接口还需满足 `site-message:*` 或 `platform:messages:send`
 
 ---
 
 ## 1. 获取未读消息数
 
-**GET** `/api/v1/site-messages/unread-count`
+**GET** `/api/v1/tenant/site-messages/unread-count`
 
 **权限**: 无特殊要求（已登录即可）
 
@@ -26,7 +26,7 @@
 
 ## 2. 获取消息分类列表
 
-**GET** `/api/v1/site-messages/categories`
+**GET** `/api/v1/common/site-messages/categories`
 
 **权限**: 无特殊要求
 
@@ -36,9 +36,9 @@
 
 ## 3. 获取消息接收设置
 
-**GET** `/api/v1/site-messages/settings`
+**GET** `/api/v1/platform/site-messages/settings`
 
-**权限**: 无特殊要求
+**权限**: `site-message:settings:view`
 
 ### 响应
 
@@ -56,9 +56,9 @@
 
 ## 4. 更新消息接收设置
 
-**PUT** `/api/v1/site-messages/settings`
+**PUT** `/api/v1/platform/site-messages/settings`
 
-**权限**: `site-message:create`
+**权限**: `site-message:settings:manage`
 
 ### 请求体
 
@@ -70,7 +70,7 @@
 
 ## 5. 标记消息为已读
 
-**PUT** `/api/v1/site-messages/read`
+**PUT** `/api/v1/tenant/site-messages/read`
 
 **权限**: 无特殊要求
 
@@ -84,7 +84,7 @@
 
 ## 6. 标记所有消息为已读
 
-**PUT** `/api/v1/site-messages/read-all`
+**PUT** `/api/v1/tenant/site-messages/read-all`
 
 **权限**: 无特殊要求
 
@@ -92,9 +92,9 @@
 
 ## 7. 获取消息列表
 
-**GET** `/api/v1/site-messages`
+**GET** `/api/v1/tenant/site-messages`
 
-**权限**: 无特殊要求
+**权限**: `site-message:list`
 
 ### 查询参数
 
@@ -104,14 +104,19 @@
 | `page_size` | int | ❌ | 每页数量，默认 10，最大 100 |
 | `keyword` | string | ❌ | 模糊搜索（标题、内容） |
 | `category` | string | ❌ | 消息分类（见分类枚举） |
+| `is_read` | string | ❌ | 已读状态：`true` / `false` |
+| `date_from` | string | ❌ | 开始时间（RFC3339 或 `YYYY-MM-DD`） |
+| `date_to` | string | ❌ | 结束时间（RFC3339 或 `YYYY-MM-DD`） |
+| `sort` | string | ❌ | 排序字段 |
+| `order` | string | ❌ | 排序方向：`asc` / `desc` |
 
 ### 响应
 
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
+  "message": "success",
+  "data": [
       {
         "id": "uuid",
         "title": "执行任务成功",
@@ -121,11 +126,10 @@
         "link": "/execution-runs/uuid",
         "created_at": "2026-02-18T09:00:00Z"
       }
-    ],
-    "total": 10,
-    "page": 1,
-    "page_size": 20
-  }
+  ],
+  "total": 10,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
@@ -133,9 +137,9 @@
 
 ## 8. 创建消息（管理员）
 
-**POST** `/api/v1/site-messages`
+**POST** `/api/v1/platform/site-messages`
 
-**权限**: `site-message:create`
+**权限**: `platform:messages:send`
 
 ### 请求体
 
@@ -144,6 +148,7 @@
 | `category` | string | ✅ | 分类（见分类枚举） |
 | `title` | string | ✅ | 消息标题 |
 | `content` | string | ✅ | 消息内容 |
+| `target_tenant_ids` | []uuid | ❌ | 指定接收租户；为空时广播到所有租户 |
 
 ---
 

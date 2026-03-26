@@ -9,7 +9,7 @@
 
 **POST** `/api/v1/git-repos/validate`
 
-**权限**: `plugin:list`
+**权限**: `repository:validate`
 
 在创建仓库前验证 URL 和认证信息是否有效。
 
@@ -18,7 +18,7 @@
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `url` | string | ✅ | 仓库 URL |
-| `auth_type` | string | ❌ | 认证方式：`none` / `token` / `ssh_key` / `username_password` |
+| `auth_type` | string | ❌ | 认证方式：`none` / `token` / `password` / `ssh_key` |
 | `auth_config` | object | ❌ | 认证配置（JSON 对象，如 `{"token": "xxx"}` 或 `{"username": "x", "password": "x"}`） |
 
 ---
@@ -27,7 +27,7 @@
 
 **GET** `/api/v1/git-repos`
 
-**权限**: `plugin:list`
+**权限**: `repository:list`
 
 ### 查询参数
 
@@ -39,7 +39,7 @@
 | `name` | string | ❌ | 按名称精确/模糊筛选 |
 | `url` | string | ❌ | 按仓库 URL 筛选 |
 | `status` | string | ❌ | 状态：`active` / `inactive` / `error` / `syncing` |
-| `auth_type` | string | ❌ | 认证方式：`none` / `token` / `ssh_key` / `username_password` |
+| `auth_type` | string | ❌ | 认证方式：`none` / `token` / `password` / `ssh_key` |
 | `sync_enabled` | bool | ❌ | 是否启用自动同步：`true` / `false` |
 | `created_from` | string | ❌ | 创建时间起始（RFC3339） |
 | `created_to` | string | ❌ | 创建时间结束（RFC3339） |
@@ -52,7 +52,7 @@
 
 **POST** `/api/v1/git-repos`
 
-**权限**: `plugin:create`
+**权限**: `repository:create`
 
 ### 请求体
 
@@ -61,10 +61,10 @@
 | `name` | string | ✅ | 仓库名称 |
 | `url` | string | ✅ | 仓库 URL（支持 HTTPS 和 SSH） |
 | `default_branch` | string | ❌ | 默认分支，默认 `main` |
-| `auth_type` | string | ❌ | 认证方式：`none` / `token` / `ssh_key` / `username_password` |
+| `auth_type` | string | ❌ | 认证方式：`none` / `token` / `password` / `ssh_key` |
 | `auth_config` | object | ❌ | 认证配置（JSON 对象，与 `auth_type` 对应） |
 | `sync_enabled` | bool | ❌ | 是否启用自动同步，默认 false |
-| `sync_interval` | string | ❌ | 同步间隔表达式（如 `@every 1h`） |
+| `sync_interval` | string | ❌ | 同步间隔时长（如 `1h` / `30m` / `10s`） |
 | `max_failures` | int | ❌ | 最大连续失败次数 |
 
 **auth_config 示例（token 认证）**:
@@ -83,7 +83,7 @@
 
 **GET** `/api/v1/git-repos/stats`
 
-**权限**: `plugin:list`
+**权限**: `repository:list`
 
 ---
 
@@ -91,7 +91,7 @@
 
 **GET** `/api/v1/git-repos/:id`
 
-**权限**: `plugin:list`
+**权限**: `repository:list`
 
 ---
 
@@ -99,7 +99,7 @@
 
 **PUT** `/api/v1/git-repos/:id`
 
-**权限**: `plugin:update`
+**权限**: `repository:update`
 
 ### 请求体（所有字段可选）
 
@@ -109,14 +109,14 @@
 | `auth_type` | string | 认证方式 |
 | `auth_config` | object | 认证配置（JSON 对象） |
 | `sync_enabled` | bool | 是否启用自动同步 |
-| `sync_interval` | string | 同步间隔表达式 |
+| `sync_interval` | string | 同步间隔时长 |
 | `max_failures` | int | 最大连续失败次数 |
 
 ## 7. 删除仓库
 
 **DELETE** `/api/v1/git-repos/:id`
 
-**权限**: `plugin:delete`
+**权限**: `repository:delete`
 
 > 删除仓库会同时删除该仓库下的所有 Playbook 记录。
 
@@ -126,7 +126,7 @@
 
 **POST** `/api/v1/git-repos/:id/sync`
 
-**权限**: `plugin:sync`
+**权限**: `repository:sync`
 
 ---
 
@@ -134,7 +134,7 @@
 
 **POST** `/api/v1/git-repos/:id/reset-status`
 
-**权限**: `plugin:update`
+**权限**: `repository:update`
 
 将仓库状态强制重置（当仓库卡在 `syncing` 状态时使用）。
 
@@ -150,7 +150,7 @@
 
 **GET** `/api/v1/git-repos/:id/logs`
 
-**权限**: `plugin:list`
+**权限**: `repository:list`
 
 ### 响应
 
@@ -184,7 +184,7 @@
 
 **GET** `/api/v1/git-repos/:id/commits`
 
-**权限**: `plugin:list`
+**权限**: `repository:list`
 
 返回仓库最近的 Git 提交记录。
 
@@ -216,7 +216,7 @@
 
 **GET** `/api/v1/git-repos/:id/files`
 
-**权限**: `plugin:list`
+**权限**: `repository:list`
 
 不传 `path` 时返回文件树；传 `path` 时返回指定文件的内容。
 

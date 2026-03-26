@@ -2,14 +2,16 @@
 # 端到端测试 - 定时执行 + SSE 实时日志
 # 不联动 CMDB，直接指定主机
 
-set -e
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/e2e_helpers.sh"
 
 API_BASE="${API_BASE:-http://localhost:8080/api/v1}"
 USERNAME="${USERNAME:-admin}"
 PASSWORD="${PASSWORD:-admin123456}"
 MOCK_ENDPOINT="${MOCK_ENDPOINT:-http://localhost:5001}"
 TARGET_HOST="${TARGET_HOST:-192.168.31.66}"
-PLAYBOOK_PATH="/root/auto-healing/tests/playbooks"
+PLAYBOOK_PATH="${PLAYBOOK_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/playbooks}"
 
 echo "=========================================="
 echo "  定时执行 + SSE 实时日志测试"
@@ -75,7 +77,7 @@ SECRETS_RESULT=$(curl -s -X POST "$API_BASE/secrets-sources" \
     }
   }")
 
-SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id // .id')
+SECRETS_SOURCE_ID=$(echo "$SECRETS_RESULT" | jq -r '.data.id')
 echo "✅ 密钥源创建成功 (ID: $SECRETS_SOURCE_ID)"
 
 # 创建 Git 仓库
@@ -90,7 +92,7 @@ REPO_RESULT=$(curl -s -X POST "$API_BASE/git-repos" \
     \"default_branch\": \"master\"
   }")
 
-REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id // .id')
+REPO_ID=$(echo "$REPO_RESULT" | jq -r '.data.id')
 echo "✅ Git 仓库创建成功 (ID: $REPO_ID)"
 
 # 同步仓库
@@ -104,6 +106,8 @@ curl -s -X POST "$API_BASE/git-repos/$REPO_ID/activate" \
   -H "Content-Type: application/json" \
   -d '{"main_playbook": "test_ping.yml", "config_mode": "manual"}' > /dev/null
 echo "✅ 仓库已激活"
+
+PLAYBOOK_ID=$(select_playbook_id "$API_BASE" "$TOKEN" "$REPO_ID")
 
 # ==================== 2. 创建定时执行任务 ====================
 echo ""
@@ -119,14 +123,14 @@ TASK_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks" \
   -H "Content-Type: application/json" \
   -d "{
     \"name\": \"E2E Schedule Ping Test\",
-    \"repository_id\": \"$REPO_ID\",
+    \"playbook_id\": \"$PLAYBOOK_ID\",
     \"target_hosts\": \"$TARGET_HOST\",
     \"executor_type\": \"local\",
     \"schedule_expr\": \"30s\",
     \"is_recurring\": false
   }")
 
-TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id // .id')
+TASK_ID=$(echo "$TASK_RESULT" | jq -r '.data.id')
 NEXT_RUN=$(echo "$TASK_RESULT" | jq -r '.data.next_run_at // "N/A"')
 
 if [ "$TASK_ID" != "null" ] && [ -n "$TASK_ID" ]; then
@@ -151,7 +155,7 @@ EXEC_RESULT=$(curl -s -X POST "$API_BASE/execution-tasks/$TASK_ID/execute" \
     \"secrets_source_id\": \"$SECRETS_SOURCE_ID\"
   }")
 
-RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id // .id')
+RUN_ID=$(echo "$EXEC_RESULT" | jq -r '.data.id')
 
 if [ "$RUN_ID" != "null" ] && [ -n "$RUN_ID" ]; then
   echo "✅ 执行已启动 (Run ID: $RUN_ID)"
@@ -197,7 +201,7 @@ echo "========== 4. 执行结果 =========="
 sleep 2
 
 RUN_DETAIL=$(curl -s "$API_BASE/execution-runs/$RUN_ID" -H "Authorization: Bearer $TOKEN")
-STATUS=$(echo "$RUN_DETAIL" | jq -r '.data.status // .status')
+STATUS=$(echo "$RUN_DETAIL" | jq -r '.data.status')
 EXIT_CODE=$(echo "$RUN_DETAIL" | jq -r '.data.exit_code // "N/A"')
 
 echo "状态: $STATUS"
@@ -218,5 +222,6 @@ if [ "$STATUS" == "success" ]; then
   echo "  ✅ 定时执行 + SSE 实时日志测试成功！"
 else
   echo "  ❌ 测试失败 (状态: $STATUS)"
+  exit 1
 fi
 echo "=========================================="

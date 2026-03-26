@@ -29,24 +29,31 @@
 
 ```json
 {
-  "code": 0,
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expires_in": 86400,
-    "token_type": "Bearer",
-    "user": {
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 86400,
+  "token_type": "Bearer",
+  "user": {
+    "id": "uuid",
+    "username": "admin",
+    "email": "admin@example.com",
+    "display_name": "管理员",
+    "is_platform_admin": true,
+    "roles": ["admin"],
+    "permissions": ["platform:users:view"]
+  },
+  "tenants": [
+    {
       "id": "uuid",
-      "username": "admin",
-      "email": "admin@example.com",
-      "display_name": "管理员",
-      "is_platform_admin": true,
-      "tenant_id": "uuid",
-      "roles": ["admin"]
+      "name": "Default Tenant",
+      "code": "default"
     }
-  }
+  ],
+  "current_tenant_id": "uuid"
 }
 ```
+
+> 登录接口保持原始返回格式，不包裹 `code/message/data`。
 
 > **注意**: 登录失败超过限制次数会触发账户锁定。
 
@@ -68,15 +75,31 @@
 
 ```json
 {
-  "code": 0,
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expires_in": 86400,
-    "token_type": "Bearer"
-  }
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 86400,
+  "token_type": "Bearer",
+  "user": {
+    "id": "uuid",
+    "username": "admin",
+    "email": "admin@example.com",
+    "display_name": "管理员",
+    "is_platform_admin": true,
+    "roles": ["admin"],
+    "permissions": ["platform:users:view"]
+  },
+  "tenants": [
+    {
+      "id": "uuid",
+      "name": "Default Tenant",
+      "code": "default"
+    }
+  ],
+  "current_tenant_id": "uuid"
 }
 ```
+
+> 刷新接口与登录接口一样，返回新的完整 `LoginResponse`，不包裹 `code/message/data`。
 
 ---
 
@@ -276,6 +299,7 @@
 ```json
 {
   "code": 0,
+  "message": "success",
   "data": { ... }
 }
 ```
@@ -284,17 +308,17 @@
 
 ```json
 {
-  "code": 400,
+  "code": 40000,
   "message": "错误描述"
 }
 ```
 
 ### 常见错误码
 
-| HTTP 状态码 | 说明 |
+| 业务错误码 | 说明 |
 |------------|------|
-| 400 | 请求参数错误 |
-| 401 | 未认证或 Token 失效 |
-| 403 | 无权限 |
-| 404 | 资源不存在 |
-| 500 | 服务器内部错误 |
+| 40000 | 请求参数错误 |
+| 40100 | 未认证或 Token 失效 |
+| 40300 | 无权限 |
+| 40400 | 资源不存在 |
+| 50000 | 服务器内部错误 |

@@ -8,45 +8,45 @@
 
 全量验收：
 
-- [test_acceptance_real.sh](/root/auto-healing/tests/e2e/test_acceptance_real.sh)
+- [test_acceptance_real.sh](./test_acceptance_real.sh)
 
 模块化验收：
 
-- [test_acceptance_auth.sh](/root/auto-healing/tests/e2e/test_acceptance_auth.sh)
-- [test_acceptance_platform_tenants.sh](/root/auto-healing/tests/e2e/test_acceptance_platform_tenants.sh)
-- [test_acceptance_settings_secrets_dictionaries.sh](/root/auto-healing/tests/e2e/test_acceptance_settings_secrets_dictionaries.sh)
-- [test_acceptance_common.sh](/root/auto-healing/tests/e2e/test_acceptance_common.sh)
-- [test_acceptance_profile_rbac_misc.sh](/root/auto-healing/tests/e2e/test_acceptance_profile_rbac_misc.sh)
-- [test_acceptance_workbench_site_messages.sh](/root/auto-healing/tests/e2e/test_acceptance_workbench_site_messages.sh)
-- [test_acceptance_dashboard_overview_stats.sh](/root/auto-healing/tests/e2e/test_acceptance_dashboard_overview_stats.sh)
-- [test_acceptance_dashboard.sh](/root/auto-healing/tests/e2e/test_acceptance_dashboard.sh)
-- [test_acceptance_tenant_boundaries.sh](/root/auto-healing/tests/e2e/test_acceptance_tenant_boundaries.sh)
-- [test_acceptance_impersonation.sh](/root/auto-healing/tests/e2e/test_acceptance_impersonation.sh)
-- [test_acceptance_healing.sh](/root/auto-healing/tests/e2e/test_acceptance_healing.sh)
-- [test_acceptance_healing_queries.sh](/root/auto-healing/tests/e2e/test_acceptance_healing_queries.sh)
-- [test_acceptance_execution.sh](/root/auto-healing/tests/e2e/test_acceptance_execution.sh)
-- [test_acceptance_execution_queries.sh](/root/auto-healing/tests/e2e/test_acceptance_execution_queries.sh)
-- [test_acceptance_plugin_cmdb.sh](/root/auto-healing/tests/e2e/test_acceptance_plugin_cmdb.sh)
-- [test_acceptance_notifications_audit.sh](/root/auto-healing/tests/e2e/test_acceptance_notifications_audit.sh)
-- [test_acceptance_notification_variables.sh](/root/auto-healing/tests/e2e/test_acceptance_notification_variables.sh)
-- [test_acceptance_notification_failures.sh](/root/auto-healing/tests/e2e/test_acceptance_notification_failures.sh)
-- [test_acceptance_notification_retry.sh](/root/auto-healing/tests/e2e/test_acceptance_notification_retry.sh)
-- [test_acceptance_notification_retry_exhaustion.sh](/root/auto-healing/tests/e2e/test_acceptance_notification_retry_exhaustion.sh)
-- [test_acceptance_notification_rate_limit.sh](/root/auto-healing/tests/e2e/test_acceptance_notification_rate_limit.sh)
-- [test_acceptance_notification_retry_tenant_scope.sh](/root/auto-healing/tests/e2e/test_acceptance_notification_retry_tenant_scope.sh)
-- [test_acceptance_secrets_default_fallback.sh](/root/auto-healing/tests/e2e/test_acceptance_secrets_default_fallback.sh)
-- [test_acceptance_secrets_disabled_usage.sh](/root/auto-healing/tests/e2e/test_acceptance_secrets_disabled_usage.sh)
-- [test_acceptance_secrets_runtime_override.sh](/root/auto-healing/tests/e2e/test_acceptance_secrets_runtime_override.sh)
-- [test_acceptance_secrets_reference_updates.sh](/root/auto-healing/tests/e2e/test_acceptance_secrets_reference_updates.sh)
-- [test_acceptance_secrets_update_constraints.sh](/root/auto-healing/tests/e2e/test_acceptance_secrets_update_constraints.sh)
-- [test_acceptance_blacklist_security.sh](/root/auto-healing/tests/e2e/test_acceptance_blacklist_security.sh)
-- [test_acceptance_blacklist_exemption_execution.sh](/root/auto-healing/tests/e2e/test_acceptance_blacklist_exemption_execution.sh)
-- [test_acceptance_audit_action_assertions.sh](/root/auto-healing/tests/e2e/test_acceptance_audit_action_assertions.sh)
-- [test_acceptance_filters_pagination.sh](/root/auto-healing/tests/e2e/test_acceptance_filters_pagination.sh)
+- [test_acceptance_auth.sh](./test_acceptance_auth.sh)
+- [test_acceptance_platform_tenants.sh](./test_acceptance_platform_tenants.sh)
+- [test_acceptance_settings_secrets_dictionaries.sh](./test_acceptance_settings_secrets_dictionaries.sh)
+- [test_acceptance_common.sh](./test_acceptance_common.sh)
+- [test_acceptance_profile_rbac_misc.sh](./test_acceptance_profile_rbac_misc.sh)
+- [test_acceptance_workbench_site_messages.sh](./test_acceptance_workbench_site_messages.sh)
+- [test_acceptance_dashboard_overview_stats.sh](./test_acceptance_dashboard_overview_stats.sh)
+- [test_acceptance_dashboard.sh](./test_acceptance_dashboard.sh)
+- [test_acceptance_tenant_boundaries.sh](./test_acceptance_tenant_boundaries.sh)
+- [test_acceptance_impersonation.sh](./test_acceptance_impersonation.sh)
+- [test_acceptance_healing.sh](./test_acceptance_healing.sh)
+- [test_acceptance_healing_queries.sh](./test_acceptance_healing_queries.sh)
+- [test_acceptance_execution.sh](./test_acceptance_execution.sh)
+- [test_acceptance_execution_queries.sh](./test_acceptance_execution_queries.sh)
+- [test_acceptance_plugin_cmdb.sh](./test_acceptance_plugin_cmdb.sh)
+- [test_acceptance_notifications_audit.sh](./test_acceptance_notifications_audit.sh)
+- [test_acceptance_notification_variables.sh](./test_acceptance_notification_variables.sh)
+- [test_acceptance_notification_failures.sh](./test_acceptance_notification_failures.sh)
+- [test_acceptance_notification_retry.sh](./test_acceptance_notification_retry.sh)
+- [test_acceptance_notification_retry_exhaustion.sh](./test_acceptance_notification_retry_exhaustion.sh)
+- [test_acceptance_notification_rate_limit.sh](./test_acceptance_notification_rate_limit.sh)
+- [test_acceptance_notification_retry_tenant_scope.sh](./test_acceptance_notification_retry_tenant_scope.sh)
+- [test_acceptance_secrets_default_fallback.sh](./test_acceptance_secrets_default_fallback.sh)
+- [test_acceptance_secrets_disabled_usage.sh](./test_acceptance_secrets_disabled_usage.sh)
+- [test_acceptance_secrets_runtime_override.sh](./test_acceptance_secrets_runtime_override.sh)
+- [test_acceptance_secrets_reference_updates.sh](./test_acceptance_secrets_reference_updates.sh)
+- [test_acceptance_secrets_update_constraints.sh](./test_acceptance_secrets_update_constraints.sh)
+- [test_acceptance_blacklist_security.sh](./test_acceptance_blacklist_security.sh)
+- [test_acceptance_blacklist_exemption_execution.sh](./test_acceptance_blacklist_exemption_execution.sh)
+- [test_acceptance_audit_action_assertions.sh](./test_acceptance_audit_action_assertions.sh)
+- [test_acceptance_filters_pagination.sh](./test_acceptance_filters_pagination.sh)
 
 主脚本：
 
-- [test_acceptance_real.py](/root/auto-healing/tests/e2e/test_acceptance_real.py)
+- [test_acceptance_real.py](./test_acceptance_real.py)
 
 ## 前置依赖
 
@@ -61,8 +61,8 @@
 
 还需要本机存在以下容器：
 
-- PostgreSQL 容器：默认 `auto-healing-postgres`
-- Redis 容器：默认 `auto-healing-redis`
+- PostgreSQL 容器：默认按 phase 隔离，例如 `auto-healing-postgres-auth`
+- Redis 容器：默认按 phase 隔离，例如 `auto-healing-redis-auth`
 
 如果容器名称不同，可用环境变量覆盖：
 
@@ -77,10 +77,11 @@ export ACCEPTANCE_REDIS_CONTAINER=your-redis-container
 export ACCEPTANCE_GO_BIN=/usr/local/go/bin/go
 ```
 
-脚本会在启动服务时把 `INIT_ADMIN_PASSWORD` 传给 `init-admin`。如需覆盖默认验收管理员密码 `admin123456`，可设置：
+如需覆盖默认验收管理员密码 `admin123456`，可以同时设置验收脚本和初始化管理员密码：
 
 ```bash
 export ACCEPTANCE_ADMIN_PASSWORD='your-admin-password'
+export INIT_ADMIN_PASSWORD='your-admin-password'
 ```
 
 ## 全量运行
@@ -98,6 +99,8 @@ bash tests/e2e/test_acceptance_real.sh
 5. 初始化管理员
 6. 运行验收场景
 7. 输出结果 JSON
+
+默认情况下，主脚本会把验收环境中的初始化管理员密码固定为 `admin123456`；如果需要其他密码，可通过 `INIT_ADMIN_PASSWORD` 覆盖。
 
 ## 模块化运行
 
@@ -123,6 +126,7 @@ bash tests/e2e/test_acceptance_notification_retry_tenant_scope.sh
 bash tests/e2e/test_acceptance_secrets_default_fallback.sh
 bash tests/e2e/test_acceptance_secrets_disabled_usage.sh
 bash tests/e2e/test_acceptance_secrets_runtime_override.sh
+bash tests/e2e/test_acceptance_real.py --phase interface_contract_smoke
 bash tests/e2e/test_acceptance_secrets_reference_updates.sh
 bash tests/e2e/test_acceptance_secrets_update_constraints.sh
 bash tests/e2e/test_acceptance_blacklist_security.sh
@@ -152,6 +156,7 @@ python3.11 tests/e2e/test_acceptance_real.py --phase healing_queries
 python3.11 tests/e2e/test_acceptance_real.py --phase git_execution
 python3.11 tests/e2e/test_acceptance_real.py --phase plugin_cmdb
 python3.11 tests/e2e/test_acceptance_real.py --phase execution_queries
+python3.11 tests/e2e/test_acceptance_real.py --phase interface_contract_smoke
 python3.11 tests/e2e/test_acceptance_real.py --phase workbench_site_messages
 python3.11 tests/e2e/test_acceptance_real.py --phase notifications_audit
 python3.11 tests/e2e/test_acceptance_real.py --phase notification_variables
@@ -190,6 +195,7 @@ python3.11 tests/e2e/test_acceptance_real.py --phase filters_pagination
 - `git_execution`
 - `plugin_cmdb`
 - `execution_queries`
+- `interface_contract_smoke`
 - `notifications_audit`
 - `notification_variables`
 - `notification_failures`
@@ -239,7 +245,7 @@ export KEEP_ACCEPTANCE_ARTIFACTS=0
 
 全量跑完会输出：
 
-- [acceptance-automation-results-all-2026-03-22.json](/root/auto-healing/docs/acceptance-automation-results-all-2026-03-22.json)
+- [acceptance-automation-results-all-2026-03-22.json](../../docs/acceptance-automation-results-all-2026-03-22.json)
 
 模块化运行会输出：
 

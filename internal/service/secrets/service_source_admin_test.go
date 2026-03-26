@@ -33,12 +33,58 @@ func TestApplySourceAdminChangesRejectsNegativePriority(t *testing.T) {
 func TestApplySourceAdminChangesRejectsInvalidStatus(t *testing.T) {
 	source := &model.SecretsSource{}
 
-	_, err := applySourceAdminChanges(source, nil, nil, "banana")
+	_, err := applySourceAdminChanges(source, nil, nil, "enabled")
 	if err == nil {
 		t.Fatal("applySourceAdminChanges() error = nil, want invalid input")
 	}
 	if !errors.Is(err, ErrSecretsSourceInvalidInput) {
 		t.Fatalf("applySourceAdminChanges() error = %v, want invalid input", err)
+	}
+}
+
+func TestApplySourceAdminChangesReturnsRequestedDefaultAndClearsStoredDefault(t *testing.T) {
+	source := &model.SecretsSource{
+		IsDefault: false,
+		Priority:  1,
+		Status:    "inactive",
+	}
+	isDefault := true
+	priority := 3
+
+	requestedDefault, err := applySourceAdminChanges(source, &isDefault, &priority, "active")
+	if err != nil {
+		t.Fatalf("applySourceAdminChanges() error = %v", err)
+	}
+	if !requestedDefault {
+		t.Fatal("requestedDefault = false, want true")
+	}
+	if source.IsDefault {
+		t.Fatal("source.IsDefault = true, want false before repo.SetDefault")
+	}
+	if source.Priority != 3 {
+		t.Fatalf("source.Priority = %d, want 3", source.Priority)
+	}
+	if source.Status != "active" {
+		t.Fatalf("source.Status = %q, want active", source.Status)
+	}
+}
+
+func TestApplySourceAdminChangesLeavesDefaultUnchangedWhenUnset(t *testing.T) {
+	source := &model.SecretsSource{
+		IsDefault: true,
+		Priority:  2,
+		Status:    "active",
+	}
+
+	requestedDefault, err := applySourceAdminChanges(source, nil, nil, "")
+	if err != nil {
+		t.Fatalf("applySourceAdminChanges() error = %v", err)
+	}
+	if requestedDefault {
+		t.Fatal("requestedDefault = true, want false")
+	}
+	if !source.IsDefault {
+		t.Fatal("source.IsDefault = false, want true")
 	}
 }
 

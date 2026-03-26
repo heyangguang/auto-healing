@@ -18,6 +18,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Quality surface checks
+        run: bash tools/quality_surface_checks.sh
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:

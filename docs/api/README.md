@@ -11,7 +11,7 @@
 # 1. 登录获取 Token
 TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123456"}' | jq -r '.data.access_token')
+  -d '{"username":"admin","password":"admin123456"}' | jq -r '.access_token')
 
 # 2. 使用 Token 调用接口
 curl -s -H "Authorization: Bearer $TOKEN" \
@@ -21,6 +21,8 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 ---
 
 ## 通用响应格式
+
+除 `/auth/login` 与 `/auth/refresh` 外，大多数业务接口都使用如下统一响应包裹格式：
 
 ```json
 {
@@ -35,12 +37,11 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [...],
-    "total": 100,
-    "page": 1,
-    "page_size": 20
-  }
+  "message": "success",
+  "data": [...],
+  "total": 100,
+  "page": 1,
+  "page_size": 20
 }
 ```
 
@@ -48,7 +49,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 ```json
 {
-  "code": 400,
+  "code": 40000,
   "message": "参数错误：xxx"
 }
 ```
@@ -125,7 +126,8 @@ Token 有效期为 24 小时，可通过 `/api/v1/auth/refresh` 刷新。
 | 权限代码 | 说明 |
 |---------|------|
 | `user:list` / `user:create` / `user:update` / `user:delete` | 用户管理 |
-| `role:list` / `role:create` / `role:assign` | 角色管理 |
+| `role:list` / `role:create` / `role:update` / `role:delete` / `role:assign` | 租户角色管理 |
+| `platform:roles:list` / `platform:roles:manage` / `platform:permissions:list` | 平台角色与权限管理 |
 | `plugin:list` / `plugin:create` / `plugin:sync` | 插件管理 |
 | `task:list` / `task:detail` / `task:cancel` | 执行任务 |
 | `playbook:execute` | 执行 Playbook |
@@ -139,7 +141,8 @@ Token 有效期为 24 小时，可通过 `/api/v1/auth/refresh` 刷新。
 | `platform:tenants:manage` | 租户管理 |
 | `platform:settings:manage` | 平台设置 |
 | `dashboard:workspace:manage` | 工作区管理 |
-| `site-message:create` | 站内信管理 |
+| `site-message:list` / `site-message:settings:view` / `site-message:settings:manage` | 站内信查询与设置 |
+| `platform:messages:send` | 平台站内信发送 |
 
 ---
 

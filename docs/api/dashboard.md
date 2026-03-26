@@ -9,7 +9,7 @@
 
 **GET** `/api/v1/dashboard/overview`
 
-**权限**: 无特殊权限要求（已登录即可）
+**权限**: `dashboard:view`
 
 ### 查询参数
 
@@ -42,7 +42,7 @@
 
 **GET** `/api/v1/dashboard/config`
 
-**权限**: 无特殊权限要求
+**权限**: `dashboard:view`
 
 获取当前用户的仪表盘个性化配置（Widget 布局等）。
 
@@ -52,7 +52,7 @@
 
 **PUT** `/api/v1/dashboard/config`
 
-**权限**: 无特殊权限要求
+**权限**: `dashboard:config:manage`
 
 ### 请求体
 
@@ -90,7 +90,7 @@
 
 **GET** `/api/v1/dashboard/workspaces`
 
-**权限**: 无特殊权限要求
+**权限**: `dashboard:view`
 
 ---
 
@@ -114,7 +114,7 @@
 
 **GET** `/api/v1/dashboard/roles/:roleId/workspaces`
 
-**权限**: 无特殊权限要求
+**权限**: `dashboard:view`
 
 获取指定角色被分配的工作区列表。
 
