@@ -75,7 +75,7 @@ func (h *SecretsHandler) testQueryHost(c *gin.Context, id uuid.UUID, host TestQu
 	result := TestQueryResult{Hostname: host.Hostname, IPAddress: host.IPAddress}
 	secret, err := h.svc.TestQuery(c.Request.Context(), id, host.Hostname, host.IPAddress)
 	if err != nil {
-		result.Message = err.Error()
+		result.Message = publicSecretQueryErrorMessage(err)
 		return result
 	}
 

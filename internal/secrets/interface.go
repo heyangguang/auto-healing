@@ -9,10 +9,14 @@ import (
 )
 
 var (
-	ErrSecretNotFound   = provider.ErrSecretNotFound
-	ErrProviderNotFound = errors.New("密钥源不可用")
-	ErrUnsupportedType  = errors.New("不支持的密钥源类型")
-	ErrConnectionFailed = provider.ErrConnectionFailed
+	ErrSecretNotFound          = provider.ErrSecretNotFound
+	ErrProviderNotFound        = errors.New("密钥源不可用")
+	ErrUnsupportedType         = errors.New("不支持的密钥源类型")
+	ErrConnectionFailed        = provider.ErrConnectionFailed
+	ErrProviderAuthFailed      = provider.ErrProviderAuthFailed
+	ErrProviderRequestFailed   = provider.ErrProviderRequestFailed
+	ErrProviderInvalidConfig   = provider.ErrProviderInvalidConfig
+	ErrProviderInvalidResponse = provider.ErrProviderInvalidResponse
 )
 
 // Provider 密钥提供者接口
