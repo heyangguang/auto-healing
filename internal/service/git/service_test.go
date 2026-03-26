@@ -40,3 +40,20 @@ func TestResolveRepoFilePathAllowsRegularFile(t *testing.T) {
 		t.Fatalf("resolved = %q, want %q", resolved, filePath)
 	}
 }
+
+func TestRepoFileExistsRejectsTraversal(t *testing.T) {
+	parentDir := t.TempDir()
+	repoRoot := filepath.Join(parentDir, "repo")
+	outsideFile := filepath.Join(parentDir, "outside.yml")
+
+	if err := os.Mkdir(repoRoot, 0755); err != nil {
+		t.Fatalf("Mkdir(repo): %v", err)
+	}
+	if err := os.WriteFile(outsideFile, []byte("---\n"), 0600); err != nil {
+		t.Fatalf("WriteFile(outside): %v", err)
+	}
+
+	if _, err := repoFileExists(repoRoot, "../outside.yml"); err == nil {
+		t.Fatal("expected traversal path to be rejected")
+	}
+}

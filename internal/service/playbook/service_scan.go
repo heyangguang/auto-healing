@@ -3,8 +3,6 @@ package playbook
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -25,10 +23,7 @@ func (s *Service) ScanVariables(ctx context.Context, playbookID uuid.UUID, trigg
 
 	enhancedVars := s.parseEnhancedConfig(gitRepo.LocalPath)
 	scannedVars := buildScannedVariables(scanner, enhancedVars)
-	mergedVars := s.mergeVariables(playbook.Variables, scannedVars)
-	newCount, removedCount := s.countChanges(playbook.Variables, scannedVars)
-
-	logEntry, err := s.persistScanOutcome(ctx, playbook, scanner, triggerType, scannedVars, mergedVars, newCount, removedCount)
+	logEntry, mergedVars, err := s.persistScanOutcome(ctx, playbook, scanner, triggerType, scannedVars)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +50,10 @@ func (s *Service) scanPlaybookFiles(repoPath, playbookPath string) (*VariableSca
 		scannedFiles: make(map[string]bool),
 		variables:    make(map[string]*ScannedVariable),
 	}
-	fullPath := filepath.Join(repoPath, playbookPath)
+	fullPath, err := resolveExistingRepoPath(repoPath, playbookPath)
+	if err != nil {
+		return nil, invalidRepoPathError(playbookPath)
+	}
 	if err := scanner.ScanFile(fullPath); err != nil {
 		return nil, fmt.Errorf("扫描失败: %w", err)
 	}
@@ -138,19 +136,24 @@ func buildEnhancedOnlyVariable(name string, enhanced *EnhancedVariable) map[stri
 	}
 }
 
-func (s *Service) persistScanOutcome(ctx context.Context, playbook *model.Playbook, scanner *VariableScanner, triggerType string, scannedVars, mergedVars model.JSONArray, newCount, removedCount int) (*model.PlaybookScanLog, error) {
-	if err := s.repo.UpdateVariables(ctx, playbook.ID, mergedVars, scannedVars); err != nil {
-		return nil, err
-	}
+func (s *Service) persistScanOutcome(ctx context.Context, playbook *model.Playbook, scanner *VariableScanner, triggerType string, scannedVars model.JSONArray) (*model.PlaybookScanLog, model.JSONArray, error) {
+	nextStatus := ""
 	if playbook.Status == "pending" {
-		s.repo.UpdateStatus(ctx, playbook.ID, "scanned")
+		nextStatus = "scanned"
 	}
-
-	logEntry := buildPlaybookScanLog(playbook.ID, triggerType, playbook.Variables, scannedVars, scanner, newCount, removedCount)
-	s.repo.CreateScanLog(ctx, logEntry)
+	var mergedVariables model.JSONArray
+	logEntry, err := s.repo.PersistScanOutcome(ctx, playbook.ID, nextStatus, scannedVars, func(currentVariables model.JSONArray) (model.JSONArray, *model.PlaybookScanLog, error) {
+		mergedVars := s.mergeVariables(currentVariables, scannedVars)
+		newCount, removedCount := s.countChanges(currentVariables, scannedVars)
+		mergedVariables = mergedVars
+		return mergedVars, buildPlaybookScanLog(playbook.ID, triggerType, currentVariables, scannedVars, scanner, newCount, removedCount), nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
 	logger.Sync_("PLAYBOOK").Info("%s | 文件: %d | 变量: %d | 新增: %d | 移除: %d",
 		playbook.Name, logEntry.FilesScanned, logEntry.VariablesFound, logEntry.NewCount, logEntry.RemovedCount)
-	return logEntry, nil
+	return logEntry, mergedVariables, nil
 }
 
 func buildPlaybookScanLog(playbookID uuid.UUID, triggerType string, oldVars, scannedVars model.JSONArray, scanner *VariableScanner, newCount, removedCount int) *model.PlaybookScanLog {
@@ -177,7 +180,7 @@ func (s *Service) UpdateUserVariables(ctx context.Context, playbookID uuid.UUID,
 	}
 
 	playbook.Variables = variables
-	if err := s.repo.Update(ctx, playbook); err != nil {
+	if err := s.repo.UpdateConfirmedVariables(ctx, playbook.ID, playbook.Variables); err != nil {
 		return err
 	}
 
@@ -208,12 +211,17 @@ func (s *Service) CheckPlaybooksAfterRepoSync(ctx context.Context, repositoryID 
 }
 
 func (s *Service) markInvalidPlaybookIfMissing(ctx context.Context, repoPath string, playbook model.Playbook) bool {
-	fullPath := filepath.Join(repoPath, playbook.FilePath)
-	if _, err := os.Stat(fullPath); !os.IsNotExist(err) {
+	exists, err := repoPathExists(repoPath, playbook.FilePath)
+	if err != nil {
+		logger.Sync_("PLAYBOOK").Warn("%s 入口文件路径非法: %v", playbook.Name, err)
+	} else if exists {
 		return false
 	}
 
-	s.repo.UpdateStatus(ctx, playbook.ID, "invalid")
+	if err := s.repo.UpdateStatus(ctx, playbook.ID, "invalid"); err != nil {
+		logger.Sync_("PLAYBOOK").Error("%s 标记 invalid 失败: %v", playbook.Name, err)
+		return false
+	}
 	logger.Sync_("PLAYBOOK").Warn("%s 入口文件不存在，标记为 invalid", playbook.Name)
 	return true
 }

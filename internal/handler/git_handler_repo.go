@@ -70,6 +70,10 @@ func (h *GitRepoHandler) CreateRepo(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
+	if err := validateGitCreateRequest(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
 	repo, err := h.svc.CreateRepo(c.Request.Context(), req.ToModel())
 	if err != nil {
@@ -89,7 +93,7 @@ func (h *GitRepoHandler) GetRepo(c *gin.Context) {
 
 	repo, err := h.svc.GetRepo(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "仓库不存在")
+		respondResourceError(c, "GIT", "获取仓库详情失败", "仓库不存在", repository.ErrGitRepositoryNotFound, resourceErrorModeInternal, err)
 		return
 	}
 	response.Success(c, repo)
@@ -108,10 +112,19 @@ func (h *GitRepoHandler) UpdateRepo(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-
-	repo, err := h.svc.UpdateRepo(c.Request.Context(), id, req.DefaultBranch, req.AuthType, req.AuthConfig, req.SyncEnabled, req.SyncInterval)
+	current, err := h.svc.GetRepo(c.Request.Context(), id)
 	if err != nil {
-		respondInternalError(c, "GIT", "更新仓库失败", err)
+		respondResourceError(c, "GIT", "获取仓库详情失败", "仓库不存在", repository.ErrGitRepositoryNotFound, resourceErrorModeInternal, err)
+		return
+	}
+	if err := validateGitUpdateRequest(current, &req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	repo, err := h.svc.UpdateRepo(c.Request.Context(), id, req.DefaultBranch, req.AuthType, req.AuthConfig, req.SyncEnabled, req.SyncInterval, req.MaxFailures)
+	if err != nil {
+		respondResourceError(c, "GIT", "更新仓库失败", "仓库不存在", repository.ErrGitRepositoryNotFound, resourceErrorModeInternal, err)
 		return
 	}
 	response.Success(c, repo)
@@ -141,6 +154,10 @@ func (h *GitRepoHandler) ValidateRepo(c *gin.Context) {
 	var req ValidateRepoRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+	if err := validateGitAuthType(req.AuthType); err != nil {
+		response.BadRequest(c, err.Error())
 		return
 	}
 

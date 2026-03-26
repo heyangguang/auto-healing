@@ -1,6 +1,10 @@
 package plugin
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/company/auto-healing/internal/model"
+)
 
 func TestToStringHandlesNumericValues(t *testing.T) {
 	t.Helper()
@@ -38,5 +42,28 @@ func TestApplyFilterWithReasonSupportsNumericEquals(t *testing.T) {
 	matched, reason := ApplyFilterWithReason(filter, data)
 	if !matched {
 		t.Fatalf("expected numeric filter to match, reason=%q", reason)
+	}
+}
+
+func TestParseSyncFilterRejectsUnknownOperator(t *testing.T) {
+	_, err := ParseSyncFilter(model.JSON{
+		"field":    "status",
+		"operator": "unknown",
+		"value":    "open",
+	})
+	if err == nil {
+		t.Fatal("expected unknown operator to be rejected")
+	}
+}
+
+func TestParseSyncFilterRejectsUnknownLogic(t *testing.T) {
+	_, err := ParseSyncFilter(model.JSON{
+		"logic": "xor",
+		"rules": []map[string]any{
+			{"field": "status", "operator": "equals", "value": "open"},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected unknown logic to be rejected")
 	}
 }

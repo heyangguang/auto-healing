@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+var ErrGitRepositoryNotFound = errors.New("仓库不存在")
 
 // GitRepositoryRepository Git 仓库仓储
 type GitRepositoryRepository struct {
@@ -38,6 +41,9 @@ func (r *GitRepositoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*m
 	var repo model.GitRepository
 	err := TenantDB(r.db, ctx).Where("id = ?", id).First(&repo).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrGitRepositoryNotFound
+		}
 		return nil, err
 	}
 	return &repo, nil
@@ -48,14 +54,12 @@ func (r *GitRepositoryRepository) GetByName(ctx context.Context, name string) (*
 	var repo model.GitRepository
 	err := TenantDB(r.db, ctx).Where("name = ?", name).First(&repo).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrGitRepositoryNotFound
+		}
 		return nil, err
 	}
 	return &repo, nil
-}
-
-// Update 更新仓库
-func (r *GitRepositoryRepository) Update(ctx context.Context, repo *model.GitRepository) error {
-	return UpdateTenantScopedModel(r.db, ctx, repo.ID, repo)
 }
 
 // Delete 删除仓库
@@ -245,7 +249,9 @@ func (r *GitRepositoryRepository) ListSyncLogs(ctx context.Context, repoID uuid.
 	var total int64
 
 	query := TenantDB(r.db, ctx).Model(&model.GitSyncLog{}).Where("repository_id = ?", repoID)
-	query.Session(&gorm.Session{}).Count(&total)
+	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 
 	err := query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&logs).Error
 	return logs, total, err
@@ -272,10 +278,12 @@ func (r *GitRepositoryRepository) GetStats(ctx context.Context) (map[string]inte
 		Count  int64  `json:"count"`
 	}
 	var statusCounts []StatusCount
-	newDB().Model(&model.GitRepository{}).
+	if err := newDB().Model(&model.GitRepository{}).
 		Select("status, count(*) as count").
 		Group("status").
-		Scan(&statusCounts)
+		Scan(&statusCounts).Error; err != nil {
+		return nil, err
+	}
 	stats["by_status"] = statusCounts
 
 	return stats, nil

@@ -23,10 +23,12 @@ func (r *PlaybookRepository) GetStats(ctx context.Context) (map[string]interface
 		Count  int64  `json:"count"`
 	}
 	var byStatus []statusCount
-	newDB().Model(&model.Playbook{}).
+	if err := newDB().Model(&model.Playbook{}).
 		Select("status, count(*) as count").
 		Group("status").
-		Scan(&byStatus)
+		Scan(&byStatus).Error; err != nil {
+		return nil, err
+	}
 	stats["by_status"] = byStatus
 
 	type configModeCount struct {
@@ -34,10 +36,12 @@ func (r *PlaybookRepository) GetStats(ctx context.Context) (map[string]interface
 		Count      int64  `json:"count"`
 	}
 	var byConfigMode []configModeCount
-	newDB().Model(&model.Playbook{}).
+	if err := newDB().Model(&model.Playbook{}).
 		Select("config_mode, count(*) as count").
 		Group("config_mode").
-		Scan(&byConfigMode)
+		Scan(&byConfigMode).Error; err != nil {
+		return nil, err
+	}
 	stats["by_config_mode"] = byConfigMode
 
 	return stats, nil

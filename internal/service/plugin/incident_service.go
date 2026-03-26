@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
@@ -11,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+var ErrBatchResetScanScopeRequired = errors.New("批量重置必须提供 ids 或 healing_status")
 
 // IncidentService 工单服务
 type IncidentService struct {
@@ -55,7 +58,10 @@ func (s *IncidentService) CloseIncident(ctx context.Context, id uuid.UUID, resol
 		closeStatus = "resolved"
 	}
 
-	sourceUpdated := s.writeBackIncidentClose(ctx, id, incident, resolution, workNotes, closeCode, closeStatus)
+	sourceUpdated, err := s.writeBackIncidentClose(ctx, id, incident, resolution, workNotes, closeCode, closeStatus)
+	if err != nil {
+		return nil, err
+	}
 	incident.Status = closeStatus
 	incident.HealingStatus = "healed"
 	if err := s.incidentRepo.Update(ctx, incident); err != nil {
@@ -69,18 +75,24 @@ func (s *IncidentService) CloseIncident(ctx context.Context, id uuid.UUID, resol
 	}, nil
 }
 
-func (s *IncidentService) writeBackIncidentClose(ctx context.Context, id uuid.UUID, incident *model.Incident, resolution, workNotes, closeCode, closeStatus string) bool {
+func (s *IncidentService) writeBackIncidentClose(ctx context.Context, id uuid.UUID, incident *model.Incident, resolution, workNotes, closeCode, closeStatus string) (bool, error) {
 	if incident.PluginID == nil {
-		return false
+		return false, nil
 	}
 	plugin, err := s.pluginRepo.GetByID(ctx, *incident.PluginID)
-	if err != nil || plugin == nil {
-		return false
+	if err != nil {
+		if errors.Is(err, repository.ErrPluginNotFound) {
+			return false, nil
+		}
+		return false, fmt.Errorf("获取来源插件失败: %w", err)
+	}
+	if plugin == nil {
+		return false, nil
 	}
 
 	closeURL, ok := plugin.Config["close_incident_url"].(string)
 	if !ok || closeURL == "" {
-		return false
+		return false, nil
 	}
 
 	req := map[string]any{
@@ -92,17 +104,17 @@ func (s *IncidentService) writeBackIncidentClose(ctx context.Context, id uuid.UU
 	}
 	if err := s.httpClient.CloseIncident(ctx, plugin.Config, req); err != nil {
 		logger.Sync_("PLUGIN").Warn("回写工单到源系统失败: incident_id=%s, external_id=%s, error=%s", id, incident.ExternalID, err.Error())
-		return false
+		return false, fmt.Errorf("回写工单到源系统失败: %w", err)
 	}
 
 	logger.Sync_("PLUGIN").Info("成功回写工单到源系统: incident_id=%s, external_id=%s", id, incident.ExternalID)
-	return true
+	return true, nil
 }
 
 // ResetScan 重置工单扫描状态
 func (s *IncidentService) ResetScan(ctx context.Context, id uuid.UUID) error {
 	if _, err := s.incidentRepo.GetByID(ctx, id); err != nil {
-		return fmt.Errorf("工单不存在: %w", err)
+		return fmt.Errorf("获取工单失败: %w", err)
 	}
 	return s.incidentRepo.ResetScan(ctx, id)
 }
@@ -121,6 +133,9 @@ type BatchResetScanRequest struct {
 
 // BatchResetScan 批量重置工单扫描状态
 func (s *IncidentService) BatchResetScan(ctx context.Context, ids []uuid.UUID, healingStatus string) (*BatchResetScanResponse, error) {
+	if len(ids) == 0 && healingStatus == "" {
+		return nil, ErrBatchResetScanScopeRequired
+	}
 	count, err := s.incidentRepo.BatchResetScan(ctx, ids, healingStatus)
 	if err != nil {
 		return nil, fmt.Errorf("批量重置失败: %w", err)

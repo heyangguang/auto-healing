@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 type CMDBService struct {
 	cmdbRepo *repository.CMDBItemRepository
 }
+
+var ErrCMDBOfflineMaintenanceForbidden = errors.New("已下线的配置项不能进入维护模式")
 
 // NewCMDBService 创建 CMDB 服务
 func NewCMDBService() *CMDBService {
@@ -54,12 +57,7 @@ func (s *CMDBService) EnterMaintenance(ctx context.Context, id uuid.UUID, reason
 
 	// 检查状态：offline 不能进入维护
 	if item.Status == "offline" {
-		return fmt.Errorf("已下线的配置项不能进入维护模式")
-	}
-
-	// 进入维护
-	if err := s.cmdbRepo.EnterMaintenance(ctx, id, reason, endAt); err != nil {
-		return err
+		return ErrCMDBOfflineMaintenanceForbidden
 	}
 
 	// 记录日志
@@ -71,7 +69,7 @@ func (s *CMDBService) EnterMaintenance(ctx context.Context, id uuid.UUID, reason
 		ScheduledEndAt: endAt,
 		Operator:       operator,
 	}
-	return s.cmdbRepo.CreateMaintenanceLog(ctx, log)
+	return s.cmdbRepo.EnterMaintenanceWithLog(ctx, id, reason, endAt, log)
 }
 
 // ExitMaintenance 退出维护模式
@@ -79,11 +77,6 @@ func (s *CMDBService) ExitMaintenance(ctx context.Context, id uuid.UUID, exitTyp
 	// 获取配置项信息
 	item, err := s.cmdbRepo.GetByID(ctx, id)
 	if err != nil {
-		return err
-	}
-
-	// 退出维护
-	if err := s.cmdbRepo.ExitMaintenance(ctx, id); err != nil {
 		return err
 	}
 
@@ -97,7 +90,7 @@ func (s *CMDBService) ExitMaintenance(ctx context.Context, id uuid.UUID, exitTyp
 		ExitType:     exitType,
 		Operator:     operator,
 	}
-	return s.cmdbRepo.CreateMaintenanceLog(ctx, log)
+	return s.cmdbRepo.ExitMaintenanceWithLog(ctx, id, log)
 }
 
 // GetMaintenanceLogs 获取维护日志
@@ -113,6 +106,7 @@ func (s *CMDBService) CheckExpiredMaintenance(ctx context.Context) (int, error) 
 	}
 
 	count := 0
+	var failed []error
 	for _, item := range items {
 		// 注入该配置项所属租户的上下文，确保 ExitMaintenance 在正确租户范围内操作
 		itemCtx := ctx
@@ -121,7 +115,9 @@ func (s *CMDBService) CheckExpiredMaintenance(ctx context.Context) (int, error) 
 		}
 		if err := s.ExitMaintenance(itemCtx, item.ID, "auto", "system"); err == nil {
 			count++
+		} else {
+			failed = append(failed, fmt.Errorf("恢复配置项 %s 失败: %w", item.ID, err))
 		}
 	}
-	return count, nil
+	return count, errors.Join(failed...)
 }

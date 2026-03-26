@@ -23,6 +23,18 @@ type FilterCondition struct {
 	Value    interface{} `json:"value,omitempty"`
 }
 
+var allowedFilterOperators = map[string]bool{
+	"equals":       true,
+	"not_equals":   true,
+	"contains":     true,
+	"not_contains": true,
+	"starts_with":  true,
+	"ends_with":    true,
+	"regex":        true,
+	"in":           true,
+	"not_in":       true,
+}
+
 // ParseSyncFilter 解析插件的同步过滤器配置
 func ParseSyncFilter(syncFilter model.JSON) (*FilterCondition, error) {
 	if len(syncFilter) == 0 {
@@ -36,6 +48,9 @@ func ParseSyncFilter(syncFilter model.JSON) (*FilterCondition, error) {
 
 	var condition FilterCondition
 	if err := json.Unmarshal(data, &condition); err != nil {
+		return nil, err
+	}
+	if err := validateFilterCondition(&condition); err != nil {
 		return nil, err
 	}
 
@@ -84,6 +99,8 @@ func evaluateConditionWithReason(cond *FilterCondition, data map[string]interfac
 				reasons = append(reasons, reason)
 			}
 			return false, strings.Join(reasons, " 且 ")
+		default:
+			return false, fmt.Sprintf("未知逻辑操作符: %s", cond.Logic)
 		}
 	}
 
@@ -151,8 +168,44 @@ func evaluateNormalizedRule(field, operator string, value interface{}, fieldStr,
 		}
 		return false, fmt.Sprintf("%s=%s 在排除列表 %v 中", field, fieldStr, value)
 	default:
-		return true, "" // 未知操作符放行
+		return false, fmt.Sprintf("未知操作符: %s", operator)
 	}
+}
+
+func validateFilterCondition(cond *FilterCondition) error {
+	if cond == nil {
+		return nil
+	}
+
+	if cond.Logic != "" {
+		logic := strings.ToLower(cond.Logic)
+		if logic != "and" && logic != "or" {
+			return fmt.Errorf("未知逻辑操作符: %s", cond.Logic)
+		}
+		if len(cond.Rules) == 0 {
+			return fmt.Errorf("逻辑过滤器必须包含 rules")
+		}
+		for i := range cond.Rules {
+			if err := validateFilterCondition(&cond.Rules[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if cond.Field == "" || cond.Operator == "" {
+		return fmt.Errorf("过滤规则必须包含 field 和 operator")
+	}
+	operator := strings.ToLower(cond.Operator)
+	if !allowedFilterOperators[operator] {
+		return fmt.Errorf("未知操作符: %s", cond.Operator)
+	}
+	if operator == "regex" {
+		if _, err := regexp.Compile(toString(cond.Value)); err != nil {
+			return fmt.Errorf("无效的正则表达式: %w", err)
+		}
+	}
+	return nil
 }
 
 func evaluateContains(fieldStr, valueStr string, shouldContain bool, makeReason func() string) (bool, string) {

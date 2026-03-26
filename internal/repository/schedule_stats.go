@@ -23,10 +23,12 @@ func (r *ScheduleRepository) GetStats(ctx context.Context) (map[string]interface
 		Count  int64  `json:"count"`
 	}
 	var byStatus []statusCount
-	newDB().Model(&model.ExecutionSchedule{}).
+	if err := newDB().Model(&model.ExecutionSchedule{}).
 		Select("status, count(*) as count").
 		Group("status").
-		Scan(&byStatus)
+		Scan(&byStatus).Error; err != nil {
+		return nil, err
+	}
 	stats["by_status"] = byStatus
 
 	type scheduleTypeCount struct {
@@ -34,14 +36,18 @@ func (r *ScheduleRepository) GetStats(ctx context.Context) (map[string]interface
 		Count        int64  `json:"count"`
 	}
 	var byType []scheduleTypeCount
-	newDB().Model(&model.ExecutionSchedule{}).
+	if err := newDB().Model(&model.ExecutionSchedule{}).
 		Select("schedule_type, count(*) as count").
 		Group("schedule_type").
-		Scan(&byType)
+		Scan(&byType).Error; err != nil {
+		return nil, err
+	}
 	stats["by_schedule_type"] = byType
 
 	var enabledCount int64
-	newDB().Model(&model.ExecutionSchedule{}).Where("enabled = ?", true).Count(&enabledCount)
+	if err := newDB().Model(&model.ExecutionSchedule{}).Where("enabled = ?", true).Count(&enabledCount).Error; err != nil {
+		return nil, err
+	}
 	stats["enabled_count"] = enabledCount
 	stats["disabled_count"] = total - enabledCount
 	return stats, nil

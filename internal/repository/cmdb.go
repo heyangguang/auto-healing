@@ -77,16 +77,47 @@ func (r *CMDBItemRepository) UpsertByExternalID(ctx context.Context, item *model
 	}
 
 	// 更新现有记录
-	item.ID = existing.ID
-	if item.TenantID == nil {
-		item.TenantID = existing.TenantID
-	}
-	item.CreatedAt = existing.CreatedAt
-	item.UpdatedAt = time.Now()
-	if err := UpdateTenantScopedModel(r.db, ctx, item.ID, item); err != nil {
+	if err := r.updateFromSync(ctx, existing, item); err != nil {
 		return false, err
 	}
 	return false, nil
+}
+
+func (r *CMDBItemRepository) updateFromSync(ctx context.Context, existing model.CMDBItem, item *model.CMDBItem) error {
+	return TenantDB(r.db, ctx).Model(&model.CMDBItem{}).Where("id = ?", existing.ID).Updates(buildCMDBSyncUpdates(existing, item)).Error
+}
+
+func buildCMDBSyncUpdates(existing model.CMDBItem, item *model.CMDBItem) map[string]any {
+	updates := map[string]any{
+		"plugin_id":          item.PluginID,
+		"source_plugin_name": item.SourcePluginName,
+		"name":               item.Name,
+		"type":               item.Type,
+		"ip_address":         item.IPAddress,
+		"hostname":           item.Hostname,
+		"os":                 item.OS,
+		"os_version":         item.OSVersion,
+		"cpu":                item.CPU,
+		"memory":             item.Memory,
+		"disk":               item.Disk,
+		"location":           item.Location,
+		"owner":              item.Owner,
+		"environment":        item.Environment,
+		"manufacturer":       item.Manufacturer,
+		"model":              item.Model,
+		"serial_number":      item.SerialNumber,
+		"department":         item.Department,
+		"dependencies":       item.Dependencies,
+		"tags":               item.Tags,
+		"raw_data":           item.RawData,
+		"source_created_at":  item.SourceCreatedAt,
+		"source_updated_at":  item.SourceUpdatedAt,
+		"updated_at":         time.Now(),
+	}
+	if existing.Status != "maintenance" {
+		updates["status"] = item.Status
+	}
+	return updates
 }
 
 // applyCMDBFilters 通用 CMDB 筛选条件（List 和 ListIDs 共用）

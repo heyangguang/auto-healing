@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -16,7 +17,7 @@ func (h *PlaybookHandler) GetFiles(c *gin.Context) {
 
 	files, err := h.svc.GetFiles(c.Request.Context(), id)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		respondResourceError(c, "PLAYBOOK", "获取 Playbook 文件失败", "Playbook不存在", repository.ErrPlaybookNotFound, resourceErrorModeBadRequest, err)
 		return
 	}
 	response.Success(c, map[string]any{"files": files})
@@ -32,7 +33,7 @@ func (h *PlaybookHandler) ScanVariables(c *gin.Context) {
 
 	log, err := h.svc.ScanVariables(c.Request.Context(), id, "manual")
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		respondResourceError(c, "PLAYBOOK", "扫描变量失败", "Playbook不存在", repository.ErrPlaybookNotFound, resourceErrorModeBadRequest, err)
 		return
 	}
 	response.Success(c, log)
@@ -53,7 +54,7 @@ func (h *PlaybookHandler) UpdateVariables(c *gin.Context) {
 	}
 
 	if err := h.svc.UpdateUserVariables(c.Request.Context(), id, req.Variables); err != nil {
-		respondInternalError(c, "PLAYBOOK", "更新变量失败", err)
+		respondResourceError(c, "PLAYBOOK", "更新变量失败", "Playbook不存在", repository.ErrPlaybookNotFound, resourceErrorModeInternal, err)
 		return
 	}
 	response.Message(c, "变量更新成功")
@@ -70,7 +71,7 @@ func (h *PlaybookHandler) GetScanLogs(c *gin.Context) {
 	page, pageSize := parsePagination(c, 20)
 	logs, total, err := h.svc.GetScanLogs(c.Request.Context(), id, page, pageSize)
 	if err != nil {
-		respondInternalError(c, "PLAYBOOK", "获取扫描日志失败", err)
+		respondResourceError(c, "PLAYBOOK", "获取扫描日志失败", "Playbook不存在", repository.ErrPlaybookNotFound, resourceErrorModeInternal, err)
 		return
 	}
 	response.List(c, logs, total, page, pageSize)

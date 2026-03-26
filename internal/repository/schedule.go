@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -10,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+var ErrScheduleNotFound = errors.New("调度不存在")
 
 // ScheduleRepository 定时任务调度仓库
 type ScheduleRepository struct {
@@ -79,21 +82,12 @@ func (r *ScheduleRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.
 		Preload("Task.Playbook").
 		First(&schedule, "id = ?", id).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrScheduleNotFound
+		}
 		return nil, err
 	}
 	return &schedule, nil
-}
-
-// Update 更新定时任务调度
-func (r *ScheduleRepository) Update(ctx context.Context, schedule *model.ExecutionSchedule) error {
-	return r.tenantDB(ctx).
-		Model(schedule).
-		Select("name", "task_id", "schedule_type", "schedule_expr", "scheduled_at", "status",
-			"next_run_at", "last_run_at", "enabled", "description",
-			"max_failures", "consecutive_failures", "pause_reason",
-			"target_hosts_override", "extra_vars_override", "secrets_source_ids",
-			"skip_notification", "updated_at").
-		Updates(schedule).Error
 }
 
 // Delete 删除定时任务调度

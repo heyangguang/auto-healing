@@ -36,8 +36,15 @@ type CreatePlaybookRequest struct {
 
 // UpdatePlaybookRequest 更新 Playbook 请求
 type UpdatePlaybookRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+}
+
+func (r *UpdatePlaybookRequest) ToUpdateInput() *playbook.UpdateInput {
+	return &playbook.UpdateInput{
+		Name:        r.Name,
+		Description: r.Description,
+	}
 }
 
 // UpdateVariablesRequest 更新变量请求

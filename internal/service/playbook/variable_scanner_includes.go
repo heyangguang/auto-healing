@@ -6,6 +6,30 @@ import (
 	"strings"
 )
 
+func (vs *VariableScanner) recordScanError(err error) {
+	if err != nil && vs.err == nil {
+		vs.err = err
+	}
+}
+
+func (vs *VariableScanner) scanNestedYAML(path string) {
+	if vs.err != nil {
+		return
+	}
+	if err := vs.ScanFile(path); err != nil {
+		vs.recordScanError(err)
+	}
+}
+
+func (vs *VariableScanner) scanNestedTemplate(path string) {
+	if vs.err != nil {
+		return
+	}
+	if err := vs.scanJinja2File(path); err != nil {
+		vs.recordScanError(err)
+	}
+}
+
 func (vs *VariableScanner) scanIncludes(data interface{}, currentFile string) {
 	currentDir := filepath.Dir(currentFile)
 
@@ -33,7 +57,10 @@ func (vs *VariableScanner) scanIncludedFiles(data map[string]interface{}, curren
 		}
 		includePath := filepath.Join(currentDir, path)
 		if _, err := os.Stat(includePath); err == nil {
-			vs.ScanFile(includePath)
+			vs.scanNestedYAML(includePath)
+			if vs.err != nil {
+				return
+			}
 		}
 	}
 }
@@ -115,9 +142,12 @@ func (vs *VariableScanner) scanRoleDirectory(dirPath string) {
 		fullPath := filepath.Join(dirPath, entry.Name())
 		switch {
 		case strings.HasSuffix(entry.Name(), ".yml"), strings.HasSuffix(entry.Name(), ".yaml"):
-			vs.ScanFile(fullPath)
+			vs.scanNestedYAML(fullPath)
 		case strings.HasSuffix(entry.Name(), ".j2"):
-			vs.scanJinja2File(fullPath)
+			vs.scanNestedTemplate(fullPath)
+		}
+		if vs.err != nil {
+			return
 		}
 	}
 }
@@ -131,7 +161,7 @@ func (vs *VariableScanner) scanVarsFile(path string, currentFile string) {
 
 	varsPath := filepath.Join(currentDir, path)
 	if _, err := os.Stat(varsPath); err == nil {
-		vs.ScanFile(varsPath)
+		vs.scanNestedYAML(varsPath)
 	}
 }
 
@@ -149,7 +179,10 @@ func (vs *VariableScanner) scanDynamicVarsDir(varsDir string) {
 			continue
 		}
 		if strings.HasSuffix(entry.Name(), ".yml") || strings.HasSuffix(entry.Name(), ".yaml") {
-			vs.ScanFile(filepath.Join(varsDir, entry.Name()))
+			vs.scanNestedYAML(filepath.Join(varsDir, entry.Name()))
+			if vs.err != nil {
+				return
+			}
 		}
 	}
 }
@@ -157,7 +190,7 @@ func (vs *VariableScanner) scanDynamicVarsDir(varsDir string) {
 func (vs *VariableScanner) scanTemplateFile(src string, currentFile string) {
 	for _, templatePath := range vs.templateSearchPaths(src, currentFile) {
 		if _, err := os.Stat(templatePath); err == nil {
-			vs.scanJinja2File(templatePath)
+			vs.scanNestedTemplate(templatePath)
 			return
 		}
 	}
@@ -185,17 +218,22 @@ func (vs *VariableScanner) templateSearchPaths(src string, currentFile string) [
 	return append(searchPaths, filepath.Join(parts[0], "roles", roleParts[0], "templates", src))
 }
 
-func (vs *VariableScanner) scanJinja2File(filePath string) {
-	absPath, _ := filepath.Abs(filePath)
-	if vs.scannedFiles[absPath] {
-		return
+func (vs *VariableScanner) scanJinja2File(filePath string) error {
+	resolvedPath, err := resolveExistingRepoPath(vs.basePath, filePath)
+	if err != nil {
+		return err
 	}
-	vs.scannedFiles[absPath] = true
+	if vs.scannedFiles[resolvedPath] {
+		return nil
+	}
+	vs.scannedFiles[resolvedPath] = true
 
-	content, err := os.ReadFile(filePath)
-	if err == nil {
-		vs.scanVariableReferences(string(content), filePath)
+	content, err := os.ReadFile(resolvedPath)
+	if err != nil {
+		return err
 	}
+	vs.scanVariableReferences(string(content), resolvedPath)
+	return nil
 }
 
 func isBuiltinVariable(name string) bool {

@@ -80,45 +80,44 @@ func (r *CreateScheduleRequest) ToModel() *model.ExecutionSchedule {
 
 // UpdateScheduleRequest 更新调度请求
 type UpdateScheduleRequest struct {
-	Name         string     `json:"name"`
-	ScheduleType string     `json:"schedule_type"`
+	Name         *string    `json:"name"`
+	ScheduleType *string    `json:"schedule_type"`
 	ScheduleExpr *string    `json:"schedule_expr"`
 	ScheduledAt  *time.Time `json:"scheduled_at"`
-	Description  string     `json:"description"`
+	Description  *string    `json:"description"`
 	MaxFailures  *int       `json:"max_failures"` // 最大连续失败次数
 
 	// 执行参数覆盖（可选）
-	TargetHostsOverride string         `json:"target_hosts_override"`
-	ExtraVarsOverride   map[string]any `json:"extra_vars_override"`
-	SecretsSourceIDs    []uuid.UUID    `json:"secrets_source_ids"`
-	SkipNotification    bool           `json:"skip_notification"`
+	TargetHostsOverride *string         `json:"target_hosts_override"`
+	ExtraVarsOverride   *map[string]any `json:"extra_vars_override"`
+	SecretsSourceIDs    *[]uuid.UUID    `json:"secrets_source_ids"`
+	SkipNotification    *bool           `json:"skip_notification"`
 }
 
-// ToModel 转换为 Model
-func (r *UpdateScheduleRequest) ToModel() *model.ExecutionSchedule {
-	var secretIDs model.StringArray
-	if len(r.SecretsSourceIDs) > 0 {
-		secretIDs = make(model.StringArray, len(r.SecretsSourceIDs))
-		for i, id := range r.SecretsSourceIDs {
-			secretIDs[i] = id.String()
-		}
-	}
-
-	schedule := &model.ExecutionSchedule{
+// ToUpdateInput 转换为 Service 更新输入
+func (r *UpdateScheduleRequest) ToUpdateInput() *schedule.UpdateInput {
+	input := &schedule.UpdateInput{
 		Name:                r.Name,
+		Description:         r.Description,
 		ScheduleType:        r.ScheduleType,
 		ScheduleExpr:        r.ScheduleExpr,
 		ScheduledAt:         r.ScheduledAt,
-		Description:         r.Description,
 		TargetHostsOverride: r.TargetHostsOverride,
-		ExtraVarsOverride:   model.JSON(r.ExtraVarsOverride),
-		SecretsSourceIDs:    secretIDs,
 		SkipNotification:    r.SkipNotification,
+		MaxFailures:         r.MaxFailures,
 	}
-	if r.MaxFailures != nil {
-		schedule.MaxFailures = *r.MaxFailures
+	if r.ExtraVarsOverride != nil {
+		data := model.JSON(*r.ExtraVarsOverride)
+		input.ExtraVarsOverride = &data
 	}
-	return schedule
+	if r.SecretsSourceIDs != nil {
+		secretIDs := make(model.StringArray, len(*r.SecretsSourceIDs))
+		for i, id := range *r.SecretsSourceIDs {
+			secretIDs[i] = id.String()
+		}
+		input.SecretsSourceIDs = &secretIDs
+	}
+	return input
 }
 
 func buildScheduleListOptions(c *gin.Context, page, pageSize int) *repository.ScheduleListOptions {

@@ -48,7 +48,7 @@ func (h *CMDBHandler) EnterMaintenance(c *gin.Context) {
 		return
 	}
 	if err := h.cmdbSvc.EnterMaintenance(c.Request.Context(), id, req.Reason, endAt, middleware.GetUsername(c)); err != nil {
-		respondInternalError(c, "CMDB", "进入维护模式失败", err)
+		respondCMDBMaintenanceError(c, "进入维护模式失败", err)
 		return
 	}
 	response.Message(c, "配置项已进入维护模式")
@@ -74,7 +74,7 @@ func (h *CMDBHandler) ExitMaintenance(c *gin.Context) {
 		return
 	}
 	if err := h.cmdbSvc.ExitMaintenance(c.Request.Context(), id, "manual", middleware.GetUsername(c)); err != nil {
-		respondInternalError(c, "CMDB", "退出维护模式失败", err)
+		respondCMDBMaintenanceError(c, "退出维护模式失败", err)
 		return
 	}
 	response.Message(c, "配置项已恢复正常")
