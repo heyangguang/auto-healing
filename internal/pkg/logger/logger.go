@@ -8,13 +8,15 @@ import (
 )
 
 var (
-	logger *zap.Logger
-	sugar  *zap.SugaredLogger
+	logger = zap.NewNop()
+	sugar  = logger.Sugar()
 
 	categoryWriters = make(map[Category]*lumberjack.Logger)
 	categoryMu      sync.RWMutex
-	logDir          = "logs"
+	logDir          = defaultLogDir
 )
+
+const defaultLogDir = "logs"
 
 type Category string
 

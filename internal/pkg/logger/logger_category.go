@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -24,7 +25,9 @@ func (l *CategoryLogger) writeToFile(level, msg string) {
 		return
 	}
 	line := fmt.Sprintf("%s\t%s\t%s %s\n", formatTime(), level, l.formatTag(), msg)
-	_, _ = writer.Write([]byte(line))
+	if _, err := writer.Write([]byte(line)); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "写入分类日志失败: %v\n", err)
+	}
 }
 
 func formatTime() string {

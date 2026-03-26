@@ -124,7 +124,7 @@ func migrateMissingTables(db *gorm.DB, models []interface{}) (int, error) {
 func migrateModelIfMissing(db *gorm.DB, current interface{}) (bool, error) {
 	stmt := &gorm.Statement{DB: db}
 	if err := stmt.Parse(current); err != nil {
-		return false, nil
+		return false, fmt.Errorf("解析模型 %T 失败: %w", current, err)
 	}
 	tableName := stmt.Schema.Table
 	if db.Migrator().HasTable(tableName) {

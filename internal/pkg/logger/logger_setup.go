@@ -12,38 +12,69 @@ import (
 )
 
 func Init(cfg *config.LogConfig) {
-	var cores []zapcore.Core
-	level := parseLevel(cfg.Level)
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		fmt.Printf("创建日志目录失败: %v\n", err)
+	if cfg == nil {
+		logger = zap.NewNop()
+		sugar = logger.Sugar()
+		logDir = defaultLogDir
+		resetCategoryWriters(false)
+		return
 	}
+
+	logDir = resolveLogDir(cfg)
+	fileEnabled := cfg.File.Enabled
+	if fileEnabled {
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			fmt.Printf("创建日志目录失败: %v\n", err)
+			fileEnabled = false
+		}
+	}
+	cores := buildCores(cfg, fileEnabled)
+	logger = buildLogger(cores)
+	sugar = logger.Sugar()
+	resetCategoryWriters(fileEnabled)
+}
+
+func buildCores(cfg *config.LogConfig, fileEnabled bool) []zapcore.Core {
+	cores := make([]zapcore.Core, 0, 2)
+	level := parseLevel(cfg.Level)
 	if cfg.Console.Enabled {
 		cores = append(cores, zapcore.NewCore(getEncoder(cfg.Console.Format, cfg.Console.Color), zapcore.AddSync(os.Stdout), level))
 	}
-	if cfg.File.Enabled {
-		if err := os.MkdirAll(cfg.File.Path, 0755); err == nil {
-			fileWriter := &lumberjack.Logger{
-				Filename:   filepath.Join(cfg.File.Path, cfg.File.Filename),
-				MaxSize:    cfg.File.MaxSize,
-				MaxBackups: cfg.File.MaxBackups,
-				MaxAge:     cfg.File.MaxAge,
-				Compress:   cfg.File.Compress,
-			}
-			cores = append(cores, zapcore.NewCore(getEncoder(cfg.File.Format, false), zapcore.AddSync(fileWriter), level))
+	if fileEnabled {
+		fileWriter := &lumberjack.Logger{
+			Filename:   filepath.Join(logDir, cfg.File.Filename),
+			MaxSize:    cfg.File.MaxSize,
+			MaxBackups: cfg.File.MaxBackups,
+			MaxAge:     cfg.File.MaxAge,
+			Compress:   cfg.File.Compress,
 		}
+		cores = append(cores, zapcore.NewCore(getEncoder(cfg.File.Format, false), zapcore.AddSync(fileWriter), level))
 	}
-	if len(cores) == 0 {
-		logger = zap.NewNop()
-	} else {
-		logger = zap.New(zapcore.NewTee(cores...), zap.AddCaller(), zap.AddCallerSkip(1))
-	}
-	sugar = logger.Sugar()
-	initCategoryWriters()
+	return cores
 }
 
-func initCategoryWriters() {
+func buildLogger(cores []zapcore.Core) *zap.Logger {
+	if len(cores) == 0 {
+		return zap.NewNop()
+	}
+	return zap.New(zapcore.NewTee(cores...), zap.AddCaller(), zap.AddCallerSkip(1))
+}
+
+func resolveLogDir(cfg *config.LogConfig) string {
+	if cfg.File.Path != "" {
+		return cfg.File.Path
+	}
+	return defaultLogDir
+}
+
+func resetCategoryWriters(enabled bool) {
 	categoryMu.Lock()
 	defer categoryMu.Unlock()
+	closeCategoryWritersLocked()
+	categoryWriters = make(map[Category]*lumberjack.Logger, len(categoryToFile))
+	if !enabled {
+		return
+	}
 	for cat, filename := range categoryToFile {
 		categoryWriters[cat] = &lumberjack.Logger{
 			Filename:   filepath.Join(logDir, filename),
@@ -59,6 +90,21 @@ func getCategoryWriter(cat Category) *lumberjack.Logger {
 	categoryMu.RLock()
 	defer categoryMu.RUnlock()
 	return categoryWriters[cat]
+}
+
+func closeCategoryWriters() {
+	categoryMu.Lock()
+	defer categoryMu.Unlock()
+	closeCategoryWritersLocked()
+}
+
+func closeCategoryWritersLocked() {
+	for cat, writer := range categoryWriters {
+		if writer != nil {
+			_ = writer.Close()
+		}
+		delete(categoryWriters, cat)
+	}
 }
 
 func getEncoder(format string, color bool) zapcore.Encoder {

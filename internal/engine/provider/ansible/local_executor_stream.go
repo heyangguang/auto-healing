@@ -28,20 +28,12 @@ func (e *LocalExecutor) executeWithScript(ctx context.Context, req *ExecuteReque
 		return nil, fmt.Errorf("创建 stdout pipe 失败: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		logger.Exec("ANSIBLE").Warn("script 命令启动失败，回退到普通模式: %v", err)
-		return e.executeBuffered(ctx, req, startedAt)
+		return buildStreamingStartFailure(startedAt, fmt.Errorf("启动 script 实时输出命令失败: %w", err)), err
 	}
 
 	stdoutBuf := e.collectScriptOutput(req, stdout)
 	err = cmd.Wait()
-	return &ExecuteResult{
-		ExitCode:  streamingExitCode(err),
-		Stdout:    stdoutBuf.String(),
-		Stderr:    "",
-		Stats:     ParseStats(stdoutBuf.String()),
-		StartedAt: startedAt,
-		Duration:  time.Since(startedAt),
-	}, nil
+	return buildStreamingResult(startedAt, &stdoutBuf, &bytes.Buffer{}, err)
 }
 
 func (e *LocalExecutor) buildStreamingCommand(ctx context.Context, req *ExecuteRequest) (*exec.Cmd, func(), error) {

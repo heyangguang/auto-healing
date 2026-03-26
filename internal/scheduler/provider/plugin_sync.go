@@ -36,6 +36,14 @@ func (s *Scheduler) handlePluginSyncError(ctx context.Context, plugin model.Plug
 		updates["sync_enabled"] = false
 		updates["next_sync_at"] = nil
 		updates["pause_reason"] = fmt.Sprintf("连续失败 %d 次后自动暂停 (最后错误: %s)", newCount, truncateStr(err.Error(), 200))
+	}
+
+	if updateErr := s.updateSyncState(ctx, plugin.ID, updates); updateErr != nil {
+		logger.Sched("SYNC").Error("[%s] 同步失败且状态落库失败: %s - %v | state_err=%v", shortID, plugin.Name, err, updateErr)
+		return
+	}
+
+	if plugin.MaxFailures > 0 && newCount >= plugin.MaxFailures {
 		logger.Sched("SYNC").Warn("[%s] ⚠ 连续失败 %d/%d 次，已自动暂停同步: %s",
 			shortID, newCount, plugin.MaxFailures, plugin.Name)
 	} else if plugin.MaxFailures > 0 {
@@ -45,8 +53,6 @@ func (s *Scheduler) handlePluginSyncError(ctx context.Context, plugin model.Plug
 		logger.Sched("SYNC").Warn("[%s] 同步失败 (第%d次): %s - %v",
 			shortID, newCount, plugin.Name, err)
 	}
-
-	s.updatePluginSyncState(ctx, plugin.ID, updates)
 }
 
 func (s *Scheduler) handlePluginSyncResult(ctx context.Context, plugin model.Plugin, syncLog *model.PluginSyncLog, shortID string, nextSyncAt time.Time, duration time.Duration) {
@@ -55,11 +61,14 @@ func (s *Scheduler) handlePluginSyncResult(ctx context.Context, plugin model.Plu
 		return
 	}
 
-	s.updatePluginSyncState(ctx, plugin.ID, map[string]interface{}{
+	if err := s.updateSyncState(ctx, plugin.ID, map[string]interface{}{
 		"consecutive_failures": 0,
 		"pause_reason":         "",
 		"next_sync_at":         nextSyncAt,
-	})
+	}); err != nil {
+		logger.Sched("SYNC").Error("[%s] 同步成功但状态落库失败: %s | state_err=%v", shortID, plugin.Name, err)
+		return
+	}
 	if plugin.ConsecutiveFailures > 0 {
 		logger.Sched("SYNC").Info("[%s] 同步成功: %s | 失败计数已重置 (之前: %d) | 耗时: %v",
 			shortID, plugin.Name, plugin.ConsecutiveFailures, duration)
@@ -89,6 +98,14 @@ func (s *Scheduler) handlePluginSyncStatusError(ctx context.Context, plugin mode
 		updates["sync_enabled"] = false
 		updates["next_sync_at"] = nil
 		updates["pause_reason"] = fmt.Sprintf("连续失败 %d 次后自动暂停 (状态: %s)", newCount, syncLog.Status)
+	}
+
+	if updateErr := s.updateSyncState(ctx, plugin.ID, updates); updateErr != nil {
+		logger.Sched("SYNC").Error("[%s] 同步异常且状态落库失败: %s | status=%s | state_err=%v", shortID, plugin.Name, syncLog.Status, updateErr)
+		return
+	}
+
+	if plugin.MaxFailures > 0 && newCount >= plugin.MaxFailures {
 		logger.Sched("SYNC").Warn("[%s] ⚠ 连续失败 %d/%d 次，已自动暂停同步: %s",
 			shortID, newCount, plugin.MaxFailures, plugin.Name)
 	} else {
@@ -105,12 +122,10 @@ func (s *Scheduler) handlePluginSyncStatusError(ctx context.Context, plugin mode
 			duration,
 		)
 	}
-
-	s.updatePluginSyncState(ctx, plugin.ID, updates)
 }
 
-func (s *Scheduler) updatePluginSyncState(ctx context.Context, pluginID interface{}, updates map[string]interface{}) {
-	s.db.WithContext(ctx).Model(&model.Plugin{}).Where("id = ?", pluginID).Updates(updates)
+func (s *Scheduler) updatePluginSyncState(ctx context.Context, pluginID interface{}, updates map[string]interface{}) error {
+	return s.db.WithContext(ctx).Model(&model.Plugin{}).Where("id = ?", pluginID).Updates(updates).Error
 }
 
 func pluginFailureLimit(plugin model.Plugin) int {

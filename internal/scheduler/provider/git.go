@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	gitService "github.com/company/auto-healing/internal/service/git"
 	"gorm.io/gorm"
 )
+
+const gitClaimLease = 40 * time.Minute
 
 // GitScheduler Git 仓库同步调度器
 type GitScheduler struct {
@@ -22,6 +25,8 @@ type GitScheduler struct {
 	mu                sync.Mutex
 	loadReposNeedSync func(context.Context) ([]model.GitRepository, error)
 	runRepoSync       func(context.Context, model.GitRepository)
+	updateSyncState   func(context.Context, interface{}, map[string]interface{}) error
+	claimRepoSync     func(context.Context, model.GitRepository) (bool, error)
 }
 
 // NewGitScheduler 创建 Git 同步调度器
@@ -33,6 +38,8 @@ func NewGitScheduler() *GitScheduler {
 	}
 	s.loadReposNeedSync = s.getReposNeedSync
 	s.runRepoSync = s.syncRepo
+	s.updateSyncState = s.updateGitSyncState
+	s.claimRepoSync = s.claimRepo
 	return s
 }
 
@@ -47,7 +54,7 @@ func (s *GitScheduler) Start() {
 	s.lifecycle = newSchedulerLifecycle()
 	s.mu.Unlock()
 
-	s.lifecycle.Go(s.run)
+	s.lifecycleGo(s.run)
 	logger.Sched("GIT").Info("Git 仓库同步调度器已启动 (检查间隔: %v)", s.interval)
 }
 
@@ -63,7 +70,9 @@ func (s *GitScheduler) Stop() {
 	s.lifecycle = nil
 	s.mu.Unlock()
 
-	lifecycle.Stop()
+	if lifecycle != nil {
+		lifecycle.Stop()
+	}
 	logger.Sched("GIT").Info("Git 仓库同步调度器已停止")
 }
 
@@ -99,20 +108,78 @@ func (s *GitScheduler) checkAndSync(ctx context.Context) {
 	logger.Sched("GIT").Info("发现 %d 个 Git 仓库需要同步", len(repos))
 
 	for _, repo := range repos {
-		s.dispatchRepoSync(repo)
+		claimed, err := s.claimRepoSync(ctx, repo)
+		if err != nil {
+			logger.Sched("GIT").Error("认领 Git 仓库同步失败: %s (%s) - %v", repo.Name, repo.ID.String()[:8], err)
+			continue
+		}
+		if !claimed {
+			continue
+		}
+		if !s.dispatchRepoSync(repo) {
+			s.rollbackRepoClaim(ctx, repo)
+		}
 	}
 }
 
-func (s *GitScheduler) dispatchRepoSync(repo model.GitRepository) {
+func (s *GitScheduler) dispatchRepoSync(repo model.GitRepository) bool {
 	r := repo
-	s.lifecycle.Go(func(rootCtx context.Context) {
+	return s.lifecycleGo(func(rootCtx context.Context) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.Sched("GIT").Error("[%s] syncRepo panic: %v", r.ID.String()[:8], rec)
+				panicErr := fmt.Errorf("panic: %v", rec)
+				shortID := r.ID.String()[:8]
+				logger.Sched("GIT").Error("[%s] syncRepo panic: %v", shortID, rec)
+				s.handleGitSyncError(withTenantContext(rootCtx, r.TenantID), r, shortID, time.Now().Add(resolveRepoSyncInterval(r)), panicErr)
 			}
 		}()
 		s.runRepoSync(withTenantContext(rootCtx, r.TenantID), r)
 	})
+}
+
+func (s *GitScheduler) lifecycleGo(fn func(context.Context)) bool {
+	s.mu.Lock()
+	lifecycle := s.lifecycle
+	running := s.running
+	s.mu.Unlock()
+	if !running || lifecycle == nil {
+		return false
+	}
+	return lifecycle.Go(fn)
+}
+
+func (s *GitScheduler) claimRepo(ctx context.Context, repo model.GitRepository) (bool, error) {
+	if repo.NextSyncAt == nil {
+		return false, nil
+	}
+	now := time.Now()
+	nextSyncAt := now.Add(maxDuration(resolveRepoSyncInterval(repo), gitClaimLease))
+	result := s.db.WithContext(ctx).
+		Model(&model.GitRepository{}).
+		Where("id = ? AND sync_enabled = ? AND next_sync_at IS NOT NULL AND next_sync_at <= ?", repo.ID, true, now).
+		Update("next_sync_at", nextSyncAt)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
+}
+
+func (s *GitScheduler) rollbackRepoClaim(ctx context.Context, repo model.GitRepository) {
+	if repo.NextSyncAt == nil {
+		return
+	}
+	if err := s.updateSyncState(ctx, repo.ID, map[string]interface{}{
+		"next_sync_at": repo.NextSyncAt,
+	}); err != nil {
+		logger.Sched("GIT").Warn("回滚 Git 仓库认领失败: %s (%s) - %v", repo.Name, repo.ID.String()[:8], err)
+	}
+}
+
+func maxDuration(first, second time.Duration) time.Duration {
+	if first >= second {
+		return first
+	}
+	return second
 }
 
 // getReposNeedSync 获取需要同步的仓库列表

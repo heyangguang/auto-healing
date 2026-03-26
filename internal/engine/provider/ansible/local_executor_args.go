@@ -25,10 +25,11 @@ func (e *LocalExecutor) buildArgs(req *ExecuteRequest) ([]string, func(), error)
 		cleanup = inventoryCleanup
 	}
 
-	if len(req.ExtraVars) > 0 {
-		jsonVars, _ := json.Marshal(req.ExtraVars)
-		args = append(args, "--extra-vars", string(jsonVars))
+	extraVarsArgs, err := buildExtraVarsArgs(req.ExtraVars)
+	if err != nil {
+		return nil, nil, err
 	}
+	args = append(args, extraVarsArgs...)
 	if req.Limit != "" {
 		args = append(args, "--limit", req.Limit)
 	}
@@ -48,6 +49,17 @@ func (e *LocalExecutor) buildArgs(req *ExecuteRequest) ([]string, func(), error)
 		}
 	}
 	return args, cleanup, nil
+}
+
+func buildExtraVarsArgs(extraVars map[string]interface{}) ([]string, error) {
+	if len(extraVars) == 0 {
+		return nil, nil
+	}
+	jsonVars, err := json.Marshal(extraVars)
+	if err != nil {
+		return nil, fmt.Errorf("序列化 extra_vars 失败: %w", err)
+	}
+	return []string{"--extra-vars", string(jsonVars)}, nil
 }
 
 func resolveLocalPlaybookPath(workDir, playbookPath string) string {

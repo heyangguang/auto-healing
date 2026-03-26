@@ -13,24 +13,35 @@ import (
 )
 
 func (s *ExecutionScheduler) executeSchedule(ctx context.Context, sched model.ExecutionSchedule) {
+	shortID := sched.ID.String()[:8]
+	tenantCtx := scheduleTenantContext(ctx, sched)
+	triggered := false
+
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Sched("TASK").Error("[%s] 定时任务 panic: %v", sched.ID.String()[:8], rec)
+			panicErr := fmt.Errorf("panic: %v", rec)
+			logger.Sched("TASK").Error("[%s] 定时任务 panic: %v", shortID, rec)
+			if stateErr := s.handleScheduledExecutionError(ctx, tenantCtx, sched, shortID, panicErr, triggered); stateErr != nil {
+				logger.Sched("TASK").Error("[%s] panic 后状态更新失败: %v | state_err=%v", shortID, panicErr, stateErr)
+			}
 		}
 	}()
 
-	shortID := sched.ID.String()[:8]
 	logger.Sched("TASK").Info("[%s] 开始执行定时任务: %s", shortID, sched.Name)
-	tenantCtx := scheduleTenantContext(ctx, sched)
 	run, err := s.execSvc.ExecuteTask(tenantCtx, sched.TaskID, buildExecutionOptions(sched))
 	if err == nil {
+		triggered = true
 		err = s.afterScheduleTriggered(tenantCtx, sched, run.ID)
 	}
 	if err != nil {
-		s.handleScheduledExecutionError(ctx, tenantCtx, sched, shortID, err)
+		if stateErr := s.handleScheduledExecutionError(ctx, tenantCtx, sched, shortID, err, triggered); stateErr != nil {
+			logger.Sched("TASK").Error("[%s] 执行失败且状态更新失败: %v | state_err=%v", shortID, err, stateErr)
+		}
 		return
 	}
-	s.handleScheduledExecutionSuccess(ctx, tenantCtx, sched, shortID)
+	if err := s.handleScheduledExecutionSuccess(ctx, tenantCtx, sched, shortID); err != nil {
+		logger.Sched("TASK").Error("[%s] 执行成功但状态更新失败: %v", shortID, err)
+	}
 }
 
 func scheduleTenantContext(ctx context.Context, sched model.ExecutionSchedule) context.Context {
@@ -63,18 +74,21 @@ func scheduleTriggerLabel(sched model.ExecutionSchedule) string {
 }
 
 func (s *ExecutionScheduler) afterScheduleTriggered(ctx context.Context, sched model.ExecutionSchedule, runID uuid.UUID) error {
-	_ = s.scheduleRepo.UpdateLastRunAt(ctx, sched.ID)
+	if err := s.updateScheduleLastRun(ctx, sched.ID); err != nil {
+		return fmt.Errorf("更新调度 last_run_at 失败: %w", err)
+	}
 	if sched.IsCron() {
-		_ = s.scheduleSvc.UpdateNextRunAt(ctx, sched.ID, *sched.ScheduleExpr)
+		if err := s.updateScheduleNextRun(ctx, sched.ID, *sched.ScheduleExpr); err != nil {
+			return fmt.Errorf("更新调度 next_run_at 失败: %w", err)
+		}
 	} else {
-		_ = s.db.WithContext(ctx).
-			Model(&model.ExecutionSchedule{}).
-			Where("id = ?", sched.ID).
-			Updates(map[string]interface{}{
-				"status":      model.ScheduleStatusRunning,
-				"last_run_at": time.Now(),
-				"next_run_at": nil,
-			}).Error
+		if err := s.updateScheduleState(ctx, sched.ID, map[string]interface{}{
+			"status":      model.ScheduleStatusRunning,
+			"last_run_at": time.Now(),
+			"next_run_at": nil,
+		}); err != nil {
+			return fmt.Errorf("更新单次调度运行状态失败: %w", err)
+		}
 	}
 
 	finalStatus, err := s.waitForRunTerminalStatus(ctx, runID)
@@ -87,12 +101,13 @@ func (s *ExecutionScheduler) afterScheduleTriggered(ctx context.Context, sched m
 	return fmt.Errorf("执行结果状态为 %s", finalStatus)
 }
 
-func (s *ExecutionScheduler) handleScheduledExecutionError(ctx, tenantCtx context.Context, sched model.ExecutionSchedule, shortID string, err error) {
+func (s *ExecutionScheduler) handleScheduledExecutionError(ctx, tenantCtx context.Context, sched model.ExecutionSchedule, shortID string, err error, triggered bool) error {
 	newCount := sched.ConsecutiveFailures + 1
 	updates := map[string]interface{}{
 		"consecutive_failures": newCount,
 	}
-	if sched.MaxFailures > 0 && newCount >= sched.MaxFailures && sched.IsCron() {
+	pausedCron := sched.MaxFailures > 0 && newCount >= sched.MaxFailures && sched.IsCron()
+	if pausedCron {
 		updates["enabled"] = false
 		updates["status"] = model.ScheduleStatusAutoPaused
 		updates["next_run_at"] = nil
@@ -104,23 +119,38 @@ func (s *ExecutionScheduler) handleScheduledExecutionError(ctx, tenantCtx contex
 		logger.Sched("TASK").Error("[%s] 执行失败 (第%d次): %s - %v", shortID, newCount, sched.Name, err)
 	}
 
-	s.db.WithContext(ctx).Model(&model.ExecutionSchedule{}).Where("id = ?", sched.ID).Updates(updates)
-	if !sched.IsCron() {
-		_ = s.scheduleSvc.MarkCompleted(tenantCtx, sched.ID)
+	if updateErr := s.updateScheduleState(ctx, sched.ID, updates); updateErr != nil {
+		return fmt.Errorf("更新调度失败状态失败: %w", updateErr)
 	}
+	if sched.IsCron() && !triggered && !pausedCron {
+		if err := s.restoreCronNextRun(ctx, sched); err != nil {
+			return fmt.Errorf("恢复 cron 下一次执行时间失败: %w", err)
+		}
+	}
+	if !sched.IsCron() {
+		if completeErr := s.markScheduleCompleted(tenantCtx, sched.ID); completeErr != nil {
+			return fmt.Errorf("标记单次调度完成失败: %w", completeErr)
+		}
+	}
+	return nil
 }
 
-func (s *ExecutionScheduler) handleScheduledExecutionSuccess(ctx, tenantCtx context.Context, sched model.ExecutionSchedule, shortID string) {
-	s.db.WithContext(ctx).Model(&model.ExecutionSchedule{}).Where("id = ?", sched.ID).Updates(map[string]interface{}{
+func (s *ExecutionScheduler) handleScheduledExecutionSuccess(ctx, tenantCtx context.Context, sched model.ExecutionSchedule, shortID string) error {
+	if err := s.updateScheduleState(ctx, sched.ID, map[string]interface{}{
 		"consecutive_failures": 0,
 		"pause_reason":         "",
-	})
+	}); err != nil {
+		return fmt.Errorf("重置调度失败计数失败: %w", err)
+	}
 	if sched.ConsecutiveFailures > 0 {
 		logger.Sched("TASK").Info("[%s] 执行成功: %s | 失败计数已重置 (之前: %d)", shortID, sched.Name, sched.ConsecutiveFailures)
 	} else {
 		logger.Sched("TASK").Info("[%s] 执行完成: %s", shortID, sched.Name)
 	}
 	if !sched.IsCron() {
-		_ = s.scheduleSvc.MarkCompleted(tenantCtx, sched.ID)
+		if err := s.markScheduleCompleted(tenantCtx, sched.ID); err != nil {
+			return fmt.Errorf("标记单次调度完成失败: %w", err)
+		}
 	}
+	return nil
 }

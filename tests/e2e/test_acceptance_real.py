@@ -16,6 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BIN_DIR = ROOT / ".bin"
+DEFAULT_ACCEPTANCE_ADMIN_PASSWORD = "admin123456"
+DEFAULT_ACCEPTANCE_GO_BIN = "/usr/local/go/bin/go"
 PG_CONTAINER = os.environ.get("ACCEPTANCE_PG_CONTAINER", "auto-healing-postgres")
 REDIS_CONTAINER = os.environ.get("ACCEPTANCE_REDIS_CONTAINER", "auto-healing-redis")
 
@@ -99,6 +101,23 @@ def info(msg):
 def require(cmd):
     if shutil.which(cmd) is None:
         raise RuntimeError(f"missing required command: {cmd}")
+
+
+def require_go_binary():
+    configured = os.environ.get("ACCEPTANCE_GO_BIN", "").strip()
+    candidates = [configured] if configured else []
+    detected = shutil.which("go")
+    if detected:
+        candidates.append(detected)
+    candidates.append(DEFAULT_ACCEPTANCE_GO_BIN)
+    for go_bin in candidates:
+        if not go_bin:
+            continue
+        if Path(go_bin).exists():
+            return go_bin
+    raise RuntimeError(
+        "go binary not found: set ACCEPTANCE_GO_BIN, add go to PATH, or install it at /usr/local/go/bin/go"
+    )
 
 
 def pick_port():
@@ -205,6 +224,9 @@ class AcceptanceRunner:
         self.server_env = None
         self.keep_artifacts = os.environ.get("KEEP_ACCEPTANCE_ARTIFACTS", "1") == "1"
         self.selected_phases = selected_phases or EXPOSED_PHASES[:]
+        self.admin_password = os.environ.get(
+            "ACCEPTANCE_ADMIN_PASSWORD", DEFAULT_ACCEPTANCE_ADMIN_PASSWORD
+        )
         self.webhook_hits_path = self.tmp_dir / "webhook_hits.jsonl"
         self.smtp_hits_path = self.tmp_dir / "smtp_hits.jsonl"
         info(f"acceptance artifacts: {self.tmp_dir}")
@@ -279,20 +301,29 @@ class AcceptanceRunner:
     def build_binaries(self):
         info("==> build static binaries")
         BIN_DIR.mkdir(exist_ok=True)
+        go_bin = require_go_binary()
+        build_env = {**os.environ, "CGO_ENABLED": "0"}
         run(
             [
-                "docker",
-                "run",
-                "--rm",
-                "-v",
-                f"{ROOT}:/workspace",
-                "-w",
-                "/workspace",
-                "golang:1.24.5",
-                "sh",
-                "-c",
-                "CGO_ENABLED=0 go build -o .bin/server-static ./cmd/server && CGO_ENABLED=0 go build -o .bin/init-admin-static ./cmd/init-admin",
-            ]
+                go_bin,
+                "build",
+                "-o",
+                str(BIN_DIR / "server-static"),
+                "./cmd/server",
+            ],
+            cwd=ROOT,
+            env=build_env,
+        )
+        run(
+            [
+                go_bin,
+                "build",
+                "-o",
+                str(BIN_DIR / "init-admin-static"),
+                "./cmd/init-admin",
+            ],
+            cwd=ROOT,
+            env=build_env,
         )
 
     def prepare_repo(self):
@@ -552,6 +583,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                 "LOG_FILE_PATH": str(self.tmp_dir / "logs"),
                 "ANSIBLE_WORKSPACE_DIR": str(self.tmp_dir / "workspace"),
                 "GIT_REPOS_DIR": str(self.tmp_dir / "repos"),
+                "INIT_ADMIN_PASSWORD": self.admin_password,
                 "NOTIFICATION_RETRY_INTERVAL": "2s",
                 "BLACKLIST_EXEMPTION_INTERVAL": "2s",
             }
@@ -659,7 +691,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
 
     def run_auth_scenarios(self):
         info("==> auth scenarios")
-        login = self.login("admin", "admin123456")
+        login = self.login("admin", self.admin_password)
         access = login["access_token"]
         refresh = login["refresh_token"]
         me = curl_json([f"{self.api_base()}/auth/me", "-H", f"Authorization: Bearer {access}"])
@@ -721,7 +753,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
 
     def setup_tenants_and_users(self):
         info("==> tenant and user setup")
-        admin_login = self.login("admin", "admin123456")
+        admin_login = self.login("admin", self.admin_password)
         self.platform_token = admin_login["access_token"]
         headers = ["-H", f"Authorization: Bearer {self.platform_token}", "-H", "Content-Type: application/json"]
 

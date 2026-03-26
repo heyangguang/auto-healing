@@ -2,6 +2,7 @@ package ansible
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -37,9 +38,14 @@ func (e *LocalExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exec
 	// 确保 ansible.cfg 存在
 	cfgPath := filepath.Join(req.WorkDir, "ansible.cfg")
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		WriteAnsibleCfg(req.WorkDir, nil)
+		if err := WriteAnsibleCfg(req.WorkDir, nil); err != nil {
+			return buildStreamingStartFailure(startedAt, fmt.Errorf("写入 ansible.cfg 失败: %w", err)), err
+		}
 	}
 
-	// 避免把参数回拼成 shell 命令，这里统一走 argv-safe 的执行路径。
+	if req.LogCallback != nil {
+		return e.executeWithScript(ctx, req, startedAt)
+	}
+
 	return e.executeBuffered(ctx, req, startedAt)
 }

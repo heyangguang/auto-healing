@@ -2,6 +2,8 @@ package database
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -49,55 +51,71 @@ func SyncPermissionsAndRoles() error {
 	})
 }
 
-func syncPermissions(tx *gorm.DB) (map[string]string, error) {
+func syncPermissions(tx *gorm.DB) (map[string]uuid.UUID, error) {
 	logger.Info("同步系统预置权限...")
 	for _, seed := range AllPermissions {
-		perm := model.Permission{
+		if err := upsertPermission(tx, seed); err != nil {
+			return nil, err
+		}
+	}
+	return loadPermissionIDs(tx)
+}
+
+func upsertPermission(tx *gorm.DB, seed PermissionSeed) error {
+	var permission model.Permission
+	err := tx.Where("code = ?", seed.Code).First(&permission).Error
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		return tx.Create(&model.Permission{
 			Code:        seed.Code,
 			Name:        seed.Name,
 			Description: seed.Description,
 			Module:      seed.Module,
 			Resource:    seed.Resource,
 			Action:      seed.Action,
-		}
-
-		result := tx.Where("code = ?", seed.Code).First(&model.Permission{})
-		switch result.Error {
-		case gorm.ErrRecordNotFound:
-			if err := tx.Create(&perm).Error; err != nil {
-				return nil, err
-			}
-		case nil:
-			tx.Model(&model.Permission{}).Where("code = ?", seed.Code).Updates(map[string]interface{}{
-				"name":        seed.Name,
-				"description": seed.Description,
-				"module":      seed.Module,
-				"resource":    seed.Resource,
-				"action":      seed.Action,
-			})
-		}
+		}).Error
+	case err != nil:
+		return err
+	default:
+		return tx.Model(&model.Permission{}).
+			Where("code = ?", seed.Code).
+			Updates(permissionFields(seed)).Error
 	}
+}
 
+func permissionFields(seed PermissionSeed) map[string]interface{} {
+	return map[string]interface{}{
+		"name":        seed.Name,
+		"description": seed.Description,
+		"module":      seed.Module,
+		"resource":    seed.Resource,
+		"action":      seed.Action,
+	}
+}
+
+func loadPermissionIDs(tx *gorm.DB) (map[string]uuid.UUID, error) {
 	var allPerms []model.Permission
 	if err := tx.Find(&allPerms).Error; err != nil {
 		return nil, err
 	}
-	permCodeToID := make(map[string]string, len(allPerms))
+	permCodeToID := make(map[string]uuid.UUID, len(allPerms))
 	for _, permission := range allPerms {
-		permCodeToID[permission.Code] = permission.ID.String()
+		permCodeToID[permission.Code] = permission.ID
 	}
 	return permCodeToID, nil
 }
 
-func syncSystemRoles(tx *gorm.DB, permCodeToID map[string]string) error {
+func syncSystemRoles(tx *gorm.DB, permCodeToID map[string]uuid.UUID) error {
 	logger.Info("同步系统预置角色...")
 	for _, roleSeed := range SystemRoles {
 		role, err := upsertSystemRole(tx, roleSeed)
 		if err != nil {
 			return err
 		}
-		if roleSeed.IsSystem && roleSeed.Permissions != nil {
-			syncRolePermissions(tx, role.ID, roleSeed.Permissions, permCodeToID)
+		if roleSeed.IsSystem && len(roleSeed.Permissions) > 0 {
+			if err := syncRolePermissions(tx, role.ID, roleSeed.Permissions, permCodeToID); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -124,43 +142,55 @@ func upsertSystemRole(tx *gorm.DB, roleSeed RoleSeed) (*model.Role, error) {
 			return nil, err
 		}
 	case nil:
-		tx.Model(&role).Updates(map[string]interface{}{
-			"description": roleSeed.Description,
-			"is_system":   roleSeed.IsSystem,
-			"scope":       scope,
-		})
+		if err := tx.Model(&role).Updates(map[string]interface{}{
+			"display_name": roleSeed.DisplayName,
+			"description":  roleSeed.Description,
+			"is_system":    roleSeed.IsSystem,
+			"scope":        scope,
+		}).Error; err != nil {
+			return nil, err
+		}
 	default:
 		return nil, result.Error
 	}
 	return &role, nil
 }
 
-func syncRolePermissions(tx *gorm.DB, roleID uuid.UUID, permissionCodes []string, permCodeToID map[string]string) {
+func syncRolePermissions(tx *gorm.DB, roleID uuid.UUID, permissionCodes []string, permCodeToID map[string]uuid.UUID) error {
 	var existingRolePerms []model.RolePermission
-	tx.Where("role_id = ?", roleID).Find(&existingRolePerms)
-	existingPermIDs := make(map[string]bool, len(existingRolePerms))
-	for _, rolePermission := range existingRolePerms {
-		existingPermIDs[rolePermission.PermissionID.String()] = true
+	if err := tx.Where("role_id = ?", roleID).Find(&existingRolePerms).Error; err != nil {
+		return err
 	}
+	existingPermIDs := make(map[uuid.UUID]bool, len(existingRolePerms))
+	for _, rolePermission := range existingRolePerms {
+		existingPermIDs[rolePermission.PermissionID] = true
+	}
+	desiredPermIDs := make(map[uuid.UUID]bool, len(permissionCodes))
 
 	for _, permCode := range permissionCodes {
 		permID, ok := permCodeToID[permCode]
 		if !ok {
-			logger.Warn("权限码 %s 未找到，跳过", permCode)
-			continue
+			return fmt.Errorf("角色 %s 引用了不存在的权限码 %s", roleID, permCode)
 		}
+		desiredPermIDs[permID] = true
 		if existingPermIDs[permID] {
 			continue
 		}
 		rolePermission := model.RolePermission{
 			RoleID:       roleID,
-			PermissionID: parseUUID(permID),
+			PermissionID: permID,
 		}
-		tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&rolePermission)
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&rolePermission).Error; err != nil {
+			return err
+		}
 	}
-}
-
-func parseUUID(s string) uuid.UUID {
-	id, _ := uuid.Parse(s)
-	return id
+	for _, rolePermission := range existingRolePerms {
+		if desiredPermIDs[rolePermission.PermissionID] {
+			continue
+		}
+		if err := tx.Delete(&rolePermission).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }

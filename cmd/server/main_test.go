@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -41,5 +42,94 @@ func TestRunHTTPServerInvokesShutdownHook(t *testing.T) {
 
 	if !shutdownCalled.Load() {
 		t.Fatal("shutdown hook was not called")
+	}
+}
+
+func TestRunStartupJobReturnsErrorForRequiredJob(t *testing.T) {
+	err := runStartupJob(startupJob{
+		name:     "required job",
+		required: true,
+		run: func() error {
+			return errors.New("boom")
+		},
+	})
+	if err == nil {
+		t.Fatal("runStartupJob() error = nil, want required job failure")
+	}
+}
+
+func TestRunStartupJobSwallowsOptionalJobError(t *testing.T) {
+	err := runStartupJob(startupJob{
+		name:     "optional job",
+		required: false,
+		run: func() error {
+			return errors.New("boom")
+		},
+	})
+	if err != nil {
+		t.Fatalf("runStartupJob() error = %v, want nil for optional job", err)
+	}
+}
+
+func TestRunStartupJobsReturnsErrorWhenDictionarySeedFails(t *testing.T) {
+	restore := stubStartupDependencies(
+		func() []startupJob { return nil },
+		func() dictionarySeeder { return fakeDictionarySeeder{err: errors.New("dict failed")} },
+		func() siteMessageCleaner { return fakeSiteMessageCleaner{} },
+	)
+	defer restore()
+
+	err := runStartupJobs(context.Background())
+	if err == nil {
+		t.Fatal("runStartupJobs() error = nil, want dictionary seed failure")
+	}
+}
+
+func TestRunStartupJobsIgnoresCleanExpiredFailure(t *testing.T) {
+	restore := stubStartupDependencies(
+		func() []startupJob { return nil },
+		func() dictionarySeeder { return fakeDictionarySeeder{} },
+		func() siteMessageCleaner { return fakeSiteMessageCleaner{err: errors.New("clean failed")} },
+	)
+	defer restore()
+
+	if err := runStartupJobs(context.Background()); err != nil {
+		t.Fatalf("runStartupJobs() error = %v, want nil", err)
+	}
+}
+
+type fakeDictionarySeeder struct {
+	err error
+}
+
+func (f fakeDictionarySeeder) SeedDictionaries(context.Context) error {
+	return f.err
+}
+
+type fakeSiteMessageCleaner struct {
+	err error
+}
+
+func (f fakeSiteMessageCleaner) CleanExpired(context.Context) (int64, error) {
+	return 0, f.err
+}
+
+func stubStartupDependencies(
+	jobs func() []startupJob,
+	dict func() dictionarySeeder,
+	cleaner func() siteMessageCleaner,
+) func() {
+	oldJobs := listStartupSeedJobs
+	oldDict := newDictionaryService
+	oldCleaner := newSiteMessageRepo
+
+	listStartupSeedJobs = jobs
+	newDictionaryService = dict
+	newSiteMessageRepo = cleaner
+
+	return func() {
+		listStartupSeedJobs = oldJobs
+		newDictionaryService = oldDict
+		newSiteMessageRepo = oldCleaner
 	}
 }

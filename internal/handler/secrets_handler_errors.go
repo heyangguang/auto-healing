@@ -43,6 +43,8 @@ func classifySourceAdminError(err error) (int, string) {
 	switch {
 	case errors.Is(err, secretsSvc.ErrSecretsSourceInvalidID):
 		return http.StatusBadRequest, err.Error()
+	case errors.Is(err, secretsSvc.ErrSecretsSourceInvalidInput):
+		return http.StatusBadRequest, err.Error()
 	case errors.Is(err, secretsSvc.ErrSecretsSourceInUse):
 		return http.StatusConflict, err.Error()
 	case errors.Is(err, secretsSvc.ErrSecretsSourceInactive), errors.Is(err, secretsSvc.ErrDefaultSecretsSourceUnavailable):

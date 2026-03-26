@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/company/auto-healing/internal/model"
 )
 
 func TestBuildGitSSHCommandUsesKnownHostsWhenConfigured(t *testing.T) {
@@ -17,8 +19,22 @@ func TestBuildGitSSHCommandUsesKnownHostsWhenConfigured(t *testing.T) {
 	if !strings.Contains(cmd, "StrictHostKeyChecking=yes") {
 		t.Fatalf("command missing strict host key checking: %s", cmd)
 	}
-	if !strings.Contains(cmd, "UserKnownHostsFile=/tmp/custom-known-hosts") {
+	if !strings.Contains(cmd, "UserKnownHostsFile='/tmp/custom-known-hosts'") {
 		t.Fatalf("command missing custom known_hosts: %s", cmd)
+	}
+}
+
+func TestBuildGitSSHCommandQuotesPaths(t *testing.T) {
+	t.Setenv("AUTO_HEALING_KNOWN_HOSTS", "/tmp/known hosts")
+	cmd, err := buildGitSSHCommand("/tmp/private key")
+	if err != nil {
+		t.Fatalf("buildGitSSHCommand() error = %v", err)
+	}
+	if !strings.Contains(cmd, "-i '/tmp/private key'") {
+		t.Fatalf("command missing quoted key path: %s", cmd)
+	}
+	if !strings.Contains(cmd, "UserKnownHostsFile='/tmp/known hosts'") {
+		t.Fatalf("command missing quoted known_hosts path: %s", cmd)
 	}
 }
 
@@ -69,5 +85,90 @@ func TestRedactCredentialsMasksAuthenticatedURLs(t *testing.T) {
 	}
 	if !strings.Contains(masked, "https://***@github.com/company/private.git") {
 		t.Fatalf("masked output unexpected: %s", masked)
+	}
+}
+
+func TestGetAuthenticatedURLRejectsMissingToken(t *testing.T) {
+	client := NewClient(&model.GitRepository{
+		URL:      "https://github.com/company/private.git",
+		AuthType: "token",
+	}, t.TempDir())
+
+	_, _, err := client.getAuthenticatedURL()
+	if err == nil {
+		t.Fatal("getAuthenticatedURL() error = nil, want missing token error")
+	}
+	if !strings.Contains(err.Error(), "缺少 token") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGetAuthenticatedURLInjectsTokenIntoHTTPURL(t *testing.T) {
+	client := NewClient(&model.GitRepository{
+		URL:      "http://github.com/company/private.git",
+		AuthType: "token",
+		AuthConfig: map[string]any{
+			"token": "secret",
+		},
+	}, t.TempDir())
+
+	url, _, err := client.getAuthenticatedURL()
+	if err != nil {
+		t.Fatalf("getAuthenticatedURL() error = %v", err)
+	}
+	if url != "http://secret@github.com/company/private.git" {
+		t.Fatalf("url = %q", url)
+	}
+}
+
+func TestGetAuthenticatedURLRejectsPasswordAuthForUnsupportedScheme(t *testing.T) {
+	client := NewClient(&model.GitRepository{
+		URL:      "git@github.com:company/private.git",
+		AuthType: "password",
+		AuthConfig: map[string]any{
+			"username": "user",
+			"password": "pass",
+		},
+	}, t.TempDir())
+
+	_, _, err := client.getAuthenticatedURL()
+	if err == nil {
+		t.Fatal("getAuthenticatedURL() error = nil, want scheme mismatch error")
+	}
+	if !strings.Contains(err.Error(), "不支持当前仓库地址协议") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGetAuthenticatedURLRejectsInvalidAuthConfig(t *testing.T) {
+	client := NewClient(&model.GitRepository{
+		URL:      "https://github.com/company/private.git",
+		AuthType: "token",
+		AuthConfig: map[string]any{
+			"token": make(chan int),
+		},
+	}, t.TempDir())
+
+	_, _, err := client.getAuthenticatedURL()
+	if err == nil {
+		t.Fatal("getAuthenticatedURL() error = nil, want invalid auth config error")
+	}
+	if !strings.Contains(err.Error(), "认证配置") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestWriteSSHPrivateKeyFileFailsOnClosedFile(t *testing.T) {
+	tmpFile, err := os.CreateTemp(t.TempDir(), "ssh-key-*")
+	if err != nil {
+		t.Fatalf("CreateTemp() error = %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	err = writeSSHPrivateKeyFile(tmpFile, "private-key")
+	if err == nil {
+		t.Fatal("writeSSHPrivateKeyFile() error = nil, want closed file error")
 	}
 }

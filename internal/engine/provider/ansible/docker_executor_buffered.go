@@ -13,7 +13,11 @@ import (
 // executeBuffered 使用缓冲方式执行（原有逻辑，也支持取消）
 func (e *DockerExecutor) executeBuffered(ctx context.Context, req *ExecuteRequest, startedAt time.Time) (*ExecuteResult, error) {
 	containerName := e.generateContainerName(req.WorkDir)
-	cmd := exec.Command("docker", e.buildDockerArgs(req, containerName)...)
+	args, err := e.buildDockerArgs(req, containerName)
+	if err != nil {
+		return &ExecuteResult{ExitCode: -1, Stderr: err.Error(), StartedAt: startedAt, Duration: time.Since(startedAt)}, err
+	}
+	cmd := exec.Command("docker", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
