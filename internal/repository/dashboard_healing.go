@@ -1,0 +1,144 @@
+package repository
+
+import (
+	"context"
+	"time"
+
+	"github.com/company/auto-healing/internal/model"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+type HealingSection struct {
+	FlowsTotal          int64          `json:"flows_total"`
+	FlowsActive         int64          `json:"flows_active"`
+	RulesTotal          int64          `json:"rules_total"`
+	RulesActive         int64          `json:"rules_active"`
+	InstancesTotal      int64          `json:"instances_total"`
+	InstancesRunning    int64          `json:"instances_running"`
+	PendingApprovals    int64          `json:"pending_approvals"`
+	PendingTriggers     int64          `json:"pending_triggers"`
+	InstancesByStatus   []StatusCount  `json:"instances_by_status"`
+	InstanceTrend7d     []TrendPoint   `json:"instance_trend_7d"`
+	ApprovalsByStatus   []StatusCount  `json:"approvals_by_status"`
+	RulesByTriggerMode  []StatusCount  `json:"rules_by_trigger_mode"`
+	FlowTop10           []RankItem     `json:"flow_top10"`
+	RecentInstances     []InstanceItem `json:"recent_instances"`
+	PendingApprovalList []ApprovalItem `json:"pending_approval_list"`
+	PendingTriggerList  []TriggerItem  `json:"pending_trigger_list"`
+}
+
+type InstanceItem struct {
+	ID        uuid.UUID `json:"id"`
+	FlowName  string    `json:"flow_name"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ApprovalItem struct {
+	ID             uuid.UUID `json:"id"`
+	FlowInstanceID uuid.UUID `json:"flow_instance_id"`
+	NodeID         string    `json:"node_id"`
+	Status         string    `json:"status"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type TriggerItem struct {
+	ID         uuid.UUID `json:"id"`
+	Title      string    `json:"title"`
+	Severity   string    `json:"severity"`
+	AffectedCI string    `json:"affected_ci"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+func (r *DashboardRepository) GetHealingSection(ctx context.Context) (*HealingSection, error) {
+	section := &HealingSection{}
+	db := r.tenantDB(ctx)
+	tenantID, err := RequireTenantID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	countModel(db, &model.HealingFlow{}, &section.FlowsTotal)
+	countModel(db.Where("is_active = ?", true), &model.HealingFlow{}, &section.FlowsActive)
+	countModel(db, &model.HealingRule{}, &section.RulesTotal)
+	countModel(db.Where("is_active = ?", true), &model.HealingRule{}, &section.RulesActive)
+	countModel(db, &model.FlowInstance{}, &section.InstancesTotal)
+	countModel(db.Where("status = ?", "running"), &model.FlowInstance{}, &section.InstancesRunning)
+	countModel(db.Where("status = ?", "pending"), &model.ApprovalTask{}, &section.PendingApprovals)
+	countModel(pendingTriggerQuery(db), &model.Incident{}, &section.PendingTriggers)
+
+	scanStatusCounts(db, &model.FlowInstance{}, "status", &section.InstancesByStatus)
+	scanTrendPoints(db, &model.FlowInstance{}, "created_at", time.Now().AddDate(0, 0, -7), &section.InstanceTrend7d)
+	scanStatusCounts(db, &model.ApprovalTask{}, "status", &section.ApprovalsByStatus)
+	scanStatusCounts(db, &model.HealingRule{}, "trigger_mode", &section.RulesByTriggerMode)
+	section.FlowTop10 = listTopHealingFlows(r.db.WithContext(ctx), tenantID)
+	section.RecentInstances = listRecentInstances(db.Order("created_at DESC").Limit(10))
+	section.PendingApprovalList = listPendingApprovals(db.Where("status = ?", "pending").Order("created_at DESC").Limit(10))
+	section.PendingTriggerList = listPendingTriggers(pendingTriggerQuery(db).Order("created_at DESC").Limit(10))
+	return section, nil
+}
+
+func pendingTriggerQuery(db *gorm.DB) *gorm.DB {
+	return db.Where("scanned = ? AND matched_rule_id IS NOT NULL AND healing_flow_instance_id IS NULL", true)
+}
+
+func listTopHealingFlows(db *gorm.DB, tenantID uuid.UUID) []RankItem {
+	var items []RankItem
+	db.Where("fi.tenant_id = ?", tenantID).
+		Table("flow_instances fi").
+		Select("hf.name as name, count(*) as count").
+		Joins("JOIN healing_flows hf ON fi.flow_id = hf.id").
+		Group("hf.name").
+		Order("count DESC").
+		Limit(10).
+		Scan(&items)
+	return items
+}
+
+func listRecentInstances(query *gorm.DB) []InstanceItem {
+	var instances []model.FlowInstance
+	query.Find(&instances)
+	items := make([]InstanceItem, 0, len(instances))
+	for _, instance := range instances {
+		items = append(items, InstanceItem{
+			ID:        instance.ID,
+			FlowName:  instance.FlowName,
+			Status:    instance.Status,
+			CreatedAt: instance.CreatedAt,
+		})
+	}
+	return items
+}
+
+func listPendingApprovals(query *gorm.DB) []ApprovalItem {
+	var approvals []model.ApprovalTask
+	query.Find(&approvals)
+	items := make([]ApprovalItem, 0, len(approvals))
+	for _, approval := range approvals {
+		items = append(items, ApprovalItem{
+			ID:             approval.ID,
+			FlowInstanceID: approval.FlowInstanceID,
+			NodeID:         approval.NodeID,
+			Status:         approval.Status,
+			CreatedAt:      approval.CreatedAt,
+		})
+	}
+	return items
+}
+
+func listPendingTriggers(query *gorm.DB) []TriggerItem {
+	var incidents []model.Incident
+	query.Find(&incidents)
+	items := make([]TriggerItem, 0, len(incidents))
+	for _, incident := range incidents {
+		items = append(items, TriggerItem{
+			ID:         incident.ID,
+			Title:      incident.Title,
+			Severity:   incident.Severity,
+			AffectedCI: incident.AffectedCI,
+			CreatedAt:  incident.CreatedAt,
+		})
+	}
+	return items
+}

@@ -98,7 +98,7 @@ func WriteKeyFile(workDir, keyName, content string) (string, error) {
 // 返回文件路径和清理函数
 func WriteInventoryFile(workDir, content string) (path string, err error) {
 	path = filepath.Join(workDir, "inventory.ini")
-	err = os.WriteFile(path, []byte(content), 0644)
+	err = os.WriteFile(path, []byte(content), 0600)
 	return path, err
 }
 
@@ -106,7 +106,7 @@ func WriteInventoryFile(workDir, content string) (path string, err error) {
 func GenerateAnsibleCfg(options map[string]string) string {
 	var sb strings.Builder
 	sb.WriteString("[defaults]\n")
-	sb.WriteString("host_key_checking = False\n")
+	sb.WriteString("host_key_checking = True\n")
 	sb.WriteString("retry_files_enabled = False\n")
 	sb.WriteString("gathering = smart\n")
 
@@ -121,5 +121,5 @@ func GenerateAnsibleCfg(options map[string]string) string {
 func WriteAnsibleCfg(workDir string, options map[string]string) error {
 	content := GenerateAnsibleCfg(options)
 	path := filepath.Join(workDir, "ansible.cfg")
-	return os.WriteFile(path, []byte(content), 0644)
+	return os.WriteFile(path, []byte(content), 0600)
 }

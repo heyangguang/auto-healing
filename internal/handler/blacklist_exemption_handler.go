@@ -1,11 +1,9 @@
 package handler
 
 import (
-	"net/http"
-	"strconv"
-
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
@@ -28,8 +26,7 @@ func NewBlacklistExemptionHandler() *BlacklistExemptionHandler {
 
 // List 豁免申请列表
 func (h *BlacklistExemptionHandler) List(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	page, pageSize := parsePagination(c, 10)
 
 	opts := repository.ExemptionListOptions{
 		Page:      page,
@@ -44,98 +41,121 @@ func (h *BlacklistExemptionHandler) List(c *gin.Context) {
 
 	items, total, err := h.svc.List(c.Request.Context(), opts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, "BLACKLIST", "获取黑名单豁免列表失败", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": items, "total": total})
+	response.List(c, items, total, page, pageSize)
 }
 
 // Get 获取单条
 func (h *BlacklistExemptionHandler) Get(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 ID"})
+		response.BadRequest(c, "无效的 ID")
 		return
 	}
 	item, err := h.svc.Get(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "豁免申请不存在"})
+		response.NotFound(c, "豁免申请不存在")
 		return
 	}
-	c.JSON(http.StatusOK, item)
+	response.Success(c, item)
 }
 
 // Create 创建豁免申请
 func (h *BlacklistExemptionHandler) Create(c *gin.Context) {
-	var input struct {
-		TaskID       string `json:"task_id" binding:"required"`
-		TaskName     string `json:"task_name"`
-		RuleID       string `json:"rule_id" binding:"required"`
-		RuleName     string `json:"rule_name"`
-		RuleSeverity string `json:"rule_severity"`
-		RulePattern  string `json:"rule_pattern"`
-		Reason       string `json:"reason" binding:"required"`
-		ValidityDays int    `json:"validity_days"`
+	input, ok := parseBlacklistExemptionCreateInput(c)
+	if !ok {
+		return
 	}
+	taskID, ruleID, ok := parseBlacklistExemptionIDs(c, input.TaskID, input.RuleID)
+	if !ok {
+		return
+	}
+	task, rule, ok := h.loadBlacklistExemptionDependencies(c, taskID, ruleID)
+	if !ok {
+		return
+	}
+	item := buildBlacklistExemptionModel(c, input, taskID, ruleID, task.Name, rule.Name, rule.Severity, rule.Pattern)
+	if err := h.svc.Create(c.Request.Context(), item); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Created(c, item)
+}
+
+type blacklistExemptionCreateInput struct {
+	TaskID       string `json:"task_id" binding:"required"`
+	TaskName     string `json:"task_name"`
+	RuleID       string `json:"rule_id" binding:"required"`
+	RuleName     string `json:"rule_name"`
+	RuleSeverity string `json:"rule_severity"`
+	RulePattern  string `json:"rule_pattern"`
+	Reason       string `json:"reason" binding:"required"`
+	ValidityDays int    `json:"validity_days"`
+}
+
+func parseBlacklistExemptionCreateInput(c *gin.Context) (*blacklistExemptionCreateInput, bool) {
+	var input blacklistExemptionCreateInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误: " + err.Error()})
-		return
+		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
+		return nil, false
 	}
-
-	taskID, err := uuid.Parse(input.TaskID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的任务模板 ID"})
-		return
-	}
-	ruleID, err := uuid.Parse(input.RuleID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的规则 ID"})
-		return
-	}
-
-	userID, _ := uuid.Parse(middleware.GetUserID(c))
-	username := middleware.GetUsername(c)
-
 	if input.ValidityDays <= 0 {
 		input.ValidityDays = 30
 	}
+	return &input, true
+}
 
+func parseBlacklistExemptionIDs(c *gin.Context, taskIDValue, ruleIDValue string) (uuid.UUID, uuid.UUID, bool) {
+	taskID, err := uuid.Parse(taskIDValue)
+	if err != nil {
+		response.BadRequest(c, "无效的任务模板 ID")
+		return uuid.Nil, uuid.Nil, false
+	}
+	ruleID, err := uuid.Parse(ruleIDValue)
+	if err != nil {
+		response.BadRequest(c, "无效的规则 ID")
+		return uuid.Nil, uuid.Nil, false
+	}
+	return taskID, ruleID, true
+}
+
+func (h *BlacklistExemptionHandler) loadBlacklistExemptionDependencies(c *gin.Context, taskID, ruleID uuid.UUID) (*model.ExecutionTask, *model.CommandBlacklist, bool) {
 	task, err := h.taskRepo.GetTaskByID(c.Request.Context(), taskID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "任务模板不存在或不属于当前租户"})
-		return
+		response.BadRequest(c, "任务模板不存在或不属于当前租户")
+		return nil, nil, false
 	}
 	rule, err := h.blacklistRepo.GetByID(c.Request.Context(), ruleID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "黑名单规则不存在或不属于当前租户"})
-		return
+		response.BadRequest(c, "黑名单规则不存在或不属于当前租户")
+		return nil, nil, false
 	}
+	return task, rule, true
+}
 
-	item := &model.BlacklistExemption{
+func buildBlacklistExemptionModel(c *gin.Context, input *blacklistExemptionCreateInput, taskID, ruleID uuid.UUID, taskName, ruleName, ruleSeverity, rulePattern string) *model.BlacklistExemption {
+	userID, _ := uuid.Parse(middleware.GetUserID(c))
+	return &model.BlacklistExemption{
 		TaskID:        taskID,
-		TaskName:      task.Name,
+		TaskName:      taskName,
 		RuleID:        ruleID,
-		RuleName:      rule.Name,
-		RuleSeverity:  rule.Severity,
-		RulePattern:   rule.Pattern,
+		RuleName:      ruleName,
+		RuleSeverity:  ruleSeverity,
+		RulePattern:   rulePattern,
 		Reason:        input.Reason,
 		RequestedBy:   userID,
-		RequesterName: username,
+		RequesterName: middleware.GetUsername(c),
 		ValidityDays:  input.ValidityDays,
 	}
-
-	if err := h.svc.Create(c.Request.Context(), item); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusCreated, item)
 }
 
 // Approve 审批通过
 func (h *BlacklistExemptionHandler) Approve(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 ID"})
+		response.BadRequest(c, "无效的 ID")
 		return
 	}
 
@@ -143,39 +163,43 @@ func (h *BlacklistExemptionHandler) Approve(c *gin.Context) {
 	username := middleware.GetUsername(c)
 
 	if err := h.svc.Approve(c.Request.Context(), id, userID, username); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "豁免已批准"})
+	response.Message(c, "豁免已批准")
 }
 
 // Reject 审批拒绝
 func (h *BlacklistExemptionHandler) Reject(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 ID"})
+		response.BadRequest(c, "无效的 ID")
 		return
 	}
 
 	var input struct {
 		RejectReason string `json:"reject_reason"`
 	}
-	_ = c.ShouldBindJSON(&input)
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&input); err != nil {
+			response.BadRequest(c, "请求参数错误")
+			return
+		}
+	}
 
 	userID, _ := uuid.Parse(middleware.GetUserID(c))
 	username := middleware.GetUsername(c)
 
 	if err := h.svc.Reject(c.Request.Context(), id, userID, username, input.RejectReason); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "豁免已拒绝"})
+	response.Message(c, "豁免已拒绝")
 }
 
 // GetPending 获取待审批列表（审批中心用）
 func (h *BlacklistExemptionHandler) GetPending(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	page, pageSize := parsePagination(c, 10)
 
 	opts := repository.ExemptionListOptions{
 		Page:      page,
@@ -187,15 +211,15 @@ func (h *BlacklistExemptionHandler) GetPending(c *gin.Context) {
 
 	items, total, err := h.svc.ListPending(c.Request.Context(), opts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, "BLACKLIST", "获取待审批豁免列表失败", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": items, "total": total})
+	response.List(c, items, total, page, pageSize)
 }
 
 // GetSearchSchema 搜索字段定义
 func (h *BlacklistExemptionHandler) GetSearchSchema(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"fields": []map[string]interface{}{
 			{"key": "task_name", "label": "任务模板", "type": "text"},
 			{"key": "rule_name", "label": "规则名称", "type": "text"},

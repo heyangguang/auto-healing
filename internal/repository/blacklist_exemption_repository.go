@@ -37,9 +37,9 @@ func (r *BlacklistExemptionRepository) List(ctx context.Context, opts ExemptionL
 	if opts.Status != "" {
 		switch opts.Status {
 		case "approved":
-			query = query.Where("status = ? AND (expires_at IS NULL OR expires_at > ?)", "approved", now)
+			query = query.Where("status = ? AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)", "approved")
 		case "expired":
-			query = query.Where("(status = ? OR (status = ? AND expires_at IS NOT NULL AND expires_at <= ?))", "expired", "approved", now)
+			query = query.Where("(status = ? OR (status = ? AND expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP))", "expired", "approved")
 		default:
 			query = query.Where("status = ?", opts.Status)
 		}
@@ -96,7 +96,7 @@ func (r *BlacklistExemptionRepository) GetApprovedByTaskID(ctx context.Context, 
 	var items []model.BlacklistExemption
 	now := time.Now()
 	err := TenantDB(r.db, ctx).
-		Where("task_id = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)", taskID, "approved", now).
+		Where("task_id = ? AND status = ? AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)", taskID, "approved").
 		Find(&items).Error
 	normalizeExemptionStatuses(items, now)
 	return items, err

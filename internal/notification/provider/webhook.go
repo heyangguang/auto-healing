@@ -45,63 +45,73 @@ func (p *WebhookProvider) Send(ctx context.Context, req *SendRequest) (*SendResp
 	if err != nil {
 		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
 	}
+	p.applyTimeout(config)
+	httpReq, err := p.newWebhookRequest(ctx, config, webhookPayload(req))
+	if err != nil {
+		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
+	}
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
+	}
+	defer resp.Body.Close()
+	return buildWebhookSendResult(resp)
+}
 
-	// 设置超时
+func (p *WebhookProvider) applyTimeout(config *WebhookConfig) {
 	if config.TimeoutSeconds > 0 {
 		p.client.Timeout = time.Duration(config.TimeoutSeconds) * time.Second
 	}
+}
 
-	// 构建请求体
-	payload := map[string]interface{}{
+func webhookPayload(req *SendRequest) map[string]interface{} {
+	return map[string]interface{}{
 		"subject":    req.Subject,
 		"body":       req.Body,
 		"format":     req.Format,
 		"recipients": req.Recipients,
 		"timestamp":  time.Now().Format(time.RFC3339),
 	}
+}
+
+func (p *WebhookProvider) newWebhookRequest(ctx context.Context, config *WebhookConfig, payload map[string]interface{}) (*http.Request, error) {
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
+		return nil, err
 	}
-
-	// 创建请求
-	method := config.Method
-	if method == "" {
-		method = "POST"
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, method, config.URL, bytes.NewBuffer(jsonData))
+	httpReq, err := http.NewRequestWithContext(ctx, webhookMethod(config), config.URL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
+		return nil, err
 	}
+	p.applyWebhookHeaders(httpReq, config)
+	return httpReq, nil
+}
 
-	// 设置头部
+func webhookMethod(config *WebhookConfig) string {
+	if config.Method == "" {
+		return "POST"
+	}
+	return config.Method
+}
+
+func (p *WebhookProvider) applyWebhookHeaders(httpReq *http.Request, config *WebhookConfig) {
 	httpReq.Header.Set("Content-Type", "application/json")
-	for k, v := range config.Headers {
-		httpReq.Header.Set(k, v)
+	for key, value := range config.Headers {
+		httpReq.Header.Set(key, value)
 	}
-
-	// Basic Auth
 	if config.Username != "" {
 		httpReq.SetBasicAuth(config.Username, config.Password)
 	}
+}
 
-	// 发送请求
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
-	}
-	defer resp.Body.Close()
-
-	// 读取响应
+func buildWebhookSendResult(resp *http.Response) (*SendResponse, error) {
 	body, _ := io.ReadAll(resp.Body)
-
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return &SendResponse{
 			Success:      true,
 			ResponseData: map[string]interface{}{"status_code": resp.StatusCode, "body": string(body)},
 		}, nil
 	}
-
 	errMsg := fmt.Sprintf("webhook 返回错误状态码: %d, body: %s", resp.StatusCode, string(body))
 	return &SendResponse{Success: false, ErrorMessage: errMsg}, fmt.Errorf("%s", errMsg)
 }

@@ -147,6 +147,10 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 
 // ValidateRefreshToken 验证刷新Token
 func (s *Service) ValidateRefreshToken(tokenString string) (*jwt.RegisteredClaims, error) {
+	return s.ValidateRefreshTokenContext(context.Background(), tokenString)
+}
+
+func (s *Service) ValidateRefreshTokenContext(ctx context.Context, tokenString string) (*jwt.RegisteredClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
@@ -165,7 +169,7 @@ func (s *Service) ValidateRefreshToken(tokenString string) (*jwt.RegisteredClaim
 	if !ok || !token.Valid {
 		return nil, ErrInvalidToken
 	}
-	if s.IsBlacklisted(claims.ID) {
+	if s.IsBlacklisted(ctx, claims.ID) {
 		return nil, ErrInvalidToken
 	}
 
@@ -181,11 +185,11 @@ func (s *Service) Blacklist(ctx context.Context, jti string, exp time.Time) erro
 }
 
 // IsBlacklisted 检查Token是否在黑名单中
-func (s *Service) IsBlacklisted(jti string) bool {
+func (s *Service) IsBlacklisted(ctx context.Context, jti string) bool {
 	if s.blacklist == nil {
 		return false
 	}
-	return s.blacklist.Exists(context.Background(), jti)
+	return s.blacklist.Exists(ctx, jti)
 }
 
 // GetAccessTokenTTL 获取访问令牌有效期

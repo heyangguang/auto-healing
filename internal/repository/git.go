@@ -27,9 +27,8 @@ func NewGitRepositoryRepository() *GitRepositoryRepository {
 
 // Create 创建仓库
 func (r *GitRepositoryRepository) Create(ctx context.Context, repo *model.GitRepository) error {
-	if repo.TenantID == nil {
-		tenantID := TenantIDFromContext(ctx)
-		repo.TenantID = &tenantID
+	if err := FillTenantID(ctx, &repo.TenantID); err != nil {
+		return err
 	}
 	return r.db.WithContext(ctx).Create(repo).Error
 }
@@ -56,7 +55,7 @@ func (r *GitRepositoryRepository) GetByName(ctx context.Context, name string) (*
 
 // Update 更新仓库
 func (r *GitRepositoryRepository) Update(ctx context.Context, repo *model.GitRepository) error {
-	return r.db.WithContext(ctx).Save(repo).Error
+	return UpdateTenantScopedModel(r.db, ctx, repo.ID, repo)
 }
 
 // Delete 删除仓库
@@ -101,45 +100,47 @@ func (r *GitRepositoryRepository) ListWithOptions(ctx context.Context, opts *Git
 	var repos []model.GitRepository
 	var total int64
 
-	q := TenantDB(r.db, ctx).Model(&model.GitRepository{})
+	q := applyGitRepoListFilters(TenantDB(r.db, ctx).Model(&model.GitRepository{}), opts)
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return repos, total, err
+	}
+	q = applyGitRepoListOrder(q, opts)
+	q = applyGitRepoListPagination(q, opts)
+	if err := q.Find(&repos).Error; err != nil {
+		return repos, total, err
+	}
+	if err := r.attachGitRepoPlaybookCounts(ctx, repos); err != nil {
+		return repos, total, err
+	}
+	return repos, total, nil
+}
 
-	// 按名称搜索（支持精确/模糊匹配）
+func applyGitRepoListFilters(q *gorm.DB, opts *GitRepoListOptions) *gorm.DB {
 	if !opts.Name.IsEmpty() {
 		q = query.ApplyStringFilter(q, "name", opts.Name)
 	}
-
-	// 按 URL 搜索（支持精确/模糊匹配）
 	if !opts.URL.IsEmpty() {
 		q = query.ApplyStringFilter(q, "url", opts.URL)
 	}
-
-	// 状态过滤
 	if opts.Status != "" {
 		q = q.Where("status = ?", opts.Status)
 	}
-
-	// 认证方式过滤
 	if opts.AuthType != "" {
 		q = q.Where("auth_type = ?", opts.AuthType)
 	}
-
-	// 定时同步过滤
 	if opts.SyncEnabled != nil {
 		q = q.Where("sync_enabled = ?", *opts.SyncEnabled)
 	}
-
-	// 时间范围
 	if opts.CreatedFrom != nil {
 		q = q.Where("created_at >= ?", *opts.CreatedFrom)
 	}
 	if opts.CreatedTo != nil {
 		q = q.Where("created_at <= ?", *opts.CreatedTo)
 	}
+	return q
+}
 
-	// 计数
-	q.Session(&gorm.Session{}).Count(&total)
-
-	// 排序
+func applyGitRepoListOrder(q *gorm.DB, opts *GitRepoListOptions) *gorm.DB {
 	allowedSortFields := map[string]bool{
 		"name": true, "status": true, "created_at": true,
 		"updated_at": true, "last_sync_at": true,
@@ -149,50 +150,56 @@ func (r *GitRepositoryRepository) ListWithOptions(ctx context.Context, opts *Git
 		if strings.ToLower(opts.SortOrder) == "desc" {
 			order = "DESC"
 		}
-		q = q.Order(fmt.Sprintf("%s %s", opts.SortField, order))
-	} else {
-		q = q.Order("created_at DESC")
+		return q.Order(fmt.Sprintf("%s %s", opts.SortField, order))
 	}
+	return q.Order("created_at DESC")
+}
 
-	// 分页
+func applyGitRepoListPagination(q *gorm.DB, opts *GitRepoListOptions) *gorm.DB {
 	if opts.Page > 0 && opts.PageSize > 0 {
-		q = q.Offset((opts.Page - 1) * opts.PageSize).Limit(opts.PageSize)
+		return q.Offset((opts.Page - 1) * opts.PageSize).Limit(opts.PageSize)
 	}
+	return q
+}
 
-	err := q.Find(&repos).Error
+func (r *GitRepositoryRepository) attachGitRepoPlaybookCounts(ctx context.Context, repos []model.GitRepository) error {
+	if len(repos) == 0 {
+		return nil
+	}
+	countMap, err := r.listGitRepoPlaybookCounts(ctx, repos)
 	if err != nil {
-		return repos, total, err
+		return err
 	}
-
-	// 批量填充 playbook_count
-	if len(repos) > 0 {
-		var repoIDs []uuid.UUID
-		for _, repo := range repos {
-			repoIDs = append(repoIDs, repo.ID)
-		}
-
-		type PlaybookCountResult struct {
-			RepositoryID uuid.UUID `gorm:"column:repository_id"`
-			Count        int64     `gorm:"column:count"`
-		}
-		var counts []PlaybookCountResult
-		TenantDB(r.db, ctx).
-			Model(&model.Playbook{}).
-			Select("repository_id, COUNT(*) as count").
-			Where("repository_id IN ?", repoIDs).
-			Group("repository_id").
-			Find(&counts)
-
-		countMap := make(map[uuid.UUID]int64)
-		for _, c := range counts {
-			countMap[c.RepositoryID] = c.Count
-		}
-		for i := range repos {
-			repos[i].PlaybookCount = countMap[repos[i].ID]
-		}
+	for i := range repos {
+		repos[i].PlaybookCount = countMap[repos[i].ID]
 	}
+	return nil
+}
 
-	return repos, total, nil
+func (r *GitRepositoryRepository) listGitRepoPlaybookCounts(ctx context.Context, repos []model.GitRepository) (map[uuid.UUID]int64, error) {
+	repoIDs := make([]uuid.UUID, 0, len(repos))
+	for _, repo := range repos {
+		repoIDs = append(repoIDs, repo.ID)
+	}
+	type playbookCountResult struct {
+		RepositoryID uuid.UUID `gorm:"column:repository_id"`
+		Count        int64     `gorm:"column:count"`
+	}
+	var counts []playbookCountResult
+	err := TenantDB(r.db, ctx).
+		Model(&model.Playbook{}).
+		Select("repository_id, COUNT(*) as count").
+		Where("repository_id IN ?", repoIDs).
+		Group("repository_id").
+		Find(&counts).Error
+	if err != nil {
+		return nil, err
+	}
+	countMap := make(map[uuid.UUID]int64, len(counts))
+	for _, count := range counts {
+		countMap[count.RepositoryID] = count.Count
+	}
+	return countMap, nil
 }
 
 // UpdateStatus 更新仓库状态
@@ -226,9 +233,8 @@ func (r *GitRepositoryRepository) UpdateLastSync(ctx context.Context, id uuid.UU
 
 // CreateSyncLog 创建同步日志
 func (r *GitRepositoryRepository) CreateSyncLog(ctx context.Context, log *model.GitSyncLog) error {
-	if log.TenantID == nil {
-		tenantID := TenantIDFromContext(ctx)
-		log.TenantID = &tenantID
+	if err := FillTenantID(ctx, &log.TenantID); err != nil {
+		return err
 	}
 	return r.db.WithContext(ctx).Create(log).Error
 }

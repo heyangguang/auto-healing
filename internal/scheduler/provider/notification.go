@@ -13,12 +13,12 @@ import (
 
 // NotificationRetryScheduler 通知失败重试调度器
 type NotificationRetryScheduler struct {
-	notifSvc *notification.Service
-	interval time.Duration
-	stopCh   chan struct{}
-	wg       sync.WaitGroup
-	running  bool
-	mu       sync.Mutex
+	notifSvc  *notification.Service
+	interval  time.Duration
+	lifecycle *schedulerLifecycle
+	running   bool
+	mu        sync.Mutex
+	retryFunc func(context.Context) error
 }
 
 // NewNotificationRetryScheduler 创建通知重试调度器
@@ -30,10 +30,12 @@ func NewNotificationRetryScheduler() *NotificationRetryScheduler {
 		}
 	}
 
+	notifSvc := notification.NewConfiguredService(database.DB)
 	return &NotificationRetryScheduler{
-		notifSvc: notification.NewService(database.DB, "Auto-Healing", "", "1.0.0"),
-		interval: interval,
-		stopCh:   make(chan struct{}),
+		notifSvc:  notifSvc,
+		interval:  interval,
+		lifecycle: newSchedulerLifecycle(),
+		retryFunc: notifSvc.RetryFailed,
 	}
 }
 
@@ -44,11 +46,14 @@ func (s *NotificationRetryScheduler) Start() {
 		s.mu.Unlock()
 		return
 	}
+	if s.lifecycle == nil || s.lifecycle.ctx.Err() != nil {
+		s.lifecycle = newSchedulerLifecycle()
+	}
+	lifecycle := s.lifecycle
 	s.running = true
 	s.mu.Unlock()
 
-	s.wg.Add(1)
-	go s.run()
+	lifecycle.Go(s.run)
 	logger.Sched("NOTIFY").Info("通知重试调度器已启动 (检查间隔: %v)", s.interval)
 }
 
@@ -60,34 +65,31 @@ func (s *NotificationRetryScheduler) Stop() {
 		return
 	}
 	s.running = false
+	lifecycle := s.lifecycle
 	s.mu.Unlock()
 
-	close(s.stopCh)
-	s.wg.Wait()
+	lifecycle.Stop()
 	logger.Sched("NOTIFY").Info("通知重试调度器已停止")
 }
 
-func (s *NotificationRetryScheduler) run() {
-	defer s.wg.Done()
-
+func (s *NotificationRetryScheduler) run(ctx context.Context) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
-	s.retryOnce()
+	s.retryOnce(ctx)
 
 	for {
 		select {
-		case <-s.stopCh:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.retryOnce()
+			s.retryOnce(ctx)
 		}
 	}
 }
 
-func (s *NotificationRetryScheduler) retryOnce() {
-	ctx := context.Background()
-	if err := s.notifSvc.RetryFailed(ctx); err != nil {
+func (s *NotificationRetryScheduler) retryOnce(ctx context.Context) {
+	if err := s.retryFunc(ctx); err != nil {
 		logger.Sched("NOTIFY").Error("通知失败重试执行失败: %v", err)
 	}
 }

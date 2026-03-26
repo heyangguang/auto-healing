@@ -1,9 +1,9 @@
 package middleware
 
 import (
+	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 // ValidateAuditResourceTypes 启动时校验：扫描所有路由，推断可能产出的 resource_type，
@@ -51,14 +51,8 @@ func ValidateAuditResourceTypes(router *gin.Engine) {
 	}
 
 	if len(missing) > 0 {
-		zap.L().Warn("⚠️ 以下审计资源类型在字典种子中缺失中文标签，请更新 dictionary_seeds_extra.go 的 auditResourceSeeds()",
-			zap.Int("缺失数量", len(missing)),
-			zap.Strings("缺失类型", missing),
-		)
+		logger.API("AUDIT").Warn("以下审计资源类型在字典种子中缺失中文标签，请更新 dictionary_seeds_extra.go 的 auditResourceSeeds() | count=%d missing=%v", len(missing), missing)
 	} else {
-		zap.L().Info("✅ 审计资源类型字典校验通过 — 所有路由 resource_type 均有中文标签",
-			zap.Int("路由资源类型数", len(routeResourceTypes)),
-			zap.Int("字典条目数", len(dictKeys)),
-		)
+		logger.API("AUDIT").Info("审计资源类型字典校验通过 | route_types=%d dict_entries=%d", len(routeResourceTypes), len(dictKeys))
 	}
 }

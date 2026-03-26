@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -12,12 +11,7 @@ func RequirePermission(requiredPermission string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		permissions := GetPermissions(c)
 		if permissions == nil {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": gin.H{
-					"code":    "FORBIDDEN",
-					"message": "No permissions found",
-				},
-			})
+			AbortPermissionsContextMissing(c)
 			return
 		}
 
@@ -26,13 +20,7 @@ func RequirePermission(requiredPermission string) gin.HandlerFunc {
 			return
 		}
 
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"error": gin.H{
-				"code":     "FORBIDDEN",
-				"message":  "Permission denied",
-				"required": requiredPermission,
-			},
-		})
+		AbortPermissionDenied(c, requiredPermission, "all")
 	}
 }
 
@@ -41,12 +29,7 @@ func RequireAnyPermission(requiredPermissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		permissions := GetPermissions(c)
 		if permissions == nil {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": gin.H{
-					"code":    "FORBIDDEN",
-					"message": "No permissions found",
-				},
-			})
+			AbortPermissionsContextMissing(c)
 			return
 		}
 
@@ -57,13 +40,7 @@ func RequireAnyPermission(requiredPermissions ...string) gin.HandlerFunc {
 			}
 		}
 
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"error": gin.H{
-				"code":     "FORBIDDEN",
-				"message":  "Permission denied",
-				"required": requiredPermissions,
-			},
-		})
+		AbortPermissionDenied(c, requiredPermissions, "any")
 	}
 }
 
@@ -72,24 +49,13 @@ func RequireAllPermissions(requiredPermissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		permissions := GetPermissions(c)
 		if permissions == nil {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": gin.H{
-					"code":    "FORBIDDEN",
-					"message": "No permissions found",
-				},
-			})
+			AbortPermissionsContextMissing(c)
 			return
 		}
 
 		for _, required := range requiredPermissions {
 			if !hasPermission(permissions, required) {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-					"error": gin.H{
-						"code":     "FORBIDDEN",
-						"message":  "Permission denied",
-						"required": requiredPermissions,
-					},
-				})
+				AbortPermissionDenied(c, requiredPermissions, "all")
 				return
 			}
 		}
@@ -132,12 +98,7 @@ func RequireRole(requiredRole string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roles := GetRoles(c)
 		if roles == nil {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": gin.H{
-					"code":    "FORBIDDEN",
-					"message": "No roles found",
-				},
-			})
+			AbortRolesContextMissing(c)
 			return
 		}
 
@@ -148,12 +109,6 @@ func RequireRole(requiredRole string) gin.HandlerFunc {
 			}
 		}
 
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"error": gin.H{
-				"code":     "FORBIDDEN",
-				"message":  "Role required",
-				"required": requiredRole,
-			},
-		})
+		AbortRoleRequired(c, requiredRole)
 	}
 }

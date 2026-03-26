@@ -1,0 +1,105 @@
+package repository
+
+import (
+	"context"
+	"time"
+
+	"github.com/company/auto-healing/internal/model"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+type CMDBSection struct {
+	Total             int64             `json:"total"`
+	Active            int64             `json:"active"`
+	Maintenance       int64             `json:"maintenance"`
+	Offline           int64             `json:"offline"`
+	ActiveRate        float64           `json:"active_rate"`
+	ByStatus          []StatusCount     `json:"by_status"`
+	ByEnvironment     []StatusCount     `json:"by_environment"`
+	ByType            []StatusCount     `json:"by_type"`
+	ByOS              []StatusCount     `json:"by_os"`
+	ByDepartment      []StatusCount     `json:"by_department"`
+	ByManufacturer    []StatusCount     `json:"by_manufacturer"`
+	RecentMaintenance []MaintenanceItem `json:"recent_maintenance"`
+	OfflineAssets     []AssetItem       `json:"offline_assets"`
+}
+
+type MaintenanceItem struct {
+	ID           uuid.UUID `json:"id"`
+	CMDBItemName string    `json:"cmdb_item_name"`
+	Action       string    `json:"action"`
+	Reason       string    `json:"reason"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type AssetItem struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Type        string    `json:"type"`
+	IPAddress   string    `json:"ip_address"`
+	Environment string    `json:"environment"`
+}
+
+func (r *DashboardRepository) GetCMDBSection(ctx context.Context) (*CMDBSection, error) {
+	section := &CMDBSection{
+		ByStatus:       []StatusCount{},
+		ByEnvironment:  []StatusCount{},
+		ByType:         []StatusCount{},
+		ByOS:           []StatusCount{},
+		ByDepartment:   []StatusCount{},
+		ByManufacturer: []StatusCount{},
+	}
+	db := r.tenantDB(ctx)
+
+	countModel(db, &model.CMDBItem{}, &section.Total)
+	countModel(db.Where("status = ?", "active"), &model.CMDBItem{}, &section.Active)
+	countModel(db.Where("status = ?", "maintenance"), &model.CMDBItem{}, &section.Maintenance)
+	countModel(db.Where("status = ?", "offline"), &model.CMDBItem{}, &section.Offline)
+	if section.Total > 0 {
+		section.ActiveRate = float64(section.Active) / float64(section.Total) * 100
+	}
+
+	scanStatusCounts(db, &model.CMDBItem{}, "status", &section.ByStatus)
+	scanStatusCounts(db, &model.CMDBItem{}, "environment", &section.ByEnvironment)
+	scanStatusCounts(db, &model.CMDBItem{}, "type", &section.ByType)
+	scanStatusCounts(db, &model.CMDBItem{}, "os", &section.ByOS)
+	scanStatusCounts(db, &model.CMDBItem{}, "department", &section.ByDepartment)
+	scanStatusCounts(db, &model.CMDBItem{}, "manufacturer", &section.ByManufacturer)
+
+	section.RecentMaintenance = listRecentMaintenance(db.Order("created_at DESC").Limit(10))
+	section.OfflineAssets = listOfflineAssets(db.Where("status = ?", "offline").Order("updated_at DESC").Limit(10))
+	return section, nil
+}
+
+func listRecentMaintenance(query *gorm.DB) []MaintenanceItem {
+	var logs []model.CMDBMaintenanceLog
+	query.Find(&logs)
+	items := make([]MaintenanceItem, 0, len(logs))
+	for _, log := range logs {
+		items = append(items, MaintenanceItem{
+			ID:           log.ID,
+			CMDBItemName: log.CMDBItemName,
+			Action:       log.Action,
+			Reason:       log.Reason,
+			CreatedAt:    log.CreatedAt,
+		})
+	}
+	return items
+}
+
+func listOfflineAssets(query *gorm.DB) []AssetItem {
+	var assets []model.CMDBItem
+	query.Find(&assets)
+	items := make([]AssetItem, 0, len(assets))
+	for _, asset := range assets {
+		items = append(items, AssetItem{
+			ID:          asset.ID,
+			Name:        asset.Name,
+			Type:        asset.Type,
+			IPAddress:   asset.IPAddress,
+			Environment: asset.Environment,
+		})
+	}
+	return items
+}

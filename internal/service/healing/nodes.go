@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 
-	appconf "github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/notification"
@@ -20,13 +19,23 @@ import (
 type NodeExecutors struct {
 	cmdbRepo         *repository.CMDBItemRepository
 	notificationRepo *repository.NotificationRepository
+	notificationSvc  *notification.Service
 }
 
 // NewNodeExecutors 创建节点执行器
 func NewNodeExecutors() *NodeExecutors {
+	return NewNodeExecutorsWithDependencies(
+		repository.NewCMDBItemRepository(),
+		repository.NewNotificationRepository(database.DB),
+		notification.NewConfiguredService(database.DB),
+	)
+}
+
+func NewNodeExecutorsWithDependencies(cmdbRepo *repository.CMDBItemRepository, notificationRepo *repository.NotificationRepository, notificationSvc *notification.Service) *NodeExecutors {
 	return &NodeExecutors{
-		cmdbRepo:         repository.NewCMDBItemRepository(),
-		notificationRepo: repository.NewNotificationRepository(database.DB),
+		cmdbRepo:         cmdbRepo,
+		notificationRepo: notificationRepo,
+		notificationSvc:  notificationSvc,
 	}
 }
 
@@ -38,13 +47,20 @@ type HostExtractorConfig struct {
 }
 
 // ExecuteHostExtractor 执行主机提取
-func (e *NodeExecutors) ExecuteHostExtractor(ctx context.Context, instance *model.FlowInstance, config map[string]interface{}) ([]string, error) {
-	// 解析配置
+func (e *NodeExecutors) ExecuteHostExtractor(_ context.Context, instance *model.FlowInstance, config map[string]interface{}) ([]string, error) {
+	cfg := parseHostExtractorConfig(config)
+	incident := e.getIncidentFromContext(instance)
+	if incident == nil {
+		return nil, nil
+	}
+	return extractHostsFromIncident(incident, cfg)
+}
+
+func parseHostExtractorConfig(config map[string]interface{}) *HostExtractorConfig {
 	cfg := &HostExtractorConfig{
 		Source:  "description",
 		Pattern: `\b(?:\d{1,3}\.){3}\d{1,3}\b|[a-zA-Z][a-zA-Z0-9-]*(?:\.[a-zA-Z0-9-]+)+`,
 	}
-
 	if source, ok := config["source"].(string); ok {
 		cfg.Source = source
 	}
@@ -54,54 +70,49 @@ func (e *NodeExecutors) ExecuteHostExtractor(ctx context.Context, instance *mode
 	if field, ok := config["field"].(string); ok {
 		cfg.Field = field
 	}
+	return cfg
+}
 
-	// 获取工单信息
-	incident := e.getIncidentFromContext(instance)
-	if incident == nil {
-		return nil, nil
-	}
-
-	// 获取提取来源文本
-	var sourceText string
-	switch cfg.Source {
-	case "title":
-		sourceText = incident.Title
-	case "description":
-		sourceText = incident.Description
-	case "affected_ci":
-		sourceText = incident.AffectedCI
-	case "affected_service":
-		sourceText = incident.AffectedService
-	case "raw_data":
-		if incident.RawData != nil && cfg.Field != "" {
-			if val, ok := incident.RawData[cfg.Field]; ok {
-				sourceText = toString(val)
-			}
-		}
-	default:
-		sourceText = incident.Description
-	}
-
-	// 使用正则提取主机
+func extractHostsFromIncident(incident *model.Incident, cfg *HostExtractorConfig) ([]string, error) {
 	re, err := regexp.Compile(cfg.Pattern)
 	if err != nil {
 		return nil, err
 	}
+	return uniqueHosts(re.FindAllString(hostExtractorSourceText(incident, cfg), -1)), nil
+}
 
-	matches := re.FindAllString(sourceText, -1)
+func hostExtractorSourceText(incident *model.Incident, cfg *HostExtractorConfig) string {
+	switch cfg.Source {
+	case "title":
+		return incident.Title
+	case "description":
+		return incident.Description
+	case "affected_ci":
+		return incident.AffectedCI
+	case "affected_service":
+		return incident.AffectedService
+	case "raw_data":
+		if incident.RawData != nil && cfg.Field != "" {
+			if val, ok := incident.RawData[cfg.Field]; ok {
+				return toString(val)
+			}
+		}
+	}
+	return incident.Description
+}
 
-	// 去重
+func uniqueHosts(matches []string) []string {
 	hostSet := make(map[string]bool)
 	var hosts []string
 	for _, match := range matches {
 		host := strings.TrimSpace(match)
-		if host != "" && !hostSet[host] {
-			hostSet[host] = true
-			hosts = append(hosts, host)
+		if host == "" || hostSet[host] {
+			continue
 		}
+		hostSet[host] = true
+		hosts = append(hosts, host)
 	}
-
-	return hosts, nil
+	return hosts
 }
 
 // CMDBValidatorConfig CMDB 校验配置
@@ -171,15 +182,33 @@ type NotificationConfig struct {
 
 // ExecuteNotification 执行通知
 func (e *NodeExecutors) ExecuteNotification(ctx context.Context, instance *model.FlowInstance, config map[string]interface{}) error {
-	// 解析配置（使用 JSON 序列化避免逐字段赋值）
-	configData, _ := json.Marshal(config)
-	cfg := &NotificationConfig{}
-	_ = json.Unmarshal(configData, cfg)
+	sendReq := e.buildNotificationSendRequest(instance, config)
+	notifSvc := e.newNotificationService()
+	_, err := notifSvc.Send(ctx, sendReq)
+	return err
+}
 
-	// 构建变量
-	variables := make(map[string]string)
+func (e *NodeExecutors) newNotificationService() *notification.Service {
+	return e.notificationSvc
+}
 
-	// 从实例上下文中获取变量
+func (e *NodeExecutors) buildNotificationSendRequest(instance *model.FlowInstance, config map[string]interface{}) notification.SendNotificationRequest {
+	sendReq := notification.SendNotificationRequest{
+		Variables: e.buildNotificationVariables(instance, config),
+		ChannelIDs: parseNotificationChannelIDs(config),
+		TemplateID: parseNotificationTemplateID(config),
+	}
+	if subject, ok := config["subject"].(string); ok {
+		sendReq.Subject = subject
+	}
+	if body, ok := config["body"].(string); ok {
+		sendReq.Body = body
+	}
+	return sendReq
+}
+
+func (e *NodeExecutors) buildNotificationVariables(instance *model.FlowInstance, config map[string]interface{}) map[string]interface{} {
+	variables := make(map[string]interface{})
 	incident := e.getIncidentFromContext(instance)
 	if incident != nil {
 		variables["incident_id"] = incident.ID.String()
@@ -187,63 +216,42 @@ func (e *NodeExecutors) ExecuteNotification(ctx context.Context, instance *model
 		variables["incident_severity"] = incident.Severity
 		variables["incident_status"] = incident.Status
 	}
-
-	// 合并配置中的变量
 	if configVars, ok := config["variables"].(map[string]interface{}); ok {
-		for k, v := range configVars {
-			variables[k] = toString(v)
+		for key, value := range configVars {
+			variables[key] = toString(value)
 		}
 	}
+	return variables
+}
 
-	// 调用通知服务发送通知
-	cp := appconf.GetAppConfig()
-	notifSvc := notification.NewService(
-		database.DB,
-		cp.Name,
-		cp.URL,
-		cp.Version,
-	)
-
-	sendReq := notification.SendNotificationRequest{
-		Variables: make(map[string]interface{}),
-	}
-	for k, v := range variables {
-		sendReq.Variables[k] = v
-	}
-
-	// 解析 channel_ids（支持 UUID 数组或单个 channel_id）
+func parseNotificationChannelIDs(config map[string]interface{}) []uuid.UUID {
 	var channelIDs []uuid.UUID
 	if idStrs, ok := config["channel_ids"].([]interface{}); ok {
-		for _, s := range idStrs {
-			if id, err := uuid.Parse(fmt.Sprint(s)); err == nil {
+		for _, raw := range idStrs {
+			if id, err := uuid.Parse(fmt.Sprint(raw)); err == nil {
 				channelIDs = append(channelIDs, id)
 			}
 		}
-	} else if idStr, ok := config["channel_id"].(string); ok {
+		return channelIDs
+	}
+	if idStr, ok := config["channel_id"].(string); ok {
 		if id, err := uuid.Parse(idStr); err == nil {
 			channelIDs = append(channelIDs, id)
 		}
 	}
-	sendReq.ChannelIDs = channelIDs
+	return channelIDs
+}
 
-	// 解析 template_id
-	if tmplStr, ok := config["template_id"].(string); ok {
-		if id, err := uuid.Parse(tmplStr); err == nil {
-			sendReq.TemplateID = &id
-		}
+func parseNotificationTemplateID(config map[string]interface{}) *uuid.UUID {
+	tmplStr, ok := config["template_id"].(string)
+	if !ok {
+		return nil
 	}
-
-	// 直接指定 subject/body（无模板时使用）
-	if s, ok := config["subject"].(string); ok {
-		sendReq.Subject = s
+	id, err := uuid.Parse(tmplStr)
+	if err != nil {
+		return nil
 	}
-	if b, ok := config["body"].(string); ok {
-		sendReq.Body = b
-	}
-
-	_, err := notifSvc.Send(ctx, sendReq)
-	return err
-
+	return &id
 }
 
 // getIncidentFromContext 从实例上下文获取工单

@@ -24,9 +24,8 @@ func NewSecretsSourceRepository() *SecretsSourceRepository {
 
 // Create 创建密钥源
 func (r *SecretsSourceRepository) Create(ctx context.Context, source *model.SecretsSource) error {
-	if source.TenantID == nil {
-		tenantID := TenantIDFromContext(ctx)
-		source.TenantID = &tenantID
+	if err := FillTenantID(ctx, &source.TenantID); err != nil {
+		return err
 	}
 	return r.db.WithContext(ctx).Create(source).Error
 }
@@ -53,7 +52,7 @@ func (r *SecretsSourceRepository) GetByName(ctx context.Context, name string) (*
 
 // Update 更新密钥源
 func (r *SecretsSourceRepository) Update(ctx context.Context, source *model.SecretsSource) error {
-	return r.db.WithContext(ctx).Save(source).Error
+	return UpdateTenantScopedModel(r.db, ctx, source.ID, source)
 }
 
 // Delete 删除密钥源

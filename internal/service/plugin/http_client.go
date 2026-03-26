@@ -58,66 +58,77 @@ func (c *HTTPClient) TestConnection(ctx context.Context, config model.JSON) erro
 
 // FetchData 拉取数据
 func (c *HTTPClient) FetchData(ctx context.Context, config model.JSON, since time.Time) ([]map[string]interface{}, error) {
-	url, ok := config["url"].(string)
-	if !ok || url == "" {
-		return nil, fmt.Errorf("配置缺少 url 字段")
+	url, err := configURL(config)
+	if err != nil {
+		return nil, err
 	}
 
-	// 构建查询参数
-	params := []string{}
-
-	// 添加额外查询参数（extra_params）
-	if extraParams, ok := config["extra_params"].(map[string]interface{}); ok {
-		for k, v := range extraParams {
-			if str, ok := v.(string); ok {
-				params = append(params, fmt.Sprintf("%s=%s", k, str))
-			}
-		}
-	}
-
-	// 添加时间参数（如果配置了）
-	if timeParam, ok := config["since_param"].(string); ok && timeParam != "" {
-		params = append(params, fmt.Sprintf("%s=%s", timeParam, since.Format(time.RFC3339)))
-	}
-
-	// 拼接查询参数到 URL
-	if len(params) > 0 {
-		separator := "?"
-		if strings.Contains(url, "?") {
-			separator = "&"
-		}
-		url = url + separator + strings.Join(params, "&")
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", c.buildRequestURL(url, config, since), nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
 
-	// 添加认证
 	c.addAuth(req, config)
-
-	// 设置 Accept header
 	req.Header.Set("Accept", "application/json")
 
+	body, err := c.doJSONRequest(req, "请求")
+	if err != nil {
+		return nil, err
+	}
+	return c.parseResponse(body, config)
+}
+
+func configURL(config model.JSON) (string, error) {
+	url, ok := config["url"].(string)
+	if !ok || url == "" {
+		return "", fmt.Errorf("配置缺少 url 字段")
+	}
+	return url, nil
+}
+
+func (c *HTTPClient) buildRequestURL(url string, config model.JSON, since time.Time) string {
+	params := c.buildQueryParams(config, since)
+	if len(params) == 0 {
+		return url
+	}
+
+	separator := "?"
+	if strings.Contains(url, "?") {
+		separator = "&"
+	}
+	return url + separator + strings.Join(params, "&")
+}
+
+func (c *HTTPClient) buildQueryParams(config model.JSON, since time.Time) []string {
+	params := make([]string, 0)
+	if extraParams, ok := config["extra_params"].(map[string]interface{}); ok {
+		for key, value := range extraParams {
+			if str, ok := value.(string); ok {
+				params = append(params, fmt.Sprintf("%s=%s", key, str))
+			}
+		}
+	}
+	if timeParam, ok := config["since_param"].(string); ok && timeParam != "" {
+		params = append(params, fmt.Sprintf("%s=%s", timeParam, since.Format(time.RFC3339)))
+	}
+	return params
+}
+
+func (c *HTTPClient) doJSONRequest(req *http.Request, action string) ([]byte, error) {
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("请求失败: %w", err)
+		return nil, fmt.Errorf("%s失败: %w", action, err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("请求返回错误状态码 %d: %s", resp.StatusCode, string(body))
-	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
-
-	// 解析响应
-	return c.parseResponse(body, config)
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("%s返回错误状态码 %d: %s", action, resp.StatusCode, string(body))
+	}
+	return body, nil
 }
 
 // CloseIncident 关闭工单
@@ -127,7 +138,6 @@ func (c *HTTPClient) CloseIncident(ctx context.Context, config model.JSON, close
 		return fmt.Errorf("未配置关闭工单接口 (close_incident_url)")
 	}
 
-	// 替换 URL 中的占位符
 	if externalID, ok := closeData["external_id"].(string); ok {
 		closeURL = strings.ReplaceAll(closeURL, "{external_id}", externalID)
 	}
@@ -147,22 +157,10 @@ func (c *HTTPClient) CloseIncident(ctx context.Context, config model.JSON, close
 		return fmt.Errorf("创建请求失败: %w", err)
 	}
 
-	// 添加认证
 	c.addAuth(req, config)
 	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("请求失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("关闭工单返回错误状态码 %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	_, err = c.doJSONRequest(req, "关闭工单")
+	return err
 }
 
 // addAuth 添加认证信息
@@ -192,69 +190,86 @@ func (c *HTTPClient) addAuth(req *http.Request, config model.JSON) {
 
 // parseResponse 解析响应数据
 func (c *HTTPClient) parseResponse(body []byte, config model.JSON) ([]map[string]interface{}, error) {
-	// 尝试解析为数组
-	var arrayResult []map[string]interface{}
-	if err := json.Unmarshal(body, &arrayResult); err == nil {
-		return arrayResult, nil
+	if items, err := parseArrayBody(body); err == nil {
+		return items, nil
 	}
 
-	// 尝试解析为对象，并从指定路径提取数据
-	var objResult map[string]interface{}
-	if err := json.Unmarshal(body, &objResult); err != nil {
+	objResult, err := parseObjectBody(body)
+	if err != nil {
+		return nil, err
+	}
+
+	if items := extractPathArray(objResult, config); items != nil {
+		return items, nil
+	}
+	if items := extractNamedArray(objResult, "data"); items != nil {
+		return items, nil
+	}
+	if items := extractNamedArray(objResult, "items"); items != nil {
+		return items, nil
+	}
+	return nil, fmt.Errorf("无法从响应中提取数据数组")
+}
+
+func parseArrayBody(body []byte) ([]map[string]interface{}, error) {
+	var result []map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func parseObjectBody(body []byte) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
+	return result, nil
+}
 
-	// 检查是否配置了数据路径（如 "data.items"）
-	if dataPath, ok := config["response_data_path"].(string); ok && dataPath != "" {
-		parts := strings.Split(dataPath, ".")
-		current := objResult
-
-		for i, part := range parts {
-			if val, ok := current[part]; ok {
-				if i == len(parts)-1 {
-					// 最后一部分，应该是数组
-					if arr, ok := val.([]interface{}); ok {
-						result := make([]map[string]interface{}, 0, len(arr))
-						for _, item := range arr {
-							if m, ok := item.(map[string]interface{}); ok {
-								result = append(result, m)
-							}
-						}
-						return result, nil
-					}
-				} else {
-					// 中间部分，应该是对象
-					if obj, ok := val.(map[string]interface{}); ok {
-						current = obj
-					} else {
-						break
-					}
-				}
-			}
-		}
+func extractPathArray(objResult map[string]interface{}, config model.JSON) []map[string]interface{} {
+	dataPath, ok := config["response_data_path"].(string)
+	if !ok || dataPath == "" {
+		return nil
 	}
 
-	// 如果有 data 字段且是数组
-	if data, ok := objResult["data"].([]interface{}); ok {
-		result := make([]map[string]interface{}, 0, len(data))
-		for _, item := range data {
-			if m, ok := item.(map[string]interface{}); ok {
-				result = append(result, m)
-			}
+	current := objResult
+	parts := strings.Split(dataPath, ".")
+	for i, part := range parts {
+		val, ok := current[part]
+		if !ok {
+			return nil
 		}
-		return result, nil
-	}
-
-	// 如果有 items 字段且是数组
-	if items, ok := objResult["items"].([]interface{}); ok {
-		result := make([]map[string]interface{}, 0, len(items))
-		for _, item := range items {
-			if m, ok := item.(map[string]interface{}); ok {
-				result = append(result, m)
+		if i == len(parts)-1 {
+			if arr, ok := val.([]interface{}); ok {
+				return mapInterfaceArray(arr)
 			}
+			return nil
 		}
-		return result, nil
-	}
 
-	return nil, fmt.Errorf("无法从响应中提取数据数组")
+		obj, ok := val.(map[string]interface{})
+		if !ok {
+			return nil
+		}
+		current = obj
+	}
+	return nil
+}
+
+func extractNamedArray(objResult map[string]interface{}, key string) []map[string]interface{} {
+	arr, ok := objResult[key].([]interface{})
+	if !ok {
+		return nil
+	}
+	return mapInterfaceArray(arr)
+}
+
+func mapInterfaceArray(values []interface{}) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0, len(values))
+	for _, value := range values {
+		if item, ok := value.(map[string]interface{}); ok {
+			result = append(result, item)
+		}
+	}
+	return result
 }

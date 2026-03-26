@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"strconv"
 	"time"
 
+	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
@@ -25,76 +25,77 @@ func NewPlatformAuditHandler() *PlatformAuditHandler {
 // ListPlatformAuditLogs 获取平台审计日志列表
 // GET /api/v1/platform/audit-logs?page=1&page_size=20&category=login&action=create&...
 func (h *PlatformAuditHandler) ListPlatformAuditLogs(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-
-	opts := &repository.PlatformAuditListOptions{
-		Page:         page,
-		PageSize:     pageSize,
-		Search:       GetStringFilter(c, "search"),
-		Category:     c.Query("category"),
-		Action:       c.Query("action"),
-		ResourceType: c.Query("resource_type"),
-		Username:     GetStringFilter(c, "username"),
-		Status:       c.Query("status"),
-		RequestPath:  GetStringFilter(c, "request_path"),
-		SortBy:       c.Query("sort_by"),
-		SortOrder:    c.Query("sort_order"),
-	}
-
-	if userIDStr := c.Query("user_id"); userIDStr != "" {
-		if uid, err := uuid.Parse(userIDStr); err == nil {
-			opts.UserID = &uid
-		}
-	}
-
-	if afterStr := c.Query("created_after"); afterStr != "" {
-		if after, err := time.Parse(time.RFC3339, afterStr); err == nil {
-			opts.CreatedAfter = &after
-		}
-	}
-	if beforeStr := c.Query("created_before"); beforeStr != "" {
-		if before, err := time.Parse(time.RFC3339, beforeStr); err == nil {
-			opts.CreatedBefore = &before
-		}
-	}
-
+	page, pageSize := parsePagination(c, 20)
+	opts := buildPlatformAuditListOptions(c, page, pageSize)
 	logs, total, err := h.repo.List(c.Request.Context(), opts)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		respondInternalError(c, "AUDIT", "获取平台审计日志列表失败", err)
 		return
 	}
+	response.List(c, formatPlatformAuditLogs(logs), total, page, pageSize)
+}
 
+func buildPlatformAuditListOptions(c *gin.Context, page, pageSize int) *repository.PlatformAuditListOptions {
+	return &repository.PlatformAuditListOptions{
+		Page:          page,
+		PageSize:      pageSize,
+		Search:        GetStringFilter(c, "search"),
+		Category:      c.Query("category"),
+		Action:        c.Query("action"),
+		ResourceType:  c.Query("resource_type"),
+		Username:      GetStringFilter(c, "username"),
+		Status:        c.Query("status"),
+		RequestPath:   GetStringFilter(c, "request_path"),
+		SortBy:        c.Query("sort_by"),
+		SortOrder:     c.Query("sort_order"),
+		UserID:        parseOptionalUUID(c.Query("user_id")),
+		CreatedAfter:  parseOptionalRFC3339Time(c.Query("created_after")),
+		CreatedBefore: parseOptionalRFC3339Time(c.Query("created_before")),
+	}
+}
+
+func parseOptionalRFC3339Time(value string) *time.Time {
+	if value == "" {
+		return nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil
+	}
+	return &parsed
+}
+
+func formatPlatformAuditLogs(logs []model.PlatformAuditLog) []gin.H {
 	result := make([]gin.H, len(logs))
 	for i, log := range logs {
-		riskLevel := repository.GetRiskLevel(log.Action, log.ResourceType)
-		riskReason := repository.GetRiskReason(log.Action, log.ResourceType)
-
-		result[i] = gin.H{
-			"id":              log.ID,
-			"user_id":         log.UserID,
-			"username":        log.Username,
-			"ip_address":      log.IPAddress,
-			"user_agent":      log.UserAgent,
-			"category":        log.Category,
-			"action":          log.Action,
-			"resource_type":   log.ResourceType,
-			"resource_id":     log.ResourceID,
-			"resource_name":   log.ResourceName,
-			"request_method":  log.RequestMethod,
-			"request_path":    log.RequestPath,
-			"request_body":    log.RequestBody,
-			"response_status": log.ResponseStatus,
-			"changes":         log.Changes,
-			"status":          log.Status,
-			"error_message":   log.ErrorMessage,
-			"risk_level":      riskLevel,
-			"risk_reason":     riskReason,
-			"created_at":      log.CreatedAt,
-		}
+		result[i] = formatPlatformAuditLog(log)
 	}
+	return result
+}
 
-	response.List(c, result, total, page, pageSize)
+func formatPlatformAuditLog(log model.PlatformAuditLog) gin.H {
+	return gin.H{
+		"id":              log.ID,
+		"user_id":         log.UserID,
+		"username":        log.Username,
+		"ip_address":      log.IPAddress,
+		"user_agent":      log.UserAgent,
+		"category":        log.Category,
+		"action":          log.Action,
+		"resource_type":   log.ResourceType,
+		"resource_id":     log.ResourceID,
+		"resource_name":   log.ResourceName,
+		"request_method":  log.RequestMethod,
+		"request_path":    log.RequestPath,
+		"request_body":    sanitizeAuditPayload(log.RequestBody),
+		"response_status": log.ResponseStatus,
+		"changes":         sanitizeAuditPayload(log.Changes),
+		"status":          log.Status,
+		"error_message":   log.ErrorMessage,
+		"risk_level":      repository.GetRiskLevel(log.Action, log.ResourceType),
+		"risk_reason":     repository.GetRiskReason(log.Action, log.ResourceType),
+		"created_at":      log.CreatedAt,
+	}
 }
 
 // GetPlatformAuditLog 获取平台审计日志详情
@@ -108,7 +109,7 @@ func (h *PlatformAuditHandler) GetPlatformAuditLog(c *gin.Context) {
 
 	log, err := h.repo.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		respondInternalError(c, "AUDIT", "获取平台审计日志详情失败", err)
 		return
 	}
 	if log == nil {
@@ -132,9 +133,9 @@ func (h *PlatformAuditHandler) GetPlatformAuditLog(c *gin.Context) {
 		"resource_name":   log.ResourceName,
 		"request_method":  log.RequestMethod,
 		"request_path":    log.RequestPath,
-		"request_body":    log.RequestBody,
+		"request_body":    sanitizeAuditPayload(log.RequestBody),
 		"response_status": log.ResponseStatus,
-		"changes":         log.Changes,
+		"changes":         sanitizeAuditPayload(log.Changes),
 		"status":          log.Status,
 		"error_message":   log.ErrorMessage,
 		"risk_level":      riskLevel,
@@ -148,7 +149,7 @@ func (h *PlatformAuditHandler) GetPlatformAuditLog(c *gin.Context) {
 func (h *PlatformAuditHandler) GetPlatformAuditStats(c *gin.Context) {
 	stats, err := h.repo.GetStats(c.Request.Context())
 	if err != nil {
-		response.InternalError(c, err.Error())
+		respondInternalError(c, "AUDIT", "获取平台审计统计失败", err)
 		return
 	}
 	response.Success(c, stats)
@@ -157,14 +158,11 @@ func (h *PlatformAuditHandler) GetPlatformAuditStats(c *gin.Context) {
 // GetPlatformAuditTrend 获取平台审计趋势
 // GET /api/v1/platform/audit-logs/trend?days=30
 func (h *PlatformAuditHandler) GetPlatformAuditTrend(c *gin.Context) {
-	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
-	if days <= 0 {
-		days = 30
-	}
+	days := parsePositiveIntQuery(c, "days", 30, 365)
 
 	items, err := h.repo.GetTrend(c.Request.Context(), days)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		respondInternalError(c, "AUDIT", "获取平台审计趋势失败", err)
 		return
 	}
 
@@ -177,16 +175,12 @@ func (h *PlatformAuditHandler) GetPlatformAuditTrend(c *gin.Context) {
 // GetPlatformUserRanking 获取平台用户操作排行
 // GET /api/v1/platform/audit-logs/user-ranking?limit=10&days=7
 func (h *PlatformAuditHandler) GetPlatformUserRanking(c *gin.Context) {
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
-	days, _ := strconv.Atoi(c.DefaultQuery("days", "7"))
-
-	if limit <= 0 || limit > 100 {
-		limit = 10
-	}
+	limit := parsePositiveIntQuery(c, "limit", 10, 100)
+	days := parsePositiveIntQuery(c, "days", 7, 365)
 
 	rankings, err := h.repo.GetUserRanking(c.Request.Context(), limit, days)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		respondInternalError(c, "AUDIT", "获取平台审计用户排行失败", err)
 		return
 	}
 
@@ -200,12 +194,11 @@ func (h *PlatformAuditHandler) GetPlatformUserRanking(c *gin.Context) {
 // GetPlatformHighRiskLogs 获取平台高危操作日志
 // GET /api/v1/platform/audit-logs/high-risk?page=1&page_size=20
 func (h *PlatformAuditHandler) GetPlatformHighRiskLogs(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize := parsePagination(c, 20)
 
 	logs, total, err := h.repo.GetHighRiskLogs(c.Request.Context(), page, pageSize)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		respondInternalError(c, "AUDIT", "获取平台高危审计日志失败", err)
 		return
 	}
 

@@ -28,9 +28,19 @@ func NewUserRepository() *UserRepository {
 	return &UserRepository{db: database.DB}
 }
 
+func NewUserRepositoryWithDB(db *gorm.DB) *UserRepository {
+	return &UserRepository{db: db}
+}
+
 // Create 创建用户
 func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 	return r.db.WithContext(ctx).Create(user).Error
+}
+
+func (r *UserRepository) CountAll(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.User{}).Count(&count).Error
+	return count, err
 }
 
 // GetByID 根据 ID 获取用户
@@ -66,6 +76,29 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 // Update 更新用户
 func (r *UserRepository) Update(ctx context.Context, user *model.User) error {
 	return r.db.WithContext(ctx).Save(user).Error
+}
+
+func (r *UserRepository) UpdatePlatformUserWithRole(ctx context.Context, user *model.User, roleID *uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(user).Error; err != nil {
+			return err
+		}
+		if roleID == nil {
+			return nil
+		}
+		if err := tx.Where("user_id = ?", user.ID).Delete(&model.UserPlatformRole{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Table("user_platform_roles").Create(map[string]any{
+			"user_id": user.ID,
+			"role_id": *roleID,
+		}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.User{}).
+			Where("id = ?", user.ID).
+			Update("is_platform_admin", true).Error
+	})
 }
 
 // Delete 删除用户

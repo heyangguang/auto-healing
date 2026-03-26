@@ -12,12 +12,12 @@ import (
 
 // BlacklistExemptionScheduler 过期豁免清理调度器
 type BlacklistExemptionScheduler struct {
-	svc      *service.BlacklistExemptionService
-	interval time.Duration
-	stopCh   chan struct{}
-	wg       sync.WaitGroup
-	running  bool
-	mu       sync.Mutex
+	svc        *service.BlacklistExemptionService
+	interval   time.Duration
+	lifecycle  *schedulerLifecycle
+	running    bool
+	mu         sync.Mutex
+	expireFunc func(context.Context) (int64, error)
 }
 
 // NewBlacklistExemptionScheduler 创建过期豁免清理调度器
@@ -30,9 +30,10 @@ func NewBlacklistExemptionScheduler() *BlacklistExemptionScheduler {
 	}
 
 	return &BlacklistExemptionScheduler{
-		svc:      service.NewBlacklistExemptionService(),
-		interval: interval,
-		stopCh:   make(chan struct{}),
+		svc:        service.NewBlacklistExemptionService(),
+		interval:   interval,
+		lifecycle:  newSchedulerLifecycle(),
+		expireFunc: service.NewBlacklistExemptionService().ExpireOverdue,
 	}
 }
 
@@ -43,11 +44,14 @@ func (s *BlacklistExemptionScheduler) Start() {
 		s.mu.Unlock()
 		return
 	}
+	if s.lifecycle == nil || s.lifecycle.ctx.Err() != nil {
+		s.lifecycle = newSchedulerLifecycle()
+	}
+	lifecycle := s.lifecycle
 	s.running = true
 	s.mu.Unlock()
 
-	s.wg.Add(1)
-	go s.run()
+	lifecycle.Go(s.run)
 	logger.Sched("BLACKLIST").Info("黑名单豁免过期调度器已启动 (检查间隔: %v)", s.interval)
 }
 
@@ -59,34 +63,31 @@ func (s *BlacklistExemptionScheduler) Stop() {
 		return
 	}
 	s.running = false
+	lifecycle := s.lifecycle
 	s.mu.Unlock()
 
-	close(s.stopCh)
-	s.wg.Wait()
+	lifecycle.Stop()
 	logger.Sched("BLACKLIST").Info("黑名单豁免过期调度器已停止")
 }
 
-func (s *BlacklistExemptionScheduler) run() {
-	defer s.wg.Done()
-
+func (s *BlacklistExemptionScheduler) run(ctx context.Context) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
-	s.expireOnce()
+	s.expireOnce(ctx)
 
 	for {
 		select {
-		case <-s.stopCh:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.expireOnce()
+			s.expireOnce(ctx)
 		}
 	}
 }
 
-func (s *BlacklistExemptionScheduler) expireOnce() {
-	ctx := context.Background()
-	affected, err := s.svc.ExpireOverdue(ctx)
+func (s *BlacklistExemptionScheduler) expireOnce(ctx context.Context) {
+	affected, err := s.expireFunc(ctx)
 	if err != nil {
 		logger.Sched("BLACKLIST").Error("黑名单豁免过期清理失败: %v", err)
 		return

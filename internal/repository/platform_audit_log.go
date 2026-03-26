@@ -63,8 +63,20 @@ func (r *PlatformAuditLogRepository) List(ctx context.Context, opts *PlatformAud
 	var logs []model.PlatformAuditLog
 	var total int64
 
-	q := r.db.WithContext(ctx).Model(&model.PlatformAuditLog{})
+	q := applyPlatformAuditFilters(r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}), opts)
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := q.Order(platformAuditOrderClause(opts)).
+		Offset((opts.Page - 1) * opts.PageSize).
+		Limit(opts.PageSize).
+		Find(&logs).Error; err != nil {
+		return nil, 0, err
+	}
+	return logs, total, nil
+}
 
+func applyPlatformAuditFilters(q *gorm.DB, opts *PlatformAuditListOptions) *gorm.DB {
 	if opts.Category != "" {
 		q = q.Where("category = ?", opts.Category)
 	}
@@ -95,12 +107,10 @@ func (r *PlatformAuditLogRepository) List(ctx context.Context, opts *PlatformAud
 	if !opts.Search.IsEmpty() {
 		q = query.ApplyMultiStringFilter(q, []string{"username", "resource_name", "request_path"}, opts.Search)
 	}
+	return q
+}
 
-	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	// 排序
+func platformAuditOrderClause(opts *PlatformAuditListOptions) string {
 	sortBy := "created_at"
 	sortOrder := "DESC"
 	allowedSortFields := map[string]bool{
@@ -117,14 +127,7 @@ func (r *PlatformAuditLogRepository) List(ctx context.Context, opts *PlatformAud
 	if opts.SortOrder == "asc" || opts.SortOrder == "ASC" {
 		sortOrder = "ASC"
 	}
-	q = q.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
-
-	offset := (opts.Page - 1) * opts.PageSize
-	if err := q.Offset(offset).Limit(opts.PageSize).Find(&logs).Error; err != nil {
-		return nil, 0, err
-	}
-
-	return logs, total, nil
+	return fmt.Sprintf("%s %s", sortBy, sortOrder)
 }
 
 // PlatformAuditStats 平台审计统计

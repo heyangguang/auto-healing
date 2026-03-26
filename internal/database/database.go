@@ -75,113 +75,74 @@ func Init(cfg *config.Config) error {
 // AutoMigrate 自动迁移数据库表结构（增量：只创建不存在的表）
 func AutoMigrate() error {
 	logger.Info("开始自动迁移数据库表结构...")
-
-	// 所有需要迁移的模型
-	allModels := []interface{}{
-		// 用户权限
-		&model.User{},
-		&model.Role{},
-		&model.Permission{},
-		&model.UserPlatformRole{},
-		&model.RolePermission{},
-		&model.TokenBlacklist{},
-		&model.RefreshToken{},
-		// 插件
-		&model.Plugin{},
-		&model.PluginSyncLog{},
-		&model.Incident{},
-		// 工作流
-		&model.Workflow{},
-		&model.WorkflowNode{},
-		&model.WorkflowEdge{},
-		&model.WorkflowInstance{},
-		&model.NodeExecution{},
-		// 执行
-		&model.GitRepository{},
-		&model.GitSyncLog{},
-		&model.Playbook{},
-		&model.PlaybookScanLog{},
-		&model.ExecutionTask{},
-		&model.ExecutionRun{},
-		&model.ExecutionSchedule{},
-		// 通知
-		&model.NotificationChannel{},
-		&model.NotificationTemplate{},
-		&model.NotificationLog{},
-		// 日志
-		&model.AuditLog{},
-		&model.PlatformAuditLog{},
-		&model.ExecutionLog{},
-		&model.WorkflowLog{},
-		// Dashboard
-		&model.DashboardConfig{},
-		&model.SystemWorkspace{},
-		&model.RoleWorkspace{},
-		// 用户偏好
-		&model.UserPreference{},
-		// 用户活动（收藏 + 最近访问）
-		&model.UserFavorite{},
-		&model.UserRecent{},
-		// 自愈引擎
-		&model.HealingFlow{},
-		&model.HealingRule{},
-		&model.FlowInstance{},
-		&model.ApprovalTask{},
-		&model.FlowExecutionLog{},
-		// 站内信
-		&model.SiteMessage{},
-		&model.SiteMessageRead{},
-		// 平台级设置（KV 存储，与租户无关）
-		&model.PlatformSetting{},
-		// 多租户
-		&model.Tenant{},
-		&model.UserTenantRole{},
-		// 字典值
-		&model.Dictionary{},
-		// 邀请
-		&model.TenantInvitation{},
-		// 高危指令黑名单
-		&model.CommandBlacklist{},
-		// 安全豁免
-		&model.BlacklistExemption{},
-		&model.TenantBlacklistOverride{},
-		// CMDB
-		&model.CMDBItem{},
-		&model.CMDBMaintenanceLog{},
-		// 代提权申请
-		&model.ImpersonationRequest{},
-		&model.ImpersonationApprover{},
-		// 密钥管理
-		&model.SecretsSource{},
+	migrated, err := migrateMissingTables(DB, autoMigrateModels())
+	if err != nil {
+		return err
 	}
-
-	// 增量迁移：只迁移不存在的表，避免修改已有表导致约束名冲突
-	migrated := 0
-	for _, m := range allModels {
-		stmt := &gorm.Statement{DB: DB}
-		if err := stmt.Parse(m); err != nil {
-			continue
-		}
-		tableName := stmt.Schema.Table
-		if !DB.Migrator().HasTable(tableName) {
-			if err := DB.AutoMigrate(m); err != nil {
-				return fmt.Errorf("迁移表 %s 失败: %w", tableName, err)
-			}
-			logger.Info("已创建表: %s", tableName)
-			migrated++
-		}
-	}
-
-	if migrated > 0 {
-		logger.Info("数据库迁移完成，新建 %d 张表", migrated)
-	} else {
-		logger.Info("数据库表结构已是最新，无需迁移")
-	}
+	logAutoMigrateResult(migrated)
 
 	if err := ensureRoleWorkspaceSchema(); err != nil {
 		return fmt.Errorf("修正 role_workspaces 表结构失败: %w", err)
 	}
 	return nil
+}
+
+func autoMigrateModels() []interface{} {
+	return []interface{}{
+		&model.User{}, &model.Role{}, &model.Permission{}, &model.UserPlatformRole{}, &model.RolePermission{}, &model.TokenBlacklist{}, &model.RefreshToken{},
+		&model.Plugin{}, &model.PluginSyncLog{}, &model.Incident{},
+		&model.Workflow{}, &model.WorkflowNode{}, &model.WorkflowEdge{}, &model.WorkflowInstance{}, &model.NodeExecution{},
+		&model.GitRepository{}, &model.GitSyncLog{}, &model.Playbook{}, &model.PlaybookScanLog{}, &model.ExecutionTask{}, &model.ExecutionRun{}, &model.ExecutionSchedule{},
+		&model.NotificationChannel{}, &model.NotificationTemplate{}, &model.NotificationLog{},
+		&model.AuditLog{}, &model.PlatformAuditLog{}, &model.ExecutionLog{}, &model.WorkflowLog{},
+		&model.DashboardConfig{}, &model.SystemWorkspace{}, &model.RoleWorkspace{},
+		&model.UserPreference{}, &model.UserFavorite{}, &model.UserRecent{},
+		&model.HealingFlow{}, &model.HealingRule{}, &model.FlowInstance{}, &model.ApprovalTask{}, &model.FlowExecutionLog{},
+		&model.SiteMessage{}, &model.SiteMessageRead{}, &model.PlatformSetting{},
+		&model.Tenant{}, &model.UserTenantRole{}, &model.Dictionary{}, &model.TenantInvitation{},
+		&model.CommandBlacklist{}, &model.BlacklistExemption{}, &model.TenantBlacklistOverride{},
+		&model.CMDBItem{}, &model.CMDBMaintenanceLog{},
+		&model.ImpersonationRequest{}, &model.ImpersonationApprover{},
+		&model.SecretsSource{},
+	}
+}
+
+func migrateMissingTables(db *gorm.DB, models []interface{}) (int, error) {
+	migrated := 0
+	for _, current := range models {
+		created, err := migrateModelIfMissing(db, current)
+		if err != nil {
+			return 0, err
+		}
+		if created {
+			migrated++
+		}
+	}
+	return migrated, nil
+}
+
+func migrateModelIfMissing(db *gorm.DB, current interface{}) (bool, error) {
+	stmt := &gorm.Statement{DB: db}
+	if err := stmt.Parse(current); err != nil {
+		return false, nil
+	}
+	tableName := stmt.Schema.Table
+	if db.Migrator().HasTable(tableName) {
+		return false, nil
+	}
+	if err := db.AutoMigrate(current); err != nil {
+		return false, fmt.Errorf("迁移表 %s 失败: %w", tableName, err)
+	}
+	logger.Info("已创建表: %s", tableName)
+	return true, nil
+}
+
+func logAutoMigrateResult(migrated int) {
+	if migrated > 0 {
+		logger.Info("数据库迁移完成，新建 %d 张表", migrated)
+		return
+	}
+	logger.Info("数据库表结构已是最新，无需迁移")
 }
 
 func ensureRoleWorkspaceSchema() error {

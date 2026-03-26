@@ -1,0 +1,132 @@
+package plugin
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/logger"
+	"github.com/company/auto-healing/internal/pkg/query"
+	"github.com/company/auto-healing/internal/repository"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+// IncidentService 工单服务
+type IncidentService struct {
+	incidentRepo *repository.IncidentRepository
+	pluginRepo   *repository.PluginRepository
+	httpClient   *HTTPClient
+}
+
+// NewIncidentService 创建工单服务
+func NewIncidentService() *IncidentService {
+	return &IncidentService{
+		incidentRepo: repository.NewIncidentRepository(),
+		pluginRepo:   repository.NewPluginRepository(),
+		httpClient:   NewHTTPClient(),
+	}
+}
+
+// GetIncident 获取工单
+func (s *IncidentService) GetIncident(ctx context.Context, id uuid.UUID) (*model.Incident, error) {
+	return s.incidentRepo.GetByID(ctx, id)
+}
+
+// ListIncidents 获取工单列表（支持查询已删除插件的工单）
+func (s *IncidentService) ListIncidents(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity string, sourcePluginName, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, externalID query.StringFilter, scopes ...func(*gorm.DB) *gorm.DB) ([]model.Incident, int64, error) {
+	return s.incidentRepo.List(ctx, page, pageSize, pluginID, status, healingStatus, severity, sourcePluginName, search, hasPlugin, sortBy, sortOrder, externalID, scopes...)
+}
+
+// CloseIncidentResponse 关闭工单响应
+type CloseIncidentResponse struct {
+	Message       string `json:"message"`
+	LocalStatus   string `json:"local_status"`
+	SourceUpdated bool   `json:"source_updated"`
+}
+
+// CloseIncident 关闭工单
+func (s *IncidentService) CloseIncident(ctx context.Context, id uuid.UUID, resolution, workNotes, closeCode, closeStatus string) (*CloseIncidentResponse, error) {
+	incident, err := s.incidentRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("获取工单失败: %w", err)
+	}
+	if closeStatus == "" {
+		closeStatus = "resolved"
+	}
+
+	sourceUpdated := s.writeBackIncidentClose(ctx, id, incident, resolution, workNotes, closeCode, closeStatus)
+	incident.Status = closeStatus
+	incident.HealingStatus = "healed"
+	if err := s.incidentRepo.Update(ctx, incident); err != nil {
+		return nil, fmt.Errorf("更新本地工单状态失败: %w", err)
+	}
+
+	return &CloseIncidentResponse{
+		Message:       "工单已关闭",
+		LocalStatus:   "healed",
+		SourceUpdated: sourceUpdated,
+	}, nil
+}
+
+func (s *IncidentService) writeBackIncidentClose(ctx context.Context, id uuid.UUID, incident *model.Incident, resolution, workNotes, closeCode, closeStatus string) bool {
+	if incident.PluginID == nil {
+		return false
+	}
+	plugin, err := s.pluginRepo.GetByID(ctx, *incident.PluginID)
+	if err != nil || plugin == nil {
+		return false
+	}
+
+	closeURL, ok := plugin.Config["close_incident_url"].(string)
+	if !ok || closeURL == "" {
+		return false
+	}
+
+	req := map[string]any{
+		"external_id":  incident.ExternalID,
+		"resolution":   resolution,
+		"work_notes":   workNotes,
+		"close_code":   closeCode,
+		"close_status": closeStatus,
+	}
+	if err := s.httpClient.CloseIncident(ctx, plugin.Config, req); err != nil {
+		logger.Sync_("PLUGIN").Warn("回写工单到源系统失败: incident_id=%s, external_id=%s, error=%s", id, incident.ExternalID, err.Error())
+		return false
+	}
+
+	logger.Sync_("PLUGIN").Info("成功回写工单到源系统: incident_id=%s, external_id=%s", id, incident.ExternalID)
+	return true
+}
+
+// ResetScan 重置工单扫描状态
+func (s *IncidentService) ResetScan(ctx context.Context, id uuid.UUID) error {
+	if _, err := s.incidentRepo.GetByID(ctx, id); err != nil {
+		return fmt.Errorf("工单不存在: %w", err)
+	}
+	return s.incidentRepo.ResetScan(ctx, id)
+}
+
+// BatchResetScanResponse 批量重置响应
+type BatchResetScanResponse struct {
+	AffectedCount int64  `json:"affected_count"`
+	Message       string `json:"message"`
+}
+
+// BatchResetScanRequest 批量重置请求
+type BatchResetScanRequest struct {
+	IDs           []uuid.UUID `json:"ids"`
+	HealingStatus string      `json:"healing_status"`
+}
+
+// BatchResetScan 批量重置工单扫描状态
+func (s *IncidentService) BatchResetScan(ctx context.Context, ids []uuid.UUID, healingStatus string) (*BatchResetScanResponse, error) {
+	count, err := s.incidentRepo.BatchResetScan(ctx, ids, healingStatus)
+	if err != nil {
+		return nil, fmt.Errorf("批量重置失败: %w", err)
+	}
+	return &BatchResetScanResponse{
+		AffectedCount: count,
+		Message:       fmt.Sprintf("成功重置 %d 条工单的扫描状态", count),
+	}, nil
+}

@@ -66,7 +66,10 @@ func auditRiskLevelSeeds() []model.Dictionary {
 // 平台级 vs 租户级通过 dict_type 区分（audit_resource_platform / audit_resource_tenant），
 // 前端分别使用对应的 LABELS Map，不会混淆。
 func auditResourceSeeds() []model.Dictionary {
-	return []model.Dictionary{
+	return auditResourceSeedValues
+}
+
+var auditResourceSeedValues = []model.Dictionary{
 		// ==================== 租户级资源（实际 key 格式：tenant-X）====================
 		// inferResourceType 对 /tenant/X 路径产出 "tenant-X"（tenant 在 nestedPrefixes 中）
 		d("audit_resource_tenant", "tenant-users", "用户管理", "User", "", "", "", "", "", 0),
@@ -156,7 +159,6 @@ func auditResourceSeeds() []model.Dictionary {
 		d("audit_resource_platform", "tenant-command-blacklist", "命令黑名单", "Command Blacklist", "", "", "", "", "", 50),
 		d("audit_resource_platform", "tenant-blacklist-exemptions", "豁免规则", "Blacklist Exemption", "", "", "", "", "", 51),
 
-	}
 }
 
 // permissionModuleSeeds 权限模块 Seed

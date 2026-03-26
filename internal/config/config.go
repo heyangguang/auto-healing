@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	appcrypto "github.com/company/auto-healing/internal/pkg/crypto"
 	"time"
 
 	"github.com/spf13/viper"
@@ -172,6 +174,30 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("解析配置失败: %w", err)
 	}
 
+	if cfg.JWT.Secret == "" || cfg.JWT.Secret == "your-super-secret-key-change-in-production" {
+		if cfg.App.Env == "production" {
+			return nil, fmt.Errorf("production 环境必须显式配置 jwt.secret")
+		}
+		secret, genErr := appcrypto.GenerateRandomString(48)
+		if genErr != nil {
+			return nil, fmt.Errorf("生成默认 JWT Secret 失败: %w", genErr)
+		}
+		cfg.JWT.Secret = secret
+		fmt.Println("⚠️  未配置安全的 JWT Secret，已生成临时随机值；重启后会失效，请尽快在配置中显式设置 jwt.secret")
+	}
+
+	if cfg.App.Env == "production" {
+		if cfg.Server.Mode == "debug" {
+			fmt.Println("⚠️  当前 app.env=production 但 server.mode=debug，请尽快切换到 release")
+		}
+		if cfg.Database.SSLMode == "disable" {
+			fmt.Println("⚠️  当前 app.env=production 但 database.ssl_mode=disable，请确认数据库链路已启用 TLS")
+		}
+		if cfg.Database.Password == "postgres" {
+			fmt.Println("⚠️  当前 app.env=production 仍在使用默认数据库密码 postgres，请立即更换")
+		}
+	}
+
 	return &cfg, nil
 }
 
@@ -207,7 +233,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("redis.db", 0)
 
 	// JWT
-	v.SetDefault("jwt.secret", "your-super-secret-key-change-in-production")
+	v.SetDefault("jwt.secret", "")
 	v.SetDefault("jwt.access_token_ttl_minutes", 60)
 	v.SetDefault("jwt.refresh_token_ttl_hours", 168)
 	v.SetDefault("jwt.issuer", "auto-healing")

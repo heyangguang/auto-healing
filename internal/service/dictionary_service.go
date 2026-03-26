@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/company/auto-healing/internal/model"
@@ -12,9 +14,10 @@ import (
 
 // DictionaryService 字典值服务（含内存缓存）
 type DictionaryService struct {
-	repo  *repository.DictionaryRepository
-	mu    sync.RWMutex
-	cache map[string][]model.Dictionary // dict_type -> []Dictionary
+	repo         *repository.DictionaryRepository
+	mu           sync.RWMutex
+	cache        map[string][]model.Dictionary // dict_type -> []Dictionary
+	cacheLoadErr error
 }
 
 // NewDictionaryService 创建服务
@@ -25,11 +28,10 @@ func NewDictionaryService() *DictionaryService {
 }
 
 // LoadCache 启动时加载全量缓存
-func (s *DictionaryService) LoadCache(ctx context.Context) {
+func (s *DictionaryService) LoadCache(ctx context.Context) error {
 	items, err := s.repo.ListByTypes(ctx, nil, true)
 	if err != nil {
-		logger.Warn("加载字典缓存失败: %v", err)
-		return
+		return s.setDictionaryCacheError(fmt.Errorf("加载字典缓存失败: %w", err))
 	}
 
 	cache := make(map[string][]model.Dictionary)
@@ -39,15 +41,18 @@ func (s *DictionaryService) LoadCache(ctx context.Context) {
 
 	s.mu.Lock()
 	s.cache = cache
+	s.cacheLoadErr = nil
 	s.mu.Unlock()
 
 	logger.Info("字典缓存已加载: %d 个类型, %d 条记录", len(cache), len(items))
+	return nil
 }
 
 // InvalidateCache 清除缓存
 func (s *DictionaryService) InvalidateCache() {
 	s.mu.Lock()
 	s.cache = nil
+	s.cacheLoadErr = nil
 	s.mu.Unlock()
 }
 
@@ -57,18 +62,22 @@ func (s *DictionaryService) GetAll(ctx context.Context, types []string, activeOn
 	if activeOnly {
 		s.mu.RLock()
 		cache := s.cache
+		cacheErr := s.cacheLoadErr
 		s.mu.RUnlock()
 
+		if cacheErr != nil {
+			return nil, cacheErr
+		}
 		if cache != nil {
 			if len(types) == 0 {
 				// 返回全量缓存
-				return cache, nil
+				return cloneDictionaryCache(cache), nil
 			}
 			// 从缓存中筛选指定类型
 			result := make(map[string][]model.Dictionary)
 			for _, t := range types {
 				if items, ok := cache[t]; ok {
-					result[t] = items
+					result[t] = cloneDictionaryItems(items)
 				}
 			}
 			return result, nil
@@ -135,6 +144,46 @@ func (s *DictionaryService) SeedDictionaries(ctx context.Context) error {
 		return err
 	}
 	s.InvalidateCache()
-	s.LoadCache(ctx)
-	return nil
+	return s.LoadCache(ctx)
+}
+
+func (s *DictionaryService) setDictionaryCacheError(err error) error {
+	s.mu.Lock()
+	s.cache = nil
+	s.cacheLoadErr = err
+	s.mu.Unlock()
+	logger.Error("加载字典缓存失败: %v", err)
+	return err
+}
+
+func cloneDictionaryCache(cache map[string][]model.Dictionary) map[string][]model.Dictionary {
+	result := make(map[string][]model.Dictionary, len(cache))
+	for key, items := range cache {
+		result[key] = cloneDictionaryItems(items)
+	}
+	return result
+}
+
+func cloneDictionaryItems(items []model.Dictionary) []model.Dictionary {
+	result := make([]model.Dictionary, len(items))
+	for i, item := range items {
+		result[i] = item
+		result[i].Extra = cloneDictionaryJSON(item.Extra)
+	}
+	return result
+}
+
+func cloneDictionaryJSON(src model.JSON) model.JSON {
+	if src == nil {
+		return nil
+	}
+	data, err := json.Marshal(src)
+	if err != nil {
+		return nil
+	}
+	var cloned model.JSON
+	if err := json.Unmarshal(data, &cloned); err != nil {
+		return nil
+	}
+	return cloned
 }

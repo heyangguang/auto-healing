@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
@@ -21,10 +23,15 @@ type WorkbenchHandler struct {
 	userRepo     *repository.UserRepository
 }
 
+type workbenchSection struct {
+	key string
+	fn  func() (interface{}, error)
+}
+
 // NewWorkbenchHandler 创建工作台处理器
 func NewWorkbenchHandler() *WorkbenchHandler {
 	return &WorkbenchHandler{
-		repo:         repository.NewWorkbenchRepository(),
+		repo:         repository.NewWorkbenchRepository(database.DB),
 		activityRepo: repository.NewUserActivityRepository(),
 		userRepo:     repository.NewUserRepository(),
 	}
@@ -38,75 +45,62 @@ func (h *WorkbenchHandler) GetOverview(c *gin.Context) {
 	}
 	ctx := c.Request.Context()
 	permissions := middleware.GetPermissions(c)
-
-	// 并发查询有权限的 section
-	result := make(map[string]interface{})
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	var lastErr error
-
-	type section struct {
-		key string
-		fn  func() (interface{}, error)
-	}
-
-	// 动态构建需要查询的 sections（基于用户权限）
-	sections := []section{
-		// 系统健康：所有用户可见
-		{"system_health", func() (interface{}, error) { return h.repo.GetSystemHealth(ctx) }},
-	}
-
-	// 自愈统计：需要 healing:instances:view
-	if workbenchHasPermission(permissions, "healing:instances:view") {
-		sections = append(sections, section{"healing_stats", func() (interface{}, error) { return h.repo.GetHealingStats(ctx) }})
-	}
-
-	// 工单统计：需要 plugin:list
-	if workbenchHasPermission(permissions, "plugin:list") {
-		sections = append(sections, section{"incident_stats", func() (interface{}, error) { return h.repo.GetIncidentStats(ctx) }})
-	}
-
-	// 主机统计：需要 plugin:list
-	if workbenchHasPermission(permissions, "plugin:list") {
-		sections = append(sections, section{"host_stats", func() (interface{}, error) { return h.repo.GetHostStats(ctx) }})
-	}
-
-	// 资源概览：始终查询，但内部按权限过滤子项
-	sections = append(sections, section{"resource_overview", func() (interface{}, error) {
-		return h.repo.GetResourceOverview(ctx, permissions)
-	}})
-
-	for _, sec := range sections {
-		wg.Add(1)
-		go func(key string, fn func() (interface{}, error)) {
-			defer wg.Done()
-			defer func() {
-				if rec := recover(); rec != nil {
-					mu.Lock()
-					lastErr = fmt.Errorf("section %s panic: %v", key, rec)
-					mu.Unlock()
-				}
-			}()
-
-			data, err := fn()
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				lastErr = err
-				return
-			}
-			result[key] = data
-		}(sec.key, sec.fn)
-	}
-
-	wg.Wait()
-
+	result, lastErr := h.loadWorkbenchOverviewSections(ctx, permissions)
 	if lastErr != nil {
 		response.InternalError(c, "获取工作台概览失败: "+lastErr.Error())
 		return
 	}
-
 	response.Success(c, result)
+}
+
+func (h *WorkbenchHandler) loadWorkbenchOverviewSections(ctx context.Context, permissions []string) (map[string]interface{}, error) {
+	sections := h.workbenchOverviewSections(ctx, permissions)
+	result := make(map[string]interface{})
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	var lastErr error
+	for _, sec := range sections {
+		wg.Add(1)
+		go h.runWorkbenchSection(sec, &wg, &mu, result, &lastErr)
+	}
+	wg.Wait()
+	return result, lastErr
+}
+
+func (h *WorkbenchHandler) workbenchOverviewSections(ctx context.Context, permissions []string) []workbenchSection {
+	sections := []workbenchSection{
+		{key: "system_health", fn: func() (interface{}, error) { return h.repo.GetSystemHealth(ctx) }},
+		{key: "resource_overview", fn: func() (interface{}, error) { return h.repo.GetResourceOverview(ctx, permissions) }},
+	}
+	if workbenchHasPermission(permissions, "healing:instances:view") {
+		sections = append(sections, workbenchSection{key: "healing_stats", fn: func() (interface{}, error) { return h.repo.GetHealingStats(ctx) }})
+	}
+	if workbenchHasPermission(permissions, "plugin:list") {
+		sections = append(sections,
+			workbenchSection{key: "incident_stats", fn: func() (interface{}, error) { return h.repo.GetIncidentStats(ctx) }},
+			workbenchSection{key: "host_stats", fn: func() (interface{}, error) { return h.repo.GetHostStats(ctx) }},
+		)
+	}
+	return sections
+}
+
+func (h *WorkbenchHandler) runWorkbenchSection(sec workbenchSection, wg *sync.WaitGroup, mu *sync.Mutex, result map[string]interface{}, lastErr *error) {
+	defer wg.Done()
+	defer func() {
+		if rec := recover(); rec != nil {
+			mu.Lock()
+			*lastErr = fmt.Errorf("section %s panic: %v", sec.key, rec)
+			mu.Unlock()
+		}
+	}()
+	data, err := sec.fn()
+	mu.Lock()
+	defer mu.Unlock()
+	if err != nil {
+		*lastErr = err
+		return
+	}
+	result[sec.key] = data
 }
 
 // GetActivities 获取活动动态
@@ -124,7 +118,7 @@ func (h *WorkbenchHandler) GetActivities(c *gin.Context) {
 
 	items, err := h.repo.GetRecentActivities(c.Request.Context(), limit)
 	if err != nil {
-		response.InternalError(c, "获取活动动态失败: "+err.Error())
+		respondInternalError(c, "WORKBENCH", "获取活动动态失败", err)
 		return
 	}
 
@@ -161,7 +155,7 @@ func (h *WorkbenchHandler) GetScheduleCalendar(c *gin.Context) {
 
 	dates, err := h.repo.GetScheduleCalendar(c.Request.Context(), year, month)
 	if err != nil {
-		response.InternalError(c, "获取定时任务日历失败: "+err.Error())
+		respondInternalError(c, "WORKBENCH", "获取定时任务日历失败", err)
 		return
 	}
 
@@ -193,7 +187,7 @@ func (h *WorkbenchHandler) GetAnnouncements(c *gin.Context) {
 
 	items, err := h.repo.GetAnnouncements(c.Request.Context(), limit, userCreatedAt)
 	if err != nil {
-		response.InternalError(c, "获取系统公告失败: "+err.Error())
+		respondInternalError(c, "WORKBENCH", "获取系统公告失败", err)
 		return
 	}
 
@@ -216,7 +210,7 @@ func (h *WorkbenchHandler) GetFavorites(c *gin.Context) {
 
 	favorites, err := h.activityRepo.ListFavorites(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "获取收藏失败: "+err.Error())
+		respondInternalError(c, "WORKBENCH", "获取收藏失败", err)
 		return
 	}
 

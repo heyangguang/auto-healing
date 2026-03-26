@@ -33,7 +33,7 @@ func (m *WorkspaceManager) PrepareWorkspace(taskID uuid.UUID, repoPath string) (
 	workDir = filepath.Join(m.baseDir, taskID.String())
 
 	// 创建工作目录
-	if err = os.MkdirAll(workDir, 0755); err != nil {
+	if err = os.MkdirAll(workDir, 0700); err != nil {
 		return "", nil, err
 	}
 

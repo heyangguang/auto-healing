@@ -2,11 +2,12 @@ package handler
 
 import (
 	"context"
-	"net/http"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -20,8 +21,11 @@ type DictionaryHandler struct {
 // NewDictionaryHandler 创建处理器
 func NewDictionaryHandler() *DictionaryHandler {
 	svc := service.NewDictionaryService()
-	// 启动时加载缓存
-	go svc.LoadCache(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := svc.LoadCache(ctx); err != nil {
+		panic(fmt.Errorf("初始化字典缓存失败: %w", err))
+	}
 	return &DictionaryHandler{svc: svc}
 }
 
@@ -38,7 +42,7 @@ func (h *DictionaryHandler) ListDictionaries(c *gin.Context) {
 
 	data, err := h.svc.GetAll(c.Request.Context(), types, activeOnly)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询字典失败: " + err.Error()})
+		respondInternalError(c, "DICT", "查询字典失败", err)
 		return
 	}
 
@@ -48,8 +52,8 @@ func (h *DictionaryHandler) ListDictionaries(c *gin.Context) {
 		totalItems += len(items)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": data,
+	response.Success(c, gin.H{
+		"items": data,
 		"meta": gin.H{
 			"types_count": len(data),
 			"items_count": totalItems,
@@ -62,12 +66,12 @@ func (h *DictionaryHandler) ListDictionaries(c *gin.Context) {
 func (h *DictionaryHandler) ListTypes(c *gin.Context) {
 	types, err := h.svc.GetTypes(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询类型列表失败: " + err.Error()})
+		respondInternalError(c, "DICT", "查询字典类型失败", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data":  types,
+	response.Success(c, gin.H{
+		"items": types,
 		"total": len(types),
 	})
 }
@@ -77,12 +81,12 @@ func (h *DictionaryHandler) ListTypes(c *gin.Context) {
 func (h *DictionaryHandler) CreateDictionary(c *gin.Context) {
 	var item model.Dictionary
 	if err := c.ShouldBindJSON(&item); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求: " + err.Error()})
+		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return
 	}
 
 	if item.DictType == "" || item.DictKey == "" || item.Label == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "dict_type, dict_key, label 为必填项"})
+		response.BadRequest(c, "dict_type, dict_key, label 为必填项")
 		return
 	}
 
@@ -93,11 +97,11 @@ func (h *DictionaryHandler) CreateDictionary(c *gin.Context) {
 	item.IsSystem = false
 
 	if err := h.svc.Create(c.Request.Context(), &item); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建失败: " + err.Error()})
+		respondInternalError(c, "DICT", "创建字典项失败", err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": item})
+	response.Created(c, item)
 }
 
 // UpdateDictionary 更新字典项
@@ -105,19 +109,19 @@ func (h *DictionaryHandler) CreateDictionary(c *gin.Context) {
 func (h *DictionaryHandler) UpdateDictionary(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 ID"})
+		response.BadRequest(c, "无效的 ID")
 		return
 	}
 
 	existing, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "字典项不存在"})
+		response.NotFound(c, "字典项不存在")
 		return
 	}
 
 	var input model.Dictionary
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求: " + err.Error()})
+		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return
 	}
 
@@ -135,11 +139,11 @@ func (h *DictionaryHandler) UpdateDictionary(c *gin.Context) {
 	existing.UpdatedAt = time.Now()
 
 	if err := h.svc.Update(c.Request.Context(), existing); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新失败: " + err.Error()})
+		respondInternalError(c, "DICT", "更新字典项失败", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": existing})
+	response.Success(c, existing)
 }
 
 // DeleteDictionary 删除字典项
@@ -147,27 +151,27 @@ func (h *DictionaryHandler) UpdateDictionary(c *gin.Context) {
 func (h *DictionaryHandler) DeleteDictionary(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 ID"})
+		response.BadRequest(c, "无效的 ID")
 		return
 	}
 
 	existing, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "字典项不存在"})
+		response.NotFound(c, "字典项不存在")
 		return
 	}
 
 	if existing.IsSystem {
-		c.JSON(http.StatusForbidden, gin.H{"error": "系统内置字典项不可删除"})
+		response.Forbidden(c, "系统内置字典项不可删除")
 		return
 	}
 
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败: " + err.Error()})
+		respondInternalError(c, "DICT", "删除字典项失败", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	response.Message(c, "删除成功")
 }
 
 // GetDictionaryService 返回服务实例（供路由外部调用 Seed）

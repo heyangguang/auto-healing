@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
@@ -122,92 +121,77 @@ func (p *VaultProvider) GetSecret(ctx context.Context, query model.SecretQuery) 
 	if err != nil {
 		return nil, err
 	}
-
-	// 根据 query_key 拼接路径（智能处理末尾斜杠）
-	secretPath := strings.TrimSuffix(p.config.SecretPath, "/")
-	switch p.config.QueryKey {
-	case "ip":
-		secretPath = secretPath + "/" + query.IPAddress
-	case "hostname":
-		secretPath = secretPath + "/" + query.Hostname
-		// 如果没有配置 query_key，使用原始路径（所有主机共用）
+	req, err := p.newSecretRequest(ctx, query, token)
+	if err != nil {
+		return nil, err
 	}
+	resp, err := p.executeSecretRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	data, err := p.decodeSecretResponse(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return buildMappedSecret(p.authType, p.config.FieldMapping, func(path string) string {
+		return extractStringPath(data, path)
+	})
+}
 
-	url := fmt.Sprintf("%s/v1/%s", p.config.Address, secretPath)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+func (p *VaultProvider) newSecretRequest(ctx context.Context, query model.SecretQuery, token string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", p.secretURL(query), nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
-
 	req.Header.Set("X-Vault-Token", token)
 	if p.config.Namespace != "" {
 		req.Header.Set("X-Vault-Namespace", p.config.Namespace)
 	}
+	return req, nil
+}
 
+func (p *VaultProvider) secretURL(query model.SecretQuery) string {
+	path := p.config.SecretPath
+	if len(path) > 0 && path[len(path)-1] == '/' {
+		path = path[:len(path)-1]
+	}
+	switch p.config.QueryKey {
+	case "ip":
+		path += "/" + query.IPAddress
+	case "hostname":
+		path += "/" + query.Hostname
+	}
+	return fmt.Sprintf("%s/v1/%s", p.config.Address, path)
+}
+
+func (p *VaultProvider) executeSecretRequest(req *http.Request) (*http.Response, error) {
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("请求 Vault 失败: %w", err)
 	}
-	defer resp.Body.Close()
-
 	if resp.StatusCode == http.StatusNotFound {
+		resp.Body.Close()
 		return nil, ErrSecretNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		return nil, fmt.Errorf("Vault 返回错误: HTTP %d, %s", resp.StatusCode, string(body))
 	}
+	return resp, nil
+}
 
-	// 解析响应
+func (p *VaultProvider) decodeSecretResponse(body io.Reader) (map[string]interface{}, error) {
 	var result struct {
 		Data struct {
 			Data map[string]interface{} `json:"data"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("解析 Vault 响应失败: %w", err)
 	}
-
-	data := result.Data.Data
-
-	// 提取密钥信息，使用字段映射
-	secret := &model.Secret{
-		AuthType: p.authType,
-		Username: "root",
-	}
-
-	// 提取 username（支持路径，如 "user.name"）
-	usernamePath := p.config.FieldMapping.Username
-	if usernamePath == "" {
-		usernamePath = "username"
-	}
-	if v := p.extractField(data, usernamePath); v != "" {
-		secret.Username = v
-	}
-
-	// 根据 auth_type 提取对应字段
-	switch p.authType {
-	case "ssh_key":
-		keyPath := p.config.FieldMapping.PrivateKey
-		if keyPath == "" {
-			keyPath = "private_key"
-		}
-		secret.PrivateKey = p.extractField(data, keyPath)
-	case "password":
-		pwdPath := p.config.FieldMapping.Password
-		if pwdPath == "" {
-			pwdPath = "password"
-		}
-		secret.Password = p.extractField(data, pwdPath)
-	}
-
-	// 检查是否获取到有效凭据
-	if secret.PrivateKey == "" && secret.Password == "" {
-		return nil, ErrSecretNotFound
-	}
-
-	return secret, nil
+	return result.Data.Data, nil
 }
 
 // TestConnection 测试连接
@@ -247,21 +231,5 @@ func (p *VaultProvider) Name() string {
 
 // extractField 从 data 中提取字段（支持点分隔路径）
 func (p *VaultProvider) extractField(data map[string]interface{}, path string) string {
-	parts := strings.Split(path, ".")
-	current := data
-
-	for i, part := range parts {
-		if i == len(parts)-1 {
-			if v, ok := current[part].(string); ok {
-				return v
-			}
-			return ""
-		}
-		if next, ok := current[part].(map[string]interface{}); ok {
-			current = next
-		} else {
-			return ""
-		}
-	}
-	return ""
+	return extractStringPath(data, path)
 }

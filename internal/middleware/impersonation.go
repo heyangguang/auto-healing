@@ -2,9 +2,11 @@ package middleware
 
 import (
 	"context"
-	"net/http"
 	"sync"
+	"time"
 
+	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -17,29 +19,64 @@ const (
 	ImpersonationTenantIDKey  = "impersonation_tenant_id"
 )
 
+const (
+	ErrorCodeImpersonationPlatformOnly    = "IMPERSONATION_PLATFORM_ONLY"
+	ErrorCodeImpersonationRequestMissing  = "IMPERSONATION_REQUEST_ID_MISSING"
+	ErrorCodeImpersonationRequestInvalid  = "IMPERSONATION_REQUEST_ID_INVALID"
+	ErrorCodeImpersonationRequestNotFound = "IMPERSONATION_REQUEST_NOT_FOUND"
+	ErrorCodeImpersonationUserMismatch    = "IMPERSONATION_USER_MISMATCH"
+	ErrorCodeImpersonationSessionInvalid  = "IMPERSONATION_SESSION_INVALID"
+	ErrorCodeImpersonationTenantMismatch  = "IMPERSONATION_TENANT_MISMATCH"
+	ErrorCodeImpersonationPermsLoadFailed = "IMPERSONATION_PERMS_LOAD_FAILED"
+)
+
 // 缓存 impersonation_accessor 角色的权限列表（进程级缓存）
 var (
-	impersonationPermsOnce sync.Once
-	impersonationPerms     []string
+	impersonationPermsMu       sync.RWMutex
+	impersonationPerms         []string
+	impersonationPermsLoadedAt time.Time
+	impersonationPermsTTL      = 30 * time.Second
+	impersonationPermsLoader   = loadImpersonationPermissionsFromDB
 )
 
 // loadImpersonationPermissions 从数据库加载 impersonation_accessor 角色的权限
-func loadImpersonationPermissions() []string {
-	impersonationPermsOnce.Do(func() {
-		roleRepo := repository.NewRoleRepository()
-		role, err := roleRepo.GetByName(context.Background(), "impersonation_accessor")
-		if err != nil || role == nil {
-			// 回退：使用空权限（安全第一，拒绝所有操作）
-			impersonationPerms = []string{}
-			return
-		}
-		codes := make([]string, len(role.Permissions))
-		for i, p := range role.Permissions {
-			codes[i] = p.Code
-		}
-		impersonationPerms = codes
-	})
-	return impersonationPerms
+func loadImpersonationPermissions(ctx context.Context) ([]string, error) {
+	now := time.Now()
+
+	impersonationPermsMu.RLock()
+	if len(impersonationPerms) > 0 && now.Sub(impersonationPermsLoadedAt) < impersonationPermsTTL {
+		cached := append([]string(nil), impersonationPerms...)
+		impersonationPermsMu.RUnlock()
+		return cached, nil
+	}
+	impersonationPermsMu.RUnlock()
+
+	perms, err := impersonationPermsLoader(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	impersonationPermsMu.Lock()
+	impersonationPerms = append([]string(nil), perms...)
+	impersonationPermsLoadedAt = now
+	impersonationPermsMu.Unlock()
+
+	return append([]string(nil), perms...), nil
+}
+
+func loadImpersonationPermissionsFromDB(ctx context.Context) ([]string, error) {
+	roleRepo := repository.NewRoleRepository()
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	role, err := roleRepo.GetByName(ctx, "impersonation_accessor")
+	if err != nil {
+		return nil, err
+	}
+	codes := make([]string, len(role.Permissions))
+	for i, p := range role.Permissions {
+		codes[i] = p.Code
+	}
+	return codes, nil
 }
 
 // ImpersonationMiddleware 验证 Impersonation 会话
@@ -53,94 +90,90 @@ func ImpersonationMiddleware() gin.HandlerFunc {
 	repo := repository.NewImpersonationRepository()
 
 	return func(c *gin.Context) {
-		// 默认不是 Impersonation
 		c.Set(ImpersonationKey, false)
-
-		impersonating := c.GetHeader("X-Impersonation")
-		if impersonating != "true" {
+		if !requestIsImpersonating(c) {
 			c.Next()
 			return
 		}
-
-		// 只有平台管理员才能 Impersonate
 		if !IsPlatformAdmin(c) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"code":    40300,
-				"message": "只有平台管理员才能使用 Impersonation",
-			})
+			abortForbidden(c, "只有平台管理员才能使用 Impersonation", ErrorCodeImpersonationPlatformOnly)
 			return
 		}
-
-		// 获取申请单 ID
-		requestIDStr := c.GetHeader("X-Impersonation-Request-ID")
-		if requestIDStr == "" {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-				"code":    40000,
-				"message": "Impersonation 缺少 X-Impersonation-Request-ID",
-			})
+		requestID, ok := parseImpersonationRequestID(c)
+		if !ok {
 			return
 		}
-
-		requestID, err := uuid.Parse(requestIDStr)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-				"code":    40000,
-				"message": "无效的 X-Impersonation-Request-ID",
-			})
+		req, ok := loadActiveImpersonationRequest(c, repo, requestID)
+		if !ok {
 			return
 		}
-
-		// 验证申请单
-		req, err := repo.GetByID(c.Request.Context(), requestID)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"code":    40300,
-				"message": "Impersonation 申请不存在",
-			})
-			return
+			if !applyImpersonationContext(c, requestID, req.TenantID) {
+				return
+			}
+			c.Next()
 		}
-
-		// 验证申请人是当前用户
-		userID, _ := uuid.Parse(GetUserID(c))
-		if req.RequesterID != userID {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"code":    40300,
-				"message": "Impersonation 申请与当前用户不匹配",
-			})
-			return
-		}
-
-		// 验证会话是否有效
-		if !req.IsSessionValid() {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"code":    40300,
-				"message": "Impersonation 会话已过期或未激活",
-			})
-			return
-		}
-
-		// 验证请求的 X-Tenant-ID 与申请的目标租户一致
-		tenantIDStr := c.GetHeader("X-Tenant-ID")
-		if tenantIDStr != "" && tenantIDStr != req.TenantID.String() {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"code":    40300,
-				"message": "Impersonation 请求的租户与申请不匹配",
-			})
-			return
-		}
-
-		// 设置 Impersonation 标记到上下文
-		c.Set(ImpersonationKey, true)
-		c.Set(ImpersonationRequestIDKey, requestID.String())
-		c.Set(ImpersonationTenantIDKey, req.TenantID.String())
-
-		// 🔒 关键：用 impersonation_accessor 角色的权限覆盖 JWT 中的 * 通配符
-		// 这样提权用户就无法审批自己的请求（因为没有 tenant:impersonation:approve 权限）
-		perms := loadImpersonationPermissions()
-		c.Set(PermissionsKey, perms)
-
-		c.Next()
 	}
+
+func requestIsImpersonating(c *gin.Context) bool {
+	return c.GetHeader("X-Impersonation") == "true"
+}
+
+func parseImpersonationRequestID(c *gin.Context) (uuid.UUID, bool) {
+	requestIDStr := c.GetHeader("X-Impersonation-Request-ID")
+	if requestIDStr == "" {
+		abortBadRequest(c, "Impersonation 缺少 X-Impersonation-Request-ID", ErrorCodeImpersonationRequestMissing)
+		return uuid.Nil, false
+	}
+	requestID, err := uuid.Parse(requestIDStr)
+	if err != nil {
+		abortBadRequest(c, "无效的 X-Impersonation-Request-ID", ErrorCodeImpersonationRequestInvalid)
+		return uuid.Nil, false
+	}
+	return requestID, true
+}
+
+func loadActiveImpersonationRequest(c *gin.Context, repo *repository.ImpersonationRepository, requestID uuid.UUID) (*model.ImpersonationRequest, bool) {
+	req, err := repo.GetByID(c.Request.Context(), requestID)
+	if err != nil {
+		abortForbidden(c, "Impersonation 申请不存在", ErrorCodeImpersonationRequestNotFound)
+		return nil, false
+	}
+	if !validateImpersonationRequest(c, req) {
+		return nil, false
+	}
+	return req, true
+}
+
+func validateImpersonationRequest(c *gin.Context, req *model.ImpersonationRequest) bool {
+	userID, _ := uuid.Parse(GetUserID(c))
+	if req.RequesterID != userID {
+		abortForbidden(c, "Impersonation 申请与当前用户不匹配", ErrorCodeImpersonationUserMismatch)
+		return false
+	}
+	if !req.IsSessionValid() {
+		abortForbidden(c, "Impersonation 会话已过期或未激活", ErrorCodeImpersonationSessionInvalid)
+		return false
+	}
+	tenantIDStr := c.GetHeader("X-Tenant-ID")
+	if tenantIDStr != "" && tenantIDStr != req.TenantID.String() {
+		abortForbidden(c, "Impersonation 请求的租户与申请不匹配", ErrorCodeImpersonationTenantMismatch)
+		return false
+	}
+	return true
+}
+
+func applyImpersonationContext(c *gin.Context, requestID, tenantID uuid.UUID) bool {
+	perms, err := loadImpersonationPermissions(c.Request.Context())
+	if err != nil {
+		logger.Auth("IMPERSONATION").Error("加载 impersonation 权限失败: request=%s err=%v", requestID, err)
+		abortInternalError(c, "加载 Impersonation 权限失败", ErrorCodeImpersonationPermsLoadFailed)
+		return false
+	}
+	c.Set(ImpersonationKey, true)
+	c.Set(ImpersonationRequestIDKey, requestID.String())
+	c.Set(ImpersonationTenantIDKey, tenantID.String())
+	c.Set(PermissionsKey, perms)
+	return true
 }
 
 // IsImpersonating 检查当前请求是否为 Impersonation

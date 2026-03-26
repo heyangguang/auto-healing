@@ -10,7 +10,6 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // CommandBlacklistRepository 高危指令黑名单仓库
@@ -46,15 +45,18 @@ func (r *CommandBlacklistRepository) Create(ctx context.Context, rule *model.Com
 // GetByID 获取规则
 // 系统规则（tenant_id=NULL）对所有租户可见；租户规则仅对本租户可见
 func (r *CommandBlacklistRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.CommandBlacklist, error) {
+	tenantID, err := RequireTenantID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var rule model.CommandBlacklist
-	err := r.db.WithContext(ctx).
-		Where("id = ? AND (tenant_id = ? OR tenant_id IS NULL)", id, TenantIDFromContext(ctx)).
+	err = r.db.WithContext(ctx).
+		Where("id = ? AND (tenant_id = ? OR tenant_id IS NULL)", id, tenantID).
 		First(&rule).Error
 	if err != nil {
 		return nil, fmt.Errorf("黑名单规则不存在: %w", err)
 	}
 	if rule.IsSystem || rule.TenantID == nil {
-		tenantID := TenantIDFromContext(ctx)
 		rules := r.applyOverrides(ctx, tenantID, []model.CommandBlacklist{rule})
 		if len(rules) > 0 {
 			rule = rules[0]
@@ -79,12 +81,24 @@ type CommandBlacklistListOptions struct {
 // List 列表查询
 // 返回：租户自有规则 + 系统规则（tenant_id=NULL），并将系统规则的 is_active 替换为租户的 override 值
 func (r *CommandBlacklistRepository) List(ctx context.Context, opts *CommandBlacklistListOptions) ([]model.CommandBlacklist, int64, error) {
-	tenantID := TenantIDFromContext(ctx)
+	tenantID, err := RequireTenantID(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	var rules []model.CommandBlacklist
+	if err := applyCommandBlacklistListFilters(r.db.WithContext(ctx).Model(&model.CommandBlacklist{}), tenantID, opts).
+		Order("is_system DESC, severity ASC, created_at DESC").
+		Find(&rules).Error; err != nil {
+		return nil, 0, err
+	}
+	rules = r.applyOverrides(ctx, tenantID, rules)
+	rules = applyCommandBlacklistActiveFilter(rules, opts.IsActive)
+	total := int64(len(rules))
+	return paginateCommandBlacklistRules(rules, total, opts), total, nil
+}
 
-	// 1. 查询所有相关规则（租户自有 OR 系统规则）
-	query := r.db.WithContext(ctx).Model(&model.CommandBlacklist{}).
-		Where("tenant_id = ? OR tenant_id IS NULL", tenantID)
-
+func applyCommandBlacklistListFilters(query *gorm.DB, tenantID uuid.UUID, opts *CommandBlacklistListOptions) *gorm.DB {
+	query = query.Where("tenant_id = ? OR tenant_id IS NULL", tenantID)
 	if opts.Name != "" {
 		query = query.Where("name ILIKE ?", "%"+opts.Name+"%")
 	}
@@ -103,44 +117,40 @@ func (r *CommandBlacklistRepository) List(ctx context.Context, opts *CommandBlac
 	if opts.PatternExact != "" {
 		query = query.Where("pattern = ?", opts.PatternExact)
 	}
+	return query
+}
 
-	var rules []model.CommandBlacklist
-	if err := query.Order("is_system DESC, severity ASC, created_at DESC").Find(&rules).Error; err != nil {
-		return nil, 0, err
+func applyCommandBlacklistActiveFilter(rules []model.CommandBlacklist, isActive *bool) []model.CommandBlacklist {
+	if isActive == nil {
+		return rules
 	}
-
-	// 2. 加载该租户对系统规则的 overrides，合并 is_active
-	rules = r.applyOverrides(ctx, tenantID, rules)
-
-	// 3. 如果 IsActive 过滤，在内存中过滤（因为 is_active 已被 override 替换）
-	if opts.IsActive != nil {
-		filtered := make([]model.CommandBlacklist, 0, len(rules))
-		for _, rule := range rules {
-			if rule.IsActive == *opts.IsActive {
-				filtered = append(filtered, rule)
-			}
+	filtered := make([]model.CommandBlacklist, 0, len(rules))
+	for _, rule := range rules {
+		if rule.IsActive == *isActive {
+			filtered = append(filtered, rule)
 		}
-		rules = filtered
 	}
+	return filtered
+}
 
-	total := int64(len(rules))
+func paginateCommandBlacklistRules(rules []model.CommandBlacklist, total int64, opts *CommandBlacklistListOptions) []model.CommandBlacklist {
 	if opts.PageSize <= 0 {
-		return rules, total, nil
+		return rules
 	}
 	offset := (opts.Page - 1) * opts.PageSize
-	if offset >= len(rules) {
-		return []model.CommandBlacklist{}, total, nil
+	if offset >= int(total) {
+		return []model.CommandBlacklist{}
 	}
 	end := offset + opts.PageSize
-	if end > len(rules) {
-		end = len(rules)
+	if end > int(total) {
+		end = int(total)
 	}
-	return rules[offset:end], total, nil
+	return rules[offset:end]
 }
 
 // Update 更新租户自有规则
 func (r *CommandBlacklistRepository) Update(ctx context.Context, rule *model.CommandBlacklist) error {
-	if err := r.db.WithContext(ctx).Save(rule).Error; err != nil {
+	if err := UpdateTenantScopedModel(r.db, ctx, rule.ID, rule); err != nil {
 		return fmt.Errorf("更新黑名单规则失败: %w", err)
 	}
 	r.invalidateCache()
@@ -149,7 +159,10 @@ func (r *CommandBlacklistRepository) Update(ctx context.Context, rule *model.Com
 
 // Delete 删除租户自有规则（系统规则不可删除，由 service 层校验）
 func (r *CommandBlacklistRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	tenantID := TenantIDFromContext(ctx)
+	tenantID, err := RequireTenantID(ctx)
+	if err != nil {
+		return err
+	}
 	if err := r.db.WithContext(ctx).
 		Where("id = ? AND tenant_id = ?", id, tenantID).
 		Delete(&model.CommandBlacklist{}).Error; err != nil {
@@ -157,145 +170,4 @@ func (r *CommandBlacklistRepository) Delete(ctx context.Context, id uuid.UUID) e
 	}
 	r.invalidateCache()
 	return nil
-}
-
-// BatchToggle 批量启用/禁用租户自有规则
-func (r *CommandBlacklistRepository) BatchToggle(ctx context.Context, ids []uuid.UUID, isActive bool) (int64, error) {
-	tenantID := TenantIDFromContext(ctx)
-
-	// 分为系统规则和租户规则分别处理
-	var systemIDs, tenantIDs []uuid.UUID
-	var rules []model.CommandBlacklist
-	r.db.WithContext(ctx).Where("id IN ? AND (tenant_id = ? OR tenant_id IS NULL)", ids, tenantID).Find(&rules)
-	for _, rule := range rules {
-		if rule.IsSystem || rule.TenantID == nil {
-			systemIDs = append(systemIDs, rule.ID)
-		} else {
-			tenantIDs = append(tenantIDs, rule.ID)
-		}
-	}
-
-	var affected int64
-
-	// 租户自有规则：直接更新
-	if len(tenantIDs) > 0 {
-		result := r.db.WithContext(ctx).Model(&model.CommandBlacklist{}).
-			Where("id IN ?", tenantIDs).
-			Update("is_active", isActive)
-		if result.Error != nil {
-			return 0, result.Error
-		}
-		affected += result.RowsAffected
-	}
-
-	// 系统规则：upsert override
-	for _, ruleID := range systemIDs {
-		if err := r.upsertOverride(ctx, tenantID, ruleID, isActive); err != nil {
-			return affected, err
-		}
-		affected++
-	}
-
-	r.invalidateCache()
-	return affected, nil
-}
-
-// ToggleSystemRule 为当前租户 upsert 系统规则的 override
-func (r *CommandBlacklistRepository) ToggleSystemRule(ctx context.Context, ruleID uuid.UUID, isActive bool) error {
-	tenantID := TenantIDFromContext(ctx)
-	if err := r.upsertOverride(ctx, tenantID, ruleID, isActive); err != nil {
-		return err
-	}
-	r.invalidateCache()
-	return nil
-}
-
-// upsertOverride 内部方法：INSERT ... ON CONFLICT DO UPDATE
-func (r *CommandBlacklistRepository) upsertOverride(ctx context.Context, tenantID, ruleID uuid.UUID, isActive bool) error {
-	override := model.TenantBlacklistOverride{
-		TenantID:  tenantID,
-		RuleID:    ruleID,
-		IsActive:  isActive,
-		UpdatedAt: time.Now(),
-	}
-	return r.db.WithContext(ctx).
-		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "tenant_id"}, {Name: "rule_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"is_active", "updated_at"}),
-		}).
-		Create(&override).Error
-}
-
-// GetActiveRules 获取当前租户所有启用的规则（用于 Playbook 扫描，带缓存）
-// 包含：租户自有启用规则 + 系统规则中该租户 override 为 true 的
-func (r *CommandBlacklistRepository) GetActiveRules(ctx context.Context) ([]model.CommandBlacklist, error) {
-	tenantID := TenantIDFromContext(ctx)
-
-	// 1. 租户自有启用规则
-	var tenantRules []model.CommandBlacklist
-	if err := r.db.WithContext(ctx).
-		Where("tenant_id = ? AND is_active = true", tenantID).
-		Find(&tenantRules).Error; err != nil {
-		return nil, fmt.Errorf("查询租户启用规则失败: %w", err)
-	}
-
-	// 2. 系统规则中该租户 override 为 true 的
-	var systemRules []model.CommandBlacklist
-	if err := r.db.WithContext(ctx).
-		Joins("JOIN tenant_blacklist_overrides tbo ON tbo.rule_id = command_blacklist.id "+
-			"AND tbo.tenant_id = ? AND tbo.is_active = true", tenantID).
-		Where("command_blacklist.tenant_id IS NULL").
-		Find(&systemRules).Error; err != nil {
-		return nil, fmt.Errorf("查询系统启用规则失败: %w", err)
-	}
-
-	rules := append(tenantRules, systemRules...)
-
-	return rules, nil
-}
-
-// applyOverrides 将系统规则的 is_active 替换为该租户的 override 值（list 展示用）
-func (r *CommandBlacklistRepository) applyOverrides(ctx context.Context, tenantID uuid.UUID, rules []model.CommandBlacklist) []model.CommandBlacklist {
-	// 收集系统规则 ID
-	var systemRuleIDs []uuid.UUID
-	for _, rule := range rules {
-		if rule.TenantID == nil {
-			systemRuleIDs = append(systemRuleIDs, rule.ID)
-		}
-	}
-	if len(systemRuleIDs) == 0 {
-		return rules
-	}
-
-	// 查询该租户对这些系统规则的 overrides
-	var overrides []model.TenantBlacklistOverride
-	r.db.WithContext(ctx).
-		Where("tenant_id = ? AND rule_id IN ?", tenantID, systemRuleIDs).
-		Find(&overrides)
-
-	overrideMap := make(map[uuid.UUID]bool, len(overrides))
-	overrideExists := make(map[uuid.UUID]bool, len(overrides))
-	for _, o := range overrides {
-		overrideMap[o.RuleID] = o.IsActive
-		overrideExists[o.RuleID] = true
-	}
-
-	// 合并：有 override 用 override 值，否则用规则自身默认值
-	for i := range rules {
-		if rules[i].TenantID == nil {
-			if exists := overrideExists[rules[i].ID]; exists {
-				rules[i].IsActive = overrideMap[rules[i].ID]
-			}
-			// 没有 override 则保持规则原始的 is_active（默认 false）
-		}
-	}
-	return rules
-}
-
-// invalidateCache 使所有租户缓存失效
-func (r *CommandBlacklistRepository) invalidateCache() {
-	r.mu.Lock()
-	r.cache = make(map[string][]model.CommandBlacklist)
-	r.cacheTime = make(map[string]time.Time)
-	r.mu.Unlock()
 }

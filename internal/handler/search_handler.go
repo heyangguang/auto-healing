@@ -43,7 +43,7 @@ func (h *SearchHandler) GlobalSearch(c *gin.Context) {
 
 	results, totalCount, err := h.repo.GlobalSearch(c.Request.Context(), keyword, limit, buildSearchAllowlist(middleware.GetPermissions(c)))
 	if err != nil {
-		response.InternalError(c, "搜索失败: "+err.Error())
+		respondInternalError(c, "SEARCH", "搜索失败", err)
 		return
 	}
 

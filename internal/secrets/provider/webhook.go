@@ -94,123 +94,93 @@ func (p *WebhookProvider) applyAuth(req *http.Request) {
 
 // GetSecret 获取密钥
 func (p *WebhookProvider) GetSecret(ctx context.Context, query model.SecretQuery) (*model.Secret, error) {
-	// 根据 query_key 拼接 URL（智能处理末尾斜杠）
-	url := strings.TrimSuffix(p.config.URL, "/")
-	switch p.config.QueryKey {
-	case "ip":
-		url = url + "/" + query.IPAddress
-	case "hostname":
-		url = url + "/" + query.Hostname
-		// 如果没有配置 query_key，使用原始 URL（所有主机共用）
+	req, err := p.newSecretRequest(ctx, query)
+	if err != nil {
+		return nil, err
 	}
+	resp, err := p.executeSecretRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
-	req, err := http.NewRequestWithContext(ctx, p.config.Method, url, nil)
+	data, err := p.decodeSecretResponse(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return buildMappedSecret(p.authType, p.config.FieldMapping, func(path string) string {
+		return extractStringPath(data, path)
+	})
+}
+
+func (p *WebhookProvider) newSecretRequest(ctx context.Context, query model.SecretQuery) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, p.config.Method, p.secretURL(query), nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
-
-	// 设置请求头
 	req.Header.Set("Content-Type", "application/json")
-
-	// 应用认证
 	p.applyAuth(req)
+	return req, nil
+}
 
+func (p *WebhookProvider) secretURL(query model.SecretQuery) string {
+	url := strings.TrimSuffix(p.config.URL, "/")
+	switch p.config.QueryKey {
+	case "ip":
+		return url + "/" + query.IPAddress
+	case "hostname":
+		return url + "/" + query.Hostname
+	default:
+		return url
+	}
+}
+
+func (p *WebhookProvider) executeSecretRequest(req *http.Request) (*http.Response, error) {
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Webhook 请求失败: %w", err)
 	}
-	defer resp.Body.Close()
-
 	if resp.StatusCode == http.StatusNotFound {
+		resp.Body.Close()
 		return nil, ErrSecretNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Webhook 返回错误: HTTP %d, %s", resp.StatusCode, string(respBody))
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return nil, fmt.Errorf("Webhook 返回错误: HTTP %d, %s", resp.StatusCode, string(body))
 	}
+	return resp, nil
+}
 
-	// 解析响应
+func (p *WebhookProvider) decodeSecretResponse(body io.Reader) (map[string]interface{}, error) {
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("解析 Webhook 响应失败: %w", err)
 	}
-
-	// 根据配置的 response_data_path 提取数据根节点
-	data := result
-	if p.config.ResponseDataPath != "" {
-		parts := strings.Split(p.config.ResponseDataPath, ".")
-		for _, part := range parts {
-			if d, ok := data[part].(map[string]interface{}); ok {
-				data = d
-			} else {
-				return nil, ErrSecretNotFound
-			}
+	if p.config.ResponseDataPath == "" {
+		if data, ok := result["data"].(map[string]interface{}); ok {
+			return data, nil
 		}
-	} else {
-		// 兼容旧逻辑：自动检测 data 字段
-		if d, ok := result["data"].(map[string]interface{}); ok {
-			data = d
+		return result, nil
+	}
+	return resolveWebhookResponseData(result, p.config.ResponseDataPath)
+}
+
+func resolveWebhookResponseData(result map[string]interface{}, path string) (map[string]interface{}, error) {
+	current := result
+	for _, part := range strings.Split(path, ".") {
+		next, ok := current[part].(map[string]interface{})
+		if !ok {
+			return nil, ErrSecretNotFound
 		}
+		current = next
 	}
-
-	// 提取密钥信息，使用字段映射
-	secret := &model.Secret{
-		AuthType: p.authType,
-		Username: "root",
-	}
-
-	// 提取 username
-	usernamePath := p.config.FieldMapping.Username
-	if usernamePath == "" {
-		usernamePath = "username"
-	}
-	if v := p.extractField(data, usernamePath); v != "" {
-		secret.Username = v
-	}
-
-	// 根据 auth_type 提取对应字段
-	switch p.authType {
-	case "ssh_key":
-		keyPath := p.config.FieldMapping.PrivateKey
-		if keyPath == "" {
-			keyPath = "private_key"
-		}
-		secret.PrivateKey = p.extractField(data, keyPath)
-	case "password":
-		pwdPath := p.config.FieldMapping.Password
-		if pwdPath == "" {
-			pwdPath = "password"
-		}
-		secret.Password = p.extractField(data, pwdPath)
-	}
-
-	// 检查是否获取到有效凭据
-	if secret.PrivateKey == "" && secret.Password == "" {
-		return nil, ErrSecretNotFound
-	}
-
-	return secret, nil
+	return current, nil
 }
 
 // extractField 从 data 中提取字段（支持点分隔路径）
 func (p *WebhookProvider) extractField(data map[string]interface{}, path string) string {
-	parts := strings.Split(path, ".")
-	current := data
-
-	for i, part := range parts {
-		if i == len(parts)-1 {
-			if v, ok := current[part].(string); ok {
-				return v
-			}
-			return ""
-		}
-		if next, ok := current[part].(map[string]interface{}); ok {
-			current = next
-		} else {
-			return ""
-		}
-	}
-	return ""
+	return extractStringPath(data, path)
 }
 
 // TestConnection 测试连接

@@ -8,12 +8,14 @@ import (
 
 // Response 统一响应结构
 type Response struct {
-	Code     int    `json:"code"`
-	Message  string `json:"message"`
-	Data     any    `json:"data,omitempty"`
-	Total    *int64 `json:"total,omitempty"`
-	Page     *int   `json:"page,omitempty"`
-	PageSize *int   `json:"page_size,omitempty"`
+	Code      int    `json:"code"`
+	Message   string `json:"message"`
+	ErrorCode string `json:"error_code,omitempty"`
+	Details   any    `json:"details,omitempty"`
+	Data      any    `json:"data,omitempty"`
+	Total     *int64 `json:"total,omitempty"`
+	Page      *int   `json:"page,omitempty"`
+	PageSize  *int   `json:"page_size,omitempty"`
 }
 
 // 错误码定义

@@ -38,11 +38,11 @@ func ParseStats(output string) *AnsibleStats {
 		matches := recapLineRegex.FindStringSubmatch(line)
 		if len(matches) >= 6 {
 			host := matches[1]
-			ok, _ := strconv.Atoi(matches[2])
-			changed, _ := strconv.Atoi(matches[3])
-			unreachable, _ := strconv.Atoi(matches[4])
-			failed, _ := strconv.Atoi(matches[5])
-			skipped, _ := strconv.Atoi(matches[6])
+			ok := parseMatchedInt(matches, 2)
+			changed := parseMatchedInt(matches, 3)
+			unreachable := parseMatchedInt(matches, 4)
+			failed := parseMatchedInt(matches, 5)
+			skipped := parseMatchedInt(matches, 6)
 
 			stats.Ok += ok
 			stats.Changed += changed
@@ -51,12 +51,10 @@ func ParseStats(output string) *AnsibleStats {
 			stats.Skipped += skipped
 
 			if len(matches) >= 8 && matches[7] != "" {
-				rescued, _ := strconv.Atoi(matches[7])
-				stats.Rescued += rescued
+				stats.Rescued += parseMatchedInt(matches, 7)
 			}
 			if len(matches) >= 9 && matches[8] != "" {
-				ignored, _ := strconv.Atoi(matches[8])
-				stats.Ignored += ignored
+				stats.Ignored += parseMatchedInt(matches, 8)
 			}
 
 			// 记录每个主机的 failed 数
@@ -65,6 +63,17 @@ func ParseStats(output string) *AnsibleStats {
 	}
 
 	return stats
+}
+
+func parseMatchedInt(matches []string, index int) int {
+	if index >= len(matches) || matches[index] == "" {
+		return 0
+	}
+	value, err := strconv.Atoi(matches[index])
+	if err != nil {
+		return 0
+	}
+	return value
 }
 
 // ParseTaskOutput 解析任务级输出 (可选, 用于详细日志)

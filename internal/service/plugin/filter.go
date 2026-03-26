@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/company/auto-healing/internal/model"
@@ -96,56 +97,49 @@ func evaluateConditionWithReason(cond *FilterCondition, data map[string]interfac
 
 // evaluateRuleWithReason 评估单个规则并返回原因
 func evaluateRuleWithReason(field, operator string, value interface{}, data map[string]interface{}) (bool, string) {
+	fieldStr := fieldString(data, field)
+	valueStr := toString(value)
+	return evaluateNormalizedRule(field, strings.ToLower(operator), value, fieldStr, valueStr)
+}
+
+func fieldString(data map[string]interface{}, field string) string {
 	fieldValue, ok := data[field]
 	if !ok {
-		fieldValue = "" // 字段不存在视为空
+		fieldValue = ""
+	}
+	return toString(fieldValue)
+}
+
+func evaluateNormalizedRule(field, operator string, value interface{}, fieldStr, valueStr string) (bool, string) {
+	makeReason := func() string {
+		return fmt.Sprintf("%s=%s 不满足 %s %s", field, fieldStr, operator, valueStr)
 	}
 
-	fieldStr := toString(fieldValue)
-	valueStr := toString(value)
-
-	// 生成未通过时的原因
-	makeReason := func(op string) string {
-		return fmt.Sprintf("%s=%s 不满足 %s %s", field, fieldStr, op, valueStr)
-	}
-
-	switch strings.ToLower(operator) {
+	switch operator {
 	case "equals":
 		if fieldStr == valueStr {
 			return true, ""
 		}
-		return false, makeReason("equals")
+		return false, makeReason()
 	case "not_equals":
 		if fieldStr != valueStr {
 			return true, ""
 		}
-		return false, makeReason("not_equals")
+		return false, makeReason()
 	case "contains":
-		if strings.Contains(strings.ToLower(fieldStr), strings.ToLower(valueStr)) {
-			return true, ""
-		}
-		return false, makeReason("contains")
+		return evaluateContains(fieldStr, valueStr, true, makeReason)
 	case "not_contains":
-		if !strings.Contains(strings.ToLower(fieldStr), strings.ToLower(valueStr)) {
-			return true, ""
-		}
-		return false, makeReason("not_contains")
+		return evaluateContains(fieldStr, valueStr, false, makeReason)
 	case "starts_with":
-		if strings.HasPrefix(strings.ToLower(fieldStr), strings.ToLower(valueStr)) {
-			return true, ""
-		}
-		return false, makeReason("starts_with")
+		return evaluatePrefix(fieldStr, valueStr, true, makeReason)
 	case "ends_with":
-		if strings.HasSuffix(strings.ToLower(fieldStr), strings.ToLower(valueStr)) {
-			return true, ""
-		}
-		return false, makeReason("ends_with")
+		return evaluatePrefix(fieldStr, valueStr, false, makeReason)
 	case "regex":
 		matched, _ := regexp.MatchString(valueStr, fieldStr)
 		if matched {
 			return true, ""
 		}
-		return false, makeReason("regex")
+		return false, makeReason()
 	case "in":
 		if isInList(fieldStr, value) {
 			return true, ""
@@ -161,6 +155,29 @@ func evaluateRuleWithReason(field, operator string, value interface{}, data map[
 	}
 }
 
+func evaluateContains(fieldStr, valueStr string, shouldContain bool, makeReason func() string) (bool, string) {
+	contains := strings.Contains(strings.ToLower(fieldStr), strings.ToLower(valueStr))
+	if contains == shouldContain {
+		return true, ""
+	}
+	return false, makeReason()
+}
+
+func evaluatePrefix(fieldStr, valueStr string, prefix bool, makeReason func() string) (bool, string) {
+	left := strings.ToLower(fieldStr)
+	right := strings.ToLower(valueStr)
+	var matched bool
+	if prefix {
+		matched = strings.HasPrefix(left, right)
+	} else {
+		matched = strings.HasSuffix(left, right)
+	}
+	if matched {
+		return true, ""
+	}
+	return false, makeReason()
+}
+
 // toString 将任意值转为字符串
 func toString(v interface{}) string {
 	if v == nil {
@@ -170,7 +187,15 @@ func toString(v interface{}) string {
 	case string:
 		return val
 	case float64:
-		return strings.TrimRight(strings.TrimRight(string(rune(int(val))), "0"), ".")
+		return strconv.FormatFloat(val, 'f', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(val), 'f', -1, 32)
+	case int:
+		return strconv.Itoa(val)
+	case int64:
+		return strconv.FormatInt(val, 10)
+	case bool:
+		return strconv.FormatBool(val)
 	default:
 		data, _ := json.Marshal(v)
 		return strings.Trim(string(data), "\"")

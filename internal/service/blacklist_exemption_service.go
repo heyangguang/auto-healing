@@ -48,8 +48,9 @@ func (s *BlacklistExemptionService) Create(ctx context.Context, item *model.Blac
 	item.UpdatedAt = time.Now()
 
 	// 设置租户ID
-	tenantID := repository.TenantIDFromContext(ctx)
-	item.TenantID = &tenantID
+	if err := repository.FillTenantID(ctx, &item.TenantID); err != nil {
+		return err
+	}
 
 	return s.repo.Create(ctx, item)
 }

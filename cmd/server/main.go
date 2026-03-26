@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
@@ -28,141 +31,156 @@ import (
 // @in header
 // @name Authorization
 func main() {
-	// 加载配置
+	cfg := mustLoadConfig()
+	config.SetGlobalConfig(cfg)
+	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	cleanup := initializeInfrastructure(cfg)
+	defer cleanup()
+	defer middleware.Shutdown()
+	runStartupJobs(signalCtx)
+	schedulers := startSchedulers()
+	defer stopSchedulers(schedulers)
+
+	r := newRouter(cfg)
+	defer handler.Cleanup()
+	server := newHTTPServer(cfg, r)
+	logger.Info("启动服务于 %s", server.Addr)
+	if err := runHTTPServer(signalCtx, server, 10*time.Second, logShutdownSignal); err != nil {
+		logger.Error("服务启动失败: %v", err)
+		os.Exit(1)
+	}
+}
+
+func mustLoadConfig() *config.Config {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
-	config.SetGlobalConfig(cfg)
+	return cfg
+}
 
-	// 初始化日志
+func initializeInfrastructure(cfg *config.Config) func() {
 	logger.Init(&cfg.Log)
-	defer logger.Sync()
-
-	// 初始化数据库
 	if err := database.Init(cfg); err != nil {
 		logger.Fatal("数据库初始化失败: %v", err)
 	}
-	defer database.Close()
-
-	// 自动迁移数据库表结构
 	if err := database.AutoMigrate(); err != nil {
 		logger.Fatal("数据库迁移失败: %v", err)
 	}
-
-	// 同步预置权限和角色
-	if err := database.SyncPermissionsAndRoles(); err != nil {
-		logger.Error("权限种子同步失败: %v", err)
-	}
-
-	// 插入站内信种子数据
-	if err := database.SeedSiteMessages(); err != nil {
-		logger.Error("站内信种子数据插入失败: %v", err)
-	}
-
-	// 同步字典 Seed 数据
-	dictSvc := service.NewDictionaryService()
-	if err := dictSvc.SeedDictionaries(context.Background()); err != nil {
-		logger.Error("字典种子数据同步失败: %v", err)
-	}
-
-	// 同步高危指令黑名单种子数据
-	if err := database.SeedCommandBlacklist(); err != nil {
-		logger.Error("高危指令黑名单种子数据同步失败: %v", err)
-	}
-
-	// 初始化平台设置默认值（幂等）
-	if err := database.SeedPlatformSettings(); err != nil {
-		logger.Error("平台设置默认值初始化失败: %v", err)
-	}
-
-	// 清理过期站内信
-	siteMessageRepo := repository.NewSiteMessageRepository()
-	if _, err := siteMessageRepo.CleanExpired(context.Background()); err != nil {
-		logger.Error("站内信过期清理失败: %v", err)
-	}
-
-	// 初始化 Redis
 	if err := database.InitRedis(&cfg.Redis); err != nil {
 		logger.Fatal("Redis 初始化失败: %v", err)
 	}
-	defer database.CloseRedis()
+	return func() {
+		database.CloseRedis()
+		database.Close()
+		logger.Sync()
+	}
+}
 
-	// 启动插件同步调度器
-	sched := scheduler.NewScheduler()
-	sched.Start()
-	defer sched.Stop()
+func runStartupJobs(ctx context.Context) {
+	runSeedJob("权限种子同步失败", database.SyncPermissionsAndRoles)
+	runSeedJob("站内信种子数据插入失败", database.SeedSiteMessages)
+	runSeedJob("高危指令黑名单种子数据同步失败", database.SeedCommandBlacklist)
+	runSeedJob("平台设置默认值初始化失败", database.SeedPlatformSettings)
 
-	// 启动 Git 仓库同步调度器
-	gitSched := scheduler.NewGitScheduler()
-	gitSched.Start()
-	defer gitSched.Stop()
+	dictSvc := service.NewDictionaryService()
+	if err := dictSvc.SeedDictionaries(ctx); err != nil {
+		logger.Error("字典种子数据同步失败: %v", err)
+	}
 
-	// 启动执行任务调度器
-	execSched := scheduler.NewExecutionScheduler()
-	execSched.Start()
-	defer execSched.Stop()
+	siteMessageRepo := repository.NewSiteMessageRepository()
+	if _, err := siteMessageRepo.CleanExpired(ctx); err != nil {
+		logger.Error("站内信过期清理失败: %v", err)
+	}
+}
 
-	// 启动通知失败重试调度器
-	notifySched := scheduler.NewNotificationRetryScheduler()
-	notifySched.Start()
-	defer notifySched.Stop()
+func runSeedJob(message string, fn func() error) {
+	if err := fn(); err != nil {
+		logger.Error("%s: %v", message, err)
+	}
+}
 
-	// 启动黑名单豁免过期调度器
-	blacklistSched := scheduler.NewBlacklistExemptionScheduler()
-	blacklistSched.Start()
-	defer blacklistSched.Stop()
+type lifecycleService interface {
+	Start()
+	Stop()
+}
 
-	// 启动自愈调度器
-	healingSched := healing.NewScheduler()
-	healingSched.Start()
-	defer healingSched.Stop()
+func startSchedulers() []lifecycleService {
+	schedulers := []lifecycleService{
+		scheduler.NewScheduler(),
+		scheduler.NewGitScheduler(),
+		scheduler.NewExecutionScheduler(),
+		scheduler.NewNotificationRetryScheduler(),
+		scheduler.NewBlacklistExemptionScheduler(),
+		healing.DefaultScheduler(),
+	}
+	for _, item := range schedulers {
+		item.Start()
+	}
+	return schedulers
+}
 
-	// 设置 Gin 模式
+func stopSchedulers(schedulers []lifecycleService) {
+	for i := len(schedulers) - 1; i >= 0; i-- {
+		schedulers[i].Stop()
+	}
+}
+
+func newRouter(cfg *config.Config) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// 创建 Gin 引擎
 	r := gin.New()
-
-	// 全局中间件
 	r.Use(gin.Recovery())
 	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
 	r.Use(middleware.CORS())
-
-	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
-
-	// 设置路由
 	handler.SetupRoutes(r, cfg)
-
-	// 启动时校验：审计资源类型字典完整性
 	middleware.ValidateAuditResourceTypes(r)
+	return r
+}
 
-	// 优雅关闭
+func newHTTPServer(cfg *config.Config, router http.Handler) *http.Server {
+	return &http.Server{
+		Addr:    cfg.Server.Host + ":" + cfg.Server.Port,
+		Handler: router,
+	}
+}
+
+func logShutdownSignal() {
+	logger.Info("收到关闭信号，正在停止服务...")
+}
+
+func runHTTPServer(ctx context.Context, server *http.Server, shutdownTimeout time.Duration, onShutdown func()) error {
+	errCh := make(chan error, 1)
+
 	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		logger.Info("收到关闭信号，正在停止服务...")
-		sched.Stop()
-		gitSched.Stop()
-		execSched.Stop()
-		notifySched.Stop()
-		blacklistSched.Stop()
-		healingSched.Stop()
-		os.Exit(0)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+			return
+		}
+		errCh <- nil
 	}()
 
-	// 启动服务
-	addr := cfg.Server.Host + ":" + cfg.Server.Port
-	logger.Info("启动服务于 %s", addr)
-	if err := r.Run(addr); err != nil {
-		logger.Error("服务启动失败: %v", err)
-		os.Exit(1)
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		if onShutdown != nil {
+			onShutdown()
+		}
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return <-errCh
 	}
 }

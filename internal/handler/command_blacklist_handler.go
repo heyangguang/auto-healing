@@ -2,11 +2,10 @@ package handler
 
 import (
 	"fmt"
-	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
@@ -28,8 +27,7 @@ func NewCommandBlacklistHandler() *CommandBlacklistHandler {
 // List 列表查询
 // GET /api/v1/command-blacklist
 func (h *CommandBlacklistHandler) List(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize := parsePagination(c, 20)
 
 	opts := &repository.CommandBlacklistListOptions{
 		Page:         page,
@@ -50,16 +48,11 @@ func (h *CommandBlacklistHandler) List(c *gin.Context) {
 
 	rules, total, err := h.svc.List(c.Request.Context(), opts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败: " + err.Error()})
+		respondInternalError(c, "BLACKLIST", "查询黑名单规则失败", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data":      rules,
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-	})
+	response.List(c, rules, total, page, pageSize)
 }
 
 // Create 创建规则
@@ -67,21 +60,21 @@ func (h *CommandBlacklistHandler) List(c *gin.Context) {
 func (h *CommandBlacklistHandler) Create(c *gin.Context) {
 	var rule model.CommandBlacklist
 	if err := c.ShouldBindJSON(&rule); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求: " + err.Error()})
+		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return
 	}
 
 	if rule.Name == "" || rule.Pattern == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name 和 pattern 为必填项"})
+		response.BadRequest(c, "name 和 pattern 为必填项")
 		return
 	}
 
 	if err := h.svc.Create(c.Request.Context(), &rule); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": rule})
+	response.Created(c, rule)
 }
 
 // Get 获取详情
@@ -89,17 +82,17 @@ func (h *CommandBlacklistHandler) Create(c *gin.Context) {
 func (h *CommandBlacklistHandler) Get(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 ID"})
+		response.BadRequest(c, "无效的 ID")
 		return
 	}
 
 	rule, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "规则不存在"})
+		response.NotFound(c, "规则不存在")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": rule})
+	response.Success(c, rule)
 }
 
 // Update 更新规则
@@ -107,23 +100,23 @@ func (h *CommandBlacklistHandler) Get(c *gin.Context) {
 func (h *CommandBlacklistHandler) Update(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 ID"})
+		response.BadRequest(c, "无效的 ID")
 		return
 	}
 
 	var input model.CommandBlacklist
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求: " + err.Error()})
+		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return
 	}
 
 	rule, err := h.svc.Update(c.Request.Context(), id, &input)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": rule})
+	response.Success(c, rule)
 }
 
 // Delete 删除规则
@@ -131,16 +124,16 @@ func (h *CommandBlacklistHandler) Update(c *gin.Context) {
 func (h *CommandBlacklistHandler) Delete(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 ID"})
+		response.BadRequest(c, "无效的 ID")
 		return
 	}
 
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	response.Message(c, "删除成功")
 }
 
 // ToggleActive 启用/禁用
@@ -148,17 +141,17 @@ func (h *CommandBlacklistHandler) Delete(c *gin.Context) {
 func (h *CommandBlacklistHandler) ToggleActive(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 ID"})
+		response.BadRequest(c, "无效的 ID")
 		return
 	}
 
 	rule, err := h.svc.ToggleActive(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": rule})
+	response.Success(c, rule)
 }
 
 // GetSearchSchema 搜索 Schema
@@ -212,7 +205,7 @@ func (h *CommandBlacklistHandler) GetSearchSchema(c *gin.Context) {
 		"generated_at": time.Now().Format(time.RFC3339),
 	}
 
-	c.JSON(http.StatusOK, schema)
+	response.Success(c, schema)
 }
 
 // BatchToggle 批量启用/禁用
@@ -223,7 +216,7 @@ func (h *CommandBlacklistHandler) BatchToggle(c *gin.Context) {
 		IsActive bool     `json:"is_active"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求: " + err.Error()})
+		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return
 	}
 
@@ -231,7 +224,7 @@ func (h *CommandBlacklistHandler) BatchToggle(c *gin.Context) {
 	for _, idStr := range input.IDs {
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 ID: " + idStr})
+			response.BadRequest(c, "无效的 ID: "+idStr)
 			return
 		}
 		uuids = append(uuids, id)
@@ -239,11 +232,11 @@ func (h *CommandBlacklistHandler) BatchToggle(c *gin.Context) {
 
 	count, err := h.svc.BatchToggle(c.Request.Context(), uuids, input.IsActive)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, "BLACKLIST", "批量更新黑名单规则状态失败", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"message": fmt.Sprintf("已%s %d 条规则", map[bool]string{true: "启用", false: "禁用"}[input.IsActive], count),
 		"count":   count,
 	})
@@ -254,18 +247,18 @@ func (h *CommandBlacklistHandler) BatchToggle(c *gin.Context) {
 func (h *CommandBlacklistHandler) Simulate(c *gin.Context) {
 	var req service.SimulateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求: " + err.Error()})
+		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return
 	}
 
 	if req.Pattern == "" || req.MatchType == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "pattern 和 match_type 为必填项"})
+		response.BadRequest(c, "pattern 和 match_type 为必填项")
 		return
 	}
 
 	results, err := h.svc.Simulate(&req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -281,7 +274,7 @@ func (h *CommandBlacklistHandler) Simulate(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"data": gin.H{
 			"results":       results,
 			"total_lines":   len(results),
