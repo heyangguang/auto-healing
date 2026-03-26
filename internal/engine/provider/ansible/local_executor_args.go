@@ -1,11 +1,9 @@
 package ansible
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -13,10 +11,14 @@ import (
 
 // buildArgs 构建命令行参数
 func (e *LocalExecutor) buildArgs(req *ExecuteRequest) ([]string, func(), error) {
-	args := []string{resolveLocalPlaybookPath(req.WorkDir, req.PlaybookPath)}
+	playbookPath, err := resolveLocalPlaybookPath(req.WorkDir, req.PlaybookPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	args := []string{playbookPath}
 	cleanup := func() {}
 
-	inventoryArgs, inventoryCleanup, err := buildLocalInventoryArgs(req.Inventory)
+	inventoryArgs, inventoryCleanup, err := buildLocalInventoryArgs(req.WorkDir, req.Inventory)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -26,8 +28,11 @@ func (e *LocalExecutor) buildArgs(req *ExecuteRequest) ([]string, func(), error)
 	}
 
 	if len(req.ExtraVars) > 0 {
-		jsonVars, _ := json.Marshal(req.ExtraVars)
-		args = append(args, "--extra-vars", string(jsonVars))
+		jsonVars, err := marshalExtraVars(req.ExtraVars)
+		if err != nil {
+			return nil, nil, err
+		}
+		args = append(args, "--extra-vars", jsonVars)
 	}
 	if req.Limit != "" {
 		args = append(args, "--limit", req.Limit)
@@ -50,19 +55,20 @@ func (e *LocalExecutor) buildArgs(req *ExecuteRequest) ([]string, func(), error)
 	return args, cleanup, nil
 }
 
-func resolveLocalPlaybookPath(workDir, playbookPath string) string {
-	if filepath.IsAbs(playbookPath) {
-		return playbookPath
-	}
-	return filepath.Join(workDir, playbookPath)
+func resolveLocalPlaybookPath(workDir, playbookPath string) (string, error) {
+	return resolvePathWithinWorkDir(workDir, playbookPath, "playbook")
 }
 
-func buildLocalInventoryArgs(inventory string) ([]string, func(), error) {
+func buildLocalInventoryArgs(workDir, inventory string) ([]string, func(), error) {
 	if inventory == "" {
 		return nil, nil, nil
 	}
-	if _, err := os.Stat(inventory); err == nil {
-		return []string{"-i", inventory}, nil, nil
+	path, err := resolveInventoryFile(workDir, inventory)
+	if err != nil {
+		return nil, nil, err
+	}
+	if path != "" {
+		return []string{"-i", path}, nil, nil
 	}
 	if strings.Contains(inventory, " ") || strings.Contains(inventory, "\n") {
 		return buildTemporaryInventory(inventory)
@@ -130,21 +136,4 @@ func emitBufferedLogs(stdout, stderr string, callback LogCallback, detect func(s
 	}
 	emit(stdout)
 	emit(stderr)
-}
-
-func buildShellCommand(argv []string) string {
-	quoted := make([]string, 0, len(argv))
-	for _, arg := range argv {
-		quoted = append(quoted, shellQuote(arg))
-	}
-	return strings.Join(quoted, " ")
-}
-
-func shellQuote(arg string) string {
-	quote := string([]byte{39})
-	if arg == "" {
-		return quote + quote
-	}
-	escaped := strings.ReplaceAll(arg, quote, quote+`"`+quote+`"`+quote)
-	return quote + escaped + quote
 }

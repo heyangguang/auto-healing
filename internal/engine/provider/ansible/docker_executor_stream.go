@@ -16,21 +16,26 @@ import (
 // executeWithStreaming 使用流式方式执行 Docker，实时输出日志
 func (e *DockerExecutor) executeWithStreaming(ctx context.Context, req *ExecuteRequest, startedAt time.Time) (*ExecuteResult, error) {
 	containerName := e.generateContainerName(req.WorkDir)
-	cmd, stdout, stderr, err := e.startStreamingCommand(req, containerName)
+	cmd, stdout, stderr, err := e.startStreamingCommand(ctx, req, containerName)
 	if err != nil {
-		return e.executeBuffered(ctx, req, startedAt)
+		return nil, err
 	}
 	var stdoutBuf, stderrBuf bytes.Buffer
-	readDone := make(chan struct{})
+	stdoutDone := make(chan struct{})
+	stderrDone := make(chan struct{})
 	cmdDone := make(chan error, 1)
-	go e.streamStdout(req, stdout, &stdoutBuf, readDone)
-	go e.streamStderr(stderr, &stderrBuf)
+	go e.streamStdout(req, stdout, &stdoutBuf, stdoutDone)
+	go e.streamStderr(req, stderr, &stderrBuf, stderrDone)
 	go func() { cmdDone <- cmd.Wait() }()
-	return e.collectStreamingResult(ctx, req, startedAt, containerName, &stdoutBuf, &stderrBuf, readDone, cmdDone)
+	return e.collectStreamingResult(ctx, startedAt, containerName, &stdoutBuf, &stderrBuf, stdoutDone, stderrDone, cmdDone)
 }
 
-func (e *DockerExecutor) startStreamingCommand(req *ExecuteRequest, containerName string) (*exec.Cmd, io.ReadCloser, io.ReadCloser, error) {
-	cmd := exec.Command("docker", e.buildDockerArgs(req, containerName)...)
+func (e *DockerExecutor) startStreamingCommand(ctx context.Context, req *ExecuteRequest, containerName string) (*exec.Cmd, io.ReadCloser, io.ReadCloser, error) {
+	args, err := e.buildDockerArgs(req, containerName)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	cmd := exec.CommandContext(ctx, "docker", args...)
 	logger.Exec("DOCKER").Info("使用流式输出模式执行 Docker, 容器名: %s", containerName)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -41,7 +46,7 @@ func (e *DockerExecutor) startStreamingCommand(req *ExecuteRequest, containerNam
 		return nil, nil, nil, fmt.Errorf("创建 stderr pipe 失败: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		logger.Exec("DOCKER").Warn("Docker 命令启动失败，回退到缓冲模式: %v", err)
+		logger.Exec("DOCKER").Warn("Docker 流式命令启动失败: %v", err)
 		return nil, nil, nil, err
 	}
 	return cmd, stdout, stderr, nil
@@ -51,51 +56,73 @@ func (e *DockerExecutor) streamStdout(req *ExecuteRequest, stdout io.Reader, std
 	defer close(readDone)
 	reader := bufio.NewReader(stdout)
 	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				return
+		rawLine, err := reader.ReadString('\n')
+		if rawLine != "" {
+			line := cleanControlChars(strings.TrimRight(rawLine, "\r\n"))
+			if line != "" {
+				stdoutBuf.WriteString(line)
+				if strings.HasSuffix(rawLine, "\n") {
+					stdoutBuf.WriteByte('\n')
+				}
+				if req.LogCallback != nil {
+					req.LogCallback(e.detectLogLevel(line), "execute", line)
+				}
 			}
+		}
+		if err == io.EOF {
 			return
 		}
-		line = cleanControlChars(strings.TrimRight(line, "\r\n"))
-		if line == "" {
-			continue
-		}
-		stdoutBuf.WriteString(line + "\n")
-		if req.LogCallback != nil {
-			req.LogCallback(e.detectLogLevel(line), "execute", line)
+		if err != nil {
+			return
 		}
 	}
 }
 
-func (e *DockerExecutor) streamStderr(stderr io.Reader, stderrBuf *bytes.Buffer) {
+func (e *DockerExecutor) streamStderr(req *ExecuteRequest, stderr io.Reader, stderrBuf *bytes.Buffer, done chan<- struct{}) {
+	defer close(done)
 	reader := bufio.NewReader(stderr)
 	for {
-		line, err := reader.ReadString('\n')
+		rawLine, err := reader.ReadString('\n')
+		if rawLine != "" {
+			line := cleanControlChars(strings.TrimRight(rawLine, "\r\n"))
+			if line != "" {
+				stderrBuf.WriteString(line)
+				if strings.HasSuffix(rawLine, "\n") {
+					stderrBuf.WriteByte('\n')
+				}
+				if req != nil && req.LogCallback != nil {
+					req.LogCallback(e.detectLogLevel(line), "execute", line)
+				}
+			}
+		}
+		if err == io.EOF {
+			return
+		}
 		if err != nil {
 			return
 		}
-		stderrBuf.WriteString(line)
 	}
 }
 
-func (e *DockerExecutor) collectStreamingResult(ctx context.Context, req *ExecuteRequest, startedAt time.Time, containerName string, stdoutBuf, stderrBuf *bytes.Buffer, readDone <-chan struct{}, cmdDone <-chan error) (*ExecuteResult, error) {
+func (e *DockerExecutor) collectStreamingResult(ctx context.Context, startedAt time.Time, containerName string, stdoutBuf, stderrBuf *bytes.Buffer, stdoutDone, stderrDone <-chan struct{}, cmdDone <-chan error) (*ExecuteResult, error) {
 	select {
 	case <-ctx.Done():
-		return e.cancelStreamingExecution(startedAt, containerName, stdoutBuf, stderrBuf, cmdDone, ctx.Err())
+		return e.cancelStreamingExecution(startedAt, containerName, stdoutBuf, stderrBuf, stdoutDone, stderrDone, cmdDone, ctx.Err())
 	case cmdErr := <-cmdDone:
-		<-readDone
-		return buildStreamingResult(startedAt, stdoutBuf, stderrBuf, cmdErr), nil
+		<-stdoutDone
+		<-stderrDone
+		return buildStreamingCommandResult(startedAt, stdoutBuf.String(), stderrBuf.String(), cmdErr)
 	}
 }
 
-func (e *DockerExecutor) cancelStreamingExecution(startedAt time.Time, containerName string, stdoutBuf, stderrBuf *bytes.Buffer, cmdDone <-chan error, cancelErr error) (*ExecuteResult, error) {
+func (e *DockerExecutor) cancelStreamingExecution(startedAt time.Time, containerName string, stdoutBuf, stderrBuf *bytes.Buffer, stdoutDone, stderrDone <-chan struct{}, cmdDone <-chan error, cancelErr error) (*ExecuteResult, error) {
 	logger.Exec("DOCKER").Warn("收到取消信号，正在停止容器...")
 	if err := e.stopContainer(containerName); err != nil {
 		logger.Exec("DOCKER").Error("取消执行时停止容器失败: %v", err)
 	}
 	<-cmdDone
+	<-stdoutDone
+	<-stderrDone
 	return &ExecuteResult{
 		ExitCode:  -1,
 		Stdout:    stdoutBuf.String(),
@@ -105,23 +132,18 @@ func (e *DockerExecutor) cancelStreamingExecution(startedAt time.Time, container
 	}, cancelErr
 }
 
-func buildStreamingResult(startedAt time.Time, stdoutBuf, stderrBuf *bytes.Buffer, cmdErr error) *ExecuteResult {
+func buildStreamingCommandResult(startedAt time.Time, stdout, stderr string, cmdErr error) (*ExecuteResult, error) {
+	duration := time.Since(startedAt)
+	exitCode, execErr := commandExitCode(cmdErr, stdout, stderr, startedAt, duration)
+	if execErr != nil {
+		return execErr, cmdErr
+	}
 	return &ExecuteResult{
-		ExitCode:  streamingExitCode(cmdErr),
-		Stdout:    stdoutBuf.String(),
-		Stderr:    stderrBuf.String(),
-		Stats:     ParseStats(stdoutBuf.String()),
+		ExitCode:  exitCode,
+		Stdout:    stdout,
+		Stderr:    stderr,
+		Stats:     ParseStats(stdout),
 		StartedAt: startedAt,
-		Duration:  time.Since(startedAt),
-	}
-}
-
-func streamingExitCode(cmdErr error) int {
-	if cmdErr == nil {
-		return 0
-	}
-	if exitErr, ok := cmdErr.(*exec.ExitError); ok {
-		return exitErr.ExitCode()
-	}
-	return 0
+		Duration:  duration,
+	}, nil
 }

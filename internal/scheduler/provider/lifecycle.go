@@ -9,9 +9,11 @@ import (
 )
 
 type schedulerLifecycle struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
+	mu      sync.Mutex
+	stopped bool
 }
 
 func newSchedulerLifecycle() *schedulerLifecycle {
@@ -22,16 +24,31 @@ func newSchedulerLifecycle() *schedulerLifecycle {
 	}
 }
 
-func (l *schedulerLifecycle) Go(fn func(context.Context)) {
+func (l *schedulerLifecycle) Go(fn func(context.Context)) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.stopped || l.ctx.Err() != nil {
+		return false
+	}
 	l.wg.Add(1)
 	go func() {
 		defer l.wg.Done()
 		fn(l.ctx)
 	}()
+	return true
 }
 
 func (l *schedulerLifecycle) Stop() {
-	l.cancel()
+	l.mu.Lock()
+	if l.stopped {
+		l.mu.Unlock()
+		return
+	}
+	l.stopped = true
+	cancel := l.cancel
+	l.mu.Unlock()
+
+	cancel()
 	l.wg.Wait()
 }
 

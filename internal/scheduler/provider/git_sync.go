@@ -29,15 +29,19 @@ func (s *GitScheduler) handleGitSyncError(ctx context.Context, repo model.GitRep
 			shortID, newCount, repo.Name, err, nextSyncAt.Format("15:04:05"))
 	}
 
-	s.updateGitSyncState(ctx, repo.ID, updates)
+	if err := s.updateRepoState(ctx, repo.ID, updates); err != nil {
+		logger.Sched("GIT").Error("[%s] 更新 Git 同步失败状态失败: %v", shortID, err)
+	}
 }
 
 func (s *GitScheduler) handleGitSyncSuccess(ctx context.Context, repo model.GitRepository, shortID string, nextSyncAt time.Time, duration time.Duration) {
-	s.updateGitSyncState(ctx, repo.ID, map[string]interface{}{
+	if err := s.updateRepoState(ctx, repo.ID, map[string]interface{}{
 		"consecutive_failures": 0,
 		"pause_reason":         "",
 		"next_sync_at":         nextSyncAt,
-	})
+	}); err != nil {
+		logger.Sched("GIT").Error("[%s] 更新 Git 同步成功状态失败: %v", shortID, err)
+	}
 
 	if repo.ConsecutiveFailures > 0 {
 		logger.Sched("GIT").Info("[%s] 同步成功: %s | 失败计数已重置 (之前: %d) | 耗时: %v",
@@ -54,8 +58,8 @@ func (s *GitScheduler) handleGitSyncSuccess(ctx context.Context, repo model.GitR
 	)
 }
 
-func (s *GitScheduler) updateGitSyncState(ctx context.Context, repoID interface{}, updates map[string]interface{}) {
-	s.db.WithContext(ctx).Model(&model.GitRepository{}).Where("id = ?", repoID).Updates(updates)
+func (s *GitScheduler) updateGitSyncState(ctx context.Context, repoID interface{}, updates map[string]interface{}) error {
+	return s.db.WithContext(ctx).Model(&model.GitRepository{}).Where("id = ?", repoID).Updates(updates).Error
 }
 
 func resolveRepoSyncInterval(repo model.GitRepository) time.Duration {

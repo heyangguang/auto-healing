@@ -67,21 +67,21 @@ func (e *DockerExecutor) Name() string {
 
 // Execute 执行 Ansible Playbook（支持实时日志流式输出）
 func (e *DockerExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResult, error) {
-	startedAt := time.Now()
+	execCtx, cancel := deriveExecuteContext(ctx, req.Timeout, e.timeout)
+	defer cancel()
 
-	// 确保 ansible.cfg 存在
-	cfgPath := filepath.Join(req.WorkDir, "ansible.cfg")
-	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		WriteAnsibleCfg(req.WorkDir, nil)
+	startedAt := time.Now()
+	if err := ensureAnsibleCfg(req.WorkDir); err != nil {
+		return nil, err
 	}
 
 	// 如果有日志回调，使用流式方式
 	if req.LogCallback != nil {
-		return e.executeWithStreaming(ctx, req, startedAt)
+		return e.executeWithStreaming(execCtx, req, startedAt)
 	}
 
 	// 否则使用缓冲方式
-	return e.executeBuffered(ctx, req, startedAt)
+	return e.executeBuffered(execCtx, req, startedAt)
 }
 
 // generateContainerName 根据工作目录生成容器名称

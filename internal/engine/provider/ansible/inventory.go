@@ -4,8 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"unicode"
 )
+
+const invalidInventoryHostMarker = "__AUTO_HEALING_INVALID_HOST__"
 
 // HostCredential 主机认证信息
 type HostCredential struct {
@@ -29,18 +33,14 @@ func GenerateInventory(hosts string, groupName string, vars map[string]string) s
 
 	hostList := strings.Split(hosts, ",")
 	for _, host := range hostList {
-		host = strings.TrimSpace(host)
-		if host != "" {
-			sb.WriteString(host)
-			sb.WriteString("\n")
-		}
+		appendInventoryHostLine(&sb, host)
 	}
 
 	// 添加组变量
 	if len(vars) > 0 {
 		sb.WriteString(fmt.Sprintf("\n[%s:vars]\n", groupName))
 		for k, v := range vars {
-			sb.WriteString(fmt.Sprintf("%s=%s\n", k, v))
+			sb.WriteString(fmt.Sprintf("%s=%s\n", k, quoteInventoryValue(v)))
 		}
 	}
 
@@ -58,18 +58,21 @@ func GenerateInventoryWithAuth(credentials []HostCredential, groupName string) s
 	sb.WriteString(fmt.Sprintf("[%s]\n", groupName))
 
 	for _, cred := range credentials {
-		line := cred.Host
+		host := strings.TrimSpace(cred.Host)
+		if !isValidInventoryHost(host) {
+			writeInvalidInventoryHost(&sb, host)
+			continue
+		}
+		line := host
 
-		// 添加 ansible_user
 		if cred.Username != "" {
-			line += fmt.Sprintf(" ansible_user=%s", cred.Username)
+			line += fmt.Sprintf(" ansible_user=%s", quoteInventoryValue(cred.Username))
 		}
 
-		// 根据认证类型添加参数
 		if cred.AuthType == "ssh_key" && cred.KeyFile != "" {
-			line += fmt.Sprintf(" ansible_ssh_private_key_file=%s", cred.KeyFile)
+			line += fmt.Sprintf(" ansible_ssh_private_key_file=%s", quoteInventoryValue(cred.KeyFile))
 		} else if cred.AuthType == "password" && cred.Password != "" {
-			line += fmt.Sprintf(" ansible_ssh_pass=%s", cred.Password)
+			line += fmt.Sprintf(" ansible_ssh_pass=%s", quoteInventoryValue(cred.Password))
 		}
 
 		sb.WriteString(line)
@@ -97,6 +100,9 @@ func WriteKeyFile(workDir, keyName, content string) (string, error) {
 // WriteInventoryFile 写入临时 inventory 文件
 // 返回文件路径和清理函数
 func WriteInventoryFile(workDir, content string) (path string, err error) {
+	if err = validateGeneratedInventory(content); err != nil {
+		return "", err
+	}
 	path = filepath.Join(workDir, "inventory.ini")
 	err = os.WriteFile(path, []byte(content), 0600)
 	return path, err
@@ -122,4 +128,53 @@ func WriteAnsibleCfg(workDir string, options map[string]string) error {
 	content := GenerateAnsibleCfg(options)
 	path := filepath.Join(workDir, "ansible.cfg")
 	return os.WriteFile(path, []byte(content), 0600)
+}
+
+func quoteInventoryValue(value string) string {
+	return strconv.Quote(strings.ReplaceAll(value, "\r", ""))
+}
+
+func appendInventoryHostLine(sb *strings.Builder, host string) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return
+	}
+	if !isValidInventoryHost(host) {
+		writeInvalidInventoryHost(sb, host)
+		return
+	}
+	sb.WriteString(host)
+	sb.WriteString("\n")
+}
+
+func isValidInventoryHost(host string) bool {
+	if host == "" || strings.ContainsAny(host, "#=") {
+		return false
+	}
+	for _, r := range host {
+		if unicode.IsSpace(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func writeInvalidInventoryHost(sb *strings.Builder, host string) {
+	sb.WriteString(invalidInventoryHostMarker)
+	sb.WriteString(" ")
+	sb.WriteString(strconv.Quote(host))
+	sb.WriteString("\n")
+}
+
+func validateGeneratedInventory(content string) error {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(line, invalidInventoryHostMarker+" ") {
+			host, err := strconv.Unquote(strings.TrimPrefix(line, invalidInventoryHostMarker+" "))
+			if err != nil {
+				return fmt.Errorf("inventory 主机格式非法")
+			}
+			return fmt.Errorf("inventory 主机格式非法: %s", host)
+		}
+	}
+	return nil
 }

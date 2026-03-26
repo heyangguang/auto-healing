@@ -3,7 +3,6 @@ package ansible
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -32,14 +31,17 @@ func (e *LocalExecutor) Name() string {
 
 // Execute 执行 Ansible Playbook（支持实时日志流式输出）
 func (e *LocalExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResult, error) {
-	startedAt := time.Now()
+	execCtx, cancel := deriveExecuteContext(ctx, req.Timeout, 0)
+	defer cancel()
 
-	// 确保 ansible.cfg 存在
-	cfgPath := filepath.Join(req.WorkDir, "ansible.cfg")
-	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		WriteAnsibleCfg(req.WorkDir, nil)
+	startedAt := time.Now()
+	if err := ensureAnsibleCfg(req.WorkDir); err != nil {
+		return nil, err
+	}
+	if req.LogCallback != nil {
+		return e.executeWithStreaming(execCtx, req, startedAt)
 	}
 
 	// 避免把参数回拼成 shell 命令，这里统一走 argv-safe 的执行路径。
-	return e.executeBuffered(ctx, req, startedAt)
+	return e.executeBuffered(execCtx, req, startedAt)
 }

@@ -6,16 +6,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
-
-	"github.com/company/auto-healing/internal/pkg/logger"
 )
 
-// executeWithScript 使用 script 命令包装实现实时输出
-func (e *LocalExecutor) executeWithScript(ctx context.Context, req *ExecuteRequest, startedAt time.Time) (*ExecuteResult, error) {
+// executeWithStreaming 直接流式读取 stdout/stderr，避免静默回退到缓冲模式。
+func (e *LocalExecutor) executeWithStreaming(ctx context.Context, req *ExecuteRequest, startedAt time.Time) (*ExecuteResult, error) {
 	cmd, cleanup, err := e.buildStreamingCommand(ctx, req)
 	if err != nil {
 		return nil, err
@@ -23,25 +20,7 @@ func (e *LocalExecutor) executeWithScript(ctx context.Context, req *ExecuteReque
 	if cleanup != nil {
 		defer cleanup()
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("创建 stdout pipe 失败: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		logger.Exec("ANSIBLE").Warn("script 命令启动失败，回退到普通模式: %v", err)
-		return e.executeBuffered(ctx, req, startedAt)
-	}
-
-	stdoutBuf := e.collectScriptOutput(req, stdout)
-	err = cmd.Wait()
-	return &ExecuteResult{
-		ExitCode:  streamingExitCode(err),
-		Stdout:    stdoutBuf.String(),
-		Stderr:    "",
-		Stats:     ParseStats(stdoutBuf.String()),
-		StartedAt: startedAt,
-		Duration:  time.Since(startedAt),
-	}, nil
+	return e.runStreamingCommand(ctx, req, startedAt, cmd)
 }
 
 func (e *LocalExecutor) buildStreamingCommand(ctx context.Context, req *ExecuteRequest) (*exec.Cmd, func(), error) {
@@ -49,33 +28,86 @@ func (e *LocalExecutor) buildStreamingCommand(ctx context.Context, req *ExecuteR
 	if err != nil {
 		return nil, nil, err
 	}
-	ansibleCmd := buildShellCommand(append([]string{e.ansiblePath}, args...))
-	cmd := exec.CommandContext(ctx, "script", "-q", "/dev/null", "-c", ansibleCmd)
+	cmd := exec.CommandContext(ctx, e.ansiblePath, args...)
 	cmd.Dir = req.WorkDir
-	cmd.Env = append(os.Environ(), "ANSIBLE_FORCE_COLOR=0", "ANSIBLE_NOCOLOR=1", "PYTHONUNBUFFERED=1", "TERM=dumb")
-	logger.Exec("ANSIBLE").Info("使用 script 命令实时输出模式")
+	cmd.Env = buildExecuteEnv()
 	return cmd, cleanup, nil
 }
 
-func (e *LocalExecutor) collectScriptOutput(req *ExecuteRequest, stdout io.Reader) bytes.Buffer {
+func (e *LocalExecutor) runStreamingCommand(ctx context.Context, req *ExecuteRequest, startedAt time.Time, cmd *exec.Cmd) (*ExecuteResult, error) {
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("创建 stdout pipe 失败: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("创建 stderr pipe 失败: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("启动 ansible-playbook 失败: %w", err)
+	}
+
 	var stdoutBuf bytes.Buffer
-	reader := bufio.NewReader(stdout)
+	var stderrBuf bytes.Buffer
+	stdoutDone := make(chan struct{})
+	stderrDone := make(chan struct{})
+	cmdDone := make(chan error, 1)
+	go e.collectStreamingOutput(req, stdout, &stdoutBuf, stdoutDone)
+	go e.collectStreamingOutput(req, stderr, &stderrBuf, stderrDone)
+	go func() { cmdDone <- cmd.Wait() }()
+
+	select {
+	case <-ctx.Done():
+		err := <-cmdDone
+		<-stdoutDone
+		<-stderrDone
+		return cancelledStreamingResult(startedAt, &stdoutBuf, &stderrBuf, err), ctx.Err()
+	case err := <-cmdDone:
+		<-stdoutDone
+		<-stderrDone
+		return buildStreamingCommandResult(startedAt, stdoutBuf.String(), stderrBuf.String(), err)
+	}
+}
+
+func (e *LocalExecutor) collectStreamingOutput(req *ExecuteRequest, stream io.Reader, output *bytes.Buffer, done chan<- struct{}) {
+	defer close(done)
+
+	reader := bufio.NewReader(stream)
 	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				return stdoutBuf
+		rawLine, err := reader.ReadString('\n')
+		if rawLine != "" {
+			line := cleanControlChars(strings.TrimRight(rawLine, "\r\n"))
+			if line != "" {
+				output.WriteString(line)
+				if strings.HasSuffix(rawLine, "\n") {
+					output.WriteByte('\n')
+				}
+				if req.LogCallback != nil {
+					req.LogCallback(e.detectLogLevel(line), "execute", line)
+				}
 			}
-			return stdoutBuf
 		}
-		line = cleanControlChars(strings.TrimRight(line, "\r\n"))
-		if line == "" {
-			continue
+		if err == io.EOF {
+			return
 		}
-		stdoutBuf.WriteString(line + "\n")
-		if req.LogCallback != nil {
-			req.LogCallback(e.detectLogLevel(line), "execute", line)
+		if err != nil {
+			return
 		}
+	}
+}
+
+func cancelledStreamingResult(startedAt time.Time, stdoutBuf, stderrBuf *bytes.Buffer, err error) *ExecuteResult {
+	stderr := stderrBuf.String()
+	if err != nil {
+		stderr += "\n" + err.Error()
+	}
+	stderr += "\n执行被取消"
+	return &ExecuteResult{
+		ExitCode:  -1,
+		Stdout:    stdoutBuf.String(),
+		Stderr:    stderr,
+		StartedAt: startedAt,
+		Duration:  time.Since(startedAt),
 	}
 }
 

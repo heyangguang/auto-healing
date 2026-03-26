@@ -1,10 +1,12 @@
 package ansible
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -137,5 +139,125 @@ func TestBuildArgsCreatesAndCleansTemporaryInventoryFile(t *testing.T) {
 
 	if _, err := os.Stat(inventoryPath); !os.IsNotExist(err) {
 		t.Fatalf("temporary inventory should be removed, stat err = %v", err)
+	}
+}
+
+func TestDeriveExecuteContextHonorsRequestTimeout(t *testing.T) {
+	t.Helper()
+
+	ctx, cancel := deriveExecuteContext(context.Background(), 50*time.Millisecond, time.Second)
+	defer cancel()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("expected derived context deadline")
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 || remaining > 200*time.Millisecond {
+		t.Fatalf("unexpected derived timeout window: %v", remaining)
+	}
+}
+
+func TestLocalExecutorExecuteReturnsConfigPreparationError(t *testing.T) {
+	t.Helper()
+
+	root := t.TempDir()
+	workDir := filepath.Join(root, "not-a-dir")
+	if err := os.WriteFile(workDir, []byte("x"), 0600); err != nil {
+		t.Fatalf("write sentinel file: %v", err)
+	}
+
+	executor := NewLocalExecutor()
+	_, err := executor.Execute(context.Background(), &ExecuteRequest{
+		PlaybookPath: "play.yml",
+		WorkDir:      workDir,
+	})
+	if err == nil || !strings.Contains(err.Error(), "检查 ansible.cfg 失败") {
+		t.Fatalf("expected ansible.cfg preparation error, got %v", err)
+	}
+}
+
+func TestLocalExecutorExecuteStreamsLogsWhenCallbackProvided(t *testing.T) {
+	t.Helper()
+
+	workDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workDir, "play.yml"), []byte("---\n"), 0600); err != nil {
+		t.Fatalf("write playbook: %v", err)
+	}
+
+	ansiblePath := filepath.Join(workDir, "fake-ansible.sh")
+	ansibleScript := "#!/bin/sh\nprintf 'stream-start\\n'\nsleep 1\nprintf 'stream-end\\n'\n"
+	if err := os.WriteFile(ansiblePath, []byte(ansibleScript), 0755); err != nil {
+		t.Fatalf("write fake ansible: %v", err)
+	}
+
+	executor := &LocalExecutor{ansiblePath: ansiblePath}
+	streamed := make(chan struct{}, 1)
+	done := make(chan error, 1)
+
+	go func() {
+		_, err := executor.Execute(context.Background(), &ExecuteRequest{
+			PlaybookPath: "play.yml",
+			WorkDir:      workDir,
+			LogCallback: func(level, stage, message string) {
+				if strings.Contains(message, "stream-start") {
+					select {
+					case streamed <- struct{}{}:
+					default:
+					}
+				}
+			},
+		})
+		done <- err
+	}()
+
+	select {
+	case <-streamed:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("expected streamed callback before command completion")
+	}
+
+	select {
+	case err := <-done:
+		t.Fatalf("execute returned too early, err=%v", err)
+	default:
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Execute() did not complete")
+	}
+}
+
+func TestLocalExecutorExecuteStreamingTimeoutReturnsError(t *testing.T) {
+	t.Helper()
+
+	workDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workDir, "play.yml"), []byte("---\n"), 0600); err != nil {
+		t.Fatalf("write playbook: %v", err)
+	}
+
+	ansiblePath := filepath.Join(workDir, "fake-ansible.sh")
+	ansibleScript := "#!/bin/sh\nprintf 'stream-start\\n'\nsleep 1\n"
+	if err := os.WriteFile(ansiblePath, []byte(ansibleScript), 0755); err != nil {
+		t.Fatalf("write fake ansible: %v", err)
+	}
+
+	executor := &LocalExecutor{ansiblePath: ansiblePath}
+	result, err := executor.Execute(context.Background(), &ExecuteRequest{
+		PlaybookPath: "play.yml",
+		WorkDir:      workDir,
+		Timeout:      50 * time.Millisecond,
+		LogCallback:  func(level, stage, message string) {},
+	})
+	if result == nil {
+		t.Fatal("expected partial result on streaming timeout")
+	}
+	if err == nil && result.ExitCode == 0 {
+		t.Fatalf("streaming timeout was reported as success: err=%v exit=%d", err, result.ExitCode)
 	}
 }

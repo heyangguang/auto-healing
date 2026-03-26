@@ -1,17 +1,18 @@
 package ansible
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
 // buildDockerArgs 构建 Docker 命令行参数
-func (e *DockerExecutor) buildDockerArgs(req *ExecuteRequest, containerName string) []string {
-	args := []string{"run", "--rm", "-t", "--name", containerName, "--network", "host"}
+func (e *DockerExecutor) buildDockerArgs(req *ExecuteRequest, containerName string) ([]string, error) {
+	playbookPath, err := resolveContainerPathWithinWorkDir(req.WorkDir, req.PlaybookPath, "playbook")
+	if err != nil {
+		return nil, err
+	}
+	args := []string{"run", "--rm", "--name", containerName, "--network", "host"}
 	args = append(args, "-v", fmt.Sprintf("%s:/workspace:ro", req.WorkDir), "-w", "/workspace")
 	args = append(args,
 		"-e", "ANSIBLE_FORCE_COLOR=0",
@@ -20,10 +21,17 @@ func (e *DockerExecutor) buildDockerArgs(req *ExecuteRequest, containerName stri
 		"-e", "PYTHONUNBUFFERED=1",
 		"-e", "ANSIBLE_INTERPRETER_PYTHON_FALLBACK=python3.11,python3.10,python3.9,python3.8,python3.7,python3.6,/usr/bin/python3,/usr/libexec/platform-python,python2.7,/usr/bin/python,python",
 	)
-	args = append(args, e.image, "/workspace/"+req.PlaybookPath)
-	args = append(args, dockerInventoryArgs(req)...)
+	args = append(args, e.image, playbookPath)
+	inventoryArgs, err := dockerInventoryArgs(req)
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, inventoryArgs...)
 	if len(req.ExtraVars) > 0 {
-		jsonVars, _ := json.Marshal(req.ExtraVars)
+		jsonVars, err := marshalExtraVars(req.ExtraVars)
+		if err != nil {
+			return nil, err
+		}
 		args = append(args, "--extra-vars", string(jsonVars))
 	}
 	if req.Limit != "" {
@@ -44,24 +52,36 @@ func (e *DockerExecutor) buildDockerArgs(req *ExecuteRequest, containerName stri
 			args = append(args, "--become-user", req.BecomeUser)
 		}
 	}
-	return args
+	return args, nil
 }
 
-func dockerInventoryArgs(req *ExecuteRequest) []string {
+func dockerInventoryArgs(req *ExecuteRequest) ([]string, error) {
 	if req.Inventory == "" {
-		return nil
+		return nil, nil
 	}
-	if strings.HasPrefix(req.Inventory, req.WorkDir) {
-		return []string{"-i", "/workspace" + strings.TrimPrefix(req.Inventory, req.WorkDir)}
+	path, err := resolveInventoryFile(req.WorkDir, req.Inventory)
+	if err != nil {
+		return nil, err
+	}
+	if path != "" {
+		return dockerInventoryFileArgs(req.WorkDir, path)
 	}
 	if strings.Contains(req.Inventory, " ") || strings.Contains(req.Inventory, "\n") {
-		inventoryPath := filepath.Join(req.WorkDir, "inventory.ini")
-		if err := os.WriteFile(inventoryPath, []byte("[all]\n"+req.Inventory+"\n"), 0644); err == nil {
-			return []string{"-i", "/workspace/inventory.ini"}
+		path, err = WriteInventoryFile(req.WorkDir, "[all]\n"+req.Inventory+"\n")
+		if err != nil {
+			return nil, fmt.Errorf("写入 docker inventory 文件失败: %w", err)
 		}
-		return []string{"-i", req.Inventory + ","}
+		return dockerInventoryFileArgs(req.WorkDir, path)
 	}
-	return []string{"-i", req.Inventory + ","}
+	return []string{"-i", req.Inventory + ","}, nil
+}
+
+func dockerInventoryFileArgs(workDir, path string) ([]string, error) {
+	relPath, err := relativePathWithinWorkDir(workDir, path)
+	if err != nil {
+		return nil, err
+	}
+	return []string{"-i", "/workspace/" + strings.TrimPrefix(relPath, "./")}, nil
 }
 
 // CheckDockerInstalled 检查 Docker 是否已安装

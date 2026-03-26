@@ -9,6 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	pluginService "github.com/company/auto-healing/internal/service/plugin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -19,11 +20,15 @@ type Scheduler struct {
 	db                      *gorm.DB
 	interval                time.Duration
 	lifecycle               *schedulerLifecycle
+	inFlight                *inFlightSet
+	now                     func() time.Time
 	running                 bool
 	mu                      sync.Mutex
 	loadPluginsNeedSync     func(context.Context) ([]model.Plugin, error)
 	checkExpiredMaintenance func(context.Context) (int, error)
 	runPluginSync           func(context.Context, model.Plugin)
+	triggerPluginSync       func(context.Context, uuid.UUID) (*model.PluginSyncLog, error)
+	updatePluginState       func(context.Context, interface{}, map[string]interface{}) error
 }
 
 // NewScheduler 创建调度器
@@ -33,10 +38,14 @@ func NewScheduler() *Scheduler {
 		cmdbSvc:   pluginService.NewCMDBService(),
 		db:        database.DB,
 		interval:  30 * time.Second,
+		inFlight:  newInFlightSet(),
+		now:       time.Now,
 	}
 	s.loadPluginsNeedSync = s.getPluginsNeedSync
 	s.checkExpiredMaintenance = s.cmdbSvc.CheckExpiredMaintenance
 	s.runPluginSync = s.syncPlugin
+	s.triggerPluginSync = s.pluginSvc.TriggerSyncSync
+	s.updatePluginState = s.updatePluginSyncState
 	return s
 }
 
@@ -47,11 +56,14 @@ func (s *Scheduler) Start() {
 		s.mu.Unlock()
 		return
 	}
+	if s.lifecycle == nil || s.lifecycle.ctx.Err() != nil {
+		s.lifecycle = newSchedulerLifecycle()
+	}
+	lifecycle := s.lifecycle
 	s.running = true
-	s.lifecycle = newSchedulerLifecycle()
 	s.mu.Unlock()
 
-	s.lifecycle.Go(s.run)
+	lifecycle.Go(s.run)
 	logger.Sched("SYNC").Info("插件同步调度器已启动 (检查间隔: %v)", s.interval)
 }
 
@@ -64,7 +76,6 @@ func (s *Scheduler) Stop() {
 	}
 	s.running = false
 	lifecycle := s.lifecycle
-	s.lifecycle = nil
 	s.mu.Unlock()
 
 	lifecycle.Stop()
@@ -108,14 +119,22 @@ func (s *Scheduler) checkAndSync(ctx context.Context) {
 
 	logger.Sched("SYNC").Info("发现 %d 个插件需要同步", len(plugins))
 
+	lifecycle := s.lifecycleSnapshot()
 	for _, plugin := range plugins {
-		s.dispatchPluginSync(plugin)
+		s.dispatchPluginSync(lifecycle, plugin)
 	}
 }
 
-func (s *Scheduler) dispatchPluginSync(plugin model.Plugin) {
+func (s *Scheduler) dispatchPluginSync(lifecycle *schedulerLifecycle, plugin model.Plugin) {
+	if lifecycle == nil {
+		return
+	}
+	if !s.inFlight.Start(plugin.ID) {
+		return
+	}
 	p := plugin
-	s.lifecycle.Go(func(rootCtx context.Context) {
+	started := lifecycle.Go(func(rootCtx context.Context) {
+		defer s.inFlight.Finish(p.ID)
 		defer func() {
 			if rec := recover(); rec != nil {
 				logger.Sched("SYNC").Error("[%s] syncPlugin panic: %v", p.ID.String()[:8], rec)
@@ -123,17 +142,42 @@ func (s *Scheduler) dispatchPluginSync(plugin model.Plugin) {
 		}()
 		s.runPluginSync(withTenantContext(rootCtx, p.TenantID), p)
 	})
+	if !started {
+		s.inFlight.Finish(p.ID)
+	}
+}
+
+func (s *Scheduler) lifecycleSnapshot() *schedulerLifecycle {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lifecycle
 }
 
 // getPluginsNeedSync 获取需要同步的插件列表
 func (s *Scheduler) getPluginsNeedSync(ctx context.Context) ([]model.Plugin, error) {
 	var plugins []model.Plugin
+	now := s.now()
 	err := s.db.WithContext(ctx).
 		Where("sync_enabled = ?", true).
 		Where("status = ?", "active").
 		Where("next_sync_at IS NOT NULL").
-		Where("next_sync_at <= ?", time.Now()).
+		Where("next_sync_at <= ?", now).
 		Find(&plugins).Error
 
-	return plugins, err
+	return filterDuePlugins(plugins, now), err
+}
+
+func filterDuePlugins(plugins []model.Plugin, now time.Time) []model.Plugin {
+	due := plugins[:0]
+	for _, plugin := range plugins {
+		if pluginSyncDue(plugin, now) {
+			due = append(due, plugin)
+		}
+	}
+	return due
+}
+
+func pluginSyncDue(plugin model.Plugin, now time.Time) bool {
+	interval := time.Duration(plugin.SyncIntervalMinutes) * time.Minute
+	return !lastSyncStillCoolingDown(plugin.LastSyncAt, interval, now)
 }
