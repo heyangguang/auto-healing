@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -24,7 +26,11 @@ func (h *TenantHandler) AddMember(c *gin.Context) {
 	_ = targetUser
 	_ = role
 
-	existingMember, _ := h.repo.GetMember(c.Request.Context(), userID, tenantID)
+	existingMember, err := h.repo.GetMember(c.Request.Context(), userID, tenantID)
+	if err != nil && !errors.Is(err, repository.ErrUserNotFound) {
+		respondInternalError(c, "TENANT", "查询成员关系失败", err)
+		return
+	}
 	if existingMember != nil {
 		response.Conflict(c, "该用户已是租户成员")
 		return
@@ -64,7 +70,7 @@ func parseAddMemberParams(c *gin.Context) (uuid.UUID, uuid.UUID, uuid.UUID, bool
 func (h *TenantHandler) validateAddMemberRequest(c *gin.Context, tenantID, userID, roleID uuid.UUID) (*model.Tenant, *model.Role, *model.User, bool) {
 	tenant, err := h.repo.GetByID(c.Request.Context(), tenantID)
 	if err != nil {
-		response.NotFound(c, "租户不存在")
+		respondTenantLookupError(c, err)
 		return nil, nil, nil, false
 	}
 	if tenant.Status != model.TenantStatusActive {

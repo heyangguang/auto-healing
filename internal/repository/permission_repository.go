@@ -15,6 +15,10 @@ type PermissionRepository struct {
 	db *gorm.DB
 }
 
+const platformPermissionCodePrefix = "platform:"
+
+var ErrTenantPermissionScope = errors.New("租户角色只能分配租户权限")
+
 // PermissionFilter 权限过滤参数
 type PermissionFilter struct {
 	Module string
@@ -25,6 +29,10 @@ type PermissionFilter struct {
 // NewPermissionRepository 创建权限仓库
 func NewPermissionRepository() *PermissionRepository {
 	return &PermissionRepository{db: database.DB}
+}
+
+func NewPermissionRepositoryWithDB(db *gorm.DB) *PermissionRepository {
+	return &PermissionRepository{db: db}
 }
 
 // GetByID 根据 ID 获取权限
@@ -48,8 +56,21 @@ func (r *PermissionRepository) getPermission(ctx context.Context, predicate stri
 
 // List 获取所有权限
 func (r *PermissionRepository) List(ctx context.Context) ([]model.Permission, error) {
+	return r.listPermissions(ctx, PermissionFilter{}, false)
+}
+
+// ListTenant 获取租户可分配的权限
+func (r *PermissionRepository) ListTenant(ctx context.Context) ([]model.Permission, error) {
+	return r.listPermissions(ctx, PermissionFilter{}, true)
+}
+
+func (r *PermissionRepository) listPermissions(ctx context.Context, f PermissionFilter, tenantOnly bool) ([]model.Permission, error) {
 	var perms []model.Permission
-	err := r.db.WithContext(ctx).Order("module, resource, action").Find(&perms).Error
+	queryBuilder := buildPermissionFilterQuery(r.db.WithContext(ctx), f)
+	if tenantOnly {
+		queryBuilder = applyTenantPermissionScope(queryBuilder)
+	}
+	err := queryBuilder.Order("module, resource, action").Find(&perms).Error
 	return perms, err
 }
 
@@ -61,20 +82,12 @@ func (r *PermissionRepository) CountAll(ctx context.Context) (int64, error) {
 
 // ListWithFilter 带过滤条件获取权限
 func (r *PermissionRepository) ListWithFilter(ctx context.Context, f PermissionFilter) ([]model.Permission, error) {
-	queryBuilder := r.db.WithContext(ctx)
-	if f.Module != "" {
-		queryBuilder = queryBuilder.Where("module = ?", f.Module)
-	}
-	if f.Name != "" {
-		queryBuilder = queryBuilder.Where("name ILIKE ?", "%"+f.Name+"%")
-	}
-	if f.Code != "" {
-		queryBuilder = queryBuilder.Where("code ILIKE ?", "%"+f.Code+"%")
-	}
+	return r.listPermissions(ctx, f, false)
+}
 
-	var perms []model.Permission
-	err := queryBuilder.Order("module, resource, action").Find(&perms).Error
-	return perms, err
+// ListTenantWithFilter 带过滤条件获取租户可分配权限
+func (r *PermissionRepository) ListTenantWithFilter(ctx context.Context, f PermissionFilter) ([]model.Permission, error) {
+	return r.listPermissions(ctx, f, true)
 }
 
 // ListByModule 按模块获取权限
@@ -94,8 +107,11 @@ func (r *PermissionRepository) GetUserPermissions(ctx context.Context, userID uu
 		Where(`role_permissions.role_id IN (
 			SELECT role_id FROM user_platform_roles WHERE user_id = ?
 			UNION
-			SELECT role_id FROM user_tenant_roles WHERE user_id = ?
-		)`, userID, userID).
+			SELECT user_tenant_roles.role_id
+			FROM user_tenant_roles
+			INNER JOIN tenants ON tenants.id = user_tenant_roles.tenant_id
+			WHERE user_tenant_roles.user_id = ? AND tenants.status = ?
+		)`, userID, userID, model.TenantStatusActive).
 		Find(&perms).Error
 	return perms, err
 }
@@ -116,6 +132,7 @@ func (r *PermissionRepository) GetTenantPermissionCodes(ctx context.Context, use
 		Distinct("permissions.*").
 		Table("permissions").
 		Joins("INNER JOIN role_permissions ON role_permissions.permission_id = permissions.id").
+		Where("permissions.code NOT LIKE ?", platformPermissionCodePrefix+"%").
 		Where(`role_permissions.role_id IN (
 			SELECT role_id FROM user_platform_roles WHERE user_id = ?
 			UNION
@@ -143,6 +160,56 @@ func (r *PermissionRepository) GetPlatformPermissionCodes(ctx context.Context, u
 		return nil, err
 	}
 	return permissionCodes(perms), nil
+}
+
+func (r *PermissionRepository) ValidateTenantPermissionIDs(ctx context.Context, permissionIDs []uuid.UUID) error {
+	uniqueIDs := uniquePermissionIDs(permissionIDs)
+	if len(uniqueIDs) == 0 {
+		return nil
+	}
+
+	var count int64
+	err := applyTenantPermissionScope(r.db.WithContext(ctx).Model(&model.Permission{})).
+		Where("id IN ?", uniqueIDs).
+		Distinct("id").
+		Count(&count).Error
+	if err != nil {
+		return err
+	}
+	if count != int64(len(uniqueIDs)) {
+		return ErrTenantPermissionScope
+	}
+	return nil
+}
+
+func buildPermissionFilterQuery(queryBuilder *gorm.DB, f PermissionFilter) *gorm.DB {
+	if f.Module != "" {
+		queryBuilder = queryBuilder.Where("module = ?", f.Module)
+	}
+	if f.Name != "" {
+		queryBuilder = queryBuilder.Where("name ILIKE ?", "%"+f.Name+"%")
+	}
+	if f.Code != "" {
+		queryBuilder = queryBuilder.Where("code ILIKE ?", "%"+f.Code+"%")
+	}
+	return queryBuilder
+}
+
+func applyTenantPermissionScope(queryBuilder *gorm.DB) *gorm.DB {
+	return queryBuilder.Where("code NOT LIKE ?", platformPermissionCodePrefix+"%")
+}
+
+func uniquePermissionIDs(permissionIDs []uuid.UUID) []uuid.UUID {
+	seen := make(map[uuid.UUID]struct{}, len(permissionIDs))
+	uniqueIDs := make([]uuid.UUID, 0, len(permissionIDs))
+	for _, permissionID := range permissionIDs {
+		if _, ok := seen[permissionID]; ok {
+			continue
+		}
+		seen[permissionID] = struct{}{}
+		uniqueIDs = append(uniqueIDs, permissionID)
+	}
+	return uniqueIDs
 }
 
 func permissionCodes(perms []model.Permission) []string {

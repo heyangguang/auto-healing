@@ -2,11 +2,15 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+var ErrTenantMemberAssociationCorrupted = errors.New("tenant member association is corrupted")
 
 // ListMembers 查询租户成员（带角色和用户信息）
 func (r *TenantRepository) ListMembers(ctx context.Context, tenantID uuid.UUID) ([]model.UserTenantRole, error) {
@@ -25,16 +29,20 @@ func (r *TenantRepository) ListMembers(ctx context.Context, tenantID uuid.UUID) 
 		userIDs = append(userIDs, member.UserID)
 	}
 	var users []model.User
-	if loadErr := r.db.WithContext(ctx).Where("id IN ?", userIDs).Find(&users).Error; loadErr == nil {
-		userMap := make(map[uuid.UUID]model.User, len(users))
-		for _, user := range users {
-			userMap[user.ID] = user
+	if loadErr := r.db.WithContext(ctx).Where("id IN ?", userIDs).Find(&users).Error; loadErr != nil {
+		return nil, loadErr
+	}
+	userMap := make(map[uuid.UUID]model.User, len(users))
+	for _, user := range users {
+		userMap[user.ID] = user
+	}
+	for i := range members {
+		if user, ok := userMap[members[i].UserID]; ok {
+			members[i].User = user
 		}
-		for i := range members {
-			if user, ok := userMap[members[i].UserID]; ok {
-				members[i].User = user
-			}
-		}
+	}
+	if err := validateMemberAssociations(members, tenantID); err != nil {
+		return nil, err
 	}
 	return members, nil
 }
@@ -78,6 +86,9 @@ func (r *TenantRepository) RemoveMember(ctx context.Context, userID, tenantID uu
 func (r *TenantRepository) GetMember(ctx context.Context, userID, tenantID uuid.UUID) (*model.UserTenantRole, error) {
 	var member model.UserTenantRole
 	err := r.db.WithContext(ctx).Where("user_id = ? AND tenant_id = ?", userID, tenantID).First(&member).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUserNotFound
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -89,26 +100,16 @@ func (r *TenantRepository) UpdateMemberRole(ctx context.Context, userID, tenantI
 	if err := r.ensureTenantAssignableRole(ctx, tenantID, roleID); err != nil {
 		return err
 	}
-	return r.db.WithContext(ctx).Model(&model.UserTenantRole{}).
+	tx := r.db.WithContext(ctx).Model(&model.UserTenantRole{}).
 		Where("user_id = ? AND tenant_id = ?", userID, tenantID).
-		Update("role_id", roleID).Error
-}
-
-func (r *TenantRepository) UpdateMemberUserAndRole(ctx context.Context, user *model.User, tenantID uuid.UUID, roleID *uuid.UUID) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(user).Error; err != nil {
-			return err
-		}
-		if roleID == nil {
-			return nil
-		}
-		if err := r.ensureTenantAssignableRole(ctx, tenantID, *roleID); err != nil {
-			return err
-		}
-		return tx.Model(&model.UserTenantRole{}).
-			Where("user_id = ? AND tenant_id = ?", user.ID, tenantID).
-			Update("role_id", *roleID).Error
-	})
+		Update("role_id", roleID)
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return ErrUserNotFound
+	}
+	return nil
 }
 
 func (r *TenantRepository) ensureTenantAssignableRole(ctx context.Context, tenantID, roleID uuid.UUID) error {
@@ -139,7 +140,9 @@ func (r *TenantRepository) GetUserAllRoles(ctx context.Context, userID uuid.UUID
 		Distinct("roles.*").
 		Table("roles").
 		Joins("INNER JOIN user_tenant_roles ON user_tenant_roles.role_id = roles.id").
+		Joins("INNER JOIN tenants ON tenants.id = user_tenant_roles.tenant_id").
 		Where("user_tenant_roles.user_id = ?", userID).
+		Where("tenants.status = ?", model.TenantStatusActive).
 		Find(&roles).Error
 	return roles, err
 }
@@ -154,4 +157,19 @@ func (r *TenantRepository) GetUserTenantRoles(ctx context.Context, userID uuid.U
 		Where("user_tenant_roles.user_id = ? AND user_tenant_roles.tenant_id = ?", userID, tenantID).
 		Find(&roles).Error
 	return roles, err
+}
+
+func validateMemberAssociations(members []model.UserTenantRole, tenantID uuid.UUID) error {
+	for _, member := range members {
+		if member.Tenant.ID != tenantID {
+			return fmt.Errorf("%w: missing tenant %s for member %s", ErrTenantMemberAssociationCorrupted, tenantID, member.UserID)
+		}
+		if member.Role.ID != member.RoleID {
+			return fmt.Errorf("%w: missing role %s for member %s", ErrTenantMemberAssociationCorrupted, member.RoleID, member.UserID)
+		}
+		if member.User.ID != member.UserID {
+			return fmt.Errorf("%w: missing user %s", ErrTenantMemberAssociationCorrupted, member.UserID)
+		}
+	}
+	return nil
 }

@@ -4,6 +4,8 @@
 
 set -e
 
+DEFAULT_ADMIN_PASSWORD="admin123456"
+
 echo "========================================"
 echo "运维自愈系统 - 启动中"
 echo "========================================"
@@ -29,6 +31,7 @@ ADMIN_EXISTS=$(psql -h localhost -U postgres -d auto_healing -tAc "SELECT COUNT(
 
 if [ "$ADMIN_EXISTS" = "0" ]; then
     echo "🔄 初始化超级管理员..."
+    export INIT_ADMIN_PASSWORD="${INIT_ADMIN_PASSWORD:-$DEFAULT_ADMIN_PASSWORD}"
     ./bin/init-admin
 else
     echo "✅ 超级管理员已存在"
@@ -80,7 +83,7 @@ echo "  Mock ITSM: http://localhost:5000"
 echo ""
 echo "测试账号:"
 echo "  用户名: admin"
-echo "  密码:   admin123456"
+echo "  密码:   ${INIT_ADMIN_PASSWORD:-$DEFAULT_ADMIN_PASSWORD}"
 echo ""
 echo "查看日志:"
 echo "  主服务:  tail -f /tmp/server.log (或查看当前终端)"

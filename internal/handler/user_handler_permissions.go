@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strings"
+
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
@@ -9,11 +11,12 @@ import (
 
 // ListPermissions 获取权限列表
 func (h *PermissionHandler) ListPermissions(c *gin.Context) {
-	perms, err := h.permRepo.ListWithFilter(c.Request.Context(), repository.PermissionFilter{
+	filter := repository.PermissionFilter{
 		Module: c.Query("module"),
 		Name:   c.Query("name"),
 		Code:   c.Query("code"),
-	})
+	}
+	perms, err := h.listScopedPermissions(c, filter)
 	if err != nil {
 		response.InternalError(c, "获取权限列表失败")
 		return
@@ -23,7 +26,7 @@ func (h *PermissionHandler) ListPermissions(c *gin.Context) {
 
 // GetPermissionTree 获取权限树
 func (h *PermissionHandler) GetPermissionTree(c *gin.Context) {
-	perms, err := h.permRepo.List(c.Request.Context())
+	perms, err := h.listScopedPermissions(c, repository.PermissionFilter{})
 	if err != nil {
 		response.InternalError(c, "获取权限列表失败")
 		return
@@ -34,4 +37,15 @@ func (h *PermissionHandler) GetPermissionTree(c *gin.Context) {
 		tree[permission.Module] = append(tree[permission.Module], permission)
 	}
 	response.Success(c, tree)
+}
+
+func (h *PermissionHandler) listScopedPermissions(c *gin.Context, filter repository.PermissionFilter) ([]model.Permission, error) {
+	if isTenantPermissionRequest(c) {
+		return h.permRepo.ListTenantWithFilter(c.Request.Context(), filter)
+	}
+	return h.permRepo.ListWithFilter(c.Request.Context(), filter)
+}
+
+func isTenantPermissionRequest(c *gin.Context) bool {
+	return strings.HasPrefix(c.FullPath(), "/api/v1/tenant/")
 }

@@ -14,6 +14,7 @@ import (
 )
 
 var errDefaultPlatformRole = errors.New("获取默认角色失败")
+var errPlatformAdminStateCheck = errors.New("检查平台管理员状态失败")
 
 // CreateUser 创建平台用户，支持选择平台角色（不传则默认 platform_admin）
 func (h *UserHandler) CreateUser(c *gin.Context) {
@@ -25,14 +26,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return
 	}
-
-	user, err := h.authSvc.Register(c.Request.Context(), &body.RegisterRequest)
-	if err != nil {
-		response.BadRequest(c, ToBusinessError(err))
-		return
-	}
-
-	assignRoleID, err := h.platformRoleID(c, body.RoleID)
+	roleIDs, err := h.resolveCreateUserRoleIDs(c, body.RoleID, body.RegisterRequest.RoleIDs)
 	if err != nil {
 		if errors.Is(err, errDefaultPlatformRole) {
 			response.InternalError(c, "获取默认平台角色失败")
@@ -41,8 +35,12 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		}
 		return
 	}
-	if err := h.userRepo.AssignRoles(c.Request.Context(), user.ID, []uuid.UUID{assignRoleID}); err != nil {
-		response.InternalError(c, "分配平台角色失败")
+	body.RegisterRequest.RoleIDs = roleIDs
+	body.RegisterRequest.TenantID = nil
+
+	user, err := h.authSvc.Register(c.Request.Context(), &body.RegisterRequest)
+	if err != nil {
+		response.BadRequest(c, ToBusinessError(err))
 		return
 	}
 	h.respondCreatedUser(c, user.ID, user)
@@ -74,6 +72,10 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 	if err := h.validatePlatformAdminMutation(c, id, req.Status, targetRole); err != nil {
+		if errors.Is(err, errPlatformAdminStateCheck) {
+			respondInternalError(c, "USER", "检查平台管理员状态失败", err)
+			return
+		}
 		response.BadRequest(c, err.Error())
 		return
 	}
@@ -101,7 +103,12 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		response.BadRequest(c, "不能删除自己的账户")
 		return
 	}
-	if h.isProtectedPlatformAdmin(c, id) {
+	protected, err := h.isProtectedPlatformAdmin(c, id)
+	if err != nil {
+		respondInternalError(c, "USER", "检查平台管理员状态失败", err)
+		return
+	}
+	if protected {
 		response.BadRequest(c, "系统中必须保留至少一个平台管理员，无法删除")
 		return
 	}
@@ -145,17 +152,53 @@ func (h *UserHandler) AssignUserRoles(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误")
 		return
 	}
-	if err := h.validateAssignedPlatformRoles(c, id, req.RoleIDs); err != nil {
+	roleIDs, err := h.validateAssignedPlatformRoles(c, id, req.RoleIDs)
+	if err != nil {
+		if errors.Is(err, errPlatformAdminStateCheck) {
+			respondInternalError(c, "USER", "检查平台管理员状态失败", err)
+			return
+		}
 		response.BadRequest(c, err.Error())
 		return
 	}
-	if err := h.userRepo.AssignRoles(c.Request.Context(), id, req.RoleIDs); err != nil {
+	if err := h.userRepo.AssignRoles(c.Request.Context(), id, roleIDs); err != nil {
 		response.InternalError(c, "分配角色失败")
 		return
 	}
 
-	userWithRoles, _ := h.userRepo.GetByID(c.Request.Context(), id)
+	userWithRoles, err := h.userRepo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		respondInternalError(c, "USER", "重新加载用户失败", err)
+		return
+	}
 	response.Success(c, userWithRoles)
+}
+
+func (h *UserHandler) resolveCreateUserRoleIDs(c *gin.Context, roleID *uuid.UUID, roleIDs []uuid.UUID) ([]uuid.UUID, error) {
+	if roleID != nil && len(roleIDs) > 0 {
+		return nil, fmt.Errorf("role_id 和 role_ids 不能同时传递")
+	}
+	if len(roleIDs) > 0 {
+		return h.validatePlatformRoleIDs(c, roleIDs)
+	}
+	defaultRoleID, err := h.platformRoleID(c, roleID)
+	if err != nil {
+		return nil, err
+	}
+	return []uuid.UUID{defaultRoleID}, nil
+}
+
+func (h *UserHandler) validatePlatformRoleIDs(c *gin.Context, roleIDs []uuid.UUID) ([]uuid.UUID, error) {
+	uniqueRoleIDs := dedupeRoleIDs(roleIDs)
+	validated := make([]uuid.UUID, 0, len(uniqueRoleIDs))
+	for _, candidate := range uniqueRoleIDs {
+		role, err := h.validatePlatformRole(c, &candidate)
+		if err != nil {
+			return nil, err
+		}
+		validated = append(validated, role.ID)
+	}
+	return validated, nil
 }
 
 func (h *UserHandler) platformRoleID(c *gin.Context, roleID *uuid.UUID) (uuid.UUID, error) {
@@ -189,10 +232,14 @@ func (h *UserHandler) validatePlatformRole(c *gin.Context, roleID *uuid.UUID) (*
 }
 
 func (h *UserHandler) validatePlatformAdminMutation(c *gin.Context, userID uuid.UUID, status string, targetRole *model.Role) error {
-	if status != "" && status != "active" && h.isLastPlatformAdmin(c, userID) {
+	lastAdmin, err := h.isLastPlatformAdmin(c, userID)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errPlatformAdminStateCheck, err)
+	}
+	if status != "" && status != "active" && lastAdmin {
 		return fmt.Errorf("系统中必须保留至少一个可用的平台管理员，无法禁用")
 	}
-	if targetRole != nil && targetRole.Name != "platform_admin" && h.isLastPlatformAdmin(c, userID) {
+	if targetRole != nil && targetRole.Name != "platform_admin" && lastAdmin {
 		return fmt.Errorf("系统中必须保留至少一个平台管理员，无法变更角色")
 	}
 	return nil
@@ -211,60 +258,96 @@ func applyPlatformUserUpdate(user *model.User, req *UpdateUserRequest) {
 }
 
 func (h *UserHandler) respondCreatedUser(c *gin.Context, userID uuid.UUID, fallback *model.User) {
-	if userWithRoles, _ := h.userRepo.GetByID(c.Request.Context(), userID); userWithRoles != nil {
-		response.Created(c, userWithRoles)
+	userWithRoles, err := h.userRepo.GetByID(c.Request.Context(), userID)
+	if err != nil {
+		respondInternalError(c, "USER", "重新加载用户失败", err)
 		return
 	}
-	response.Created(c, fallback)
+	response.Created(c, chooseUserResponse(userWithRoles, fallback))
 }
 
 func (h *UserHandler) respondUpdatedUser(c *gin.Context, userID uuid.UUID, fallback *model.User) {
-	if userWithRoles, _ := h.userRepo.GetByID(c.Request.Context(), userID); userWithRoles != nil {
-		response.Success(c, userWithRoles)
+	userWithRoles, err := h.userRepo.GetByID(c.Request.Context(), userID)
+	if err != nil {
+		respondInternalError(c, "USER", "重新加载用户失败", err)
 		return
 	}
-	response.Success(c, fallback)
+	response.Success(c, chooseUserResponse(userWithRoles, fallback))
 }
 
-func (h *UserHandler) validateAssignedPlatformRoles(c *gin.Context, userID uuid.UUID, roleIDs []uuid.UUID) error {
-	if !h.isLastPlatformAdmin(c, userID) {
-		return nil
+func chooseUserResponse(reloaded, fallback *model.User) *model.User {
+	if reloaded != nil {
+		return reloaded
 	}
-	for _, roleID := range roleIDs {
+	return fallback
+}
+
+func (h *UserHandler) validateAssignedPlatformRoles(c *gin.Context, userID uuid.UUID, roleIDs []uuid.UUID) ([]uuid.UUID, error) {
+	validatedRoleIDs, err := h.validatePlatformRoleIDs(c, roleIDs)
+	if err != nil {
+		return nil, err
+	}
+	lastAdmin, err := h.isLastPlatformAdmin(c, userID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", errPlatformAdminStateCheck, err)
+	}
+	if !lastAdmin {
+		return validatedRoleIDs, nil
+	}
+	for _, roleID := range validatedRoleIDs {
 		if role, err := h.roleRepo.GetByID(c.Request.Context(), roleID); err == nil && role.Name == "platform_admin" {
-			return nil
+			return validatedRoleIDs, nil
 		}
 	}
-	return fmt.Errorf("系统中必须保留至少一个平台管理员，无法移除 platform_admin 角色")
+	return nil, fmt.Errorf("系统中必须保留至少一个平台管理员，无法移除 platform_admin 角色")
 }
 
-func (h *UserHandler) isProtectedPlatformAdmin(c *gin.Context, userID uuid.UUID) bool {
+func (h *UserHandler) isProtectedPlatformAdmin(c *gin.Context, userID uuid.UUID) (bool, error) {
 	platformAdmins, _, err := h.userRepo.List(c.Request.Context(), &repository.UserListParams{
 		Page:         1,
 		PageSize:     2,
 		PlatformOnly: true,
 	})
-	if err != nil || len(platformAdmins) > 1 {
-		return false
+	if err != nil {
+		return false, err
+	}
+	if len(platformAdmins) > 1 {
+		return false, nil
 	}
 	for _, user := range platformAdmins {
 		if user.ID == userID {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // isLastPlatformAdmin 判断指定用户是否是最后一个平台管理员
-func (h *UserHandler) isLastPlatformAdmin(c *gin.Context, userID uuid.UUID) bool {
+func (h *UserHandler) isLastPlatformAdmin(c *gin.Context, userID uuid.UUID) (bool, error) {
 	platformAdmins, _, err := h.userRepo.List(c.Request.Context(), &repository.UserListParams{
 		Page:         1,
 		PageSize:     2,
 		PlatformOnly: true,
 		Status:       "active",
 	})
-	if err != nil || len(platformAdmins) > 1 {
-		return false
+	if err != nil {
+		return false, err
 	}
-	return len(platformAdmins) == 1 && platformAdmins[0].ID == userID
+	if len(platformAdmins) > 1 {
+		return false, nil
+	}
+	return len(platformAdmins) == 1 && platformAdmins[0].ID == userID, nil
+}
+
+func dedupeRoleIDs(roleIDs []uuid.UUID) []uuid.UUID {
+	seen := make(map[uuid.UUID]struct{}, len(roleIDs))
+	result := make([]uuid.UUID, 0, len(roleIDs))
+	for _, roleID := range roleIDs {
+		if _, ok := seen[roleID]; ok {
+			continue
+		}
+		seen[roleID] = struct{}{}
+		result = append(result, roleID)
+	}
+	return result
 }

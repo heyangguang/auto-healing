@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // InviteToTenant 邀请用户加入租户
@@ -33,7 +35,11 @@ func (h *TenantHandler) InviteToTenant(c *gin.Context) {
 	}
 
 	settingsRepo := repository.NewPlatformSettingsRepository()
-	inviterID, _ := uuid.Parse(middleware.GetUserID(c))
+	inviterID, err := uuid.Parse(middleware.GetUserID(c))
+	if err != nil {
+		respondInternalError(c, "TENANT", "解析邀请人失败", err)
+		return
+	}
 	invRepo := repository.NewInvitationRepository()
 	invitation := &model.TenantInvitation{
 		TenantID:  tenantID,
@@ -53,7 +59,7 @@ func (h *TenantHandler) InviteToTenant(c *gin.Context) {
 	invitationURL := buildInvitationURL(c, settingsRepo, token)
 	invitation, err = invRepo.GetByID(c.Request.Context(), invitation.ID)
 	if err != nil {
-		respondInternalError(c, "TENANT", "查询邀请记录失败", err)
+		respondInvitationLookupError(c, "TENANT", "查询邀请记录失败", err)
 		return
 	}
 	response.Created(c, h.buildInviteResponse(c, req.SendEmail, req.Email, tenant.Name, role.DisplayName, invitation, invitationURL))
@@ -82,7 +88,7 @@ func parseTenantInvitationRequest(c *gin.Context) (uuid.UUID, uuid.UUID, inviteT
 func (h *TenantHandler) validateTenantInvitationRequest(c *gin.Context, tenantID, roleID uuid.UUID, email string) (*model.Tenant, *model.Role, bool) {
 	tenant, err := h.repo.GetByID(c.Request.Context(), tenantID)
 	if err != nil {
-		response.NotFound(c, "租户不存在")
+		respondTenantLookupError(c, err)
 		return nil, nil, false
 	}
 	if tenant.Status != model.TenantStatusActive {
@@ -101,18 +107,37 @@ func (h *TenantHandler) validateTenantInvitationRequest(c *gin.Context, tenantID
 	}
 
 	invRepo := repository.NewInvitationRepository()
-	if hasPending, _ := invRepo.CheckEmailPendingInTenant(c.Request.Context(), tenantID, email); hasPending {
+	hasPending, err := invRepo.CheckEmailPendingInTenant(c.Request.Context(), tenantID, email)
+	if err != nil {
+		respondInternalError(c, "TENANT", "检查待处理邀请失败", err)
+		return nil, nil, false
+	}
+	if hasPending {
 		response.Conflict(c, "该邮箱已有待处理的邀请")
 		return nil, nil, false
 	}
 
-	existingUser, _ := h.userRepo.GetByEmail(c.Request.Context(), email)
+	existingUser, err := h.userRepo.GetByEmail(c.Request.Context(), email)
+	if err != nil && !errors.Is(err, repository.ErrUserNotFound) {
+		respondInternalError(c, "TENANT", "查询用户失败", err)
+		return nil, nil, false
+	}
 	if existingUser != nil {
-		existingMember, _ := h.repo.GetMember(c.Request.Context(), existingUser.ID, tenantID)
+		if existingUser.IsPlatformAdmin {
+			response.BadRequest(c, "平台管理员不能加入租户，请选择其他用户")
+			return nil, nil, false
+		}
+		existingMember, err := h.repo.GetMember(c.Request.Context(), existingUser.ID, tenantID)
+		if err != nil && !errors.Is(err, repository.ErrUserNotFound) {
+			respondInternalError(c, "TENANT", "查询成员关系失败", err)
+			return nil, nil, false
+		}
 		if existingMember != nil {
 			response.Conflict(c, "该邮箱用户已是租户成员")
 			return nil, nil, false
 		}
+		response.Conflict(c, "该邮箱已注册，请直接添加成员")
+		return nil, nil, false
 	}
 	return tenant, role, true
 }
@@ -160,11 +185,18 @@ func (h *TenantHandler) ListInvitations(c *gin.Context) {
 		response.BadRequest(c, "无效的租户 ID")
 		return
 	}
+	if _, err := h.repo.GetByID(c.Request.Context(), tenantID); err != nil {
+		respondTenantLookupError(c, err)
+		return
+	}
 	status := c.Query("status")
 	page, pageSize := parsePagination(c, 20)
 
 	invRepo := repository.NewInvitationRepository()
-	invRepo.ExpireOldInvitations(c.Request.Context())
+	if _, err := invRepo.ExpireOldInvitations(c.Request.Context()); err != nil {
+		respondInternalError(c, "TENANT", "更新邀请过期状态失败", err)
+		return
+	}
 	invitations, total, err := invRepo.ListByTenant(c.Request.Context(), tenantID, status, page, pageSize)
 	if err != nil {
 		response.InternalError(c, "查询邀请记录失败")
@@ -184,7 +216,8 @@ func (h *TenantHandler) ListInvitations(c *gin.Context) {
 
 // CancelInvitation 取消邀请
 func (h *TenantHandler) CancelInvitation(c *gin.Context) {
-	if _, err := uuid.Parse(c.Param("id")); err != nil {
+	tenantID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
 		response.BadRequest(c, "无效的租户 ID")
 		return
 	}
@@ -197,6 +230,10 @@ func (h *TenantHandler) CancelInvitation(c *gin.Context) {
 	invRepo := repository.NewInvitationRepository()
 	inv, err := invRepo.GetByID(c.Request.Context(), invID)
 	if err != nil {
+		respondInvitationLookupError(c, "TENANT", "查询邀请失败", err)
+		return
+	}
+	if !invitationBelongsToTenant(inv, tenantID) {
 		response.NotFound(c, "邀请不存在")
 		return
 	}
@@ -209,4 +246,16 @@ func (h *TenantHandler) CancelInvitation(c *gin.Context) {
 		return
 	}
 	response.Message(c, "邀请已取消")
+}
+
+func invitationBelongsToTenant(inv *model.TenantInvitation, tenantID uuid.UUID) bool {
+	return inv != nil && inv.TenantID == tenantID
+}
+
+func respondInvitationLookupError(c *gin.Context, module, message string, err error) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		response.NotFound(c, "邀请不存在")
+		return
+	}
+	respondInternalError(c, module, message, err)
 }

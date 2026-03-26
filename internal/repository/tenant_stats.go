@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+var ErrTenantStatsTableNotAllowed = errors.New("tenant stats table is not allowed")
 
 var tenantStatsAllowedTables = map[string]bool{
 	"audit_logs":             true,
@@ -30,21 +33,24 @@ var tenantStatsAllowedTables = map[string]bool{
 }
 
 // CountTenantMembers 统计某租户的成员数
-func (r *TenantRepository) CountTenantMembers(ctx context.Context, tenantID uuid.UUID) int64 {
+func (r *TenantRepository) CountTenantMembers(ctx context.Context, tenantID uuid.UUID) (int64, error) {
 	var count int64
-	r.db.WithContext(ctx).Model(&model.UserTenantRole{}).Where("tenant_id = ?", tenantID).Distinct("user_id").Count(&count)
-	return count
+	err := r.db.WithContext(ctx).Model(&model.UserTenantRole{}).
+		Where("tenant_id = ?", tenantID).
+		Distinct("user_id").
+		Count(&count).Error
+	return count, err
 }
 
 // CountTenantTable 统计某租户在指定表中的记录数（通用方法）
-func (r *TenantRepository) CountTenantTable(ctx context.Context, tenantID uuid.UUID, tableName string) int64 {
+func (r *TenantRepository) CountTenantTable(ctx context.Context, tenantID uuid.UUID, tableName string) (int64, error) {
 	tableName, ok := resolveTenantStatsTable(tableName)
 	if !ok {
-		return 0
+		return 0, ErrTenantStatsTableNotAllowed
 	}
 	var count int64
-	r.db.WithContext(ctx).Table(tableName).Where("tenant_id = ?", tenantID).Count(&count)
-	return count
+	err := r.db.WithContext(ctx).Table(tableName).Where("tenant_id = ?", tenantID).Count(&count).Error
+	return count, err
 }
 
 func resolveTenantStatsTable(tableName string) (string, bool) {
@@ -53,30 +59,33 @@ func resolveTenantStatsTable(tableName string) (string, bool) {
 }
 
 // GetTenantLastActivity 获取租户最近一条审计日志的时间
-func (r *TenantRepository) GetTenantLastActivity(ctx context.Context, tenantID uuid.UUID) *string {
+func (r *TenantRepository) GetTenantLastActivity(ctx context.Context, tenantID uuid.UUID) (*string, error) {
 	var result sql.NullString
 	err := r.db.WithContext(ctx).
 		Table("audit_logs").
 		Select("to_char(MAX(created_at), 'YYYY-MM-DD HH24:MI:SS')").
 		Where("tenant_id = ?", tenantID).
 		Scan(&result).Error
-	if err != nil || !result.Valid {
-		return nil
+	if err != nil {
+		return nil, err
 	}
-	return &result.String
+	if !result.Valid {
+		return nil, nil
+	}
+	return &result.String, nil
 }
 
 // CountTenantTableWhere 统计某租户在指定表中满足额外条件的记录数
-func (r *TenantRepository) CountTenantTableWhere(ctx context.Context, tenantID uuid.UUID, tableName string, extraWhere string) int64 {
+func (r *TenantRepository) CountTenantTableWhere(ctx context.Context, tenantID uuid.UUID, tableName string, extraWhere string) (int64, error) {
 	tableName, ok := resolveTenantStatsTable(tableName)
 	if !ok {
-		return 0
+		return 0, ErrTenantStatsTableNotAllowed
 	}
 	var count int64
 	query := r.db.WithContext(ctx).Table(tableName).Where("tenant_id = ?", tenantID)
 	query = applyTenantStatsExtraFilter(query, extraWhere)
-	query.Count(&count)
-	return count
+	err := query.Count(&count).Error
+	return count, err
 }
 
 type trendRow struct {
@@ -97,7 +106,7 @@ func (r *TenantRepository) GetTrendByDayWhere(ctx context.Context, tableName str
 func (r *TenantRepository) getTrendByDay(ctx context.Context, tableName string, days int, extraWhere string) ([]string, []int64, error) {
 	tableName, ok := resolveTenantStatsTable(tableName)
 	if !ok {
-		return fillEmptyTrend(days), fillZeroCounts(days), nil
+		return nil, nil, ErrTenantStatsTableNotAllowed
 	}
 	var rows []trendRow
 	since := time.Now().AddDate(0, 0, -days)

@@ -50,6 +50,26 @@ func TestRoleRepositoryAssignPermissionsRejectsSystemTenantRole(t *testing.T) {
 	}
 }
 
+func TestRoleRepositoryAssignPermissionsRejectsPlatformPermissionInTenantContext(t *testing.T) {
+	db := newStateTestDB(t)
+	createRolePermissionSchema(t, db)
+	repo := NewRoleRepositoryWithDB(db)
+	tenantID := uuid.New()
+	roleID := uuid.New()
+	permissionID := uuid.New()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	mustExec(t, db, `INSERT INTO roles (id, name, display_name, is_system, scope, tenant_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		roleID.String(), "ops-reviewer", "Ops Reviewer", false, "tenant", tenantID.String(), now, now)
+	mustExec(t, db, `INSERT INTO permissions (id, code, name, module, resource, action, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		permissionID.String(), "platform:users:list", "List Users", "platform", "users", "list", now)
+
+	err := repo.AssignPermissions(WithTenantID(context.Background(), tenantID), roleID, []uuid.UUID{permissionID})
+	if !errors.Is(err, ErrTenantPermissionScope) {
+		t.Fatalf("AssignPermissions() error = %v, want %v", err, ErrTenantPermissionScope)
+	}
+}
+
 func TestRoleRepositoryAssignPermissionsAllowsTenantCustomRole(t *testing.T) {
 	db := newStateTestDB(t)
 	createRolePermissionSchema(t, db)
@@ -77,6 +97,33 @@ func TestRoleRepositoryAssignPermissionsAllowsTenantCustomRole(t *testing.T) {
 	}
 	if count != 2 {
 		t.Fatalf("role_permissions count = %d, want 2", count)
+	}
+}
+
+func TestRoleRepositoryAssignPermissionsDeduplicatesPermissionIDs(t *testing.T) {
+	db := newStateTestDB(t)
+	createRolePermissionSchema(t, db)
+	repo := NewRoleRepositoryWithDB(db)
+	tenantID := uuid.New()
+	roleID := uuid.New()
+	permissionID := uuid.New()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	mustExec(t, db, `INSERT INTO roles (id, name, display_name, is_system, scope, tenant_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		roleID.String(), "ops-reviewer", "Ops Reviewer", false, "tenant", tenantID.String(), now, now)
+	mustExec(t, db, `INSERT INTO permissions (id, code, name, module, resource, action, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		permissionID.String(), "tenant:roles:view", "View", "tenant", "roles", "view", now)
+
+	if err := repo.AssignPermissions(WithTenantID(context.Background(), tenantID), roleID, []uuid.UUID{permissionID, permissionID}); err != nil {
+		t.Fatalf("AssignPermissions() error = %v", err)
+	}
+
+	var count int64
+	if err := db.Table("role_permissions").Where("role_id = ?", roleID.String()).Count(&count).Error; err != nil {
+		t.Fatalf("count role_permissions error = %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("role_permissions count = %d, want 1", count)
 	}
 }
 
