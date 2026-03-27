@@ -20,6 +20,14 @@ type AuthHandler struct {
 	userRepo          *repository.UserRepository
 }
 
+type AuthHandlerDeps struct {
+	AuthService       *authService.Service
+	JWTService        *jwt.Service
+	AuditRepo         *repository.AuditLogRepository
+	PlatformAuditRepo *repository.PlatformAuditLogRepository
+	UserRepo          *repository.UserRepository
+}
+
 // NewAuthHandler 创建认证处理器
 func NewAuthHandler(cfg *config.Config) *AuthHandler {
 	jwtSvc := jwt.NewService(jwt.Config{
@@ -29,12 +37,22 @@ func NewAuthHandler(cfg *config.Config) *AuthHandler {
 		Issuer:          cfg.JWT.Issuer,
 	}, newAuthTokenBlacklistStore())
 
+	return NewAuthHandlerWithDeps(AuthHandlerDeps{
+		AuthService:       authService.NewService(jwtSvc),
+		JWTService:        jwtSvc,
+		AuditRepo:         repository.NewAuditLogRepository(database.DB),
+		PlatformAuditRepo: repository.NewPlatformAuditLogRepository(),
+		UserRepo:          repository.NewUserRepository(),
+	})
+}
+
+func NewAuthHandlerWithDeps(deps AuthHandlerDeps) *AuthHandler {
 	return &AuthHandler{
-		authSvc:           authService.NewService(jwtSvc),
-		jwtSvc:            jwtSvc,
-		auditRepo:         repository.NewAuditLogRepository(database.DB),
-		platformAuditRepo: repository.NewPlatformAuditLogRepository(),
-		userRepo:          repository.NewUserRepository(),
+		authSvc:           deps.AuthService,
+		jwtSvc:            deps.JWTService,
+		auditRepo:         deps.AuditRepo,
+		platformAuditRepo: deps.PlatformAuditRepo,
+		userRepo:          deps.UserRepo,
 	}
 }
 

@@ -13,13 +13,29 @@ type TenantHandler struct {
 	authSvc  *authService.Service
 }
 
+type TenantHandlerDeps struct {
+	TenantRepo  *repository.TenantRepository
+	RoleRepo    *repository.RoleRepository
+	UserRepo    *repository.UserRepository
+	AuthService *authService.Service
+}
+
 // NewTenantHandler 创建租户处理器
 func NewTenantHandler(authSvc *authService.Service) *TenantHandler {
+	return NewTenantHandlerWithDeps(TenantHandlerDeps{
+		TenantRepo:  repository.NewTenantRepository(),
+		RoleRepo:    repository.NewRoleRepository(),
+		UserRepo:    repository.NewUserRepository(),
+		AuthService: authSvc,
+	})
+}
+
+func NewTenantHandlerWithDeps(deps TenantHandlerDeps) *TenantHandler {
 	return &TenantHandler{
-		repo:     repository.NewTenantRepository(),
-		roleRepo: repository.NewRoleRepository(),
-		userRepo: repository.NewUserRepository(),
-		authSvc:  authSvc,
+		repo:     deps.TenantRepo,
+		roleRepo: deps.RoleRepo,
+		userRepo: deps.UserRepo,
+		authSvc:  deps.AuthService,
 	}
 }
 

@@ -14,14 +14,32 @@ type ImpersonationHandler struct {
 	siteMessageRepo   *repository.SiteMessageRepository
 }
 
+type ImpersonationHandlerDeps struct {
+	ImpersonationRepo *repository.ImpersonationRepository
+	TenantRepo        *repository.TenantRepository
+	AuditRepo         *repository.AuditLogRepository
+	PlatformAuditRepo *repository.PlatformAuditLogRepository
+	SiteMessageRepo   *repository.SiteMessageRepository
+}
+
 // NewImpersonationHandler 创建 Impersonation 处理器
 func NewImpersonationHandler() *ImpersonationHandler {
+	return NewImpersonationHandlerWithDeps(ImpersonationHandlerDeps{
+		ImpersonationRepo: repository.NewImpersonationRepository(),
+		TenantRepo:        repository.NewTenantRepository(),
+		AuditRepo:         repository.NewAuditLogRepository(database.DB),
+		PlatformAuditRepo: repository.NewPlatformAuditLogRepository(),
+		SiteMessageRepo:   repository.NewSiteMessageRepository(),
+	})
+}
+
+func NewImpersonationHandlerWithDeps(deps ImpersonationHandlerDeps) *ImpersonationHandler {
 	return &ImpersonationHandler{
-		repo:              repository.NewImpersonationRepository(),
-		tenantRepo:        repository.NewTenantRepository(),
-		auditRepo:         repository.NewAuditLogRepository(database.DB),
-		platformAuditRepo: repository.NewPlatformAuditLogRepository(),
-		siteMessageRepo:   repository.NewSiteMessageRepository(),
+		repo:              deps.ImpersonationRepo,
+		tenantRepo:        deps.TenantRepo,
+		auditRepo:         deps.AuditRepo,
+		platformAuditRepo: deps.PlatformAuditRepo,
+		siteMessageRepo:   deps.SiteMessageRepo,
 	}
 }
 

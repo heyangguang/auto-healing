@@ -17,12 +17,26 @@ type UserHandler struct {
 	authSvc  *authService.Service
 }
 
+type UserHandlerDeps struct {
+	UserRepo    *repository.UserRepository
+	RoleRepo    *repository.RoleRepository
+	AuthService *authService.Service
+}
+
 // NewUserHandler 创建用户处理器
 func NewUserHandler(authSvc *authService.Service) *UserHandler {
+	return NewUserHandlerWithDeps(UserHandlerDeps{
+		UserRepo:    repository.NewUserRepository(),
+		RoleRepo:    repository.NewRoleRepository(),
+		AuthService: authSvc,
+	})
+}
+
+func NewUserHandlerWithDeps(deps UserHandlerDeps) *UserHandler {
 	return &UserHandler{
-		userRepo: repository.NewUserRepository(),
-		roleRepo: repository.NewRoleRepository(),
-		authSvc:  authSvc,
+		userRepo: deps.UserRepo,
+		roleRepo: deps.RoleRepo,
+		authSvc:  deps.AuthService,
 	}
 }
 
@@ -32,11 +46,23 @@ type RoleHandler struct {
 	permRepo *repository.PermissionRepository
 }
 
+type RoleHandlerDeps struct {
+	RoleRepo       *repository.RoleRepository
+	PermissionRepo *repository.PermissionRepository
+}
+
 // NewRoleHandler 创建角色处理器
 func NewRoleHandler() *RoleHandler {
+	return NewRoleHandlerWithDeps(RoleHandlerDeps{
+		RoleRepo:       repository.NewRoleRepository(),
+		PermissionRepo: repository.NewPermissionRepository(),
+	})
+}
+
+func NewRoleHandlerWithDeps(deps RoleHandlerDeps) *RoleHandler {
 	return &RoleHandler{
-		roleRepo: repository.NewRoleRepository(),
-		permRepo: repository.NewPermissionRepository(),
+		roleRepo: deps.RoleRepo,
+		permRepo: deps.PermissionRepo,
 	}
 }
 
@@ -45,10 +71,20 @@ type PermissionHandler struct {
 	permRepo *repository.PermissionRepository
 }
 
+type PermissionHandlerDeps struct {
+	PermissionRepo *repository.PermissionRepository
+}
+
 // NewPermissionHandler 创建权限处理器
 func NewPermissionHandler() *PermissionHandler {
+	return NewPermissionHandlerWithDeps(PermissionHandlerDeps{
+		PermissionRepo: repository.NewPermissionRepository(),
+	})
+}
+
+func NewPermissionHandlerWithDeps(deps PermissionHandlerDeps) *PermissionHandler {
 	return &PermissionHandler{
-		permRepo: repository.NewPermissionRepository(),
+		permRepo: deps.PermissionRepo,
 	}
 }
 
