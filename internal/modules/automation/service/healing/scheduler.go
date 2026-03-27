@@ -59,9 +59,13 @@ func DefaultSchedulerDeps(executor *FlowExecutor) SchedulerDeps {
 	}
 }
 
+func DefaultSchedulerRuntimeDeps() SchedulerDeps {
+	return DefaultSchedulerDeps(NewFlowExecutor())
+}
+
 // NewScheduler 创建调度器
 func NewScheduler() *Scheduler {
-	return NewSchedulerWithDeps(DefaultSchedulerDeps(NewFlowExecutor()))
+	return NewSchedulerWithDeps(DefaultSchedulerRuntimeDeps())
 }
 
 func NewSchedulerWithDeps(deps SchedulerDeps) *Scheduler {

@@ -44,15 +44,19 @@ type GitSchedulerDeps struct {
 	Now        func() time.Time
 }
 
-// NewGitScheduler 创建 Git 同步调度器
-func NewGitScheduler() *GitScheduler {
-	return NewGitSchedulerWithDeps(GitSchedulerDeps{
+func DefaultGitSchedulerDeps() GitSchedulerDeps {
+	return GitSchedulerDeps{
 		GitService: gitService.NewService(),
 		DB:         database.DB,
 		Interval:   60 * time.Second,
 		InFlight:   schedulerx.NewInFlightSet(),
 		Now:        time.Now,
-	})
+	}
+}
+
+// NewGitScheduler 创建 Git 同步调度器
+func NewGitScheduler() *GitScheduler {
+	return NewGitSchedulerWithDeps(DefaultGitSchedulerDeps())
 }
 
 func NewGitSchedulerWithDeps(deps GitSchedulerDeps) *GitScheduler {

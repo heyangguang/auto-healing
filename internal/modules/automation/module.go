@@ -25,15 +25,29 @@ type Module struct {
 	Schedule  *automationhttp.ScheduleHandler
 }
 
-// New 创建 automation 域模块。
-func New() *Module {
+type ModuleDeps struct {
+	ExecutionRepo     *automationrepo.ExecutionRepository
+	FlowRepo          *automationrepo.HealingFlowRepository
+	RuleRepo          *automationrepo.HealingRuleRepository
+	InstanceRepo      *automationrepo.FlowInstanceRepository
+	ApprovalRepo      *automationrepo.ApprovalTaskRepository
+	ScheduleRepo      *automationrepo.ScheduleRepository
+	IncidentRepo      *incidentrepo.IncidentRepository
+	NotificationRepo  *engagementrepo.NotificationRepository
+	ExecutionService  *executionSvc.Service
+	ScheduleService   *scheduleSvc.Service
+	FlowExecutor      *healingSvc.FlowExecutor
+	HealingScheduler  *healingSvc.Scheduler
+}
+
+func DefaultModuleDeps() ModuleDeps {
 	executionRepo := automationrepo.NewExecutionRepository()
 	flowRepo := automationrepo.NewHealingFlowRepository()
 	ruleRepo := automationrepo.NewHealingRuleRepository()
 	instanceRepo := automationrepo.NewFlowInstanceRepository()
 	approvalRepo := automationrepo.NewApprovalTaskRepository()
 	scheduleRepo := automationrepo.NewScheduleRepository()
-	incidentRepository := incidentrepo.NewIncidentRepository()
+	incidentRepo := incidentrepo.NewIncidentRepository()
 	notificationRepo := engagementrepo.NewNotificationRepository(database.DB)
 	notificationService := notification.NewConfiguredService(database.DB)
 	executionService := executionSvc.NewServiceWithDeps(executionSvc.ServiceDeps{
@@ -57,23 +71,44 @@ func New() *Module {
 		executionService,
 		notificationService,
 	))
-	scheduler := healingSvc.NewSchedulerWithDeps(healingSvc.DefaultSchedulerDeps(flowExecutor))
+	return ModuleDeps{
+		ExecutionRepo:    executionRepo,
+		FlowRepo:         flowRepo,
+		RuleRepo:         ruleRepo,
+		InstanceRepo:     instanceRepo,
+		ApprovalRepo:     approvalRepo,
+		ScheduleRepo:     scheduleRepo,
+		IncidentRepo:     incidentRepo,
+		NotificationRepo: notificationRepo,
+		ExecutionService: executionService,
+		ScheduleService:  scheduleService,
+		FlowExecutor:     flowExecutor,
+		HealingScheduler: healingSvc.NewSchedulerWithDeps(healingSvc.DefaultSchedulerDeps(flowExecutor)),
+	}
+}
+
+// New 创建 automation 域模块。
+func New() *Module {
+	return NewWithDeps(DefaultModuleDeps())
+}
+
+func NewWithDeps(deps ModuleDeps) *Module {
 	module := &Module{
 		Execution: automationhttp.NewExecutionHandlerWithDeps(automationhttp.ExecutionHandlerDeps{
-			Service: executionService,
+			Service: deps.ExecutionService,
 		}),
 		Healing: automationhttp.NewHealingHandlerWithDeps(automationhttp.HealingHandlerDeps{
-			FlowRepo:         flowRepo,
-			RuleRepo:         ruleRepo,
-			InstanceRepo:     instanceRepo,
-			ApprovalRepo:     approvalRepo,
-			IncidentRepo:     incidentRepository,
-			NotificationRepo: notificationRepo,
-			Executor:         flowExecutor,
-			Scheduler:        scheduler,
+			FlowRepo:         deps.FlowRepo,
+			RuleRepo:         deps.RuleRepo,
+			InstanceRepo:     deps.InstanceRepo,
+			ApprovalRepo:     deps.ApprovalRepo,
+			IncidentRepo:     deps.IncidentRepo,
+			NotificationRepo: deps.NotificationRepo,
+			Executor:         deps.FlowExecutor,
+			Scheduler:        deps.HealingScheduler,
 		}),
 		Schedule: automationhttp.NewScheduleHandlerWithDeps(automationhttp.ScheduleHandlerDeps{
-			Service: scheduleService,
+			Service: deps.ScheduleService,
 		}),
 	}
 	platformlifecycle.RegisterCleanup(module.Execution.Shutdown)

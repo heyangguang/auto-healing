@@ -18,10 +18,13 @@ import (
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/modules/automation/service/healing"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // @title Auto-Healing System API
@@ -105,13 +108,19 @@ type startupDeps struct {
 var listStartupSeedJobs = startupSeedJobs
 
 func runStartupJobs(ctx context.Context) error {
-	return runStartupJobsWithDeps(ctx, newStartupDeps())
+	return runStartupJobsWithDeps(ctx, newStartupDepsWithDB(database.DB))
 }
 
-func newStartupDeps() startupDeps {
+func newStartupDepsWithDB(db *gorm.DB) startupDeps {
+	settingsRepo := settingsrepo.NewPlatformSettingsRepositoryWithDB(db)
 	return startupDeps{
-		dictionary: opsservice.NewDictionaryService(),
-		cleaner:    engagementrepo.NewSiteMessageRepository(),
+		dictionary: opsservice.NewDictionaryServiceWithDeps(opsservice.DictionaryServiceDeps{
+			Repo: opsrepo.NewDictionaryRepository(),
+		}),
+		cleaner: engagementrepo.NewSiteMessageRepositoryWithDeps(engagementrepo.SiteMessageRepositoryDeps{
+			DB:               db,
+			PlatformSettings: settingsRepo,
+		}),
 	}
 }
 
@@ -158,7 +167,7 @@ type lifecycleService interface {
 
 func startSchedulers() []lifecycleService {
 	schedulers := []lifecycleService{
-		appruntime.NewManager(),
+		appruntime.NewManagerWithDeps(appruntime.ManagerDeps{DB: database.DB}),
 		healing.DefaultScheduler(),
 	}
 	for _, item := range schedulers {

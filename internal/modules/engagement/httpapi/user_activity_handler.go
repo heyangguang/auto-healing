@@ -18,13 +18,6 @@ type UserActivityHandlerDeps struct {
 	Repo *engagementrepo.UserActivityRepository
 }
 
-// NewUserActivityHandler 创建用户活动处理器
-func NewUserActivityHandler() *UserActivityHandler {
-	return NewUserActivityHandlerWithDeps(UserActivityHandlerDeps{
-		Repo: engagementrepo.NewUserActivityRepository(),
-	})
-}
-
 func NewUserActivityHandlerWithDeps(deps UserActivityHandlerDeps) *UserActivityHandler {
 	return &UserActivityHandler{
 		repo: deps.Repo,

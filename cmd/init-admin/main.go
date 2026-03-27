@@ -78,9 +78,9 @@ type adminRepos struct {
 
 func newAdminRepos() adminRepos {
 	return adminRepos{
-		user:       accessrepo.NewUserRepository(),
-		role:       accessrepo.NewRoleRepository(),
-		permission: accessrepo.NewPermissionRepository(),
+		user:       accessrepo.NewUserRepositoryWithDB(database.DB),
+		role:       accessrepo.NewRoleRepositoryWithDB(database.DB),
+		permission: accessrepo.NewPermissionRepositoryWithDB(database.DB),
 	}
 }
 

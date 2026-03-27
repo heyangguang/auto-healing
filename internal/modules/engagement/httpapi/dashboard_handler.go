@@ -27,15 +27,6 @@ type DashboardHandlerDeps struct {
 	RoleRepo      *accessrepo.RoleRepository
 }
 
-// NewDashboardHandler 创建 Dashboard 处理器
-func NewDashboardHandler() *DashboardHandler {
-	return NewDashboardHandlerWithDeps(DashboardHandlerDeps{
-		DashboardRepo: engagementrepo.NewDashboardRepository(),
-		WorkspaceRepo: engagementrepo.NewWorkspaceRepository(),
-		RoleRepo:      accessrepo.NewRoleRepository(),
-	})
-}
-
 func NewDashboardHandlerWithDeps(deps DashboardHandlerDeps) *DashboardHandler {
 	return &DashboardHandler{
 		repo:     deps.DashboardRepo,

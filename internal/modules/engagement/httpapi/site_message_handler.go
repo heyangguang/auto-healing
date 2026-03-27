@@ -34,17 +34,6 @@ type SiteMessageHandlerDeps struct {
 	UserRepo             *accessrepo.UserRepository
 }
 
-// NewSiteMessageHandler 创建站内信处理器
-func NewSiteMessageHandler() *SiteMessageHandler {
-	return NewSiteMessageHandlerWithDeps(SiteMessageHandlerDeps{
-		SiteMessageRepo:      engagementrepo.NewSiteMessageRepository(),
-		PlatformSettingsRepo: settingsrepo.NewPlatformSettingsRepository(),
-		EventBus:             platformevents.GetMessageEventBus(),
-		TenantRepo:           accessrepo.NewTenantRepository(),
-		UserRepo:             accessrepo.NewUserRepository(),
-	})
-}
-
 func NewSiteMessageHandlerWithDeps(deps SiteMessageHandlerDeps) *SiteMessageHandler {
 	return &SiteMessageHandler{
 		repo:             deps.SiteMessageRepo,

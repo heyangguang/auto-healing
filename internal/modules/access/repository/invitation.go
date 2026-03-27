@@ -19,7 +19,11 @@ type InvitationRepository struct {
 
 // NewInvitationRepository 创建邀请仓库
 func NewInvitationRepository() *InvitationRepository {
-	return &InvitationRepository{db: database.DB}
+	return NewInvitationRepositoryWithDB(database.DB)
+}
+
+func NewInvitationRepositoryWithDB(db *gorm.DB) *InvitationRepository {
+	return &InvitationRepository{db: db}
 }
 
 // Create 创建邀请记录

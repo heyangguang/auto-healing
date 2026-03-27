@@ -47,16 +47,20 @@ type PluginSchedulerDeps struct {
 	Now           func() time.Time
 }
 
-// NewPluginScheduler 创建调度器
-func NewPluginScheduler() *PluginScheduler {
-	return NewPluginSchedulerWithDeps(PluginSchedulerDeps{
+func DefaultPluginSchedulerDeps() PluginSchedulerDeps {
+	return PluginSchedulerDeps{
 		PluginService: pluginService.NewService(),
 		CMDBService:   pluginService.NewCMDBService(),
 		DB:            database.DB,
 		Interval:      30 * time.Second,
 		InFlight:      schedulerx.NewInFlightSet(),
 		Now:           time.Now,
-	})
+	}
+}
+
+// NewPluginScheduler 创建调度器
+func NewPluginScheduler() *PluginScheduler {
+	return NewPluginSchedulerWithDeps(DefaultPluginSchedulerDeps())
 }
 
 func NewPluginSchedulerWithDeps(deps PluginSchedulerDeps) *PluginScheduler {

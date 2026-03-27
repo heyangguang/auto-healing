@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
@@ -33,15 +32,6 @@ type WorkbenchHandlerDeps struct {
 type workbenchSection struct {
 	key string
 	fn  func() (interface{}, error)
-}
-
-// NewWorkbenchHandler 创建工作台处理器
-func NewWorkbenchHandler() *WorkbenchHandler {
-	return NewWorkbenchHandlerWithDeps(WorkbenchHandlerDeps{
-		WorkbenchRepo: engagementrepo.NewWorkbenchRepository(database.DB),
-		ActivityRepo:  engagementrepo.NewUserActivityRepository(),
-		UserRepo:      accessrepo.NewUserRepository(),
-	})
 }
 
 func NewWorkbenchHandlerWithDeps(deps WorkbenchHandlerDeps) *WorkbenchHandler {

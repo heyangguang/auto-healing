@@ -19,7 +19,11 @@ type ImpersonationRepository struct {
 
 // NewImpersonationRepository 创建 Impersonation 仓库
 func NewImpersonationRepository() *ImpersonationRepository {
-	return &ImpersonationRepository{db: database.DB}
+	return NewImpersonationRepositoryWithDB(database.DB)
+}
+
+func NewImpersonationRepositoryWithDB(db *gorm.DB) *ImpersonationRepository {
+	return &ImpersonationRepository{db: db}
 }
 
 // Create 创建 Impersonation 申请

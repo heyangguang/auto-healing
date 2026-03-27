@@ -54,9 +54,8 @@ type ServiceDeps struct {
 	Lifecycle        *asyncLifecycle
 }
 
-// NewService 创建执行任务服务
-func NewService() *Service {
-	return NewServiceWithDeps(ServiceDeps{
+func DefaultServiceDeps() ServiceDeps {
+	return ServiceDeps{
 		Repo:             automationrepo.NewExecutionRepository(),
 		GitRepo:          integrationrepo.NewGitRepositoryRepository(),
 		SecretsRepo:      secretsrepo.NewSecretsSourceRepository(),
@@ -69,7 +68,12 @@ func NewService() *Service {
 		BlacklistSvc:     opsservice.NewCommandBlacklistService(),
 		ExemptionSvc:     opsservice.NewBlacklistExemptionService(),
 		Lifecycle:        newAsyncLifecycle(maxExecutionWorkers),
-	})
+	}
+}
+
+// NewService 创建执行任务服务
+func NewService() *Service {
+	return NewServiceWithDeps(DefaultServiceDeps())
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

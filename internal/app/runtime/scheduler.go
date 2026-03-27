@@ -35,6 +35,7 @@ import (
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	schedulerx "github.com/company/auto-healing/internal/platform/schedulerx"
+	"gorm.io/gorm"
 )
 
 // Manager 调度器管理器
@@ -48,8 +49,20 @@ type Manager struct {
 	running               bool
 }
 
+type ManagerDeps struct {
+	DB *gorm.DB
+}
+
 // NewManager 创建调度器管理器
 func NewManager() *Manager {
+	return NewManagerWithDeps(ManagerDeps{DB: database.DB})
+}
+
+func NewManagerWithDeps(deps ManagerDeps) *Manager {
+	db := deps.DB
+	if db == nil {
+		db = database.DB
+	}
 	executionRepo := automationrepo.NewExecutionRepository()
 	scheduleRepo := automationrepo.NewScheduleRepository()
 	flowRepo := automationrepo.NewHealingFlowRepository()
@@ -58,7 +71,7 @@ func NewManager() *Manager {
 	playbookRepo := integrationrepo.NewPlaybookRepository()
 	secretRepo := secretsrepo.NewSecretsSourceRepository()
 	cmdbRepo := cmdbrepo.NewCMDBItemRepository()
-	notifSvc := notificationSvc.NewConfiguredService(database.DB)
+	notifSvc := notificationSvc.NewConfiguredService(db)
 	execSvc := executionSvc.NewServiceWithDeps(executionSvc.ServiceDeps{
 		Repo:             executionRepo,
 		GitRepo:          gitRepoRepo,
@@ -98,13 +111,13 @@ func NewManager() *Manager {
 	})
 	cmdbService := pluginSvc.NewCMDBServiceWithDeps(pluginSvc.CMDBServiceDeps{CMDBRepo: cmdbRepo})
 	blacklistExemptionService := opsservice.NewBlacklistExemptionServiceWithDeps(opsservice.BlacklistExemptionServiceDeps{
-		Repo: opsrepo.NewBlacklistExemptionRepository(database.DB),
+		Repo: opsrepo.NewBlacklistExemptionRepository(db),
 	})
 	return &Manager{
 		pluginScheduler: integrationsched.NewPluginSchedulerWithDeps(integrationsched.PluginSchedulerDeps{
 			PluginService: pluginService,
 			CMDBService:   cmdbService,
-			DB:            database.DB,
+			DB:            db,
 			Interval:      30 * time.Second,
 			InFlight:      schedulerx.NewInFlightSet(),
 			Now:           time.Now,
@@ -113,14 +126,14 @@ func NewManager() *Manager {
 			ExecutionService: execSvc,
 			ScheduleService:  schedSvc,
 			ScheduleRepo:     scheduleRepo,
-			DB:               database.DB,
+			DB:               db,
 			Interval:         30 * time.Second,
 			InFlight:         schedulerx.NewInFlightSet(),
 			Sem:              make(chan struct{}, 8),
 		}),
 		gitScheduler: integrationsched.NewGitSchedulerWithDeps(integrationsched.GitSchedulerDeps{
 			GitService: gitService,
-			DB:         database.DB,
+			DB:         db,
 			Interval:   60 * time.Second,
 			InFlight:   schedulerx.NewInFlightSet(),
 			Now:        time.Now,

@@ -34,28 +34,32 @@ type ServiceDeps struct {
 	Lifecycle    *asyncLifecycle
 }
 
-// NewService 创建 Git 仓库服务
-func NewService() *Service {
-	reposDir := os.Getenv("GIT_REPOS_DIR")
-	if reposDir == "" {
-		reposDir = DefaultReposDir
-	}
-	return NewServiceWithDeps(ServiceDeps{
+func DefaultServiceDeps() ServiceDeps {
+	return ServiceDeps{
 		Repo:         integrationrepo.NewGitRepositoryRepository(),
 		PlaybookRepo: integrationrepo.NewPlaybookRepository(),
-		ReposDir:     reposDir,
+		ReposDir:     defaultReposDir(),
 		PlaybookSvc:  playbookSvc.NewService,
 		Lifecycle:    newAsyncLifecycle(),
-	})
+	}
+}
+
+func defaultReposDir() string {
+	reposDir := os.Getenv("GIT_REPOS_DIR")
+	if reposDir == "" {
+		return DefaultReposDir
+	}
+	return reposDir
+}
+
+// NewService 创建 Git 仓库服务
+func NewService() *Service {
+	return NewServiceWithDeps(DefaultServiceDeps())
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {
 	if deps.ReposDir == "" {
-		reposDir := os.Getenv("GIT_REPOS_DIR")
-		if reposDir == "" {
-			reposDir = DefaultReposDir
-		}
-		deps.ReposDir = reposDir
+		deps.ReposDir = defaultReposDir()
 	}
 	if deps.PlaybookSvc == nil {
 		deps.PlaybookSvc = playbookSvc.NewService

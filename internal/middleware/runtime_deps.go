@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 
+	"github.com/company/auto-healing/internal/database"
 	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
@@ -39,33 +40,40 @@ type RuntimeDeps struct {
 }
 
 func NewRuntimeDeps() RuntimeDeps {
+	return NewRuntimeDepsWithDB(database.DB)
+}
+
+func NewRuntimeDepsWithDB(db *gorm.DB) RuntimeDeps {
+	if db == nil {
+		db = database.DB
+	}
 	return RuntimeDeps{
-		UserRepo:          accessrepo.NewUserRepository(),
-		TenantRepo:        accessrepo.NewTenantRepository(),
-		PermissionRepo:    accessrepo.NewPermissionRepository(),
-		RoleRepo:          accessrepo.NewRoleRepository(),
+		UserRepo:          accessrepo.NewUserRepositoryWithDB(db),
+		TenantRepo:        accessrepo.NewTenantRepositoryWithDB(db),
+		PermissionRepo:    accessrepo.NewPermissionRepositoryWithDB(db),
+		RoleRepo:          accessrepo.NewRoleRepositoryWithDB(db),
 		ImpersonationRepo: accessrepo.NewImpersonationRepository(),
-		AuditRepo:         auditrepo.NewAuditLogRepository(defaultDatabase()),
+		AuditRepo:         auditrepo.NewAuditLogRepository(db),
 		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
-		DB:                defaultDatabase(),
+		DB:                db,
 	}
 }
 
 func (deps RuntimeDeps) withDefaults() RuntimeDeps {
 	if deps.DB == nil {
-		deps.DB = defaultDatabase()
+		deps.DB = database.DB
 	}
 	if deps.UserRepo == nil {
-		deps.UserRepo = accessrepo.NewUserRepository()
+		deps.UserRepo = accessrepo.NewUserRepositoryWithDB(deps.DB)
 	}
 	if deps.TenantRepo == nil {
-		deps.TenantRepo = accessrepo.NewTenantRepository()
+		deps.TenantRepo = accessrepo.NewTenantRepositoryWithDB(deps.DB)
 	}
 	if deps.PermissionRepo == nil {
-		deps.PermissionRepo = accessrepo.NewPermissionRepository()
+		deps.PermissionRepo = accessrepo.NewPermissionRepositoryWithDB(deps.DB)
 	}
 	if deps.RoleRepo == nil {
-		deps.RoleRepo = accessrepo.NewRoleRepository()
+		deps.RoleRepo = accessrepo.NewRoleRepositoryWithDB(deps.DB)
 	}
 	if deps.ImpersonationRepo == nil {
 		deps.ImpersonationRepo = accessrepo.NewImpersonationRepository()

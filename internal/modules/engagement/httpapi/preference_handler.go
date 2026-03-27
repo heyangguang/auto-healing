@@ -20,13 +20,6 @@ type PreferenceHandlerDeps struct {
 	PreferenceRepo *engagementrepo.UserPreferenceRepository
 }
 
-// NewPreferenceHandler 创建用户偏好处理器
-func NewPreferenceHandler() *PreferenceHandler {
-	return NewPreferenceHandlerWithDeps(PreferenceHandlerDeps{
-		PreferenceRepo: engagementrepo.NewUserPreferenceRepository(),
-	})
-}
-
 func NewPreferenceHandlerWithDeps(deps PreferenceHandlerDeps) *PreferenceHandler {
 	return &PreferenceHandler{
 		prefRepo: deps.PreferenceRepo,

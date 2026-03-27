@@ -17,7 +17,11 @@ type DictionaryRepository struct {
 
 // NewDictionaryRepository 创建仓储
 func NewDictionaryRepository() *DictionaryRepository {
-	return &DictionaryRepository{db: database.DB}
+	return NewDictionaryRepositoryWithDB(database.DB)
+}
+
+func NewDictionaryRepositoryWithDB(db *gorm.DB) *DictionaryRepository {
+	return &DictionaryRepository{db: db}
 }
 
 // DictTypeInfo 字典类型信息

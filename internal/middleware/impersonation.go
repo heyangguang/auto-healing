@@ -44,6 +44,10 @@ var (
 
 // loadImpersonationPermissions 从数据库加载 impersonation_accessor 角色的权限
 func loadImpersonationPermissions(ctx context.Context) ([]string, error) {
+	return loadImpersonationPermissionsWithLoader(ctx, impersonationPermsLoader)
+}
+
+func loadImpersonationPermissionsWithLoader(ctx context.Context, loader func(context.Context) ([]string, error)) ([]string, error) {
 	now := time.Now()
 
 	impersonationPermsMu.RLock()
@@ -54,7 +58,7 @@ func loadImpersonationPermissions(ctx context.Context) ([]string, error) {
 	}
 	impersonationPermsMu.RUnlock()
 
-	perms, err := impersonationPermsLoader(ctx)
+	perms, err := loader(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +72,11 @@ func loadImpersonationPermissions(ctx context.Context) ([]string, error) {
 }
 
 func loadImpersonationPermissionsFromDB(ctx context.Context) ([]string, error) {
-	roleRepo := NewRuntimeDeps().RoleRepo
+	roleRepo := accessrepo.NewRoleRepository()
+	return loadImpersonationPermissionsFromRoleRepo(ctx, roleRepo)
+}
+
+func loadImpersonationPermissionsFromRoleRepo(ctx context.Context, roleRepo *accessrepo.RoleRepository) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	role, err := roleRepo.GetByName(ctx, "impersonation_accessor")
@@ -113,10 +121,12 @@ func ImpersonationMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		if !applyImpersonationContext(c, requestID, req.TenantID) {
-			return
-		}
-		c.Next()
+			if !applyImpersonationContextWithLoader(c, requestID, req.TenantID, func(innerCtx context.Context) ([]string, error) {
+				return loadImpersonationPermissionsFromRoleRepo(innerCtx, deps.RoleRepo)
+			}) {
+				return
+			}
+			c.Next()
 	}
 }
 
@@ -177,7 +187,11 @@ func validateImpersonationRequest(c *gin.Context, req *accessmodel.Impersonation
 }
 
 func applyImpersonationContext(c *gin.Context, requestID, tenantID uuid.UUID) bool {
-	perms, err := loadImpersonationPermissions(c.Request.Context())
+	return applyImpersonationContextWithLoader(c, requestID, tenantID, loadImpersonationPermissions)
+}
+
+func applyImpersonationContextWithLoader(c *gin.Context, requestID, tenantID uuid.UUID, loader func(context.Context) ([]string, error)) bool {
+	perms, err := loadImpersonationPermissionsWithLoader(c.Request.Context(), loader)
 	if err != nil {
 		logger.Auth("IMPERSONATION").Error("加载 impersonation 权限失败: request=%s err=%v", requestID, err)
 		abortInternalError(c, "加载 Impersonation 权限失败", ErrorCodeImpersonationPermsLoadFailed)

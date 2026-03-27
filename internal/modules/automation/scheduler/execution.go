@@ -60,9 +60,8 @@ type ExecutionSchedulerDeps struct {
 	Sem              chan struct{}
 }
 
-// NewExecutionScheduler 创建执行任务调度器
-func NewExecutionScheduler() *ExecutionScheduler {
-	return NewExecutionSchedulerWithDeps(ExecutionSchedulerDeps{
+func DefaultExecutionSchedulerDeps() ExecutionSchedulerDeps {
+	return ExecutionSchedulerDeps{
 		ExecutionService: executionService.NewService(),
 		ScheduleService:  scheduleService.NewService(),
 		ScheduleRepo:     automationrepo.NewScheduleRepository(),
@@ -70,7 +69,12 @@ func NewExecutionScheduler() *ExecutionScheduler {
 		Interval:         30 * time.Second,
 		InFlight:         platformsched.NewInFlightSet(),
 		Sem:              make(chan struct{}, 8),
-	})
+	}
+}
+
+// NewExecutionScheduler 创建执行任务调度器
+func NewExecutionScheduler() *ExecutionScheduler {
+	return NewExecutionSchedulerWithDeps(DefaultExecutionSchedulerDeps())
 }
 
 func NewExecutionSchedulerWithDeps(deps ExecutionSchedulerDeps) *ExecutionScheduler {

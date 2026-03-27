@@ -22,8 +22,16 @@ type Module struct {
 	Playbook *integrationhttp.PlaybookHandler
 }
 
-// New 创建 integrations 域模块。
-func New() *Module {
+type ModuleDeps struct {
+	PluginService   *plugin.Service
+	IncidentService *plugin.IncidentService
+	CMDBService     *plugin.CMDBService
+	GitService      *gitSvc.Service
+	PlaybookService *playbook.Service
+	SecretService   *secretsSvc.Service
+}
+
+func DefaultModuleDeps() ModuleDeps {
 	gitRepoRepo := integrationrepo.NewGitRepositoryRepository()
 	playbookRepo := integrationrepo.NewPlaybookRepository()
 	executionRepo := automationrepo.NewExecutionRepository()
@@ -39,47 +47,58 @@ func New() *Module {
 		IncidentRepo: incidentRepo,
 		HTTPClient:   httpClient,
 	})
-	gitService := gitSvc.NewServiceWithDeps(gitSvc.ServiceDeps{
-		Repo:         gitRepoRepo,
-		PlaybookRepo: playbookRepo,
-		PlaybookSvc: func() *playbook.Service {
-			return playbook.NewServiceWithDeps(playbook.ServiceDeps{
-				Repo:          playbookRepo,
-				GitRepo:       gitRepoRepo,
-				ExecutionRepo: executionRepo,
-			})
-		},
-	})
-	playbookService := playbook.NewServiceWithDeps(playbook.ServiceDeps{
-		Repo:          playbookRepo,
-		GitRepo:       gitRepoRepo,
-		ExecutionRepo: executionRepo,
-	})
-	incidentService := plugin.NewIncidentServiceWithDeps(plugin.IncidentServiceDeps{
-		IncidentRepo: incidentRepo,
-		PluginRepo:   pluginRepo,
-		HTTPClient:   httpClient,
-	})
-	cmdbService := plugin.NewCMDBServiceWithDeps(plugin.CMDBServiceDeps{
-		CMDBRepo: cmdbRepo,
-	})
-	secretService := secretsSvc.NewServiceWithDeps(secretsSvc.ServiceDeps{
-		Repo: secretsrepo.NewSecretsSourceRepository(),
-	})
+	return ModuleDeps{
+		PluginService: pluginService,
+		IncidentService: plugin.NewIncidentServiceWithDeps(plugin.IncidentServiceDeps{
+			IncidentRepo: incidentRepo,
+			PluginRepo:   pluginRepo,
+			HTTPClient:   httpClient,
+		}),
+		CMDBService: plugin.NewCMDBServiceWithDeps(plugin.CMDBServiceDeps{
+			CMDBRepo: cmdbRepo,
+		}),
+		GitService: gitSvc.NewServiceWithDeps(gitSvc.ServiceDeps{
+			Repo:         gitRepoRepo,
+			PlaybookRepo: playbookRepo,
+			PlaybookSvc: func() *playbook.Service {
+				return playbook.NewServiceWithDeps(playbook.ServiceDeps{
+					Repo:          playbookRepo,
+					GitRepo:       gitRepoRepo,
+					ExecutionRepo: executionRepo,
+				})
+			},
+		}),
+		PlaybookService: playbook.NewServiceWithDeps(playbook.ServiceDeps{
+			Repo:          playbookRepo,
+			GitRepo:       gitRepoRepo,
+			ExecutionRepo: executionRepo,
+		}),
+		SecretService: secretsSvc.NewServiceWithDeps(secretsSvc.ServiceDeps{
+			Repo: secretsrepo.NewSecretsSourceRepository(),
+		}),
+	}
+}
+
+// New 创建 integrations 域模块。
+func New() *Module {
+	return NewWithDeps(DefaultModuleDeps())
+}
+
+func NewWithDeps(deps ModuleDeps) *Module {
 	module := &Module{
 		Plugin: integrationhttp.NewPluginHandlerWithDeps(integrationhttp.PluginHandlerDeps{
-			PluginService:   pluginService,
-			IncidentService: incidentService,
+			PluginService:   deps.PluginService,
+			IncidentService: deps.IncidentService,
 		}),
 		CMDB: integrationhttp.NewCMDBHandlerWithDeps(integrationhttp.CMDBHandlerDeps{
-			Service:       cmdbService,
-			SecretService: secretService,
+			Service:       deps.CMDBService,
+			SecretService: deps.SecretService,
 		}),
 		GitRepo: integrationhttp.NewGitRepoHandlerWithDeps(integrationhttp.GitRepoHandlerDeps{
-			Service: gitService,
+			Service: deps.GitService,
 		}),
 		Playbook: integrationhttp.NewPlaybookHandlerWithDeps(integrationhttp.PlaybookHandlerDeps{
-			Service: playbookService,
+			Service: deps.PlaybookService,
 		}),
 	}
 	platformlifecycle.RegisterCleanup(module.Plugin.Shutdown)

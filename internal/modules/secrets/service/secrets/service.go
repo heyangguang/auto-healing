@@ -11,11 +11,15 @@ type ServiceDeps struct {
 	Repo *secretsrepo.SecretsSourceRepository
 }
 
+func DefaultServiceDeps() ServiceDeps {
+	return ServiceDeps{
+		Repo: secretsrepo.NewSecretsSourceRepository(),
+	}
+}
+
 // NewService 创建密钥服务
 func NewService() *Service {
-	return NewServiceWithDeps(ServiceDeps{
-		Repo: secretsrepo.NewSecretsSourceRepository(),
-	})
+	return NewServiceWithDeps(DefaultServiceDeps())
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

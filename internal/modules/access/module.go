@@ -24,75 +24,113 @@ type Module struct {
 	Impersonation *accesshttp.ImpersonationHandler
 }
 
+type ModuleDeps struct {
+	AuthService       *authservice.Service
+	JWTService        *jwt.Service
+	UserRepo          *accessrepo.UserRepository
+	RoleRepo          *accessrepo.RoleRepository
+	TenantRepo        *accessrepo.TenantRepository
+	PermissionRepo    *accessrepo.PermissionRepository
+	InvitationRepo    *accessrepo.InvitationRepository
+	ImpersonationRepo *accessrepo.ImpersonationRepository
+	SiteMessageRepo   *engagementrepo.SiteMessageRepository
+	SettingsRepo      *settingsrepo.PlatformSettingsRepository
+	EmailService      *engagementservice.PlatformEmailService
+	AuditRepo         *auditrepo.AuditLogRepository
+	PlatformAuditRepo *auditrepo.PlatformAuditLogRepository
+}
+
 // New 创建 access 域模块。
 func New(cfg *config.Config) *Module {
-	userRepo := accessrepo.NewUserRepository()
-	roleRepo := accessrepo.NewRoleRepository()
-	tenantRepo := accessrepo.NewTenantRepository()
-	permissionRepo := accessrepo.NewPermissionRepository()
-	invitationRepo := accessrepo.NewInvitationRepository()
-	impersonationRepo := accessrepo.NewImpersonationRepository()
-	siteMessageRepo := engagementrepo.NewSiteMessageRepository()
-	settingsRepo := settingsrepo.NewPlatformSettingsRepository()
+	db := database.DB
+	settingsRepo := settingsrepo.NewPlatformSettingsRepositoryWithDB(db)
+	userRepo := accessrepo.NewUserRepositoryWithDB(db)
+	roleRepo := accessrepo.NewRoleRepositoryWithDB(db)
+	tenantRepo := accessrepo.NewTenantRepositoryWithDB(db)
+	permissionRepo := accessrepo.NewPermissionRepositoryWithDB(db)
+	invitationRepo := accessrepo.NewInvitationRepositoryWithDB(db)
+	impersonationRepo := accessrepo.NewImpersonationRepositoryWithDB(db)
+	siteMessageRepo := engagementrepo.NewSiteMessageRepositoryWithDeps(engagementrepo.SiteMessageRepositoryDeps{
+		DB:               db,
+		PlatformSettings: settingsRepo,
+	})
 	jwtSvc := jwt.NewService(jwt.Config{
 		Secret:          cfg.JWT.Secret,
 		AccessTokenTTL:  cfg.JWT.AccessTokenTTL(),
 		RefreshTokenTTL: cfg.JWT.RefreshTokenTTL(),
 		Issuer:          cfg.JWT.Issuer,
 	}, accesshttp.NewAuthTokenBlacklistStore())
-	authSvc := authservice.NewServiceWithDeps(authservice.ServiceDeps{
-		UserRepo:       userRepo,
-		RoleRepo:       roleRepo,
-		PermissionRepo: permissionRepo,
-		TenantRepo:     tenantRepo,
-		JWTService:     jwtSvc,
-		DB:             database.DB,
-	})
-	authHandler := accesshttp.NewAuthHandlerWithDeps(accesshttp.AuthHandlerDeps{
-		AuthService:       authSvc,
+	return NewWithDeps(ModuleDeps{
+		AuthService: authservice.NewServiceWithDeps(authservice.ServiceDeps{
+			UserRepo:       userRepo,
+			RoleRepo:       roleRepo,
+			PermissionRepo: permissionRepo,
+			TenantRepo:     tenantRepo,
+			JWTService:     jwtSvc,
+			DB:             db,
+		}),
 		JWTService:        jwtSvc,
-		AuditRepo:         auditrepo.NewAuditLogRepository(database.DB),
-		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
 		UserRepo:          userRepo,
-		TenantRepo:        tenantRepo,
+		RoleRepo:          roleRepo,
 		PermissionRepo:    permissionRepo,
+		TenantRepo:        tenantRepo,
+		InvitationRepo: invitationRepo,
+		ImpersonationRepo: impersonationRepo,
+		SiteMessageRepo:   siteMessageRepo,
+		SettingsRepo:      settingsRepo,
+		EmailService: engagementservice.NewPlatformEmailServiceWithDeps(engagementservice.PlatformEmailServiceDeps{
+			SettingsRepo: settingsRepo,
+		}),
+		AuditRepo:         auditrepo.NewAuditLogRepository(db),
+		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
 	})
+}
 
+func NewWithDeps(deps ModuleDeps) *Module {
+	authHandler := accesshttp.NewAuthHandlerWithDeps(accesshttp.AuthHandlerDeps{
+		AuthService:       deps.AuthService,
+		JWTService:        deps.JWTService,
+		AuditRepo:         deps.AuditRepo,
+		PlatformAuditRepo: deps.PlatformAuditRepo,
+		UserRepo:          deps.UserRepo,
+		TenantRepo:        deps.TenantRepo,
+		PermissionRepo:    deps.PermissionRepo,
+	})
 	return &Module{
 		Auth: authHandler,
 		User: accesshttp.NewUserHandlerWithDeps(accesshttp.UserHandlerDeps{
-			UserRepo:    userRepo,
-			RoleRepo:    roleRepo,
-			AuthService: authSvc,
+			UserRepo:    deps.UserRepo,
+			RoleRepo:    deps.RoleRepo,
+			AuthService: deps.AuthService,
 		}),
 		TenantUser: accesshttp.NewTenantUserHandlerWithDeps(accesshttp.TenantUserHandlerDeps{
-			AuthService: authSvc,
-			TenantRepo:  tenantRepo,
-			UserRepo:    userRepo,
-			RoleRepo:    roleRepo,
+			AuthService: deps.AuthService,
+			TenantRepo:  deps.TenantRepo,
+			UserRepo:    deps.UserRepo,
+			RoleRepo:    deps.RoleRepo,
 		}),
 		Role: accesshttp.NewRoleHandlerWithDeps(accesshttp.RoleHandlerDeps{
-			RoleRepo:       roleRepo,
-			PermissionRepo: permissionRepo,
+			RoleRepo:       deps.RoleRepo,
+			PermissionRepo: deps.PermissionRepo,
 		}),
 		Permission: accesshttp.NewPermissionHandlerWithDeps(accesshttp.PermissionHandlerDeps{
-			PermissionRepo: permissionRepo,
+			PermissionRepo: deps.PermissionRepo,
 		}),
 		Tenant: accesshttp.NewTenantHandlerWithDeps(accesshttp.TenantHandlerDeps{
-			TenantRepo:     tenantRepo,
-			RoleRepo:       roleRepo,
-			UserRepo:       userRepo,
-			AuthService:    authSvc,
-			InvitationRepo: invitationRepo,
-			SettingsRepo:   settingsRepo,
-			EmailService:   engagementservice.NewPlatformEmailService(),
+			TenantRepo:     deps.TenantRepo,
+			RoleRepo:       deps.RoleRepo,
+			UserRepo:       deps.UserRepo,
+			AuthService:    deps.AuthService,
+			InvitationRepo: deps.InvitationRepo,
+			SettingsRepo:   deps.SettingsRepo,
+			EmailService:   deps.EmailService,
 		}),
 		Impersonation: accesshttp.NewImpersonationHandlerWithDeps(accesshttp.ImpersonationHandlerDeps{
-			ImpersonationRepo: impersonationRepo,
-			TenantRepo:        tenantRepo,
-			AuditRepo:         auditrepo.NewAuditLogRepository(database.DB),
-			PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
-			SiteMessageRepo:   siteMessageRepo,
+			ImpersonationRepo: deps.ImpersonationRepo,
+			TenantRepo:        deps.TenantRepo,
+			AuditRepo:         deps.AuditRepo,
+			PlatformAuditRepo: deps.PlatformAuditRepo,
+			SiteMessageRepo:   deps.SiteMessageRepo,
 		}),
 	}
 }

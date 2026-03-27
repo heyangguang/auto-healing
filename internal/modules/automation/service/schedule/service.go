@@ -23,12 +23,16 @@ type ServiceDeps struct {
 	ExecRepo *automationrepo.ExecutionRepository
 }
 
-// NewService 创建定时任务调度服务
-func NewService() *Service {
-	return NewServiceWithDeps(ServiceDeps{
+func DefaultServiceDeps() ServiceDeps {
+	return ServiceDeps{
 		Repo:     automationrepo.NewScheduleRepository(),
 		ExecRepo: automationrepo.NewExecutionRepository(),
-	})
+	}
+}
+
+// NewService 创建定时任务调度服务
+func NewService() *Service {
+	return NewServiceWithDeps(DefaultServiceDeps())
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

@@ -25,11 +25,15 @@ type CMDBServiceDeps struct {
 	CMDBRepo *cmdbrepo.CMDBItemRepository
 }
 
+func DefaultCMDBServiceDeps() CMDBServiceDeps {
+	return CMDBServiceDeps{
+		CMDBRepo: cmdbrepo.NewCMDBItemRepository(),
+	}
+}
+
 // NewCMDBService 创建 CMDB 服务
 func NewCMDBService() *CMDBService {
-	return NewCMDBServiceWithDeps(CMDBServiceDeps{
-		CMDBRepo: cmdbrepo.NewCMDBItemRepository(),
-	})
+	return NewCMDBServiceWithDeps(DefaultCMDBServiceDeps())
 }
 
 func NewCMDBServiceWithDeps(deps CMDBServiceDeps) *CMDBService {

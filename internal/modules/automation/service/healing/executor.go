@@ -68,9 +68,13 @@ func DefaultFlowExecutorDeps(executionSvc *execution.Service, notificationServic
 	}
 }
 
+func DefaultFlowExecutorRuntimeDeps() FlowExecutorDeps {
+	return DefaultFlowExecutorDeps(execution.NewService(), notificationSvc.NewConfiguredService(database.DB))
+}
+
 // NewFlowExecutor 创建流程执行器
 func NewFlowExecutor() *FlowExecutor {
-	return NewFlowExecutorWithDeps(DefaultFlowExecutorDeps(execution.NewService(), notificationSvc.NewConfiguredService(database.DB)))
+	return NewFlowExecutorWithDeps(DefaultFlowExecutorRuntimeDeps())
 }
 
 func NewFlowExecutorWithDependencies(executionSvc *execution.Service, notificationService *notificationSvc.Service) *FlowExecutor {

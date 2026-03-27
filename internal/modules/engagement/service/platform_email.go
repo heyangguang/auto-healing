@@ -25,13 +25,6 @@ type PlatformEmailServiceDeps struct {
 	SettingsRepo *settingsrepo.PlatformSettingsRepository
 }
 
-// NewPlatformEmailService 创建平台邮件服务
-func NewPlatformEmailService() *PlatformEmailService {
-	return NewPlatformEmailServiceWithDeps(PlatformEmailServiceDeps{
-		SettingsRepo: settingsrepo.NewPlatformSettingsRepository(),
-	})
-}
-
 func NewPlatformEmailServiceWithDeps(deps PlatformEmailServiceDeps) *PlatformEmailService {
 	return &PlatformEmailService{
 		settingsRepo: deps.SettingsRepo,

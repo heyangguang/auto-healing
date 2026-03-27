@@ -25,13 +25,17 @@ type ServiceDeps struct {
 	ExecutionRepo *automationrepo.ExecutionRepository
 }
 
-// NewService 创建 Playbook 服务
-func NewService() *Service {
-	return NewServiceWithDeps(ServiceDeps{
+func DefaultServiceDeps() ServiceDeps {
+	return ServiceDeps{
 		Repo:          integrationrepo.NewPlaybookRepository(),
 		GitRepo:       integrationrepo.NewGitRepositoryRepository(),
 		ExecutionRepo: automationrepo.NewExecutionRepository(),
-	})
+	}
+}
+
+// NewService 创建 Playbook 服务
+func NewService() *Service {
+	return NewServiceWithDeps(DefaultServiceDeps())
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

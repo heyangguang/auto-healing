@@ -25,8 +25,12 @@ type CommandBlacklistRepository struct {
 
 // NewCommandBlacklistRepository 创建仓库
 func NewCommandBlacklistRepository() *CommandBlacklistRepository {
+	return NewCommandBlacklistRepositoryWithDB(database.DB)
+}
+
+func NewCommandBlacklistRepositoryWithDB(db *gorm.DB) *CommandBlacklistRepository {
 	return &CommandBlacklistRepository{
-		db:        database.DB,
+		db:        db,
 		cacheTTL:  60 * time.Second,
 		cache:     make(map[string][]model.CommandBlacklist),
 		cacheTime: make(map[string]time.Time),

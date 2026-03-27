@@ -39,16 +39,20 @@ type ServiceDeps struct {
 	Lifecycle    *asyncLifecycle
 }
 
-// NewService 创建插件服务
-func NewService() *Service {
-	return NewServiceWithDeps(ServiceDeps{
+func DefaultServiceDeps() ServiceDeps {
+	return ServiceDeps{
 		PluginRepo:   integrationrepo.NewPluginRepository(),
 		SyncLogRepo:  integrationrepo.NewPluginSyncLogRepository(),
 		CMDBRepo:     cmdbrepo.NewCMDBItemRepository(),
 		IncidentRepo: incidentrepo.NewIncidentRepository(),
 		HTTPClient:   NewHTTPClient(),
 		Lifecycle:    newAsyncLifecycle(),
-	})
+	}
+}
+
+// NewService 创建插件服务
+func NewService() *Service {
+	return NewServiceWithDeps(DefaultServiceDeps())
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

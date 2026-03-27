@@ -29,13 +29,17 @@ type IncidentServiceDeps struct {
 	HTTPClient   *HTTPClient
 }
 
-// NewIncidentService 创建工单服务
-func NewIncidentService() *IncidentService {
-	return NewIncidentServiceWithDeps(IncidentServiceDeps{
+func DefaultIncidentServiceDeps() IncidentServiceDeps {
+	return IncidentServiceDeps{
 		IncidentRepo: incidentrepo.NewIncidentRepository(),
 		PluginRepo:   integrationrepo.NewPluginRepository(),
 		HTTPClient:   NewHTTPClient(),
-	})
+	}
+}
+
+// NewIncidentService 创建工单服务
+func NewIncidentService() *IncidentService {
+	return NewIncidentServiceWithDeps(DefaultIncidentServiceDeps())
 }
 
 func NewIncidentServiceWithDeps(deps IncidentServiceDeps) *IncidentService {
