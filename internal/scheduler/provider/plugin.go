@@ -8,8 +8,8 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	pluginService "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	pluginService "github.com/company/auto-healing/internal/service/plugin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

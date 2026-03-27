@@ -2,10 +2,10 @@ package integrations
 
 import (
 	"github.com/company/auto-healing/internal/handler"
+	gitSvc "github.com/company/auto-healing/internal/modules/integrations/service/git"
+	"github.com/company/auto-healing/internal/modules/integrations/service/playbook"
+	"github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
-	gitSvc "github.com/company/auto-healing/internal/service/git"
-	"github.com/company/auto-healing/internal/service/playbook"
-	"github.com/company/auto-healing/internal/service/plugin"
 )
 
 // Module 聚合 integrations 域处理器构造。

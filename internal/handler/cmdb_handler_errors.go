@@ -3,9 +3,9 @@ package handler
 import (
 	"errors"
 
+	pluginservice "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
-	pluginservice "github.com/company/auto-healing/internal/service/plugin"
 	"github.com/gin-gonic/gin"
 )
 

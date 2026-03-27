@@ -10,8 +10,8 @@ import (
 
 	gitclient "github.com/company/auto-healing/internal/git"
 	"github.com/company/auto-healing/internal/model"
+	playbookSvc "github.com/company/auto-healing/internal/modules/integrations/service/playbook"
 	"github.com/company/auto-healing/internal/repository"
-	playbookSvc "github.com/company/auto-healing/internal/service/playbook"
 	"github.com/google/uuid"
 )
 

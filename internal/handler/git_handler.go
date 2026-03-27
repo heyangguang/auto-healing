@@ -1,8 +1,8 @@
 package handler
 
 import (
+	gitSvc "github.com/company/auto-healing/internal/modules/integrations/service/git"
 	"github.com/company/auto-healing/internal/pkg/response"
-	gitSvc "github.com/company/auto-healing/internal/service/git"
 	"github.com/gin-gonic/gin"
 )
 

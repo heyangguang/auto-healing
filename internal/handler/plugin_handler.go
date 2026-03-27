@@ -1,8 +1,8 @@
 package handler
 
 import (
+	"github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/service/plugin"
 	"github.com/gin-gonic/gin"
 )
 
