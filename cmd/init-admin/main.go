@@ -10,9 +10,9 @@ import (
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/crypto"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
 
@@ -71,20 +71,20 @@ func prepareCLIData() error {
 }
 
 type adminRepos struct {
-	user       *repository.UserRepository
-	role       *repository.RoleRepository
-	permission *repository.PermissionRepository
+	user       *accessrepo.UserRepository
+	role       *accessrepo.RoleRepository
+	permission *accessrepo.PermissionRepository
 }
 
 func newAdminRepos() adminRepos {
 	return adminRepos{
-		user:       repository.NewUserRepository(),
-		role:       repository.NewRoleRepository(),
-		permission: repository.NewPermissionRepository(),
+		user:       accessrepo.NewUserRepository(),
+		role:       accessrepo.NewRoleRepository(),
+		permission: accessrepo.NewPermissionRepository(),
 	}
 }
 
-func ensureUsersTableEmpty(ctx context.Context, userRepo *repository.UserRepository) {
+func ensureUsersTableEmpty(ctx context.Context, userRepo *accessrepo.UserRepository) {
 	count, err := userRepo.CountAll(ctx)
 	if err != nil {
 		log.Fatalf("查询用户数量失败: %v", err)
@@ -96,7 +96,7 @@ func ensureUsersTableEmpty(ctx context.Context, userRepo *repository.UserReposit
 	}
 }
 
-func createInitialAdmin(ctx context.Context, userRepo *repository.UserRepository) (model.User, string, error) {
+func createInitialAdmin(ctx context.Context, userRepo *accessrepo.UserRepository) (model.User, string, error) {
 	password, err := resolveInitialAdminPassword()
 	if err != nil {
 		return model.User{}, "", fmt.Errorf("生成初始密码失败: %w", err)
@@ -186,7 +186,7 @@ func bindPlatformAdminRoleWith(
 	return nil
 }
 
-func printPermissionCount(ctx context.Context, permissionRepo *repository.PermissionRepository) {
+func printPermissionCount(ctx context.Context, permissionRepo *accessrepo.PermissionRepository) {
 	permCount, err := permissionRepo.CountAll(ctx)
 	if err != nil {
 		log.Fatalf("查询权限数量失败: %v", err)

@@ -10,9 +10,9 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -21,13 +21,13 @@ import (
 type WorkbenchHandler struct {
 	repo         *engagementrepo.WorkbenchRepository
 	activityRepo *engagementrepo.UserActivityRepository
-	userRepo     *repository.UserRepository
+	userRepo     *accessrepo.UserRepository
 }
 
 type WorkbenchHandlerDeps struct {
 	WorkbenchRepo *engagementrepo.WorkbenchRepository
 	ActivityRepo  *engagementrepo.UserActivityRepository
-	UserRepo      *repository.UserRepository
+	UserRepo      *accessrepo.UserRepository
 }
 
 type workbenchSection struct {
@@ -40,7 +40,7 @@ func NewWorkbenchHandler() *WorkbenchHandler {
 	return NewWorkbenchHandlerWithDeps(WorkbenchHandlerDeps{
 		WorkbenchRepo: engagementrepo.NewWorkbenchRepository(database.DB),
 		ActivityRepo:  engagementrepo.NewUserActivityRepository(),
-		UserRepo:      repository.NewUserRepository(),
+		UserRepo:      accessrepo.NewUserRepository(),
 	})
 }
 
@@ -185,7 +185,7 @@ func (h *WorkbenchHandler) GetAnnouncements(c *gin.Context) {
 	var userCreatedAt time.Time
 	if userID, err := uuid.Parse(middleware.GetUserID(c)); err == nil {
 		user, err := h.userRepo.GetByID(c.Request.Context(), userID)
-		if err != nil && !errors.Is(err, repository.ErrUserNotFound) {
+		if err != nil && !errors.Is(err, accessrepo.ErrUserNotFound) {
 			respondInternalError(c, "WORKBENCH", "获取系统公告失败", err)
 			return
 		}
