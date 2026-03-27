@@ -3,6 +3,8 @@ package repository
 import (
 	"strings"
 	"testing"
+
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 )
 
 func TestGetRiskLevelNormalizesTenantPrefixedResources(t *testing.T) {
@@ -11,27 +13,27 @@ func TestGetRiskLevelNormalizesTenantPrefixedResources(t *testing.T) {
 		resourceType string
 		want         string
 	}{
-		{"reset_password", "tenant-users", RiskLevelHigh},
-		{"assign_role", "tenant-users", RiskLevelCritical},
-		{"assign_permission", "tenant-roles", RiskLevelCritical},
-		{"deactivate", "tenant-plugins", RiskLevelHigh},
-		{"execute", "tenant-execution-tasks", RiskLevelMedium},
-		{"trigger", "tenant-incidents", RiskLevelMedium},
-		{"approve", "tenant-healing", RiskLevelMedium},
+		{"reset_password", "tenant-users", auditrepo.RiskLevelHigh},
+		{"assign_role", "tenant-users", auditrepo.RiskLevelCritical},
+		{"assign_permission", "tenant-roles", auditrepo.RiskLevelCritical},
+		{"deactivate", "tenant-plugins", auditrepo.RiskLevelHigh},
+		{"execute", "tenant-execution-tasks", auditrepo.RiskLevelMedium},
+		{"trigger", "tenant-incidents", auditrepo.RiskLevelMedium},
+		{"approve", "tenant-healing", auditrepo.RiskLevelMedium},
 	}
 
 	for _, tc := range tests {
-		if got := GetRiskLevel(tc.action, tc.resourceType); got != tc.want {
+		if got := auditrepo.GetRiskLevel(tc.action, tc.resourceType); got != tc.want {
 			t.Fatalf("GetRiskLevel(%q, %q) = %q, want %q", tc.action, tc.resourceType, got, tc.want)
 		}
-		if GetRiskReason(tc.action, tc.resourceType) == "" {
+		if auditrepo.GetRiskReason(tc.action, tc.resourceType) == "" {
 			t.Fatalf("GetRiskReason(%q, %q) should not be empty", tc.action, tc.resourceType)
 		}
 	}
 }
 
 func TestBuildHighRiskConditionIncludesTenantVariants(t *testing.T) {
-	sql := buildHighRiskCondition()
+	sql := auditrepo.BuildHighRiskCondition()
 	for _, want := range []string{
 		"tenant-users",
 		"tenant-roles",

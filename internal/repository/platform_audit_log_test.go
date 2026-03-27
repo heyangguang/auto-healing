@@ -3,11 +3,13 @@ package repository
 import (
 	"context"
 	"testing"
+
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 )
 
 func TestPlatformAuditGetStatsReturnsDatabaseError(t *testing.T) {
 	db := newSQLiteTestDB(t)
-	repo := NewPlatformAuditLogRepositoryWithDB(db)
+	repo := auditrepo.NewPlatformAuditLogRepositoryWithDB(db)
 
 	_, err := repo.GetStats(context.Background())
 	if err == nil {
