@@ -7,6 +7,9 @@ import (
 	"testing"
 
 	"github.com/company/auto-healing/internal/database"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -27,10 +30,10 @@ func TestGitRepositoryGetByIDReturnsNotFoundSentinel(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = originalDB })
 
-	ctx := WithTenantID(context.Background(), uuid.New())
-	_, err := NewGitRepositoryRepository().GetByID(ctx, uuid.New())
-	if !errors.Is(err, ErrGitRepositoryNotFound) {
-		t.Fatalf("GetByID() error = %v, want %v", err, ErrGitRepositoryNotFound)
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
+	_, err := integrationrepo.NewGitRepositoryRepository().GetByID(ctx, uuid.New())
+	if !errors.Is(err, integrationrepo.ErrGitRepositoryNotFound) {
+		t.Fatalf("GetByID() error = %v, want %v", err, integrationrepo.ErrGitRepositoryNotFound)
 	}
 }
 
@@ -48,10 +51,10 @@ func TestPlaybookGetByIDReturnsNotFoundSentinel(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = originalDB })
 
-	ctx := WithTenantID(context.Background(), uuid.New())
-	_, err := NewPlaybookRepository().GetByID(ctx, uuid.New())
-	if !errors.Is(err, ErrPlaybookNotFound) {
-		t.Fatalf("GetByID() error = %v, want %v", err, ErrPlaybookNotFound)
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
+	_, err := integrationrepo.NewPlaybookRepository().GetByID(ctx, uuid.New())
+	if !errors.Is(err, integrationrepo.ErrPlaybookNotFound) {
+		t.Fatalf("GetByID() error = %v, want %v", err, integrationrepo.ErrPlaybookNotFound)
 	}
 }
 
@@ -69,10 +72,10 @@ func TestScheduleGetByIDReturnsNotFoundSentinel(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = originalDB })
 
-	ctx := WithTenantID(context.Background(), uuid.New())
-	_, err := NewScheduleRepository().GetByID(ctx, uuid.New())
-	if !errors.Is(err, ErrScheduleNotFound) {
-		t.Fatalf("GetByID() error = %v, want %v", err, ErrScheduleNotFound)
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
+	_, err := automationrepo.NewScheduleRepository().GetByID(ctx, uuid.New())
+	if !errors.Is(err, automationrepo.ErrScheduleNotFound) {
+		t.Fatalf("GetByID() error = %v, want %v", err, automationrepo.ErrScheduleNotFound)
 	}
 }
 

@@ -1,8 +1,8 @@
 package httpapi
 
 import (
-	platformhttp "github.com/company/auto-healing/internal/platform/httpx"
 	"github.com/company/auto-healing/internal/pkg/query"
+	platformhttp "github.com/company/auto-healing/internal/platform/httpx"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

@@ -7,6 +7,8 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/google/uuid"
 )
 
@@ -139,7 +141,7 @@ func TestExecutionRepositoryCreateTaskRequiresTenantContext(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = originalDB })
 
-	repo := NewExecutionRepository()
+	repo := automationrepo.NewExecutionRepository()
 	task := &model.ExecutionTask{
 		ID:           uuid.New(),
 		Name:         "task",
@@ -184,7 +186,7 @@ func TestScheduleRepositoryCreateRequiresTenantContext(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = originalDB })
 
-	repo := NewScheduleRepository()
+	repo := automationrepo.NewScheduleRepository()
 	schedule := &model.ExecutionSchedule{
 		ID:           uuid.New(),
 		Name:         "daily",
@@ -201,20 +203,20 @@ func TestScheduleRepositoryCreateRequiresTenantContext(t *testing.T) {
 
 func TestTenantRepositoryGetTrendByDayRejectsInvalidTable(t *testing.T) {
 	db := newStateTestDB(t)
-	repo := NewTenantRepositoryWithDB(db)
+	repo := accessrepo.NewTenantRepositoryWithDB(db)
 
 	_, _, err := repo.GetTrendByDay(context.Background(), "not_allowed_table", 7)
-	if !errors.Is(err, ErrTenantStatsTableNotAllowed) {
-		t.Fatalf("GetTrendByDay() error = %v, want %v", err, ErrTenantStatsTableNotAllowed)
+	if !errors.Is(err, accessrepo.ErrTenantStatsTableNotAllowed) {
+		t.Fatalf("GetTrendByDay() error = %v, want %v", err, accessrepo.ErrTenantStatsTableNotAllowed)
 	}
 }
 
 func TestTenantRepositoryGetTrendByDayWhereRejectsInvalidTable(t *testing.T) {
 	db := newStateTestDB(t)
-	repo := NewTenantRepositoryWithDB(db)
+	repo := accessrepo.NewTenantRepositoryWithDB(db)
 
 	_, _, err := repo.GetTrendByDayWhere(context.Background(), "not_allowed_table", 7, "")
-	if !errors.Is(err, ErrTenantStatsTableNotAllowed) {
-		t.Fatalf("GetTrendByDayWhere() error = %v, want %v", err, ErrTenantStatsTableNotAllowed)
+	if !errors.Is(err, accessrepo.ErrTenantStatsTableNotAllowed) {
+		t.Fatalf("GetTrendByDayWhere() error = %v, want %v", err, accessrepo.ErrTenantStatsTableNotAllowed)
 	}
 }

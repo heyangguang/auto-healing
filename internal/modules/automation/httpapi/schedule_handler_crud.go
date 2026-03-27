@@ -1,8 +1,8 @@
 package httpapi
 
 import (
-	"github.com/company/auto-healing/internal/pkg/response"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

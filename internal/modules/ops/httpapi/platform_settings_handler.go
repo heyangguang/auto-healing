@@ -9,8 +9,8 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
-	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/company/auto-healing/internal/pkg/response"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"

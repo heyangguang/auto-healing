@@ -7,8 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,7 +17,7 @@ func TestRespondResourceErrorReturnsNotFoundForSentinel(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 
-	respondResourceError(ctx, "GIT", "获取仓库失败", "仓库不存在", repository.ErrGitRepositoryNotFound, resourceErrorModeInternal, repository.ErrGitRepositoryNotFound)
+	respondResourceError(ctx, "GIT", "获取仓库失败", "仓库不存在", integrationrepo.ErrGitRepositoryNotFound, resourceErrorModeInternal, integrationrepo.ErrGitRepositoryNotFound)
 
 	assertResponseCode(t, recorder, http.StatusNotFound, response.CodeNotFound)
 }
@@ -25,7 +26,7 @@ func TestRespondResourceErrorReturnsBadRequestWhenConfigured(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 
-	respondResourceError(ctx, "PLAYBOOK", "扫描失败", "Playbook不存在", repository.ErrPlaybookNotFound, resourceErrorModeBadRequest, errors.New("路径非法"))
+	respondResourceError(ctx, "PLAYBOOK", "扫描失败", "Playbook不存在", integrationrepo.ErrPlaybookNotFound, resourceErrorModeBadRequest, errors.New("路径非法"))
 
 	assertResponseCode(t, recorder, http.StatusBadRequest, response.CodeBadRequest)
 }
@@ -34,7 +35,7 @@ func TestRespondResourceErrorReturnsInternalForUnexpectedError(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 
-	respondResourceError(ctx, "SCHEDULE", "获取调度失败", "调度不存在", repository.ErrScheduleNotFound, resourceErrorModeInternal, errors.New("db down"))
+	respondResourceError(ctx, "SCHEDULE", "获取调度失败", "调度不存在", automationrepo.ErrScheduleNotFound, resourceErrorModeInternal, errors.New("db down"))
 
 	assertResponseCode(t, recorder, http.StatusInternalServerError, response.CodeInternal)
 }
