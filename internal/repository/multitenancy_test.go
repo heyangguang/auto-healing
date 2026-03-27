@@ -9,6 +9,7 @@ import (
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -21,10 +22,10 @@ func TestDashboardConfigTenantIsolation(t *testing.T) {
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 
-	if err := repo.UpsertConfig(WithTenantID(context.Background(), tenantA), userID, model.JSON{"layout": "A"}); err != nil {
+	if err := repo.UpsertConfig(platformrepo.WithTenantID(context.Background(), tenantA), userID, model.JSON{"layout": "A"}); err != nil {
 		t.Fatalf("upsert config tenant A: %v", err)
 	}
-	if err := repo.UpsertConfig(WithTenantID(context.Background(), tenantB), userID, model.JSON{"layout": "B"}); err != nil {
+	if err := repo.UpsertConfig(platformrepo.WithTenantID(context.Background(), tenantB), userID, model.JSON{"layout": "B"}); err != nil {
 		t.Fatalf("upsert config tenant B: %v", err)
 	}
 
@@ -36,11 +37,11 @@ func TestDashboardConfigTenantIsolation(t *testing.T) {
 		t.Fatalf("dashboard config row count = %d, want 2", count)
 	}
 
-	cfgA, err := repo.GetConfigByUserID(WithTenantID(context.Background(), tenantA), userID)
+	cfgA, err := repo.GetConfigByUserID(platformrepo.WithTenantID(context.Background(), tenantA), userID)
 	if err != nil || cfgA == nil || cfgA.Config["layout"] != "A" {
 		t.Fatalf("tenant A config = %#v, err = %v", cfgA, err)
 	}
-	cfgB, err := repo.GetConfigByUserID(WithTenantID(context.Background(), tenantB), userID)
+	cfgB, err := repo.GetConfigByUserID(platformrepo.WithTenantID(context.Background(), tenantB), userID)
 	if err != nil || cfgB == nil || cfgB.Config["layout"] != "B" {
 		t.Fatalf("tenant B config = %#v, err = %v", cfgB, err)
 	}
@@ -82,7 +83,7 @@ func TestWorkspaceRepositoryUsesCurrentTenantRoles(t *testing.T) {
 		mustExec(t, db, stmt.sql, stmt.args...)
 	}
 
-	ctxA := WithTenantID(context.Background(), tenantA)
+	ctxA := platformrepo.WithTenantID(context.Background(), tenantA)
 	roleIDs, err := repo.GetUserRoleIDs(ctxA, userID)
 	if err != nil {
 		t.Fatalf("GetUserRoleIDs: %v", err)
@@ -141,7 +142,7 @@ func TestCMDBUpsertPreservesTenantScope(t *testing.T) {
 	repo := cmdbrepo.NewCMDBItemRepositoryWithDB(db)
 	tenantID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	pluginID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
-	ctx := WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 
 	item := &model.CMDBItem{
 		ID:               uuid.New(),
@@ -231,7 +232,7 @@ func TestDashboardUsersSectionUsesCurrentTenantMembership(t *testing.T) {
 	mustExec(t, db, `INSERT INTO user_tenant_roles (id, user_id, tenant_id, role_id, created_at) VALUES (?, ?, ?, ?, ?)`,
 		uuid.NewString(), userB.String(), tenantB.String(), roleTenantB.String(), now)
 
-	section, err := repo.GetUsersSection(WithTenantID(context.Background(), tenantA))
+	section, err := repo.GetUsersSection(platformrepo.WithTenantID(context.Background(), tenantA))
 	if err != nil {
 		t.Fatalf("GetUsersSection: %v", err)
 	}

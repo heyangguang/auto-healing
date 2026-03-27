@@ -9,6 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -25,32 +26,32 @@ func (tenantScopedTestModel) TableName() string {
 func TestTenantDBRequiresTenantContext(t *testing.T) {
 	db := newStateTestDB(t)
 
-	tx := TenantDB(db, context.Background())
-	if !errors.Is(tx.Error, ErrTenantContextRequired) {
-		t.Fatalf("TenantDB() error = %v, want %v", tx.Error, ErrTenantContextRequired)
+	tx := platformrepo.TenantDB(db, context.Background())
+	if !errors.Is(tx.Error, platformrepo.ErrTenantContextRequired) {
+		t.Fatalf("TenantDB() error = %v, want %v", tx.Error, platformrepo.ErrTenantContextRequired)
 	}
 }
 
 func TestTenantIDFromContextMissingReturnsNil(t *testing.T) {
-	if got := TenantIDFromContext(context.Background()); got != uuid.Nil {
+	if got := platformrepo.TenantIDFromContext(context.Background()); got != uuid.Nil {
 		t.Fatalf("TenantIDFromContext() = %v, want %v", got, uuid.Nil)
 	}
 }
 
 func TestFillTenantIDRequiresTenantContext(t *testing.T) {
 	var tenantID *uuid.UUID
-	err := FillTenantID(context.Background(), &tenantID)
-	if !errors.Is(err, ErrTenantContextRequired) {
-		t.Fatalf("FillTenantID() error = %v, want %v", err, ErrTenantContextRequired)
+	err := platformrepo.FillTenantID(context.Background(), &tenantID)
+	if !errors.Is(err, platformrepo.ErrTenantContextRequired) {
+		t.Fatalf("FillTenantID() error = %v, want %v", err, platformrepo.ErrTenantContextRequired)
 	}
 }
 
 func TestFillTenantIDUsesExplicitTenantContext(t *testing.T) {
 	expected := uuid.New()
-	ctx := WithTenantID(context.Background(), expected)
+	ctx := platformrepo.WithTenantID(context.Background(), expected)
 
 	var tenantID *uuid.UUID
-	if err := FillTenantID(ctx, &tenantID); err != nil {
+	if err := platformrepo.FillTenantID(ctx, &tenantID); err != nil {
 		t.Fatalf("FillTenantID() error = %v", err)
 	}
 	if tenantID == nil || *tenantID != expected {
@@ -71,9 +72,9 @@ func TestUpdateTenantScopedModelRequiresTenantContext(t *testing.T) {
 	tenantID := uuid.New()
 	entity := &tenantScopedTestModel{ID: uuid.New(), TenantID: &tenantID, Name: "updated"}
 
-	err := UpdateTenantScopedModel(db, context.Background(), entity.ID, entity)
-	if !errors.Is(err, ErrTenantContextRequired) {
-		t.Fatalf("UpdateTenantScopedModel() error = %v, want %v", err, ErrTenantContextRequired)
+	err := platformrepo.UpdateTenantScopedModel(db, context.Background(), entity.ID, entity)
+	if !errors.Is(err, platformrepo.ErrTenantContextRequired) {
+		t.Fatalf("UpdateTenantScopedModel() error = %v, want %v", err, platformrepo.ErrTenantContextRequired)
 	}
 }
 
@@ -92,11 +93,11 @@ func TestUpdateTenantScopedModelUsesTenantScope(t *testing.T) {
 	entityID := uuid.New()
 	mustExec(t, db, `INSERT INTO tenant_scoped_test_models (id, tenant_id, name) VALUES (?, ?, ?)`, entityID.String(), tenantA.String(), "before")
 
-	ctxA := WithTenantID(context.Background(), tenantA)
-	ctxB := WithTenantID(context.Background(), tenantB)
+	ctxA := platformrepo.WithTenantID(context.Background(), tenantA)
+	ctxB := platformrepo.WithTenantID(context.Background(), tenantB)
 	update := &tenantScopedTestModel{ID: entityID, TenantID: &tenantA, Name: "after"}
 
-	if err := UpdateTenantScopedModel(db, ctxB, entityID, update); err != nil {
+	if err := platformrepo.UpdateTenantScopedModel(db, ctxB, entityID, update); err != nil {
 		t.Fatalf("UpdateTenantScopedModel() wrong tenant error = %v", err)
 	}
 
@@ -108,7 +109,7 @@ func TestUpdateTenantScopedModelUsesTenantScope(t *testing.T) {
 		t.Fatalf("wrong-tenant update changed row name to %q, want %q", afterWrongTenant.Name, "before")
 	}
 
-	if err := UpdateTenantScopedModel(db, ctxA, entityID, update); err != nil {
+	if err := platformrepo.UpdateTenantScopedModel(db, ctxA, entityID, update); err != nil {
 		t.Fatalf("UpdateTenantScopedModel() correct tenant error = %v", err)
 	}
 
@@ -149,8 +150,8 @@ func TestExecutionRepositoryCreateTaskRequiresTenantContext(t *testing.T) {
 	}
 
 	err := repo.CreateTask(context.Background(), task)
-	if !errors.Is(err, ErrTenantContextRequired) {
-		t.Fatalf("CreateTask() error = %v, want %v", err, ErrTenantContextRequired)
+	if !errors.Is(err, platformrepo.ErrTenantContextRequired) {
+		t.Fatalf("CreateTask() error = %v, want %v", err, platformrepo.ErrTenantContextRequired)
 	}
 }
 
@@ -196,8 +197,8 @@ func TestScheduleRepositoryCreateRequiresTenantContext(t *testing.T) {
 	}
 
 	err := repo.Create(context.Background(), schedule)
-	if !errors.Is(err, ErrTenantContextRequired) {
-		t.Fatalf("Create() error = %v, want %v", err, ErrTenantContextRequired)
+	if !errors.Is(err, platformrepo.ErrTenantContextRequired) {
+		t.Fatalf("Create() error = %v, want %v", err, platformrepo.ErrTenantContextRequired)
 	}
 }
 
