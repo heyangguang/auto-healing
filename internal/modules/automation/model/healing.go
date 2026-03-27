@@ -3,10 +3,11 @@ package model
 import (
 	"time"
 
+	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
 )
 
-// HealingFlow 自愈流程
 type HealingFlow struct {
 	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	TenantID    *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
@@ -19,25 +20,22 @@ type HealingFlow struct {
 	CreatedAt   time.Time  `json:"created_at" gorm:"default:now()"`
 	UpdatedAt   time.Time  `json:"updated_at" gorm:"default:now()"`
 
-	// 关联
-	Creator *User `json:"creator,omitempty" gorm:"foreignKey:CreatedBy"`
+	Creator *accessmodel.User `json:"creator,omitempty" gorm:"foreignKey:CreatedBy"`
 }
 
-// TableName 表名
 func (HealingFlow) TableName() string {
 	return "healing_flows"
 }
 
-// HealingRule 自愈规则
 type HealingRule struct {
 	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	TenantID    *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	Name        string     `json:"name" gorm:"type:varchar(255);not null"`
 	Description string     `json:"description,omitempty" gorm:"type:text"`
 	Priority    int        `json:"priority" gorm:"default:0"`
-	TriggerMode string     `json:"trigger_mode" gorm:"type:varchar(20);default:'auto'"` // auto | manual
+	TriggerMode string     `json:"trigger_mode" gorm:"type:varchar(20);default:'auto'"`
 	Conditions  JSONArray  `json:"conditions" gorm:"type:jsonb;not null;default:'[]'"`
-	MatchMode   string     `json:"match_mode" gorm:"type:varchar(10);default:'all'"` // all | any
+	MatchMode   string     `json:"match_mode" gorm:"type:varchar(10);default:'all'"`
 	FlowID      *uuid.UUID `json:"flow_id,omitempty" gorm:"type:uuid;index"`
 	IsActive    bool       `json:"is_active" gorm:"default:false"`
 	LastRunAt   *time.Time `json:"last_run_at,omitempty"`
@@ -45,24 +43,21 @@ type HealingRule struct {
 	CreatedAt   time.Time  `json:"created_at" gorm:"default:now()"`
 	UpdatedAt   time.Time  `json:"updated_at" gorm:"default:now()"`
 
-	// 关联
-	Flow    *HealingFlow `json:"flow,omitempty" gorm:"foreignKey:FlowID"`
-	Creator *User        `json:"creator,omitempty" gorm:"foreignKey:CreatedBy"`
+	Flow    *HealingFlow      `json:"flow,omitempty" gorm:"foreignKey:FlowID"`
+	Creator *accessmodel.User `json:"creator,omitempty" gorm:"foreignKey:CreatedBy"`
 }
 
-// TableName 表名
 func (HealingRule) TableName() string {
 	return "healing_rules"
 }
 
-// FlowInstance 流程实例
 type FlowInstance struct {
 	ID            uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	TenantID      *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	FlowID        uuid.UUID  `json:"flow_id" gorm:"type:uuid;not null;index"`
 	RuleID        *uuid.UUID `json:"rule_id,omitempty" gorm:"type:uuid;index"`
 	IncidentID    *uuid.UUID `json:"incident_id,omitempty" gorm:"type:uuid;index"`
-	Status        string     `json:"status" gorm:"type:varchar(20);default:'pending'"` // pending | running | waiting_approval | completed | failed | cancelled
+	Status        string     `json:"status" gorm:"type:varchar(20);default:'pending'"`
 	CurrentNodeID string     `json:"current_node_id,omitempty" gorm:"type:varchar(100)"`
 	Context       JSON       `json:"context" gorm:"type:jsonb;not null;default:'{}'"`
 	NodeStates    JSON       `json:"node_states" gorm:"type:jsonb;not null;default:'{}'"`
@@ -72,23 +67,19 @@ type FlowInstance struct {
 	CreatedAt     time.Time  `json:"created_at" gorm:"default:now()"`
 	UpdatedAt     time.Time  `json:"updated_at" gorm:"default:now()"`
 
-	// 流程定义快照（创建时固化，不随流程修改而变化）
 	FlowName  string    `json:"flow_name" gorm:"type:varchar(255)"`
 	FlowNodes JSONArray `json:"flow_nodes" gorm:"type:jsonb;default:'[]'"`
 	FlowEdges JSONArray `json:"flow_edges" gorm:"type:jsonb;default:'[]'"`
 
-	// 关联
-	Flow     *HealingFlow `json:"-" gorm:"foreignKey:FlowID"`
-	Rule     *HealingRule `json:"rule,omitempty" gorm:"foreignKey:RuleID"`
-	Incident *Incident    `json:"incident,omitempty" gorm:"foreignKey:IncidentID"`
+	Flow     *HealingFlow            `json:"-" gorm:"foreignKey:FlowID"`
+	Rule     *HealingRule            `json:"rule,omitempty" gorm:"foreignKey:RuleID"`
+	Incident *platformmodel.Incident `json:"incident,omitempty" gorm:"foreignKey:IncidentID"`
 }
 
-// TableName 表名
 func (FlowInstance) TableName() string {
 	return "flow_instances"
 }
 
-// FlowInstanceStatus 流程实例状态常量
 const (
 	FlowInstanceStatusPending         = "pending"
 	FlowInstanceStatusRunning         = "running"
@@ -98,7 +89,6 @@ const (
 	FlowInstanceStatusCancelled       = "cancelled"
 )
 
-// ApprovalTask 审批任务
 type ApprovalTask struct {
 	ID               uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	TenantID         *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
@@ -107,7 +97,7 @@ type ApprovalTask struct {
 	InitiatedBy      *uuid.UUID `json:"initiated_by,omitempty" gorm:"type:uuid"`
 	Approvers        JSONArray  `json:"approvers" gorm:"type:jsonb;not null;default:'[]'"`
 	ApproverRoles    JSONArray  `json:"approver_roles" gorm:"type:jsonb;not null;default:'[]'"`
-	Status           string     `json:"status" gorm:"type:varchar(20);default:'pending'"` // pending | approved | rejected | expired
+	Status           string     `json:"status" gorm:"type:varchar(20);default:'pending'"`
 	TimeoutAt        *time.Time `json:"timeout_at,omitempty"`
 	DecidedBy        *uuid.UUID `json:"decided_by,omitempty" gorm:"type:uuid"`
 	DecidedAt        *time.Time `json:"decided_at,omitempty"`
@@ -116,18 +106,15 @@ type ApprovalTask struct {
 	CreatedAt        time.Time  `json:"created_at" gorm:"default:now()"`
 	UpdatedAt        time.Time  `json:"updated_at" gorm:"default:now()"`
 
-	// 关联
-	FlowInstance *FlowInstance `json:"flow_instance,omitempty" gorm:"foreignKey:FlowInstanceID"`
-	Initiator    *User         `json:"initiator,omitempty" gorm:"foreignKey:InitiatedBy"`
-	Decider      *User         `json:"decider,omitempty" gorm:"foreignKey:DecidedBy"`
+	FlowInstance *FlowInstance     `json:"flow_instance,omitempty" gorm:"foreignKey:FlowInstanceID"`
+	Initiator    *accessmodel.User `json:"initiator,omitempty" gorm:"foreignKey:InitiatedBy"`
+	Decider      *accessmodel.User `json:"decider,omitempty" gorm:"foreignKey:DecidedBy"`
 }
 
-// TableName 表名
 func (ApprovalTask) TableName() string {
 	return "approval_tasks"
 }
 
-// ApprovalTaskStatus 审批任务状态常量
 const (
 	ApprovalTaskStatusPending   = "pending"
 	ApprovalTaskStatusApproved  = "approved"
