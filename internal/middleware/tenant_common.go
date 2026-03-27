@@ -3,36 +3,38 @@ package middleware
 import (
 	"fmt"
 
+	"github.com/company/auto-healing/internal/database"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 // CommonTenantMiddleware 公共路由的租户上下文解析。
 func CommonTenantMiddleware() gin.HandlerFunc {
-	return CommonTenantMiddlewareWithDeps(NewRuntimeDeps())
+	return CommonTenantMiddlewareWithDeps(NewRuntimeDepsWithDB(database.DB))
 }
 
 func CommonTenantMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
-	deps = deps.withDefaults()
+	tenantRepo := deps.requireTenantRepo()
+	permissionRepo := deps.requirePermissionRepo()
 	return func(c *gin.Context) {
-		tenantID, ok := resolveCommonRouteTenantWithRepo(c, deps.TenantRepo)
+		tenantID, ok := resolveCommonRouteTenantWithRepo(c, tenantRepo)
 		if !ok {
 			return
 		}
 		if tenantID == uuid.Nil {
-			if err := reloadCommonRoutePermissionsWithRepo(c, deps.PermissionRepo); err != nil {
+			if err := reloadCommonRoutePermissionsWithRepo(c, permissionRepo); err != nil {
 				abortInternalError(c, "刷新平台权限失败", ErrorCodePlatformPermissionReloadFailed)
 				return
 			}
 			c.Next()
 			return
 		}
-		if !ensureActiveTenantWithRepo(c, deps.TenantRepo, tenantID) {
+		if !ensureActiveTenantWithRepo(c, tenantRepo, tenantID) {
 			return
 		}
 
 		injectTenantContext(c, tenantID)
-		if err := reloadTenantPermissions(c, deps.PermissionRepo, tenantID); err != nil {
+		if err := reloadTenantPermissions(c, permissionRepo, tenantID); err != nil {
 			abortInternalError(c, "刷新租户权限失败", ErrorCodeTenantPermissionReloadFailed)
 			return
 		}

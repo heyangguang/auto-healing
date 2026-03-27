@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 
+	"github.com/company/auto-healing/internal/database"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -11,17 +12,17 @@ const ErrorCodePlatformPermissionReloadFailed = "PLATFORM_PERMISSION_RELOAD_FAIL
 
 // RequirePlatformAdmin 要求平台用户权限
 func RequirePlatformAdmin() gin.HandlerFunc {
-	return RequirePlatformAdminWithDeps(NewRuntimeDeps())
+	return RequirePlatformAdminWithDeps(NewRuntimeDepsWithDB(database.DB))
 }
 
 func RequirePlatformAdminWithDeps(deps RuntimeDeps) gin.HandlerFunc {
-	deps = deps.withDefaults()
+	permissionRepo := deps.requirePermissionRepo()
 	return func(c *gin.Context) {
 		if !IsPlatformAdmin(c) {
 			abortForbidden(c, "此操作需要平台管理员权限", ErrorCodePlatformAdminRequired)
 			return
 		}
-		if err := reloadPlatformPermissionsWithRepo(c, deps.PermissionRepo); err != nil {
+		if err := reloadPlatformPermissionsWithRepo(c, permissionRepo); err != nil {
 			abortInternalError(c, "刷新平台权限失败", ErrorCodePlatformPermissionReloadFailed)
 			return
 		}

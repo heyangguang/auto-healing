@@ -7,11 +7,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// SetupRoutes 按业务域模块注册 API 路由。
-func SetupRoutes(r *gin.Engine, cfg *config.Config) {
-	SetupRoutesWithDB(r, cfg, nil)
-}
-
 func SetupRoutesWithDB(r *gin.Engine, cfg *config.Config, db *gorm.DB) {
 	modules := newModulesWithDB(cfg, db)
 	api := r.Group("/api/v1")

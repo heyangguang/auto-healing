@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	gitService "github.com/company/auto-healing/internal/modules/integrations/service/git"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -43,10 +42,6 @@ type GitSchedulerDeps struct {
 	Now        func() time.Time
 }
 
-func DefaultGitSchedulerDeps() GitSchedulerDeps {
-	return DefaultGitSchedulerDepsWithDB(database.DB)
-}
-
 func DefaultGitSchedulerDepsWithDB(db *gorm.DB) GitSchedulerDeps {
 	return GitSchedulerDeps{
 		GitService: gitService.NewServiceWithDB(db),
@@ -57,21 +52,10 @@ func DefaultGitSchedulerDepsWithDB(db *gorm.DB) GitSchedulerDeps {
 	}
 }
 
-// NewGitScheduler 创建 Git 同步调度器
-func NewGitScheduler() *GitScheduler {
-	return NewGitSchedulerWithDB(database.DB)
-}
-
-func NewGitSchedulerWithDB(db *gorm.DB) *GitScheduler {
-	return NewGitSchedulerWithDeps(DefaultGitSchedulerDepsWithDB(db))
-}
-
 func NewGitSchedulerWithDeps(deps GitSchedulerDeps) *GitScheduler {
-	if deps.DB == nil {
-		deps.DB = database.DB
-	}
-	if deps.GitService == nil {
-		deps.GitService = gitService.NewServiceWithDB(deps.DB)
+	switch {
+	case deps.GitService == nil:
+		panic("integrations git scheduler requires git service")
 	}
 	if deps.Interval == 0 {
 		deps.Interval = 60 * time.Second

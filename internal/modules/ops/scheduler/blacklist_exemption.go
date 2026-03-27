@@ -47,7 +47,7 @@ func NewBlacklistExemptionScheduler() *BlacklistExemptionScheduler {
 
 func NewBlacklistExemptionSchedulerWithDeps(deps BlacklistExemptionSchedulerDeps) *BlacklistExemptionScheduler {
 	if deps.Service == nil {
-		deps.Service = opsservice.NewBlacklistExemptionService()
+		panic("blacklist exemption scheduler requires service")
 	}
 	if deps.Interval == 0 {
 		deps.Interval = time.Minute

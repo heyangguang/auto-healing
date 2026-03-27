@@ -1,7 +1,6 @@
 package automation
 
 import (
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	automationhttp "github.com/company/auto-healing/internal/modules/automation/httpapi"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
@@ -40,10 +39,6 @@ type ModuleDeps struct {
 	ScheduleService  *scheduleSvc.Service
 	FlowExecutor     *healingSvc.FlowExecutor
 	HealingScheduler *healingSvc.Scheduler
-}
-
-func DefaultModuleDeps() ModuleDeps {
-	return DefaultModuleDepsWithDB(database.DB)
 }
 
 func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
@@ -92,11 +87,6 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 		FlowExecutor:     flowExecutor,
 		HealingScheduler: healingSvc.NewSchedulerWithDeps(healingSvc.DefaultSchedulerDepsWithDB(db, flowExecutor)),
 	}
-}
-
-// New 创建 automation 域模块。
-func New() *Module {
-	return NewWithDB(database.DB)
 }
 
 func NewWithDB(db *gorm.DB) *Module {

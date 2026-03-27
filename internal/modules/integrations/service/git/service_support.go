@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	gitclient "github.com/company/auto-healing/internal/modules/integrations/gitclient"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
@@ -20,10 +19,6 @@ type ServiceDeps struct {
 	ReposDir     string
 	PlaybookSvc  func() *playbookSvc.Service
 	Lifecycle    *asyncLifecycle
-}
-
-func DefaultServiceDeps() ServiceDeps {
-	return DefaultServiceDepsWithDB(database.DB)
 }
 
 func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {

@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	pluginService "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -47,10 +46,6 @@ type PluginSchedulerDeps struct {
 	Now           func() time.Time
 }
 
-func DefaultPluginSchedulerDeps() PluginSchedulerDeps {
-	return DefaultPluginSchedulerDepsWithDB(database.DB)
-}
-
 func DefaultPluginSchedulerDepsWithDB(db *gorm.DB) PluginSchedulerDeps {
 	return PluginSchedulerDeps{
 		PluginService: pluginService.NewServiceWithDB(db),
@@ -62,24 +57,12 @@ func DefaultPluginSchedulerDepsWithDB(db *gorm.DB) PluginSchedulerDeps {
 	}
 }
 
-// NewPluginScheduler 创建调度器
-func NewPluginScheduler() *PluginScheduler {
-	return NewPluginSchedulerWithDB(database.DB)
-}
-
-func NewPluginSchedulerWithDB(db *gorm.DB) *PluginScheduler {
-	return NewPluginSchedulerWithDeps(DefaultPluginSchedulerDepsWithDB(db))
-}
-
 func NewPluginSchedulerWithDeps(deps PluginSchedulerDeps) *PluginScheduler {
-	if deps.DB == nil {
-		deps.DB = database.DB
-	}
-	if deps.PluginService == nil {
-		deps.PluginService = pluginService.NewServiceWithDB(deps.DB)
-	}
-	if deps.CMDBService == nil {
-		deps.CMDBService = pluginService.NewCMDBServiceWithDB(deps.DB)
+	switch {
+	case deps.PluginService == nil:
+		panic("integrations plugin scheduler requires plugin service")
+	case deps.CMDBService == nil:
+		panic("integrations plugin scheduler requires cmdb service")
 	}
 	if deps.Interval == 0 {
 		deps.Interval = 30 * time.Second

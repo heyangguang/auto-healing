@@ -20,14 +20,10 @@ type PlaybookHandlerDeps struct {
 	Service *playbook.Service
 }
 
-// NewPlaybookHandler 创建 Playbook 处理器
-func NewPlaybookHandler() *PlaybookHandler {
-	return NewPlaybookHandlerWithDeps(PlaybookHandlerDeps{
-		Service: playbook.NewService(),
-	})
-}
-
 func NewPlaybookHandlerWithDeps(deps PlaybookHandlerDeps) *PlaybookHandler {
+	if deps.Service == nil {
+		panic("integrations playbook handler requires service")
+	}
 	return &PlaybookHandler{
 		svc: deps.Service,
 	}

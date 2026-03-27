@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/company/auto-healing/internal/database"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
@@ -27,10 +26,6 @@ type ServiceDeps struct {
 	ExecutionRepo *automationrepo.ExecutionRepository
 }
 
-func DefaultServiceDeps() ServiceDeps {
-	return DefaultServiceDepsWithDB(database.DB)
-}
-
 func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	return ServiceDeps{
 		Repo:          integrationrepo.NewPlaybookRepositoryWithDB(db),
@@ -39,16 +34,15 @@ func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	}
 }
 
-// NewService 创建 Playbook 服务
-func NewService() *Service {
-	return NewServiceWithDB(database.DB)
-}
-
-func NewServiceWithDB(db *gorm.DB) *Service {
-	return NewServiceWithDeps(DefaultServiceDepsWithDB(db))
-}
-
 func NewServiceWithDeps(deps ServiceDeps) *Service {
+	switch {
+	case deps.Repo == nil:
+		panic("integrations playbook service requires repo")
+	case deps.GitRepo == nil:
+		panic("integrations playbook service requires git repo")
+	case deps.ExecutionRepo == nil:
+		panic("integrations playbook service requires execution repo")
+	}
 	return &Service{
 		repo:          deps.Repo,
 		gitRepo:       deps.GitRepo,

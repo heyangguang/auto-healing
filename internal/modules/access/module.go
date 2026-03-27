@@ -58,10 +58,7 @@ func DefaultModuleDepsWithDB(cfg *config.Config, db *gorm.DB) ModuleDeps {
 	permissionRepo := accessrepo.NewPermissionRepositoryWithDB(db)
 	invitationRepo := accessrepo.NewInvitationRepositoryWithDB(db)
 	impersonationRepo := accessrepo.NewImpersonationRepositoryWithDB(db)
-	siteMessageRepo := engagementrepo.NewSiteMessageRepositoryWithDeps(engagementrepo.SiteMessageRepositoryDeps{
-		DB:               db,
-		PlatformSettings: settingsRepo,
-	})
+	siteMessageRepo := engagementrepo.NewSiteMessageRepositoryWithDB(db)
 	jwtSvc := jwt.NewService(jwt.Config{
 		Secret:          cfg.JWT.Secret,
 		AccessTokenTTL:  cfg.JWT.AccessTokenTTL(),
@@ -90,7 +87,7 @@ func DefaultModuleDepsWithDB(cfg *config.Config, db *gorm.DB) ModuleDeps {
 			SettingsRepo: settingsRepo,
 		}),
 		AuditRepo:         auditrepo.NewAuditLogRepository(db),
-		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
+		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepositoryWithDB(db),
 	}
 }
 

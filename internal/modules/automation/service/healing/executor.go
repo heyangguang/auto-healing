@@ -4,7 +4,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
@@ -51,10 +50,6 @@ type FlowExecutorDeps struct {
 	Lifecycle       *asyncLifecycle
 }
 
-func DefaultFlowExecutorDeps(executionSvc *execution.Service, notificationService *notificationSvc.Service) FlowExecutorDeps {
-	return DefaultFlowExecutorDepsWithDB(database.DB, executionSvc, notificationService)
-}
-
 func DefaultFlowExecutorDepsWithDB(db *gorm.DB, executionSvc *execution.Service, notificationService *notificationSvc.Service) FlowExecutorDeps {
 	return FlowExecutorDeps{
 		InstanceRepo:    automationrepo.NewFlowInstanceRepositoryWithDB(db),
@@ -73,28 +68,40 @@ func DefaultFlowExecutorDepsWithDB(db *gorm.DB, executionSvc *execution.Service,
 	}
 }
 
-func DefaultFlowExecutorRuntimeDeps() FlowExecutorDeps {
-	return DefaultFlowExecutorRuntimeDepsWithDB(database.DB)
-}
-
 func DefaultFlowExecutorRuntimeDepsWithDB(db *gorm.DB) FlowExecutorDeps {
 	return DefaultFlowExecutorDepsWithDB(db, execution.NewServiceWithDB(db), notificationSvc.NewConfiguredService(db))
 }
 
-// NewFlowExecutor 创建流程执行器
-func NewFlowExecutor() *FlowExecutor {
-	return NewFlowExecutorWithDB(database.DB)
-}
-
-func NewFlowExecutorWithDB(db *gorm.DB) *FlowExecutor {
-	return NewFlowExecutorWithDeps(DefaultFlowExecutorRuntimeDepsWithDB(db))
-}
-
-func NewFlowExecutorWithDependencies(executionSvc *execution.Service, notificationService *notificationSvc.Service) *FlowExecutor {
-	return NewFlowExecutorWithDeps(DefaultFlowExecutorDeps(executionSvc, notificationService))
-}
-
 func NewFlowExecutorWithDeps(deps FlowExecutorDeps) *FlowExecutor {
+	switch {
+	case deps.InstanceRepo == nil:
+		panic("automation flow executor requires instance repo")
+	case deps.ApprovalRepo == nil:
+		panic("automation flow executor requires approval repo")
+	case deps.FlowRepo == nil:
+		panic("automation flow executor requires flow repo")
+	case deps.FlowLogRepo == nil:
+		panic("automation flow executor requires flow log repo")
+	case deps.CMDBRepo == nil:
+		panic("automation flow executor requires cmdb repo")
+	case deps.GitRepoRepo == nil:
+		panic("automation flow executor requires git repo")
+	case deps.ExecutionRepo == nil:
+		panic("automation flow executor requires execution repo")
+	case deps.IncidentRepo == nil:
+		panic("automation flow executor requires incident repo")
+	case deps.ExecutionSvc == nil:
+		panic("automation flow executor requires execution service")
+	case deps.NotificationSvc == nil:
+		panic("automation flow executor requires notification service")
+	case deps.AnsibleExecutor == nil:
+		panic("automation flow executor requires ansible executor")
+	case deps.EventBus == nil:
+		panic("automation flow executor requires event bus")
+	}
+	if deps.Lifecycle == nil {
+		deps.Lifecycle = newAsyncLifecycle()
+	}
 	return &FlowExecutor{
 		instanceRepo:    deps.InstanceRepo,
 		approvalRepo:    deps.ApprovalRepo,

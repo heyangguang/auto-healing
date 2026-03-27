@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/query"
@@ -40,10 +39,6 @@ type ServiceDeps struct {
 	Lifecycle    *asyncLifecycle
 }
 
-func DefaultServiceDeps() ServiceDeps {
-	return DefaultServiceDepsWithDB(database.DB)
-}
-
 func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	return ServiceDeps{
 		PluginRepo:   integrationrepo.NewPluginRepositoryWithDB(db),
@@ -55,16 +50,17 @@ func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	}
 }
 
-// NewService 创建插件服务
-func NewService() *Service {
-	return NewServiceWithDB(database.DB)
-}
-
-func NewServiceWithDB(db *gorm.DB) *Service {
-	return NewServiceWithDeps(DefaultServiceDepsWithDB(db))
-}
-
 func NewServiceWithDeps(deps ServiceDeps) *Service {
+	switch {
+	case deps.PluginRepo == nil:
+		panic("integrations plugin service requires plugin repo")
+	case deps.SyncLogRepo == nil:
+		panic("integrations plugin service requires sync log repo")
+	case deps.CMDBRepo == nil:
+		panic("integrations plugin service requires cmdb repo")
+	case deps.IncidentRepo == nil:
+		panic("integrations plugin service requires incident repo")
+	}
 	if deps.HTTPClient == nil {
 		deps.HTTPClient = NewHTTPClient()
 	}

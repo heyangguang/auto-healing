@@ -32,6 +32,9 @@ func NewBlacklistExemptionServiceWithDB(db *gorm.DB) *BlacklistExemptionService 
 }
 
 func NewBlacklistExemptionServiceWithDeps(deps BlacklistExemptionServiceDeps) *BlacklistExemptionService {
+	if deps.Repo == nil {
+		panic("blacklist exemption service requires repository")
+	}
 	return &BlacklistExemptionService{
 		repo: deps.Repo,
 	}

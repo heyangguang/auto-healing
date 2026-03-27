@@ -19,14 +19,10 @@ type ScheduleHandlerDeps struct {
 	Service *schedule.Service
 }
 
-// NewScheduleHandler 创建 ScheduleHandler
-func NewScheduleHandler() *ScheduleHandler {
-	return NewScheduleHandlerWithDeps(ScheduleHandlerDeps{
-		Service: schedule.NewService(),
-	})
-}
-
 func NewScheduleHandlerWithDeps(deps ScheduleHandlerDeps) *ScheduleHandler {
+	if deps.Service == nil {
+		panic("automation schedule handler requires service")
+	}
 	return &ScheduleHandler{
 		service: deps.Service,
 	}

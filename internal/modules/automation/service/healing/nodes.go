@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/pkg/query"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
-	"gorm.io/gorm"
 )
 
 // NodeExecutors 节点执行器集合
@@ -27,19 +25,6 @@ type NodeExecutorsDeps struct {
 	NotificationSvc  *notification.Service
 }
 
-// NewNodeExecutors 创建节点执行器
-func NewNodeExecutors() *NodeExecutors {
-	return NewNodeExecutorsWithDB(database.DB)
-}
-
-func NewNodeExecutorsWithDB(db *gorm.DB) *NodeExecutors {
-	return NewNodeExecutorsWithDeps(NodeExecutorsDeps{
-		CMDBRepo:         cmdbrepo.NewCMDBItemRepositoryWithDB(db),
-		NotificationRepo: engagementrepo.NewNotificationRepository(db),
-		NotificationSvc:  notification.NewConfiguredService(db),
-	})
-}
-
 func NewNodeExecutorsWithDependencies(cmdbRepo *cmdbrepo.CMDBItemRepository, notificationRepo *engagementrepo.NotificationRepository, notificationSvc *notification.Service) *NodeExecutors {
 	return NewNodeExecutorsWithDeps(NodeExecutorsDeps{
 		CMDBRepo:         cmdbRepo,
@@ -49,6 +34,14 @@ func NewNodeExecutorsWithDependencies(cmdbRepo *cmdbrepo.CMDBItemRepository, not
 }
 
 func NewNodeExecutorsWithDeps(deps NodeExecutorsDeps) *NodeExecutors {
+	switch {
+	case deps.CMDBRepo == nil:
+		panic("automation node executors require cmdb repo")
+	case deps.NotificationRepo == nil:
+		panic("automation node executors require notification repo")
+	case deps.NotificationSvc == nil:
+		panic("automation node executors require notification service")
+	}
 	return &NodeExecutors{
 		cmdbRepo:         deps.CMDBRepo,
 		notificationRepo: deps.NotificationRepo,

@@ -11,14 +11,10 @@ type SecretsHandlerDeps struct {
 	Service *secretsSvc.Service
 }
 
-// NewSecretsHandler 创建密钥处理器
-func NewSecretsHandler() *SecretsHandler {
-	return NewSecretsHandlerWithDeps(SecretsHandlerDeps{
-		Service: secretsSvc.NewService(),
-	})
-}
-
 func NewSecretsHandlerWithDeps(deps SecretsHandlerDeps) *SecretsHandler {
+	if deps.Service == nil {
+		panic("secrets handler requires service")
+	}
 	return &SecretsHandler{
 		svc: deps.Service,
 	}

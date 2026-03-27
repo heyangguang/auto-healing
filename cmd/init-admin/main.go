@@ -77,16 +77,20 @@ type adminRepos struct {
 	permission *accessrepo.PermissionRepository
 }
 
-func newAdminRepos() adminRepos {
-	return newAdminReposWithDB(database.DB)
-}
-
 func newAdminReposWithDB(db *gorm.DB) adminRepos {
+	db = requireAdminDB(db)
 	return adminRepos{
 		user:       accessrepo.NewUserRepositoryWithDB(db),
 		role:       accessrepo.NewRoleRepositoryWithDB(db),
 		permission: accessrepo.NewPermissionRepositoryWithDB(db),
 	}
+}
+
+func requireAdminDB(db *gorm.DB) *gorm.DB {
+	if db == nil {
+		panic("init-admin requires explicit db")
+	}
+	return db
 }
 
 func ensureUsersTableEmpty(ctx context.Context, userRepo *accessrepo.UserRepository) {

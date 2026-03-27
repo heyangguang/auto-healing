@@ -33,7 +33,7 @@ type ConfiguredServiceDeps struct {
 func NewService(db *gorm.DB, systemName, systemURL, systemVersion string) *Service {
 	return &Service{
 		repo:             engagementrepo.NewNotificationRepository(db),
-		healingFlowRepo:  automationrepo.NewHealingFlowRepository(),
+		healingFlowRepo:  automationrepo.NewHealingFlowRepositoryWithDB(db),
 		providerRegistry: provider.NewRegistry(),
 		templateParser:   NewTemplateParser(),
 		variableBuilder:  NewVariableBuilder(systemName, systemURL, systemVersion),
@@ -44,11 +44,12 @@ func NewService(db *gorm.DB, systemName, systemURL, systemVersion string) *Servi
 func NewConfiguredService(db *gorm.DB) *Service {
 	return NewConfiguredServiceWithDeps(ConfiguredServiceDeps{
 		Repo:            engagementrepo.NewNotificationRepository(db),
-		HealingFlowRepo: automationrepo.NewHealingFlowRepository(),
+		HealingFlowRepo: automationrepo.NewHealingFlowRepositoryWithDB(db),
 	})
 }
 
 func NewConfiguredServiceWithDeps(deps ConfiguredServiceDeps) *Service {
+	requireConfiguredServiceDeps(deps)
 	appCfg := config.GetAppConfig()
 	return &Service{
 		repo:             deps.Repo,
@@ -57,6 +58,15 @@ func NewConfiguredServiceWithDeps(deps ConfiguredServiceDeps) *Service {
 		templateParser:   NewTemplateParser(),
 		variableBuilder:  NewVariableBuilder(appCfg.Name, appCfg.URL, appCfg.Version),
 		rateLimiter:      NewRateLimiter(),
+	}
+}
+
+func requireConfiguredServiceDeps(deps ConfiguredServiceDeps) {
+	switch {
+	case deps.Repo == nil:
+		panic("notification service requires notification repository")
+	case deps.HealingFlowRepo == nil:
+		panic("notification service requires healing flow repository")
 	}
 }
 

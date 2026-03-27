@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 
-	"github.com/company/auto-healing/internal/database"
 	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
@@ -39,14 +38,8 @@ type RuntimeDeps struct {
 	DB                *gorm.DB
 }
 
-func NewRuntimeDeps() RuntimeDeps {
-	return NewRuntimeDepsWithDB(database.DB)
-}
-
 func NewRuntimeDepsWithDB(db *gorm.DB) RuntimeDeps {
-	if db == nil {
-		db = database.DB
-	}
+	db = requireRuntimeDB(db)
 	return RuntimeDeps{
 		UserRepo:          accessrepo.NewUserRepositoryWithDB(db),
 		TenantRepo:        accessrepo.NewTenantRepositoryWithDB(db),
@@ -59,30 +52,62 @@ func NewRuntimeDepsWithDB(db *gorm.DB) RuntimeDeps {
 	}
 }
 
-func (deps RuntimeDeps) withDefaults() RuntimeDeps {
-	if deps.DB == nil {
-		deps.DB = database.DB
+func requireRuntimeDB(db *gorm.DB) *gorm.DB {
+	if db == nil {
+		panic("middleware runtime deps require explicit db")
 	}
+	return db
+}
+
+func (deps RuntimeDeps) requireDB() *gorm.DB {
+	return requireRuntimeDB(deps.DB)
+}
+
+func (deps RuntimeDeps) requireUserRepo() *accessrepo.UserRepository {
 	if deps.UserRepo == nil {
-		deps.UserRepo = accessrepo.NewUserRepositoryWithDB(deps.DB)
+		panic("middleware runtime deps require UserRepo")
 	}
+	return deps.UserRepo
+}
+
+func (deps RuntimeDeps) requireTenantRepo() *accessrepo.TenantRepository {
 	if deps.TenantRepo == nil {
-		deps.TenantRepo = accessrepo.NewTenantRepositoryWithDB(deps.DB)
+		panic("middleware runtime deps require TenantRepo")
 	}
+	return deps.TenantRepo
+}
+
+func (deps RuntimeDeps) requirePermissionRepo() *accessrepo.PermissionRepository {
 	if deps.PermissionRepo == nil {
-		deps.PermissionRepo = accessrepo.NewPermissionRepositoryWithDB(deps.DB)
+		panic("middleware runtime deps require PermissionRepo")
 	}
+	return deps.PermissionRepo
+}
+
+func (deps RuntimeDeps) requireRoleRepo() *accessrepo.RoleRepository {
 	if deps.RoleRepo == nil {
-		deps.RoleRepo = accessrepo.NewRoleRepositoryWithDB(deps.DB)
+		panic("middleware runtime deps require RoleRepo")
 	}
+	return deps.RoleRepo
+}
+
+func (deps RuntimeDeps) requireImpersonationRepo() *accessrepo.ImpersonationRepository {
 	if deps.ImpersonationRepo == nil {
-		deps.ImpersonationRepo = accessrepo.NewImpersonationRepositoryWithDB(deps.DB)
+		panic("middleware runtime deps require ImpersonationRepo")
 	}
+	return deps.ImpersonationRepo
+}
+
+func (deps RuntimeDeps) requireAuditRepo() *auditrepo.AuditLogRepository {
 	if deps.AuditRepo == nil {
-		deps.AuditRepo = auditrepo.NewAuditLogRepository(deps.DB)
+		panic("middleware runtime deps require AuditRepo")
 	}
+	return deps.AuditRepo
+}
+
+func (deps RuntimeDeps) requirePlatformAuditRepo() *auditrepo.PlatformAuditLogRepository {
 	if deps.PlatformAuditRepo == nil {
-		deps.PlatformAuditRepo = auditrepo.NewPlatformAuditLogRepositoryWithDB(deps.DB)
+		panic("middleware runtime deps require PlatformAuditRepo")
 	}
-	return deps
+	return deps.PlatformAuditRepo
 }

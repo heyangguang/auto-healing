@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	inventoryBuildErrorPrefix = "__AUTO_HEALING_INVENTORY_ERROR__:"
+	inventoryBuildErrorPrefix  = "__AUTO_HEALING_INVENTORY_ERROR__:"
 	invalidInventoryHostMarker = "__AUTO_HEALING_INVALID_HOST__"
 )
 

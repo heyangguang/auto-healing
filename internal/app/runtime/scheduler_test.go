@@ -1,9 +1,15 @@
 package runtime
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+)
 
 func TestNewManagerBuildsAllSchedulers(t *testing.T) {
-	manager := NewManager()
+	manager := NewManagerWithDeps(ManagerDeps{DB: newRuntimeTestDB(t)})
 	if manager == nil {
 		t.Fatal("expected non-nil manager")
 	}
@@ -22,4 +28,14 @@ func TestNewManagerBuildsAllSchedulers(t *testing.T) {
 	if manager.blacklistScheduler == nil {
 		t.Fatal("expected blacklist scheduler")
 	}
+}
+
+func newRuntimeTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "runtime.db")
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite db: %v", err)
+	}
+	return db
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/database"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/query"
@@ -30,10 +29,6 @@ type IncidentServiceDeps struct {
 	HTTPClient   *HTTPClient
 }
 
-func DefaultIncidentServiceDeps() IncidentServiceDeps {
-	return DefaultIncidentServiceDepsWithDB(database.DB)
-}
-
 func DefaultIncidentServiceDepsWithDB(db *gorm.DB) IncidentServiceDeps {
 	return IncidentServiceDeps{
 		IncidentRepo: incidentrepo.NewIncidentRepositoryWithDB(db),
@@ -42,16 +37,13 @@ func DefaultIncidentServiceDepsWithDB(db *gorm.DB) IncidentServiceDeps {
 	}
 }
 
-// NewIncidentService 创建工单服务
-func NewIncidentService() *IncidentService {
-	return NewIncidentServiceWithDB(database.DB)
-}
-
-func NewIncidentServiceWithDB(db *gorm.DB) *IncidentService {
-	return NewIncidentServiceWithDeps(DefaultIncidentServiceDepsWithDB(db))
-}
-
 func NewIncidentServiceWithDeps(deps IncidentServiceDeps) *IncidentService {
+	switch {
+	case deps.IncidentRepo == nil:
+		panic("integrations incident service requires incident repo")
+	case deps.PluginRepo == nil:
+		panic("integrations incident service requires plugin repo")
+	}
 	if deps.HTTPClient == nil {
 		deps.HTTPClient = NewHTTPClient()
 	}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/pkg/query"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
@@ -26,26 +25,16 @@ type CMDBServiceDeps struct {
 	CMDBRepo *cmdbrepo.CMDBItemRepository
 }
 
-func DefaultCMDBServiceDeps() CMDBServiceDeps {
-	return DefaultCMDBServiceDepsWithDB(database.DB)
-}
-
 func DefaultCMDBServiceDepsWithDB(db *gorm.DB) CMDBServiceDeps {
 	return CMDBServiceDeps{
 		CMDBRepo: cmdbrepo.NewCMDBItemRepositoryWithDB(db),
 	}
 }
 
-// NewCMDBService 创建 CMDB 服务
-func NewCMDBService() *CMDBService {
-	return NewCMDBServiceWithDB(database.DB)
-}
-
-func NewCMDBServiceWithDB(db *gorm.DB) *CMDBService {
-	return NewCMDBServiceWithDeps(DefaultCMDBServiceDepsWithDB(db))
-}
-
 func NewCMDBServiceWithDeps(deps CMDBServiceDeps) *CMDBService {
+	if deps.CMDBRepo == nil {
+		panic("integrations cmdb service requires cmdb repo")
+	}
 	return &CMDBService{
 		cmdbRepo: deps.CMDBRepo,
 	}

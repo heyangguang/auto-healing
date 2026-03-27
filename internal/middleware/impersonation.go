@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/company/auto-healing/internal/database"
 	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -39,7 +40,9 @@ var (
 	impersonationPerms         []string
 	impersonationPermsLoadedAt time.Time
 	impersonationPermsTTL      = 30 * time.Second
-	impersonationPermsLoader   = loadImpersonationPermissionsFromDB
+	impersonationPermsLoader   = func(context.Context) ([]string, error) {
+		return nil, errors.New("impersonation permissions loader is not configured")
+	}
 )
 
 // loadImpersonationPermissions 从数据库加载 impersonation_accessor 角色的权限
@@ -71,11 +74,6 @@ func loadImpersonationPermissionsWithLoader(ctx context.Context, loader func(con
 	return append([]string(nil), perms...), nil
 }
 
-func loadImpersonationPermissionsFromDB(ctx context.Context) ([]string, error) {
-	roleRepo := accessrepo.NewRoleRepository()
-	return loadImpersonationPermissionsFromRoleRepo(ctx, roleRepo)
-}
-
 func loadImpersonationPermissionsFromRoleRepo(ctx context.Context, roleRepo *accessrepo.RoleRepository) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -98,11 +96,12 @@ func loadImpersonationPermissionsFromRoleRepo(ctx context.Context, roleRepo *acc
 // 4. 在 gin.Context 中设置 impersonation 标记
 // 5. 用 impersonation_accessor 角色权限覆盖 JWT 中的 * 通配符
 func ImpersonationMiddleware() gin.HandlerFunc {
-	return ImpersonationMiddlewareWithDeps(NewRuntimeDeps())
+	return ImpersonationMiddlewareWithDeps(NewRuntimeDepsWithDB(database.DB))
 }
 
 func ImpersonationMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
-	deps = deps.withDefaults()
+	impersonationRepo := deps.requireImpersonationRepo()
+	roleRepo := deps.requireRoleRepo()
 	return func(c *gin.Context) {
 		c.Set(ImpersonationKey, false)
 		if !requestIsImpersonating(c) {
@@ -117,16 +116,16 @@ func ImpersonationMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		req, ok := loadActiveImpersonationRequest(c, deps.ImpersonationRepo, requestID)
+		req, ok := loadActiveImpersonationRequest(c, impersonationRepo, requestID)
 		if !ok {
 			return
 		}
-			if !applyImpersonationContextWithLoader(c, requestID, req.TenantID, func(innerCtx context.Context) ([]string, error) {
-				return loadImpersonationPermissionsFromRoleRepo(innerCtx, deps.RoleRepo)
-			}) {
-				return
-			}
-			c.Next()
+		if !applyImpersonationContextWithLoader(c, requestID, req.TenantID, func(innerCtx context.Context) ([]string, error) {
+			return loadImpersonationPermissionsFromRoleRepo(innerCtx, roleRepo)
+		}) {
+			return
+		}
+		c.Next()
 	}
 }
 

@@ -15,14 +15,10 @@ type GitRepoHandlerDeps struct {
 	Service *gitSvc.Service
 }
 
-// NewGitRepoHandler 创建 Git 仓库处理器
-func NewGitRepoHandler() *GitRepoHandler {
-	return NewGitRepoHandlerWithDeps(GitRepoHandlerDeps{
-		Service: gitSvc.NewService(),
-	})
-}
-
 func NewGitRepoHandlerWithDeps(deps GitRepoHandlerDeps) *GitRepoHandler {
+	if deps.Service == nil {
+		panic("integrations git handler requires service")
+	}
 	return &GitRepoHandler{
 		svc: deps.Service,
 	}

@@ -3,13 +3,11 @@ package healing
 import (
 	"context"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
-	"gorm.io/gorm"
 )
 
 // DryRunResult Dry-Run 执行结果
@@ -45,19 +43,6 @@ type DryRunExecutorDeps struct {
 	NotificationRepo *engagementrepo.NotificationRepository
 }
 
-// NewDryRunExecutor 创建 Dry-Run 执行器
-func NewDryRunExecutor() *DryRunExecutor {
-	return NewDryRunExecutorWithDB(database.DB)
-}
-
-func NewDryRunExecutorWithDB(db *gorm.DB) *DryRunExecutor {
-	return NewDryRunExecutorWithDeps(DryRunExecutorDeps{
-		TaskRepo:         automationrepo.NewExecutionRepositoryWithDB(db),
-		CMDBRepo:         cmdbrepo.NewCMDBItemRepositoryWithDB(db),
-		NotificationRepo: engagementrepo.NewNotificationRepository(db),
-	})
-}
-
 func NewDryRunExecutorWithDependencies(taskRepo *automationrepo.ExecutionRepository, cmdbRepo *cmdbrepo.CMDBItemRepository, notificationRepo *engagementrepo.NotificationRepository) *DryRunExecutor {
 	return NewDryRunExecutorWithDeps(DryRunExecutorDeps{
 		TaskRepo:         taskRepo,
@@ -67,6 +52,14 @@ func NewDryRunExecutorWithDependencies(taskRepo *automationrepo.ExecutionReposit
 }
 
 func NewDryRunExecutorWithDeps(deps DryRunExecutorDeps) *DryRunExecutor {
+	switch {
+	case deps.TaskRepo == nil:
+		panic("automation dry-run executor requires task repo")
+	case deps.CMDBRepo == nil:
+		panic("automation dry-run executor requires cmdb repo")
+	case deps.NotificationRepo == nil:
+		panic("automation dry-run executor requires notification repo")
+	}
 	return &DryRunExecutor{
 		taskRepo:         deps.TaskRepo,
 		cmdbRepo:         deps.CMDBRepo,

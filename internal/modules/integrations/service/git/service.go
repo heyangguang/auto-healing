@@ -6,13 +6,11 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/company/auto-healing/internal/database"
 	gitclient "github.com/company/auto-healing/internal/modules/integrations/gitclient"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	playbookSvc "github.com/company/auto-healing/internal/modules/integrations/service/playbook"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 const DefaultReposDir = "/var/lib/auto-healing/repos"
@@ -26,23 +24,17 @@ type Service struct {
 	lifecycle    *asyncLifecycle
 }
 
-// NewService 创建 Git 仓库服务
-func NewService() *Service {
-	return NewServiceWithDB(database.DB)
-}
-
-func NewServiceWithDB(db *gorm.DB) *Service {
-	return NewServiceWithDeps(DefaultServiceDepsWithDB(db))
-}
-
 func NewServiceWithDeps(deps ServiceDeps) *Service {
+	switch {
+	case deps.Repo == nil:
+		panic("integrations git service requires repo")
+	case deps.PlaybookRepo == nil:
+		panic("integrations git service requires playbook repo")
+	case deps.PlaybookSvc == nil:
+		panic("integrations git service requires playbook service factory")
+	}
 	if deps.ReposDir == "" {
 		deps.ReposDir = defaultReposDir()
-	}
-	if deps.PlaybookSvc == nil {
-		deps.PlaybookSvc = func() *playbookSvc.Service {
-			return playbookSvc.NewServiceWithDB(database.DB)
-		}
 	}
 	if deps.Lifecycle == nil {
 		deps.Lifecycle = newAsyncLifecycle()

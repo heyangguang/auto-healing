@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/company/auto-healing/internal/modules/automation/model"
 	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
 	"github.com/google/uuid"

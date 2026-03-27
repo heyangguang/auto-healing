@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/company/auto-healing/internal/database"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -33,11 +34,11 @@ const (
 
 // JWTAuth JWT认证中间件
 func JWTAuth(jwtService *jwt.Service) gin.HandlerFunc {
-	return JWTAuthWithDeps(jwtService, NewRuntimeDeps())
+	return JWTAuthWithDeps(jwtService, NewRuntimeDepsWithDB(database.DB))
 }
 
 func JWTAuthWithDeps(jwtService *jwt.Service, deps RuntimeDeps) gin.HandlerFunc {
-	deps = deps.withDefaults()
+	userRepo := deps.requireUserRepo()
 	return func(c *gin.Context) {
 		tokenString, ok := resolveBearerToken(c)
 		if !ok {
@@ -62,7 +63,7 @@ func JWTAuthWithDeps(jwtService *jwt.Service, deps RuntimeDeps) gin.HandlerFunc 
 			abortUnauthorized(c, "Token has been revoked", ErrorCodeUnauthorized)
 			return
 		}
-		if !ensureActiveUserWithRepo(c, deps.UserRepo, claims.Subject) {
+		if !ensureActiveUserWithRepo(c, userRepo, claims.Subject) {
 			return
 		}
 		setAuthContext(c, claims)

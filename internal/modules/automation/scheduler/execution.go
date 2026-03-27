@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	executionService "github.com/company/auto-healing/internal/modules/automation/service/execution"
@@ -60,10 +59,6 @@ type ExecutionSchedulerDeps struct {
 	Sem              chan struct{}
 }
 
-func DefaultExecutionSchedulerDeps() ExecutionSchedulerDeps {
-	return DefaultExecutionSchedulerDepsWithDB(database.DB)
-}
-
 func DefaultExecutionSchedulerDepsWithDB(db *gorm.DB) ExecutionSchedulerDeps {
 	return ExecutionSchedulerDeps{
 		ExecutionService: executionService.NewServiceWithDB(db),
@@ -76,27 +71,14 @@ func DefaultExecutionSchedulerDepsWithDB(db *gorm.DB) ExecutionSchedulerDeps {
 	}
 }
 
-// NewExecutionScheduler 创建执行任务调度器
-func NewExecutionScheduler() *ExecutionScheduler {
-	return NewExecutionSchedulerWithDB(database.DB)
-}
-
-func NewExecutionSchedulerWithDB(db *gorm.DB) *ExecutionScheduler {
-	return NewExecutionSchedulerWithDeps(DefaultExecutionSchedulerDepsWithDB(db))
-}
-
 func NewExecutionSchedulerWithDeps(deps ExecutionSchedulerDeps) *ExecutionScheduler {
-	if deps.DB == nil {
-		deps.DB = database.DB
-	}
-	if deps.ExecutionService == nil {
-		deps.ExecutionService = executionService.NewServiceWithDB(deps.DB)
-	}
-	if deps.ScheduleService == nil {
-		deps.ScheduleService = scheduleService.NewServiceWithDB(deps.DB)
-	}
-	if deps.ScheduleRepo == nil {
-		deps.ScheduleRepo = automationrepo.NewScheduleRepositoryWithDB(deps.DB)
+	switch {
+	case deps.ExecutionService == nil:
+		panic("automation execution scheduler requires execution service")
+	case deps.ScheduleService == nil:
+		panic("automation execution scheduler requires schedule service")
+	case deps.ScheduleRepo == nil:
+		panic("automation execution scheduler requires schedule repo")
 	}
 	if deps.Interval == 0 {
 		deps.Interval = 30 * time.Second

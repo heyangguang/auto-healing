@@ -57,7 +57,7 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 	return ModuleDeps{
 		NotificationService: notification.NewConfiguredServiceWithDeps(notification.ConfiguredServiceDeps{
 			Repo:            notificationRepo,
-			HealingFlowRepo: automationrepo.NewHealingFlowRepository(),
+			HealingFlowRepo: automationrepo.NewHealingFlowRepositoryWithDB(db),
 		}),
 		NotificationRepo:     notificationRepo,
 		DashboardRepo:        engagementrepo.NewDashboardRepositoryWithDB(db),
@@ -67,7 +67,7 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 		PreferenceRepo:       engagementrepo.NewUserPreferenceRepositoryWithDB(db),
 		ActivityRepo:         activityRepo,
 		SearchRepo:           engagementrepo.NewSearchRepositoryWithDB(db),
-		SiteMessageRepo:      engagementrepo.NewSiteMessageRepositoryWithDeps(engagementrepo.SiteMessageRepositoryDeps{DB: db, PlatformSettings: settingsRepo}),
+		SiteMessageRepo:      engagementrepo.NewSiteMessageRepositoryWithDB(db),
 		PlatformSettingsRepo: settingsRepo,
 		EventBus:             platformevents.NewMessageEventBus(),
 		TenantRepo:           accessrepo.NewTenantRepositoryWithDB(db),

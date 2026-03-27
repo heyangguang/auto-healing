@@ -27,6 +27,9 @@ func NewCommandBlacklistServiceWithDB(db *gorm.DB) *CommandBlacklistService {
 }
 
 func NewCommandBlacklistServiceWithDeps(deps CommandBlacklistServiceDeps) *CommandBlacklistService {
+	if deps.Repo == nil {
+		panic("command blacklist service requires repository")
+	}
 	return &CommandBlacklistService{
 		repo: deps.Repo,
 	}

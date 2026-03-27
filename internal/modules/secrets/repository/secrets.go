@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/company/auto-healing/internal/database"
 	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -14,13 +13,6 @@ import (
 // SecretsSourceRepository 密钥源仓储
 type SecretsSourceRepository struct {
 	db *gorm.DB
-}
-
-// NewSecretsSourceRepository 创建密钥源仓储
-func NewSecretsSourceRepository() *SecretsSourceRepository {
-	return &SecretsSourceRepository{
-		db: database.DB,
-	}
 }
 
 func NewSecretsSourceRepositoryWithDB(db *gorm.DB) *SecretsSourceRepository {

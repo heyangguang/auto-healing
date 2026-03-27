@@ -162,14 +162,11 @@ type lifecycleService interface {
 	Stop()
 }
 
-func startSchedulers() []lifecycleService {
-	return startSchedulersWithDB(database.DB)
-}
-
 func startSchedulersWithDB(db *gorm.DB) []lifecycleService {
+	db = requireServerDB(db, "server schedulers")
 	schedulers := []lifecycleService{
 		appruntime.NewManagerWithDeps(appruntime.ManagerDeps{DB: db}),
-		healing.DefaultScheduler(),
+		healing.NewSchedulerWithDB(db),
 	}
 	for _, item := range schedulers {
 		item.Start()
@@ -183,11 +180,8 @@ func stopSchedulers(schedulers []lifecycleService) {
 	}
 }
 
-func newRouter(cfg *config.Config) *gin.Engine {
-	return newRouterWithDB(cfg, database.DB)
-}
-
 func newRouterWithDB(cfg *config.Config, db *gorm.DB) *gin.Engine {
+	db = requireServerDB(db, "server router")
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -203,6 +197,13 @@ func newRouterWithDB(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	httproutes.SetupRoutesWithDB(r, cfg, db)
 	middleware.ValidateAuditResourceTypes(r)
 	return r
+}
+
+func requireServerDB(db *gorm.DB, component string) *gorm.DB {
+	if db == nil {
+		panic(component + " requires explicit db")
+	}
+	return db
 }
 
 func newHTTPServer(cfg *config.Config, router http.Handler) *http.Server {

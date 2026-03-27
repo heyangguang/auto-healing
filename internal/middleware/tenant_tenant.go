@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"github.com/company/auto-healing/internal/database"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -9,25 +10,26 @@ const ErrorCodeTenantMembershipLookupFailed = "TENANT_MEMBERSHIP_LOOKUP_FAILED"
 
 // TenantMiddleware 租户上下文中间件
 func TenantMiddleware() gin.HandlerFunc {
-	return TenantMiddlewareWithDeps(NewRuntimeDeps())
+	return TenantMiddlewareWithDeps(NewRuntimeDepsWithDB(database.DB))
 }
 
 func TenantMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
-	deps = deps.withDefaults()
+	tenantRepo := deps.requireTenantRepo()
+	permissionRepo := deps.requirePermissionRepo()
 	return func(c *gin.Context) {
 		tenantIDs, defaultTenantID := middlewareTenantClaims(c)
 
-		tenantID, ok := resolveTenantRouteTenantWithRepo(c, deps.TenantRepo, tenantIDs, defaultTenantID)
+		tenantID, ok := resolveTenantRouteTenantWithRepo(c, tenantRepo, tenantIDs, defaultTenantID)
 		if !ok {
 			return
 		}
-		if !ensureActiveTenantWithRepo(c, deps.TenantRepo, tenantID) {
+		if !ensureActiveTenantWithRepo(c, tenantRepo, tenantID) {
 			return
 		}
 
 		injectTenantContext(c, tenantID)
 		if !IsPlatformAdmin(c) && !IsImpersonating(c) {
-			if err := reloadTenantPermissions(c, deps.PermissionRepo, tenantID); err != nil {
+			if err := reloadTenantPermissions(c, permissionRepo, tenantID); err != nil {
 				abortInternalError(c, "刷新租户权限失败", ErrorCodeTenantPermissionReloadFailed)
 				return
 			}

@@ -19,14 +19,10 @@ type ExecutionHandlerDeps struct {
 	Service *execution.Service
 }
 
-// NewExecutionHandler 创建 ExecutionHandler
-func NewExecutionHandler() *ExecutionHandler {
-	return NewExecutionHandlerWithDeps(ExecutionHandlerDeps{
-		Service: execution.NewService(),
-	})
-}
-
 func NewExecutionHandlerWithDeps(deps ExecutionHandlerDeps) *ExecutionHandler {
+	if deps.Service == nil {
+		panic("automation execution handler requires service")
+	}
 	return &ExecutionHandler{service: deps.Service}
 }
 

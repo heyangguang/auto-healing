@@ -43,7 +43,7 @@ func NewNotificationRetrySchedulerWithDB(db *gorm.DB) *NotificationRetrySchedule
 
 func NewNotificationRetrySchedulerWithDeps(deps NotificationRetrySchedulerDeps) *NotificationRetryScheduler {
 	if deps.NotificationService == nil {
-		deps.NotificationService = notification.NewConfiguredService(database.DB)
+		panic("notification retry scheduler requires notification service")
 	}
 	if deps.Interval == 0 {
 		deps.Interval = notificationRetryInterval()

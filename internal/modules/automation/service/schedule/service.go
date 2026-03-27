@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -25,10 +24,6 @@ type ServiceDeps struct {
 	ExecRepo *automationrepo.ExecutionRepository
 }
 
-func DefaultServiceDeps() ServiceDeps {
-	return DefaultServiceDepsWithDB(database.DB)
-}
-
 func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	return ServiceDeps{
 		Repo:     automationrepo.NewScheduleRepositoryWithDB(db),
@@ -36,16 +31,13 @@ func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	}
 }
 
-// NewService 创建定时任务调度服务
-func NewService() *Service {
-	return NewServiceWithDB(database.DB)
-}
-
-func NewServiceWithDB(db *gorm.DB) *Service {
-	return NewServiceWithDeps(DefaultServiceDepsWithDB(db))
-}
-
 func NewServiceWithDeps(deps ServiceDeps) *Service {
+	switch {
+	case deps.Repo == nil:
+		panic("automation schedule service requires schedule repo")
+	case deps.ExecRepo == nil:
+		panic("automation schedule service requires execution repo")
+	}
 	return &Service{
 		repo:     deps.Repo,
 		execRepo: deps.ExecRepo,

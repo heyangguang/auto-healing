@@ -65,10 +65,10 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 		CommandBlacklistSvc:   commandBlacklistSvc,
 		BlacklistExemptionSvc: blacklistExemptionSvc,
 		AuditRepo:             auditrepo.NewAuditLogRepository(db),
-		PlatformAuditRepo:     auditrepo.NewPlatformAuditLogRepository(),
+		PlatformAuditRepo:     auditrepo.NewPlatformAuditLogRepositoryWithDB(db),
 		PlatformSettingsRepo:  settingsrepo.NewPlatformSettingsRepositoryWithDB(db),
 		CommandBlacklistRepo:  commandBlacklistRepo,
-		ExecutionRepo:         automationrepo.NewExecutionRepository(),
+		ExecutionRepo:         automationrepo.NewExecutionRepositoryWithDB(db),
 	}
 }
 

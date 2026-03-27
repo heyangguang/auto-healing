@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/config"
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
 	accessmodule "github.com/company/auto-healing/internal/modules/access"
 	accesshttp "github.com/company/auto-healing/internal/modules/access/httpapi"
@@ -38,21 +37,15 @@ type moduleRegistrars struct {
 	secrets      secretshttp.Registrar
 }
 
-func newModules(cfg *config.Config) moduleSet {
-	return newModulesWithDB(cfg, database.DB)
-}
-
 func newModulesWithDB(cfg *config.Config, db *gorm.DB) moduleSet {
-	if db == nil {
-		db = database.DB
-	}
+	db = requireModulesDB(db)
 	middlewareDeps := middleware.NewRuntimeDepsWithDB(db)
-	access := accessmodule.New(cfg)
-	automation := automationmodule.New()
-	engagement := engagementmodule.New()
-	integrations := integrationsmodule.New()
-	ops := opsmodule.New()
-	secrets := secretsmodule.New()
+	access := accessmodule.NewWithDB(cfg, db)
+	automation := automationmodule.NewWithDB(db)
+	engagement := engagementmodule.NewWithDB(db)
+	integrations := integrationsmodule.NewWithDB(db)
+	ops := opsmodule.NewWithDB(db)
+	secrets := secretsmodule.NewWithDB(db)
 
 	return moduleSet{
 		access:       access,
@@ -105,4 +98,11 @@ func newModulesWithDB(cfg *config.Config, db *gorm.DB) moduleSet {
 			}),
 		},
 	}
+}
+
+func requireModulesDB(db *gorm.DB) *gorm.DB {
+	if db == nil {
+		panic("http routes require explicit db")
+	}
+	return db
 }

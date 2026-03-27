@@ -1,14 +1,12 @@
 package httpapi
 
 import (
-	"github.com/company/auto-healing/internal/database"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	healing "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // HealingHandler 自愈引擎处理器
@@ -34,26 +32,25 @@ type HealingHandlerDeps struct {
 	Scheduler        *healing.Scheduler
 }
 
-// NewHealingHandler 创建自愈引擎处理器
-func NewHealingHandler() *HealingHandler {
-	return NewHealingHandlerWithDB(database.DB)
-}
-
-func NewHealingHandlerWithDB(db *gorm.DB) *HealingHandler {
-	scheduler := healing.NewSchedulerWithDB(db)
-	return NewHealingHandlerWithDeps(HealingHandlerDeps{
-		FlowRepo:         automationrepo.NewHealingFlowRepositoryWithDB(db),
-		RuleRepo:         automationrepo.NewHealingRuleRepositoryWithDB(db),
-		InstanceRepo:     automationrepo.NewFlowInstanceRepositoryWithDB(db),
-		ApprovalRepo:     automationrepo.NewApprovalTaskRepositoryWithDB(db),
-		IncidentRepo:     incidentrepo.NewIncidentRepositoryWithDB(db),
-		NotificationRepo: engagementrepo.NewNotificationRepository(db),
-		Executor:         scheduler.Executor(),
-		Scheduler:        scheduler,
-	})
-}
-
 func NewHealingHandlerWithDeps(deps HealingHandlerDeps) *HealingHandler {
+	switch {
+	case deps.FlowRepo == nil:
+		panic("automation healing handler requires flow repo")
+	case deps.RuleRepo == nil:
+		panic("automation healing handler requires rule repo")
+	case deps.InstanceRepo == nil:
+		panic("automation healing handler requires instance repo")
+	case deps.ApprovalRepo == nil:
+		panic("automation healing handler requires approval repo")
+	case deps.IncidentRepo == nil:
+		panic("automation healing handler requires incident repo")
+	case deps.NotificationRepo == nil:
+		panic("automation healing handler requires notification repo")
+	case deps.Executor == nil:
+		panic("automation healing handler requires executor")
+	case deps.Scheduler == nil:
+		panic("automation healing handler requires scheduler")
+	}
 	return &HealingHandler{
 		flowRepo:     deps.FlowRepo,
 		ruleRepo:     deps.RuleRepo,

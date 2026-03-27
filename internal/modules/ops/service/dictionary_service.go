@@ -38,6 +38,9 @@ func NewDictionaryServiceWithDB(db *gorm.DB) *DictionaryService {
 }
 
 func NewDictionaryServiceWithDeps(deps DictionaryServiceDeps) *DictionaryService {
+	if deps.Repo == nil {
+		panic("dictionary service requires repository")
+	}
 	return &DictionaryService{
 		repo: deps.Repo,
 	}

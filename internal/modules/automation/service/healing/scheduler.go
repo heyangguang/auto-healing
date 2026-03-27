@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
@@ -46,10 +45,6 @@ type SchedulerDeps struct {
 	Sem          chan struct{}
 }
 
-func DefaultSchedulerDeps(executor *FlowExecutor) SchedulerDeps {
-	return DefaultSchedulerDepsWithDB(database.DB, executor)
-}
-
 func DefaultSchedulerDepsWithDB(db *gorm.DB, executor *FlowExecutor) SchedulerDeps {
 	return SchedulerDeps{
 		RuleRepo:     automationrepo.NewHealingRuleRepositoryWithDB(db),
@@ -65,24 +60,36 @@ func DefaultSchedulerDepsWithDB(db *gorm.DB, executor *FlowExecutor) SchedulerDe
 	}
 }
 
-func DefaultSchedulerRuntimeDeps() SchedulerDeps {
-	return DefaultSchedulerRuntimeDepsWithDB(database.DB)
-}
-
 func DefaultSchedulerRuntimeDepsWithDB(db *gorm.DB) SchedulerDeps {
 	return DefaultSchedulerDepsWithDB(db, NewFlowExecutorWithDB(db))
 }
 
-// NewScheduler 创建调度器
-func NewScheduler() *Scheduler {
-	return NewSchedulerWithDB(database.DB)
-}
-
-func NewSchedulerWithDB(db *gorm.DB) *Scheduler {
-	return NewSchedulerWithDeps(DefaultSchedulerRuntimeDepsWithDB(db))
-}
-
 func NewSchedulerWithDeps(deps SchedulerDeps) *Scheduler {
+	switch {
+	case deps.RuleRepo == nil:
+		panic("automation healing scheduler requires rule repo")
+	case deps.FlowRepo == nil:
+		panic("automation healing scheduler requires flow repo")
+	case deps.InstanceRepo == nil:
+		panic("automation healing scheduler requires instance repo")
+	case deps.IncidentRepo == nil:
+		panic("automation healing scheduler requires incident repo")
+	case deps.ApprovalRepo == nil:
+		panic("automation healing scheduler requires approval repo")
+	case deps.Matcher == nil:
+		panic("automation healing scheduler requires matcher")
+	case deps.Executor == nil:
+		panic("automation healing scheduler requires executor")
+	}
+	if deps.Interval == 0 {
+		deps.Interval = 10 * time.Second
+	}
+	if deps.Lifecycle == nil {
+		deps.Lifecycle = newAsyncLifecycle()
+	}
+	if deps.Sem == nil {
+		deps.Sem = make(chan struct{}, 10)
+	}
 	s := &Scheduler{
 		ruleRepo:     deps.RuleRepo,
 		flowRepo:     deps.FlowRepo,

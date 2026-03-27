@@ -1,7 +1,6 @@
 package integrations
 
 import (
-	"github.com/company/auto-healing/internal/database"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	integrationhttp "github.com/company/auto-healing/internal/modules/integrations/httpapi"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
@@ -31,10 +30,6 @@ type ModuleDeps struct {
 	GitService      *gitSvc.Service
 	PlaybookService *playbook.Service
 	SecretService   *secretsSvc.Service
-}
-
-func DefaultModuleDeps() ModuleDeps {
-	return DefaultModuleDepsWithDB(database.DB)
 }
 
 func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
@@ -79,11 +74,6 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 			Repo: secretsrepo.NewSecretsSourceRepositoryWithDB(db),
 		}),
 	}
-}
-
-// New 创建 integrations 域模块。
-func New() *Module {
-	return NewWithDB(database.DB)
 }
 
 func NewWithDB(db *gorm.DB) *Module {

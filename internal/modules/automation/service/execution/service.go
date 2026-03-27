@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
@@ -56,10 +55,6 @@ type ServiceDeps struct {
 	Lifecycle        *asyncLifecycle
 }
 
-func DefaultServiceDeps() ServiceDeps {
-	return DefaultServiceDepsWithDB(database.DB)
-}
-
 func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	return ServiceDeps{
 		Repo:             automationrepo.NewExecutionRepositoryWithDB(db),
@@ -81,16 +76,31 @@ func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	}
 }
 
-// NewService 创建执行任务服务
-func NewService() *Service {
-	return NewServiceWithDB(database.DB)
-}
-
-func NewServiceWithDB(db *gorm.DB) *Service {
-	return NewServiceWithDeps(DefaultServiceDepsWithDB(db))
-}
-
 func NewServiceWithDeps(deps ServiceDeps) *Service {
+	switch {
+	case deps.Repo == nil:
+		panic("automation execution service requires repo")
+	case deps.GitRepo == nil:
+		panic("automation execution service requires git repo")
+	case deps.SecretsRepo == nil:
+		panic("automation execution service requires secrets repo")
+	case deps.CMDBRepo == nil:
+		panic("automation execution service requires cmdb repo")
+	case deps.HealingFlowRepo == nil:
+		panic("automation execution service requires healing flow repo")
+	case deps.WorkspaceManager == nil:
+		panic("automation execution service requires workspace manager")
+	case deps.LocalExecutor == nil:
+		panic("automation execution service requires local executor")
+	case deps.DockerExecutor == nil:
+		panic("automation execution service requires docker executor")
+	case deps.NotificationSvc == nil:
+		panic("automation execution service requires notification service")
+	case deps.BlacklistSvc == nil:
+		panic("automation execution service requires blacklist service")
+	case deps.ExemptionSvc == nil:
+		panic("automation execution service requires exemption service")
+	}
 	if deps.Lifecycle == nil {
 		deps.Lifecycle = newAsyncLifecycle(maxExecutionWorkers)
 	}
