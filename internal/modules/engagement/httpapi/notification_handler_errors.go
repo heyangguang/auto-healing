@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/notification"
+	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
 )

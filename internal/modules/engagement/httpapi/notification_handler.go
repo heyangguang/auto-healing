@@ -3,7 +3,7 @@ package httpapi
 import (
 	"github.com/company/auto-healing/internal/database"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
-	"github.com/company/auto-healing/internal/notification"
+	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 )
 
 // NotificationHandler 通知处理器

@@ -5,7 +5,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
-	"github.com/company/auto-healing/internal/notification"
+	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

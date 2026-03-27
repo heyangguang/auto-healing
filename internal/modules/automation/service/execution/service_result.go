@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/company/auto-healing/internal/engine/provider/ansible"
+	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"

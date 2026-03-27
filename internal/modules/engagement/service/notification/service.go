@@ -8,7 +8,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
-	"github.com/company/auto-healing/internal/notification/provider"
+	"github.com/company/auto-healing/internal/modules/engagement/service/notification/provider"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"

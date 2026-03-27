@@ -10,7 +10,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
-	"github.com/company/auto-healing/internal/notification"
+	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/pkg/query"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/google/uuid"

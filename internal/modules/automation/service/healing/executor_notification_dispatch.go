@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
-	notificationSvc "github.com/company/auto-healing/internal/notification"
+	notificationSvc "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 )

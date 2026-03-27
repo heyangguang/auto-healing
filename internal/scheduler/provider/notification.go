@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/notification"
+	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/pkg/logger"
 )
 

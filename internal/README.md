@@ -91,10 +91,10 @@ internal/app/httpapi/modules.go
 
 | 模块 | 路径 | 结构 |
 |------|------|------|
-| `engine` | `internal/engine/` | `interface` + `provider/ansible` |
+| `engine` | `internal/modules/automation/engine/` | `interface` + `provider/ansible` |
 | `scheduler` | `internal/scheduler/` | 调度器与 provider |
 | `secrets` | `internal/secrets/` | provider 实现 |
-| `notification` | `internal/notification/` | 通知服务与 provider |
+| `notification` | `internal/modules/engagement/service/notification/` | 通知服务与 provider |
 
 ## 基础设施目录
 

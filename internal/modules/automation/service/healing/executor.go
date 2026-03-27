@@ -5,12 +5,12 @@ import (
 	"sync"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/engine/provider/ansible"
+	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	notificationSvc "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/modules/automation/service/execution"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
-	notificationSvc "github.com/company/auto-healing/internal/notification"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 )

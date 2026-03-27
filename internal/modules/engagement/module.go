@@ -5,7 +5,7 @@ import (
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	engagementhttp "github.com/company/auto-healing/internal/modules/engagement/httpapi"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
-	"github.com/company/auto-healing/internal/notification"
+	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	platformevents "github.com/company/auto-healing/internal/platform/events"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 )

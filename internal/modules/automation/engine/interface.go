@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/engine/provider/ansible"
+	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 )
 
 // Executor 执行器接口
