@@ -59,18 +59,6 @@ type ExecutionSchedulerDeps struct {
 	Sem              chan struct{}
 }
 
-func DefaultExecutionSchedulerDepsWithDB(db *gorm.DB) ExecutionSchedulerDeps {
-	return ExecutionSchedulerDeps{
-		ExecutionService: executionService.NewServiceWithDB(db),
-		ScheduleService:  scheduleService.NewServiceWithDB(db),
-		ScheduleRepo:     automationrepo.NewScheduleRepositoryWithDB(db),
-		DB:               db,
-		Interval:         30 * time.Second,
-		InFlight:         platformsched.NewInFlightSet(),
-		Sem:              make(chan struct{}, 8),
-	}
-}
-
 func NewExecutionSchedulerWithDeps(deps ExecutionSchedulerDeps) *ExecutionScheduler {
 	switch {
 	case deps.ExecutionService == nil:

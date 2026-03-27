@@ -10,7 +10,6 @@ import (
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 // Service Playbook 服务
@@ -24,14 +23,6 @@ type ServiceDeps struct {
 	Repo          *integrationrepo.PlaybookRepository
 	GitRepo       *integrationrepo.GitRepositoryRepository
 	ExecutionRepo *automationrepo.ExecutionRepository
-}
-
-func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
-	return ServiceDeps{
-		Repo:          integrationrepo.NewPlaybookRepositoryWithDB(db),
-		GitRepo:       integrationrepo.NewGitRepositoryRepositoryWithDB(db),
-		ExecutionRepo: automationrepo.NewExecutionRepositoryWithDB(db),
-	}
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

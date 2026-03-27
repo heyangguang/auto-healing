@@ -39,17 +39,6 @@ type ServiceDeps struct {
 	Lifecycle    *asyncLifecycle
 }
 
-func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
-	return ServiceDeps{
-		PluginRepo:   integrationrepo.NewPluginRepositoryWithDB(db),
-		SyncLogRepo:  integrationrepo.NewPluginSyncLogRepositoryWithDB(db),
-		CMDBRepo:     cmdbrepo.NewCMDBItemRepositoryWithDB(db),
-		IncidentRepo: incidentrepo.NewIncidentRepositoryWithDB(db),
-		HTTPClient:   NewHTTPClient(),
-		Lifecycle:    newAsyncLifecycle(),
-	}
-}
-
 func NewServiceWithDeps(deps ServiceDeps) *Service {
 	switch {
 	case deps.PluginRepo == nil:

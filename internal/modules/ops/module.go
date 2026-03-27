@@ -1,10 +1,6 @@
 package ops
 
 import (
-	"context"
-	"fmt"
-	"time"
-
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	opshttp "github.com/company/auto-healing/internal/modules/ops/httpapi"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
@@ -36,7 +32,9 @@ type ModuleDeps struct {
 }
 
 func NewWithDB(db *gorm.DB) *Module {
-	return NewWithDeps(DefaultModuleDepsWithDB(db))
+	deps := DefaultModuleDepsWithDB(db)
+	mustInitializeRuntimeWithDeps(deps)
+	return NewWithDeps(deps)
 }
 
 func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
@@ -49,11 +47,6 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 	blacklistExemptionSvc := opsservice.NewBlacklistExemptionServiceWithDeps(opsservice.BlacklistExemptionServiceDeps{
 		Repo: opsrepo.NewBlacklistExemptionRepository(db),
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := dictSvc.LoadCache(ctx); err != nil {
-		panic(fmt.Errorf("初始化字典缓存失败: %w", err))
-	}
 	return ModuleDeps{
 		DictionaryService:     dictSvc,
 		CommandBlacklistSvc:   commandBlacklistSvc,

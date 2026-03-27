@@ -38,21 +38,6 @@ type ServiceDeps struct {
 	DB             *gorm.DB
 }
 
-func NewServiceWithDB(db *gorm.DB, jwtSvc *jwt.Service) *Service {
-	return NewServiceWithDeps(DefaultServiceDepsWithDB(db, jwtSvc))
-}
-
-func DefaultServiceDepsWithDB(db *gorm.DB, jwtSvc *jwt.Service) ServiceDeps {
-	return ServiceDeps{
-		UserRepo:       accessrepo.NewUserRepositoryWithDB(db),
-		RoleRepo:       accessrepo.NewRoleRepositoryWithDB(db),
-		PermissionRepo: accessrepo.NewPermissionRepositoryWithDB(db),
-		TenantRepo:     accessrepo.NewTenantRepositoryWithDB(db),
-		JWTService:     jwtSvc,
-		DB:             db,
-	}
-}
-
 func NewServiceWithDeps(deps ServiceDeps) *Service {
 	return &Service{
 		userRepo:   deps.UserRepo,

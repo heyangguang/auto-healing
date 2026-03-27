@@ -10,7 +10,6 @@ import (
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
-	"gorm.io/gorm"
 )
 
 // Service 定时任务调度服务
@@ -22,13 +21,6 @@ type Service struct {
 type ServiceDeps struct {
 	Repo     *automationrepo.ScheduleRepository
 	ExecRepo *automationrepo.ExecutionRepository
-}
-
-func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
-	return ServiceDeps{
-		Repo:     automationrepo.NewScheduleRepositoryWithDB(db),
-		ExecRepo: automationrepo.NewExecutionRepositoryWithDB(db),
-	}
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

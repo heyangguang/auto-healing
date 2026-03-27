@@ -29,14 +29,6 @@ type IncidentServiceDeps struct {
 	HTTPClient   *HTTPClient
 }
 
-func DefaultIncidentServiceDepsWithDB(db *gorm.DB) IncidentServiceDeps {
-	return IncidentServiceDeps{
-		IncidentRepo: incidentrepo.NewIncidentRepositoryWithDB(db),
-		PluginRepo:   integrationrepo.NewPluginRepositoryWithDB(db),
-		HTTPClient:   NewHTTPClient(),
-	}
-}
-
 func NewIncidentServiceWithDeps(deps IncidentServiceDeps) *IncidentService {
 	switch {
 	case deps.IncidentRepo == nil:

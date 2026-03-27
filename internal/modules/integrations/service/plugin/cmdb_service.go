@@ -25,12 +25,6 @@ type CMDBServiceDeps struct {
 	CMDBRepo *cmdbrepo.CMDBItemRepository
 }
 
-func DefaultCMDBServiceDepsWithDB(db *gorm.DB) CMDBServiceDeps {
-	return CMDBServiceDeps{
-		CMDBRepo: cmdbrepo.NewCMDBItemRepositoryWithDB(db),
-	}
-}
-
 func NewCMDBServiceWithDeps(deps CMDBServiceDeps) *CMDBService {
 	if deps.CMDBRepo == nil {
 		panic("integrations cmdb service requires cmdb repo")

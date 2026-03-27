@@ -10,13 +10,11 @@ import (
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
-	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	secretsrepo "github.com/company/auto-healing/internal/modules/secrets/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 const maxExecutionWorkers = 10
@@ -53,27 +51,6 @@ type ServiceDeps struct {
 	BlacklistSvc     *opsservice.CommandBlacklistService
 	ExemptionSvc     *opsservice.BlacklistExemptionService
 	Lifecycle        *asyncLifecycle
-}
-
-func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
-	return ServiceDeps{
-		Repo:             automationrepo.NewExecutionRepositoryWithDB(db),
-		GitRepo:          integrationrepo.NewGitRepositoryRepositoryWithDB(db),
-		SecretsRepo:      secretsrepo.NewSecretsSourceRepositoryWithDB(db),
-		CMDBRepo:         cmdbrepo.NewCMDBItemRepositoryWithDB(db),
-		HealingFlowRepo:  automationrepo.NewHealingFlowRepositoryWithDB(db),
-		WorkspaceManager: ansible.NewWorkspaceManager(),
-		LocalExecutor:    ansible.NewLocalExecutor(),
-		DockerExecutor:   ansible.NewDockerExecutor(),
-		NotificationSvc:  notification.NewConfiguredService(db),
-		BlacklistSvc: opsservice.NewCommandBlacklistServiceWithDeps(opsservice.CommandBlacklistServiceDeps{
-			Repo: opsrepo.NewCommandBlacklistRepositoryWithDB(db),
-		}),
-		ExemptionSvc: opsservice.NewBlacklistExemptionServiceWithDeps(opsservice.BlacklistExemptionServiceDeps{
-			Repo: opsrepo.NewBlacklistExemptionRepository(db),
-		}),
-		Lifecycle: newAsyncLifecycle(maxExecutionWorkers),
-	}
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

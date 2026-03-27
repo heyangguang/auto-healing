@@ -12,7 +12,6 @@ import (
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"gorm.io/gorm"
 )
 
 // FlowExecutor 流程执行器
@@ -48,28 +47,6 @@ type FlowExecutorDeps struct {
 	AnsibleExecutor ansible.Executor
 	EventBus        *EventBus
 	Lifecycle       *asyncLifecycle
-}
-
-func DefaultFlowExecutorDepsWithDB(db *gorm.DB, executionSvc *execution.Service, notificationService *notificationSvc.Service) FlowExecutorDeps {
-	return FlowExecutorDeps{
-		InstanceRepo:    automationrepo.NewFlowInstanceRepositoryWithDB(db),
-		ApprovalRepo:    automationrepo.NewApprovalTaskRepositoryWithDB(db),
-		FlowRepo:        automationrepo.NewHealingFlowRepositoryWithDB(db),
-		FlowLogRepo:     automationrepo.NewFlowLogRepositoryWithDB(db),
-		CMDBRepo:        cmdbrepo.NewCMDBItemRepositoryWithDB(db),
-		GitRepoRepo:     integrationrepo.NewGitRepositoryRepositoryWithDB(db),
-		ExecutionRepo:   automationrepo.NewExecutionRepositoryWithDB(db),
-		IncidentRepo:    incidentrepo.NewIncidentRepositoryWithDB(db),
-		ExecutionSvc:    executionSvc,
-		NotificationSvc: notificationService,
-		AnsibleExecutor: ansible.NewLocalExecutor(),
-		EventBus:        GetEventBus(),
-		Lifecycle:       newAsyncLifecycle(),
-	}
-}
-
-func DefaultFlowExecutorRuntimeDepsWithDB(db *gorm.DB) FlowExecutorDeps {
-	return DefaultFlowExecutorDepsWithDB(db, execution.NewServiceWithDB(db), notificationSvc.NewConfiguredService(db))
 }
 
 func NewFlowExecutorWithDeps(deps FlowExecutorDeps) *FlowExecutor {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/company/auto-healing/internal/config"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/modules/engagement/model"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
@@ -29,34 +28,13 @@ type ConfiguredServiceDeps struct {
 	HealingFlowRepo *automationrepo.HealingFlowRepository
 }
 
-// NewService 创建通知服务
-func NewService(db *gorm.DB, systemName, systemURL, systemVersion string) *Service {
-	return &Service{
-		repo:             engagementrepo.NewNotificationRepository(db),
-		healingFlowRepo:  automationrepo.NewHealingFlowRepositoryWithDB(db),
-		providerRegistry: provider.NewRegistry(),
-		templateParser:   NewTemplateParser(),
-		variableBuilder:  NewVariableBuilder(systemName, systemURL, systemVersion),
-		rateLimiter:      NewRateLimiter(),
-	}
-}
-
-func NewConfiguredService(db *gorm.DB) *Service {
-	return NewConfiguredServiceWithDeps(ConfiguredServiceDeps{
-		Repo:            engagementrepo.NewNotificationRepository(db),
-		HealingFlowRepo: automationrepo.NewHealingFlowRepositoryWithDB(db),
-	})
-}
-
-func NewConfiguredServiceWithDeps(deps ConfiguredServiceDeps) *Service {
-	requireConfiguredServiceDeps(deps)
-	appCfg := config.GetAppConfig()
+func newServiceWithRuntime(deps ConfiguredServiceDeps, systemName, systemURL, systemVersion string) *Service {
 	return &Service{
 		repo:             deps.Repo,
 		healingFlowRepo:  deps.HealingFlowRepo,
 		providerRegistry: provider.NewRegistry(),
 		templateParser:   NewTemplateParser(),
-		variableBuilder:  NewVariableBuilder(appCfg.Name, appCfg.URL, appCfg.Version),
+		variableBuilder:  NewVariableBuilder(systemName, systemURL, systemVersion),
 		rateLimiter:      NewRateLimiter(),
 	}
 }

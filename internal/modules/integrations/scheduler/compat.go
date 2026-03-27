@@ -2,7 +2,11 @@ package scheduler
 
 import (
 	"github.com/company/auto-healing/internal/database"
+	gitService "github.com/company/auto-healing/internal/modules/integrations/service/git"
+	pluginService "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
+	schedulerx "github.com/company/auto-healing/internal/platform/schedulerx"
 	"gorm.io/gorm"
+	"time"
 )
 
 func DefaultGitSchedulerDeps() GitSchedulerDeps {
@@ -11,6 +15,27 @@ func DefaultGitSchedulerDeps() GitSchedulerDeps {
 
 func DefaultPluginSchedulerDeps() PluginSchedulerDeps {
 	return DefaultPluginSchedulerDepsWithDB(database.DB)
+}
+
+func DefaultGitSchedulerDepsWithDB(db *gorm.DB) GitSchedulerDeps {
+	return GitSchedulerDeps{
+		GitService: gitService.NewServiceWithDB(db),
+		DB:         db,
+		Interval:   60 * time.Second,
+		InFlight:   schedulerx.NewInFlightSet(),
+		Now:        time.Now,
+	}
+}
+
+func DefaultPluginSchedulerDepsWithDB(db *gorm.DB) PluginSchedulerDeps {
+	return PluginSchedulerDeps{
+		PluginService: pluginService.NewServiceWithDB(db),
+		CMDBService:   pluginService.NewCMDBServiceWithDB(db),
+		DB:            db,
+		Interval:      30 * time.Second,
+		InFlight:      schedulerx.NewInFlightSet(),
+		Now:           time.Now,
+	}
 }
 
 // NewGitScheduler 保留兼容零参构造，生产路径应使用显式 deps。

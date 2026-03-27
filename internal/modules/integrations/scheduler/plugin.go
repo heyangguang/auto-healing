@@ -46,17 +46,6 @@ type PluginSchedulerDeps struct {
 	Now           func() time.Time
 }
 
-func DefaultPluginSchedulerDepsWithDB(db *gorm.DB) PluginSchedulerDeps {
-	return PluginSchedulerDeps{
-		PluginService: pluginService.NewServiceWithDB(db),
-		CMDBService:   pluginService.NewCMDBServiceWithDB(db),
-		DB:            db,
-		Interval:      30 * time.Second,
-		InFlight:      schedulerx.NewInFlightSet(),
-		Now:           time.Now,
-	}
-}
-
 func NewPluginSchedulerWithDeps(deps PluginSchedulerDeps) *PluginScheduler {
 	switch {
 	case deps.PluginService == nil:

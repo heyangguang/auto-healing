@@ -8,7 +8,6 @@ import (
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"gorm.io/gorm"
 )
 
 // Scheduler 全局自愈调度器
@@ -43,25 +42,6 @@ type SchedulerDeps struct {
 	Interval     time.Duration
 	Lifecycle    *asyncLifecycle
 	Sem          chan struct{}
-}
-
-func DefaultSchedulerDepsWithDB(db *gorm.DB, executor *FlowExecutor) SchedulerDeps {
-	return SchedulerDeps{
-		RuleRepo:     automationrepo.NewHealingRuleRepositoryWithDB(db),
-		FlowRepo:     automationrepo.NewHealingFlowRepositoryWithDB(db),
-		InstanceRepo: automationrepo.NewFlowInstanceRepositoryWithDB(db),
-		IncidentRepo: incidentrepo.NewIncidentRepositoryWithDB(db),
-		ApprovalRepo: automationrepo.NewApprovalTaskRepositoryWithDB(db),
-		Matcher:      NewRuleMatcher(),
-		Executor:     executor,
-		Interval:     10 * time.Second,
-		Lifecycle:    newAsyncLifecycle(),
-		Sem:          make(chan struct{}, 10),
-	}
-}
-
-func DefaultSchedulerRuntimeDepsWithDB(db *gorm.DB) SchedulerDeps {
-	return DefaultSchedulerDepsWithDB(db, NewFlowExecutorWithDB(db))
 }
 
 func NewSchedulerWithDeps(deps SchedulerDeps) *Scheduler {

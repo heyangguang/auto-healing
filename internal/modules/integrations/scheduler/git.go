@@ -42,16 +42,6 @@ type GitSchedulerDeps struct {
 	Now        func() time.Time
 }
 
-func DefaultGitSchedulerDepsWithDB(db *gorm.DB) GitSchedulerDeps {
-	return GitSchedulerDeps{
-		GitService: gitService.NewServiceWithDB(db),
-		DB:         db,
-		Interval:   60 * time.Second,
-		InFlight:   schedulerx.NewInFlightSet(),
-		Now:        time.Now,
-	}
-}
-
 func NewGitSchedulerWithDeps(deps GitSchedulerDeps) *GitScheduler {
 	switch {
 	case deps.GitService == nil:
