@@ -109,7 +109,7 @@ func TestGetUserTenantsReturnsStableOrder(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createTenantSchema(t, db)
 
-	repo := &TenantRepository{db: db}
+	repo := NewTenantRepositoryWithDB(db)
 	userID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")

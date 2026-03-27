@@ -2,22 +2,23 @@ package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/database"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/company/auto-healing/internal/repository"
 )
 
 // ImpersonationHandler Impersonation 处理器
 type ImpersonationHandler struct {
-	repo              *repository.ImpersonationRepository
-	tenantRepo        *repository.TenantRepository
+	repo              *accessrepo.ImpersonationRepository
+	tenantRepo        *accessrepo.TenantRepository
 	auditRepo         *auditrepo.AuditLogRepository
 	platformAuditRepo *auditrepo.PlatformAuditLogRepository
 	siteMessageRepo   *repository.SiteMessageRepository
 }
 
 type ImpersonationHandlerDeps struct {
-	ImpersonationRepo *repository.ImpersonationRepository
-	TenantRepo        *repository.TenantRepository
+	ImpersonationRepo *accessrepo.ImpersonationRepository
+	TenantRepo        *accessrepo.TenantRepository
 	AuditRepo         *auditrepo.AuditLogRepository
 	PlatformAuditRepo *auditrepo.PlatformAuditLogRepository
 	SiteMessageRepo   *repository.SiteMessageRepository
@@ -26,8 +27,8 @@ type ImpersonationHandlerDeps struct {
 // NewImpersonationHandler 创建 Impersonation 处理器
 func NewImpersonationHandler() *ImpersonationHandler {
 	return NewImpersonationHandlerWithDeps(ImpersonationHandlerDeps{
-		ImpersonationRepo: repository.NewImpersonationRepository(),
-		TenantRepo:        repository.NewTenantRepository(),
+		ImpersonationRepo: accessrepo.NewImpersonationRepository(),
+		TenantRepo:        accessrepo.NewTenantRepository(),
 		AuditRepo:         auditrepo.NewAuditLogRepository(database.DB),
 		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
 		SiteMessageRepo:   repository.NewSiteMessageRepository(),

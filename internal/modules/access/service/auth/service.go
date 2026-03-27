@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/jwt"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -22,10 +22,10 @@ var (
 
 // Service 认证服务
 type Service struct {
-	userRepo   *repository.UserRepository
-	roleRepo   *repository.RoleRepository
-	permRepo   *repository.PermissionRepository
-	tenantRepo *repository.TenantRepository
+	userRepo   *accessrepo.UserRepository
+	roleRepo   *accessrepo.RoleRepository
+	permRepo   *accessrepo.PermissionRepository
+	tenantRepo *accessrepo.TenantRepository
 	jwtSvc     *jwt.Service
 	db         *gorm.DB
 }
@@ -33,10 +33,10 @@ type Service struct {
 // NewService 创建认证服务
 func NewService(jwtSvc *jwt.Service) *Service {
 	return &Service{
-		userRepo:   repository.NewUserRepository(),
-		roleRepo:   repository.NewRoleRepository(),
-		permRepo:   repository.NewPermissionRepository(),
-		tenantRepo: repository.NewTenantRepository(),
+		userRepo:   accessrepo.NewUserRepository(),
+		roleRepo:   accessrepo.NewRoleRepository(),
+		permRepo:   accessrepo.NewPermissionRepository(),
+		tenantRepo: accessrepo.NewTenantRepository(),
 		jwtSvc:     jwtSvc,
 		db:         database.DB,
 	}

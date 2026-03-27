@@ -201,7 +201,7 @@ func TestScheduleRepositoryCreateRequiresTenantContext(t *testing.T) {
 
 func TestTenantRepositoryGetTrendByDayRejectsInvalidTable(t *testing.T) {
 	db := newStateTestDB(t)
-	repo := &TenantRepository{db: db}
+	repo := NewTenantRepositoryWithDB(db)
 
 	_, _, err := repo.GetTrendByDay(context.Background(), "not_allowed_table", 7)
 	if !errors.Is(err, ErrTenantStatsTableNotAllowed) {
@@ -211,7 +211,7 @@ func TestTenantRepositoryGetTrendByDayRejectsInvalidTable(t *testing.T) {
 
 func TestTenantRepositoryGetTrendByDayWhereRejectsInvalidTable(t *testing.T) {
 	db := newStateTestDB(t)
-	repo := &TenantRepository{db: db}
+	repo := NewTenantRepositoryWithDB(db)
 
 	_, _, err := repo.GetTrendByDayWhere(context.Background(), "not_allowed_table", 7, "")
 	if !errors.Is(err, ErrTenantStatsTableNotAllowed) {

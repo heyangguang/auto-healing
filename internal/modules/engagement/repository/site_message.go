@@ -223,17 +223,17 @@ func (r *SiteMessageRepository) MarkAllRead(ctx context.Context, userID uuid.UUI
 
 // Create 创建站内信
 func (r *SiteMessageRepository) Create(ctx context.Context, msg *model.SiteMessage) error {
-		// 自动设置 tenant_id；平台广播消息允许为空租户。
-		if msg.TenantID == nil {
-			tenantID, ok := TenantIDFromContextOK(ctx)
-			if !ok {
-				goto retention
-			}
-			msg.TenantID = &tenantID
+	// 自动设置 tenant_id；平台广播消息允许为空租户。
+	if msg.TenantID == nil {
+		tenantID, ok := TenantIDFromContextOK(ctx)
+		if !ok {
+			goto retention
 		}
-	retention:
-		// 如果没有设置过期时间，从 platform_settings 获取保留天数
-		if msg.ExpiresAt == nil {
+		msg.TenantID = &tenantID
+	}
+retention:
+	// 如果没有设置过期时间，从 platform_settings 获取保留天数
+	if msg.ExpiresAt == nil {
 		retentionDays := r.platformSettings.GetIntValue(ctx, "site_message.retention_days", 90)
 		if retentionDays > 0 {
 			expiresAt := time.Now().AddDate(0, 0, retentionDays)

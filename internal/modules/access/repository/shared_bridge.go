@@ -8,16 +8,18 @@ import (
 	"gorm.io/gorm"
 )
 
-func TenantDB(db *gorm.DB, ctx context.Context) *gorm.DB {
-	return platformrepo.TenantDB(db, ctx)
-}
+var ErrTenantContextRequired = platformrepo.ErrTenantContextRequired
 
-func TenantIDFromContextOK(ctx context.Context) (uuid.UUID, bool) {
-	return platformrepo.TenantIDFromContextOK(ctx)
+func WithTenantID(ctx context.Context, tenantID uuid.UUID) context.Context {
+	return platformrepo.WithTenantID(ctx, tenantID)
 }
 
 func TenantIDFromContext(ctx context.Context) uuid.UUID {
 	return platformrepo.TenantIDFromContext(ctx)
+}
+
+func TenantIDFromContextOK(ctx context.Context) (uuid.UUID, bool) {
+	return platformrepo.TenantIDFromContextOK(ctx)
 }
 
 func RequireTenantID(ctx context.Context) (uuid.UUID, error) {
@@ -26,6 +28,16 @@ func RequireTenantID(ctx context.Context) (uuid.UUID, error) {
 
 func FillTenantID(ctx context.Context, tenantID **uuid.UUID) error {
 	return platformrepo.FillTenantID(ctx, tenantID)
+}
+
+func TenantScope(tenantID uuid.UUID) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where("tenant_id = ?", tenantID)
+	}
+}
+
+func TenantDB(db *gorm.DB, ctx context.Context) *gorm.DB {
+	return platformrepo.TenantDB(db, ctx)
 }
 
 func UpdateTenantScopedModel(db *gorm.DB, ctx context.Context, id uuid.UUID, entity interface{}, omit ...string) error {

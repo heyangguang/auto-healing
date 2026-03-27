@@ -15,7 +15,7 @@ func TestSecretsSourceRepositoryCreateOverridesTenantID(t *testing.T) {
 	db := newStateTestDB(t)
 	createSecretsSourcesTable(t, db)
 
-	repo := &SecretsSourceRepository{db: db}
+	repo := NewSecretsSourceRepositoryWithDB(db)
 	ctxTenant := uuid.New()
 	source := &model.SecretsSource{
 		ID:       uuid.New(),
@@ -47,7 +47,7 @@ func TestSecretsSourceRepositoryEnsureActiveDefaultPromotesStableCandidate(t *te
 	db := newStateTestDB(t)
 	createSecretsSourcesTable(t, db)
 
-	repo := &SecretsSourceRepository{db: db}
+	repo := NewSecretsSourceRepositoryWithDB(db)
 	tenantID := uuid.New()
 	ctx := WithTenantID(context.Background(), tenantID)
 	olderID := uuid.New()
@@ -78,7 +78,7 @@ func TestSecretsSourceRepositoryEnsureActiveDefaultClearsInactiveDefault(t *test
 	db := newStateTestDB(t)
 	createSecretsSourcesTable(t, db)
 
-	repo := &SecretsSourceRepository{db: db}
+	repo := NewSecretsSourceRepositoryWithDB(db)
 	tenantID := uuid.New()
 	ctx := WithTenantID(context.Background(), tenantID)
 	inactiveID := uuid.New()
@@ -119,7 +119,7 @@ func TestSecretsSourceRepositoryDeleteReturnsNotFound(t *testing.T) {
 	db := newStateTestDB(t)
 	createSecretsSourcesTable(t, db)
 
-	repo := &SecretsSourceRepository{db: db}
+	repo := NewSecretsSourceRepositoryWithDB(db)
 	err := repo.Delete(WithTenantID(context.Background(), uuid.New()), uuid.New())
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("Delete() error = %v, want %v", err, gorm.ErrRecordNotFound)
@@ -130,7 +130,7 @@ func TestSecretsSourceRepositorySetDefaultReturnsNotFound(t *testing.T) {
 	db := newStateTestDB(t)
 	createSecretsSourcesTable(t, db)
 
-	repo := &SecretsSourceRepository{db: db}
+	repo := NewSecretsSourceRepositoryWithDB(db)
 	err := repo.SetDefault(WithTenantID(context.Background(), uuid.New()), uuid.New())
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("SetDefault() error = %v, want %v", err, gorm.ErrRecordNotFound)
@@ -141,7 +141,7 @@ func TestSecretsSourceRepositoryEnsureActiveDefaultClearsDefaultWhenNoActiveSour
 	db := newStateTestDB(t)
 	createSecretsSourcesTable(t, db)
 
-	repo := &SecretsSourceRepository{db: db}
+	repo := NewSecretsSourceRepositoryWithDB(db)
 	tenantID := uuid.New()
 	ctx := WithTenantID(context.Background(), tenantID)
 	sourceID := uuid.New()
@@ -166,7 +166,7 @@ func TestSecretsSourceRepositoryUpdatePreservesTestFields(t *testing.T) {
 	db := newStateTestDB(t)
 	createSecretsSourcesTable(t, db)
 
-	repo := &SecretsSourceRepository{db: db}
+	repo := NewSecretsSourceRepositoryWithDB(db)
 	tenantID := uuid.New()
 	sourceID := uuid.New()
 	now := time.Now().UTC().Format(time.RFC3339)

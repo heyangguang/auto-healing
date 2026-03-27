@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
@@ -14,25 +15,25 @@ import (
 // TenantUserHandler 租户级用户管理处理器
 type TenantUserHandler struct {
 	authSvc    *authService.Service
-	tenantRepo *repository.TenantRepository
-	userRepo   *repository.UserRepository
-	roleRepo   *repository.RoleRepository
+	tenantRepo *accessrepo.TenantRepository
+	userRepo   *accessrepo.UserRepository
+	roleRepo   *accessrepo.RoleRepository
 }
 
 type TenantUserHandlerDeps struct {
 	AuthService *authService.Service
-	TenantRepo  *repository.TenantRepository
-	UserRepo    *repository.UserRepository
-	RoleRepo    *repository.RoleRepository
+	TenantRepo  *accessrepo.TenantRepository
+	UserRepo    *accessrepo.UserRepository
+	RoleRepo    *accessrepo.RoleRepository
 }
 
 // NewTenantUserHandler 创建租户级用户处理器
 func NewTenantUserHandler(authSvc *authService.Service) *TenantUserHandler {
 	return NewTenantUserHandlerWithDeps(TenantUserHandlerDeps{
 		AuthService: authSvc,
-		TenantRepo:  repository.NewTenantRepository(),
-		UserRepo:    repository.NewUserRepository(),
-		RoleRepo:    repository.NewRoleRepository(),
+		TenantRepo:  accessrepo.NewTenantRepository(),
+		UserRepo:    accessrepo.NewUserRepository(),
+		RoleRepo:    accessrepo.NewRoleRepository(),
 	})
 }
 

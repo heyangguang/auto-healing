@@ -5,10 +5,10 @@ import (
 
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
 
@@ -18,7 +18,7 @@ type AuthHandler struct {
 	jwtSvc            *jwt.Service
 	auditRepo         *auditrepo.AuditLogRepository
 	platformAuditRepo *auditrepo.PlatformAuditLogRepository
-	userRepo          *repository.UserRepository
+	userRepo          *accessrepo.UserRepository
 }
 
 type AuthHandlerDeps struct {
@@ -26,7 +26,7 @@ type AuthHandlerDeps struct {
 	JWTService        *jwt.Service
 	AuditRepo         *auditrepo.AuditLogRepository
 	PlatformAuditRepo *auditrepo.PlatformAuditLogRepository
-	UserRepo          *repository.UserRepository
+	UserRepo          *accessrepo.UserRepository
 }
 
 // NewAuthHandler 创建认证处理器
@@ -43,7 +43,7 @@ func NewAuthHandler(cfg *config.Config) *AuthHandler {
 		JWTService:        jwtSvc,
 		AuditRepo:         auditrepo.NewAuditLogRepository(database.DB),
 		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
-		UserRepo:          repository.NewUserRepository(),
+		UserRepo:          accessrepo.NewUserRepository(),
 	})
 }
 

@@ -25,6 +25,10 @@ func NewSecretsSourceRepository() *SecretsSourceRepository {
 	}
 }
 
+func NewSecretsSourceRepositoryWithDB(db *gorm.DB) *SecretsSourceRepository {
+	return &SecretsSourceRepository{db: db}
+}
+
 func (r *SecretsSourceRepository) withDB(db *gorm.DB) *SecretsSourceRepository {
 	return &SecretsSourceRepository{db: db}
 }

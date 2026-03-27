@@ -4,30 +4,30 @@ import (
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 // UserHandler 用户管理处理器
 type UserHandler struct {
-	userRepo *repository.UserRepository
-	roleRepo *repository.RoleRepository
+	userRepo *accessrepo.UserRepository
+	roleRepo *accessrepo.RoleRepository
 	authSvc  *authService.Service
 }
 
 type UserHandlerDeps struct {
-	UserRepo    *repository.UserRepository
-	RoleRepo    *repository.RoleRepository
+	UserRepo    *accessrepo.UserRepository
+	RoleRepo    *accessrepo.RoleRepository
 	AuthService *authService.Service
 }
 
 // NewUserHandler 创建用户处理器
 func NewUserHandler(authSvc *authService.Service) *UserHandler {
 	return NewUserHandlerWithDeps(UserHandlerDeps{
-		UserRepo:    repository.NewUserRepository(),
-		RoleRepo:    repository.NewRoleRepository(),
+		UserRepo:    accessrepo.NewUserRepository(),
+		RoleRepo:    accessrepo.NewRoleRepository(),
 		AuthService: authSvc,
 	})
 }
@@ -42,20 +42,20 @@ func NewUserHandlerWithDeps(deps UserHandlerDeps) *UserHandler {
 
 // RoleHandler 角色管理处理器
 type RoleHandler struct {
-	roleRepo *repository.RoleRepository
-	permRepo *repository.PermissionRepository
+	roleRepo *accessrepo.RoleRepository
+	permRepo *accessrepo.PermissionRepository
 }
 
 type RoleHandlerDeps struct {
-	RoleRepo       *repository.RoleRepository
-	PermissionRepo *repository.PermissionRepository
+	RoleRepo       *accessrepo.RoleRepository
+	PermissionRepo *accessrepo.PermissionRepository
 }
 
 // NewRoleHandler 创建角色处理器
 func NewRoleHandler() *RoleHandler {
 	return NewRoleHandlerWithDeps(RoleHandlerDeps{
-		RoleRepo:       repository.NewRoleRepository(),
-		PermissionRepo: repository.NewPermissionRepository(),
+		RoleRepo:       accessrepo.NewRoleRepository(),
+		PermissionRepo: accessrepo.NewPermissionRepository(),
 	})
 }
 
@@ -68,17 +68,17 @@ func NewRoleHandlerWithDeps(deps RoleHandlerDeps) *RoleHandler {
 
 // PermissionHandler 权限处理器
 type PermissionHandler struct {
-	permRepo *repository.PermissionRepository
+	permRepo *accessrepo.PermissionRepository
 }
 
 type PermissionHandlerDeps struct {
-	PermissionRepo *repository.PermissionRepository
+	PermissionRepo *accessrepo.PermissionRepository
 }
 
 // NewPermissionHandler 创建权限处理器
 func NewPermissionHandler() *PermissionHandler {
 	return NewPermissionHandlerWithDeps(PermissionHandlerDeps{
-		PermissionRepo: repository.NewPermissionRepository(),
+		PermissionRepo: accessrepo.NewPermissionRepository(),
 	})
 }
 

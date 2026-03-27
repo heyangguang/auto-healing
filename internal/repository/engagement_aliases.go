@@ -5,7 +5,11 @@ import engagementrepo "github.com/company/auto-healing/internal/modules/engageme
 import "gorm.io/gorm"
 
 type DashboardRepository = engagementrepo.DashboardRepository
+type NotificationRepository = engagementrepo.NotificationRepository
 type SearchRepository = engagementrepo.SearchRepository
+type SiteMessageRepository = engagementrepo.SiteMessageRepository
+type TemplateListOptions = engagementrepo.TemplateListOptions
+type NotificationLogListOptions = engagementrepo.NotificationLogListOptions
 type UserPreferenceRepository = engagementrepo.UserPreferenceRepository
 type UserActivityRepository = engagementrepo.UserActivityRepository
 type WorkbenchRepository = engagementrepo.WorkbenchRepository
@@ -21,6 +25,14 @@ func NewDashboardRepositoryWithDB(db *gorm.DB) *DashboardRepository {
 
 func NewSearchRepository() *SearchRepository {
 	return engagementrepo.NewSearchRepository()
+}
+
+func NewNotificationRepository(db *gorm.DB) *NotificationRepository {
+	return engagementrepo.NewNotificationRepository(db)
+}
+
+func NewSiteMessageRepository() *SiteMessageRepository {
+	return engagementrepo.NewSiteMessageRepository()
 }
 
 func NewUserPreferenceRepository() *UserPreferenceRepository {

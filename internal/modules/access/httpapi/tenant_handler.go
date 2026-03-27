@@ -1,31 +1,31 @@
 package httpapi
 
 import (
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
-	"github.com/company/auto-healing/internal/repository"
 )
 
 // TenantHandler 租户处理器
 type TenantHandler struct {
-	repo     *repository.TenantRepository
-	roleRepo *repository.RoleRepository
-	userRepo *repository.UserRepository
+	repo     *accessrepo.TenantRepository
+	roleRepo *accessrepo.RoleRepository
+	userRepo *accessrepo.UserRepository
 	authSvc  *authService.Service
 }
 
 type TenantHandlerDeps struct {
-	TenantRepo  *repository.TenantRepository
-	RoleRepo    *repository.RoleRepository
-	UserRepo    *repository.UserRepository
+	TenantRepo  *accessrepo.TenantRepository
+	RoleRepo    *accessrepo.RoleRepository
+	UserRepo    *accessrepo.UserRepository
 	AuthService *authService.Service
 }
 
 // NewTenantHandler 创建租户处理器
 func NewTenantHandler(authSvc *authService.Service) *TenantHandler {
 	return NewTenantHandlerWithDeps(TenantHandlerDeps{
-		TenantRepo:  repository.NewTenantRepository(),
-		RoleRepo:    repository.NewRoleRepository(),
-		UserRepo:    repository.NewUserRepository(),
+		TenantRepo:  accessrepo.NewTenantRepository(),
+		RoleRepo:    accessrepo.NewRoleRepository(),
+		UserRepo:    accessrepo.NewUserRepository(),
 		AuthService: authSvc,
 	})
 }

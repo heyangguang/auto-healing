@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	secretsrepo "github.com/company/auto-healing/internal/modules/secrets/repository"
 	"github.com/company/auto-healing/internal/secrets"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -21,7 +21,7 @@ func (s *Service) CreateSource(ctx context.Context, source *model.SecretsSource)
 	if requestedDefault {
 		source.IsDefault = false
 	}
-	if err := s.repo.Transaction(ctx, func(repoTx *repository.SecretsSourceRepository) error {
+	if err := s.repo.Transaction(ctx, func(repoTx *secretsrepo.SecretsSourceRepository) error {
 		if err := repoTx.Create(ctx, source); err != nil {
 			return err
 		}
@@ -55,7 +55,7 @@ func (s *Service) GetSource(ctx context.Context, id uuid.UUID) (*model.SecretsSo
 
 func (s *Service) UpdateSource(ctx context.Context, id uuid.UUID, config model.JSON, isDefault *bool, priority *int, status string) (*model.SecretsSource, error) {
 	var finalSource *model.SecretsSource
-	if err := s.repo.Transaction(ctx, func(repoTx *repository.SecretsSourceRepository) error {
+	if err := s.repo.Transaction(ctx, func(repoTx *secretsrepo.SecretsSourceRepository) error {
 		source, err := repoTx.GetByIDForUpdate(ctx, id)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -137,7 +137,7 @@ func applySourceAdminChanges(source *model.SecretsSource, isDefault *bool, prior
 }
 
 func (s *Service) DeleteSource(ctx context.Context, id uuid.UUID) error {
-	return s.repo.Transaction(ctx, func(repoTx *repository.SecretsSourceRepository) error {
+	return s.repo.Transaction(ctx, func(repoTx *secretsrepo.SecretsSourceRepository) error {
 		if _, err := repoTx.GetByID(ctx, id); err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return fmt.Errorf("%w: %s", ErrSecretsSourceNotFound, id)
@@ -189,7 +189,7 @@ func (s *Service) persistTestConnectionResult(ctx context.Context, id uuid.UUID,
 }
 
 func (s *Service) Enable(ctx context.Context, id uuid.UUID) error {
-	return s.repo.Transaction(ctx, func(repoTx *repository.SecretsSourceRepository) error {
+	return s.repo.Transaction(ctx, func(repoTx *secretsrepo.SecretsSourceRepository) error {
 		source, err := repoTx.GetByIDForUpdate(ctx, id)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -215,7 +215,7 @@ func (s *Service) Enable(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *Service) Disable(ctx context.Context, id uuid.UUID) error {
-	return s.repo.Transaction(ctx, func(repoTx *repository.SecretsSourceRepository) error {
+	return s.repo.Transaction(ctx, func(repoTx *secretsrepo.SecretsSourceRepository) error {
 		source, err := repoTx.GetByIDForUpdate(ctx, id)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -239,7 +239,7 @@ func (s *Service) GetStats(ctx context.Context) (map[string]interface{}, error) 
 	return s.repo.GetStats(ctx)
 }
 
-func countSourceReferencesWithRepo(repo *repository.SecretsSourceRepository, ctx context.Context, id uuid.UUID) (int64, error) {
+func countSourceReferencesWithRepo(repo *secretsrepo.SecretsSourceRepository, ctx context.Context, id uuid.UUID) (int64, error) {
 	taskCount, err := repo.CountTasksUsingSource(ctx, id.String())
 	if err != nil {
 		return 0, fmt.Errorf("检查关联任务模板失败: %w", err)

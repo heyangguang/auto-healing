@@ -4,6 +4,7 @@ import (
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	accesshttp "github.com/company/auto-healing/internal/modules/access/httpapi"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/repository"
 )
 
@@ -22,10 +23,10 @@ type Module struct {
 func New(cfg *config.Config) *Module {
 	authHandler := accesshttp.NewAuthHandler(cfg)
 	authSvc := authHandler.GetAuthService()
-	userRepo := repository.NewUserRepository()
-	roleRepo := repository.NewRoleRepository()
-	tenantRepo := repository.NewTenantRepository()
-	permissionRepo := repository.NewPermissionRepository()
+	userRepo := accessrepo.NewUserRepository()
+	roleRepo := accessrepo.NewRoleRepository()
+	tenantRepo := accessrepo.NewTenantRepository()
+	permissionRepo := accessrepo.NewPermissionRepository()
 
 	return &Module{
 		Auth: authHandler,
@@ -54,7 +55,7 @@ func New(cfg *config.Config) *Module {
 			AuthService: authSvc,
 		}),
 		Impersonation: accesshttp.NewImpersonationHandlerWithDeps(accesshttp.ImpersonationHandlerDeps{
-			ImpersonationRepo: repository.NewImpersonationRepository(),
+			ImpersonationRepo: accessrepo.NewImpersonationRepository(),
 			TenantRepo:        tenantRepo,
 			AuditRepo:         repository.NewAuditLogRepository(database.DB),
 			PlatformAuditRepo: repository.NewPlatformAuditLogRepository(),
