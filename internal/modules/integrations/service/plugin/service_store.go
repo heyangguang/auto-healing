@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/google/uuid"
 )
 
 // saveIncident 保存工单到数据库
 // 返回: (isNew, error) - isNew=true 表示新增
 func (s *Service) saveIncident(ctx context.Context, pluginID uuid.UUID, pluginName string, raw RawIncident) (bool, error) {
-	incidentRepo := repository.NewIncidentRepository()
+	incidentRepo := incidentrepo.NewIncidentRepository()
 	incident := &model.Incident{
 		PluginID:         &pluginID,
 		SourcePluginName: pluginName,

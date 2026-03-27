@@ -9,9 +9,10 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	executionSvc "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	healingSvc "github.com/company/auto-healing/internal/modules/automation/service/healing"
-	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -69,7 +70,7 @@ func TestHealingInstanceCancelAPIUpdatesInstanceApprovalAndIncident(t *testing.T
 	handler := &HealingHandler{
 		instanceRepo: automationrepo.NewFlowInstanceRepository(),
 		approvalRepo: automationrepo.NewApprovalTaskRepository(),
-		incidentRepo: repository.NewIncidentRepository(),
+		incidentRepo: incidentrepo.NewIncidentRepository(),
 		executor:     healingSvc.NewFlowExecutor(),
 	}
 	t.Cleanup(handler.Shutdown)

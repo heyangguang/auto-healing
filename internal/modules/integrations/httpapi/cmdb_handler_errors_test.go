@@ -9,7 +9,7 @@ import (
 
 	pluginservice "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,7 +19,7 @@ func TestRespondCMDBItemErrorNotFound(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 
-	respondCMDBItemError(ctx, "获取 CMDB 详情失败", repository.ErrCMDBItemNotFound)
+	respondCMDBItemError(ctx, "获取 CMDB 详情失败", cmdbrepo.ErrCMDBItemNotFound)
 
 	assertCMDBErrorResponse(t, recorder, http.StatusNotFound, response.CodeNotFound, cmdbNotFoundMessage)
 }

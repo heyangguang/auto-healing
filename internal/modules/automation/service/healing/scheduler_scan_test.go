@@ -6,6 +6,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -31,7 +32,7 @@ func TestMarkIncidentsScannedWithoutRulesSyncsSkippedStatusWithTenantContext(t *
 	incidentID := uuid.MustParse("81818181-8181-8181-8181-818181818181")
 	mustExecHealing(t, db, `INSERT INTO incidents (id, tenant_id, healing_status, scanned) VALUES (?, ?, ?, ?)`, incidentID.String(), tenantID.String(), "pending", false)
 
-	scheduler := &Scheduler{incidentRepo: repository.NewIncidentRepository()}
+	scheduler := &Scheduler{incidentRepo: incidentrepo.NewIncidentRepository()}
 	scheduler.markIncidentsScannedWithoutRules(context.Background(), []model.Incident{{
 		ID:       incidentID,
 		TenantID: &tenantID,
@@ -63,7 +64,7 @@ func TestProcessIncidentWithoutMatchedRuleMarksIncidentSkipped(t *testing.T) {
 
 	scheduler := &Scheduler{}
 	incident := &model.Incident{ID: incidentID, TenantID: &tenantID}
-	scheduler.incidentRepo = repository.NewIncidentRepository()
+	scheduler.incidentRepo = incidentrepo.NewIncidentRepository()
 	scheduler.processIncident(ctx, incident, nil)
 
 	assertIncidentState(t, db, incidentID, "skipped", true)

@@ -11,6 +11,8 @@ import (
 	"github.com/company/auto-healing/internal/modules/automation/service/execution"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	notificationSvc "github.com/company/auto-healing/internal/notification"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/company/auto-healing/internal/repository"
 )
 
@@ -20,10 +22,10 @@ type FlowExecutor struct {
 	approvalRepo    *automationrepo.ApprovalTaskRepository
 	flowRepo        *automationrepo.HealingFlowRepository
 	flowLogRepo     *repository.FlowLogRepository
-	cmdbRepo        *repository.CMDBItemRepository
+	cmdbRepo        *cmdbrepo.CMDBItemRepository
 	gitRepoRepo     *integrationrepo.GitRepositoryRepository
 	executionRepo   *automationrepo.ExecutionRepository
-	incidentRepo    *repository.IncidentRepository
+	incidentRepo    *incidentrepo.IncidentRepository
 	executionSvc    *execution.Service
 	notificationSvc *notificationSvc.Service
 	ansibleExecutor ansible.Executor
@@ -44,10 +46,10 @@ func NewFlowExecutorWithDependencies(executionSvc *execution.Service, notificati
 		approvalRepo:    automationrepo.NewApprovalTaskRepository(),
 		flowRepo:        automationrepo.NewHealingFlowRepository(),
 		flowLogRepo:     repository.NewFlowLogRepository(),
-		cmdbRepo:        repository.NewCMDBItemRepository(),
+		cmdbRepo:        cmdbrepo.NewCMDBItemRepository(),
 		gitRepoRepo:     integrationrepo.NewGitRepositoryRepository(),
 		executionRepo:   automationrepo.NewExecutionRepository(),
-		incidentRepo:    repository.NewIncidentRepository(),
+		incidentRepo:    incidentrepo.NewIncidentRepository(),
 		executionSvc:    executionSvc,
 		notificationSvc: notificationService,
 		ansibleExecutor: ansible.NewLocalExecutor(),

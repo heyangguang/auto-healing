@@ -6,24 +6,24 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 // PlatformAuditHandler 平台审计日志处理器
 type PlatformAuditHandler struct {
-	repo *repository.PlatformAuditLogRepository
+	repo *auditrepo.PlatformAuditLogRepository
 }
 
 type PlatformAuditHandlerDeps struct {
-	Repo *repository.PlatformAuditLogRepository
+	Repo *auditrepo.PlatformAuditLogRepository
 }
 
 // NewPlatformAuditHandler 创建平台审计日志处理器
 func NewPlatformAuditHandler() *PlatformAuditHandler {
 	return NewPlatformAuditHandlerWithDeps(PlatformAuditHandlerDeps{
-		Repo: repository.NewPlatformAuditLogRepository(),
+		Repo: auditrepo.NewPlatformAuditLogRepository(),
 	})
 }
 
@@ -50,7 +50,7 @@ func (h *PlatformAuditHandler) ListPlatformAuditLogs(c *gin.Context) {
 	response.List(c, formatPlatformAuditLogs(logs), total, page, pageSize)
 }
 
-func buildPlatformAuditListOptions(c *gin.Context, page, pageSize int) (*repository.PlatformAuditListOptions, error) {
+func buildPlatformAuditListOptions(c *gin.Context, page, pageSize int) (*auditrepo.PlatformAuditListOptions, error) {
 	userID, err := parsePlatformAuditUserID(c.Query("user_id"))
 	if err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func buildPlatformAuditListOptions(c *gin.Context, page, pageSize int) (*reposit
 	if err != nil {
 		return nil, err
 	}
-	return &repository.PlatformAuditListOptions{
+	return &auditrepo.PlatformAuditListOptions{
 		Page:          page,
 		PageSize:      pageSize,
 		Search:        GetStringFilter(c, "search"),
@@ -130,8 +130,8 @@ func formatPlatformAuditLog(log model.PlatformAuditLog) gin.H {
 		"changes":         sanitizeAuditPayload(log.Changes),
 		"status":          log.Status,
 		"error_message":   log.ErrorMessage,
-		"risk_level":      repository.GetRiskLevel(log.Action, log.ResourceType),
-		"risk_reason":     repository.GetRiskReason(log.Action, log.ResourceType),
+		"risk_level":      auditrepo.GetRiskLevel(log.Action, log.ResourceType),
+		"risk_reason":     auditrepo.GetRiskReason(log.Action, log.ResourceType),
 		"created_at":      log.CreatedAt,
 	}
 }
@@ -155,8 +155,8 @@ func (h *PlatformAuditHandler) GetPlatformAuditLog(c *gin.Context) {
 		return
 	}
 
-	riskLevel := repository.GetRiskLevel(log.Action, log.ResourceType)
-	riskReason := repository.GetRiskReason(log.Action, log.ResourceType)
+	riskLevel := auditrepo.GetRiskLevel(log.Action, log.ResourceType)
+	riskReason := auditrepo.GetRiskReason(log.Action, log.ResourceType)
 
 	response.Success(c, gin.H{
 		"id":              log.ID,
@@ -251,7 +251,7 @@ func (h *PlatformAuditHandler) GetPlatformHighRiskLogs(c *gin.Context) {
 			"resource_name": log.ResourceName,
 			"status":        log.Status,
 			"ip_address":    log.IPAddress,
-			"risk_reason":   repository.GetRiskReason(log.Action, log.ResourceType),
+			"risk_reason":   auditrepo.GetRiskReason(log.Action, log.ResourceType),
 			"created_at":    log.CreatedAt,
 		}
 	}

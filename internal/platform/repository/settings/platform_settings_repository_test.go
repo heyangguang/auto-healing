@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -84,5 +86,22 @@ func toPanicMessage(value interface{}) string {
 		return typed
 	default:
 		return ""
+	}
+}
+
+func newSQLiteTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "platform-settings.db")
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite db: %v", err)
+	}
+	return db
+}
+
+func mustExec(t *testing.T, db *gorm.DB, sql string, args ...any) {
+	t.Helper()
+	if err := db.Exec(sql, args...).Error; err != nil {
+		t.Fatalf("exec %q: %v", sql, err)
 	}
 }

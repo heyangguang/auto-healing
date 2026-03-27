@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/database"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	opshttp "github.com/company/auto-healing/internal/modules/ops/httpapi"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
-	"github.com/company/auto-healing/internal/repository"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 )
 
 // Module 聚合 ops 域处理器构造。
@@ -34,13 +35,13 @@ func New() *Module {
 
 	return &Module{
 		Audit: opshttp.NewAuditHandlerWithDeps(opshttp.AuditHandlerDeps{
-			Repo: repository.NewAuditLogRepository(database.DB),
+			Repo: auditrepo.NewAuditLogRepository(database.DB),
 		}),
 		PlatformAudit: opshttp.NewPlatformAuditHandlerWithDeps(opshttp.PlatformAuditHandlerDeps{
-			Repo: repository.NewPlatformAuditLogRepository(),
+			Repo: auditrepo.NewPlatformAuditLogRepository(),
 		}),
 		PlatformSettings: opshttp.NewPlatformSettingsHandlerWithDeps(opshttp.PlatformSettingsHandlerDeps{
-			Repo: repository.NewPlatformSettingsRepository(),
+			Repo: settingsrepo.NewPlatformSettingsRepository(),
 		}),
 		Dictionary: opshttp.NewDictionaryHandlerWithDeps(opshttp.DictionaryHandlerDeps{
 			Service: dictSvc,

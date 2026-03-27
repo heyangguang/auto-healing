@@ -6,14 +6,14 @@ import (
 	"github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 // GetIncidentStats 获取工单统计数据
 func (h *PluginHandler) GetIncidentStats(c *gin.Context) {
-	incidentRepo := repository.NewIncidentRepository()
+	incidentRepo := incidentrepo.NewIncidentRepository()
 	stats, err := incidentRepo.GetStats(c.Request.Context())
 	if err != nil {
 		response.InternalError(c, "获取工单统计失败")
@@ -134,7 +134,7 @@ func (h *PluginHandler) BatchResetIncidentScan(c *gin.Context) {
 }
 
 func respondPluginIncidentError(c *gin.Context, publicMsg string, err error) {
-	if errors.Is(err, repository.ErrIncidentNotFound) {
+	if errors.Is(err, incidentrepo.ErrIncidentNotFound) {
 		response.NotFound(c, "工单不存在")
 		return
 	}

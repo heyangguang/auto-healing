@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/database"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/company/auto-healing/internal/repository"
 )
 
@@ -9,16 +10,16 @@ import (
 type ImpersonationHandler struct {
 	repo              *repository.ImpersonationRepository
 	tenantRepo        *repository.TenantRepository
-	auditRepo         *repository.AuditLogRepository
-	platformAuditRepo *repository.PlatformAuditLogRepository
+	auditRepo         *auditrepo.AuditLogRepository
+	platformAuditRepo *auditrepo.PlatformAuditLogRepository
 	siteMessageRepo   *repository.SiteMessageRepository
 }
 
 type ImpersonationHandlerDeps struct {
 	ImpersonationRepo *repository.ImpersonationRepository
 	TenantRepo        *repository.TenantRepository
-	AuditRepo         *repository.AuditLogRepository
-	PlatformAuditRepo *repository.PlatformAuditLogRepository
+	AuditRepo         *auditrepo.AuditLogRepository
+	PlatformAuditRepo *auditrepo.PlatformAuditLogRepository
 	SiteMessageRepo   *repository.SiteMessageRepository
 }
 
@@ -27,8 +28,8 @@ func NewImpersonationHandler() *ImpersonationHandler {
 	return NewImpersonationHandlerWithDeps(ImpersonationHandlerDeps{
 		ImpersonationRepo: repository.NewImpersonationRepository(),
 		TenantRepo:        repository.NewTenantRepository(),
-		AuditRepo:         repository.NewAuditLogRepository(database.DB),
-		PlatformAuditRepo: repository.NewPlatformAuditLogRepository(),
+		AuditRepo:         auditrepo.NewAuditLogRepository(database.DB),
+		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
 		SiteMessageRepo:   repository.NewSiteMessageRepository(),
 	})
 }

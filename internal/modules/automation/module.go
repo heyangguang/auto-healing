@@ -3,11 +3,12 @@ package automation
 import (
 	"github.com/company/auto-healing/internal/database"
 	automationhttp "github.com/company/auto-healing/internal/modules/automation/httpapi"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	executionSvc "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	healingSvc "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	scheduleSvc "github.com/company/auto-healing/internal/modules/automation/service/schedule"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
-	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/company/auto-healing/internal/repository"
 )
 
@@ -32,7 +33,7 @@ func New() *Module {
 			RuleRepo:         automationrepo.NewHealingRuleRepository(),
 			InstanceRepo:     automationrepo.NewFlowInstanceRepository(),
 			ApprovalRepo:     automationrepo.NewApprovalTaskRepository(),
-			IncidentRepo:     repository.NewIncidentRepository(),
+			IncidentRepo:     incidentrepo.NewIncidentRepository(),
 			NotificationRepo: repository.NewNotificationRepository(database.DB),
 			Executor:         scheduler.Executor(),
 			Scheduler:        scheduler,

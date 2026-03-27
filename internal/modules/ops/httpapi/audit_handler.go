@@ -9,24 +9,24 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 // AuditHandler 审计日志处理器
 type AuditHandler struct {
-	repo *repository.AuditLogRepository
+	repo *auditrepo.AuditLogRepository
 }
 
 type AuditHandlerDeps struct {
-	Repo *repository.AuditLogRepository
+	Repo *auditrepo.AuditLogRepository
 }
 
 // NewAuditHandler 创建审计日志处理器
 func NewAuditHandler() *AuditHandler {
 	return NewAuditHandlerWithDeps(AuditHandlerDeps{
-		Repo: repository.NewAuditLogRepository(database.DB),
+		Repo: auditrepo.NewAuditLogRepository(database.DB),
 	})
 }
 
@@ -34,8 +34,8 @@ func NewAuditHandlerWithDeps(deps AuditHandlerDeps) *AuditHandler {
 	return &AuditHandler{repo: deps.Repo}
 }
 
-func buildAuditListOptions(c *gin.Context, page, pageSize int) (*repository.AuditLogListOptions, error) {
-	opts := &repository.AuditLogListOptions{
+func buildAuditListOptions(c *gin.Context, page, pageSize int) (*auditrepo.AuditLogListOptions, error) {
+	opts := &auditrepo.AuditLogListOptions{
 		Page:         page,
 		PageSize:     pageSize,
 		Search:       GetStringFilter(c, "search"),
@@ -87,7 +87,7 @@ func parseOptionalAuditTime(value, key string) (*time.Time, error) {
 }
 
 func auditRiskFields(action, resourceType string) (string, string) {
-	return repository.GetRiskLevel(action, resourceType), repository.GetRiskReason(action, resourceType)
+	return auditrepo.GetRiskLevel(action, resourceType), auditrepo.GetRiskReason(action, resourceType)
 }
 
 func splitAndTrim(s string) []string {

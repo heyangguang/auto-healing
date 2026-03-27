@@ -7,6 +7,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -15,14 +16,14 @@ import (
 // SiteMessageRepository 站内信数据仓库
 type SiteMessageRepository struct {
 	db               *gorm.DB
-	platformSettings *PlatformSettingsRepository
+	platformSettings *settingsrepo.PlatformSettingsRepository
 }
 
 // NewSiteMessageRepository 创建站内信仓库
 func NewSiteMessageRepository() *SiteMessageRepository {
 	return &SiteMessageRepository{
 		db:               database.DB,
-		platformSettings: NewPlatformSettingsRepository(),
+		platformSettings: settingsrepo.NewPlatformSettingsRepository(),
 	}
 }
 

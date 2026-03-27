@@ -135,7 +135,7 @@ func TestCMDBUpsertPreservesTenantScope(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createCMDBSchema(t, db)
 
-	repo := &CMDBItemRepository{db: db}
+	repo := NewCMDBItemRepositoryWithDB(db)
 	tenantID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	pluginID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	ctx := WithTenantID(context.Background(), tenantID)

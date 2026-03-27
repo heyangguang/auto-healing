@@ -8,6 +8,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -24,7 +25,7 @@ func TestScheduleAutoFlowExecutionMarksQueuedInstanceFailedOnStop(t *testing.T) 
 
 	scheduler := NewScheduler()
 	scheduler.instanceRepo = automationrepo.NewFlowInstanceRepository()
-	scheduler.incidentRepo = repository.NewIncidentRepository()
+	scheduler.incidentRepo = incidentrepo.NewIncidentRepository()
 	tenantID := uuid.MustParse("40404040-4040-4040-4040-404040404040")
 	instanceID := uuid.MustParse("41414141-4141-4141-4141-414141414141")
 	incidentID := uuid.MustParse("42424242-4242-4242-4242-424242424242")
@@ -56,7 +57,7 @@ func TestExecuteTrackedFlowMarksRunningInstanceFailedOnStop(t *testing.T) {
 
 	scheduler := NewScheduler()
 	scheduler.instanceRepo = automationrepo.NewFlowInstanceRepository()
-	scheduler.incidentRepo = repository.NewIncidentRepository()
+	scheduler.incidentRepo = incidentrepo.NewIncidentRepository()
 	tenantID := uuid.MustParse("43434343-4343-4343-4343-434343434343")
 	instanceID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
 	incidentID := uuid.MustParse("45454545-4545-4545-4545-454545454545")

@@ -9,6 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/secrets"
 	"github.com/google/uuid"
@@ -100,7 +101,7 @@ func TestPrepareAuthenticatedInventoryFinalizesRunWhenCredentialBuildFails(t *te
 
 	svc := &Service{
 		repo:     automationrepo.NewExecutionRepository(),
-		cmdbRepo: repository.NewCMDBItemRepository(),
+		cmdbRepo: cmdbrepo.NewCMDBItemRepository(),
 	}
 	ctx := repository.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()
@@ -129,7 +130,7 @@ func TestResolveHostCredentialReturnsBackendErrors(t *testing.T) {
 
 	svc := &Service{
 		repo:     automationrepo.NewExecutionRepository(),
-		cmdbRepo: repository.NewCMDBItemRepository(),
+		cmdbRepo: cmdbrepo.NewCMDBItemRepository(),
 	}
 	ctx := repository.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()
@@ -153,7 +154,7 @@ func TestResolveHostCredentialContinuesOnSecretNotFound(t *testing.T) {
 
 	svc := &Service{
 		repo:     automationrepo.NewExecutionRepository(),
-		cmdbRepo: repository.NewCMDBItemRepository(),
+		cmdbRepo: cmdbrepo.NewCMDBItemRepository(),
 	}
 	ctx := repository.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()

@@ -8,11 +8,12 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/model"
-	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/notification"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
@@ -24,7 +25,7 @@ type Service struct {
 	repo             *automationrepo.ExecutionRepository
 	gitRepo          *integrationrepo.GitRepositoryRepository
 	secretsRepo      *repository.SecretsSourceRepository
-	cmdbRepo         *repository.CMDBItemRepository
+	cmdbRepo         *cmdbrepo.CMDBItemRepository
 	healingFlowRepo  *automationrepo.HealingFlowRepository
 	workspaceManager *ansible.WorkspaceManager
 	localExecutor    *ansible.LocalExecutor
@@ -44,7 +45,7 @@ func NewService() *Service {
 		repo:             automationrepo.NewExecutionRepository(),
 		gitRepo:          integrationrepo.NewGitRepositoryRepository(),
 		secretsRepo:      repository.NewSecretsSourceRepository(),
-		cmdbRepo:         repository.NewCMDBItemRepository(),
+		cmdbRepo:         cmdbrepo.NewCMDBItemRepository(),
 		healingFlowRepo:  automationrepo.NewHealingFlowRepository(),
 		workspaceManager: ansible.NewWorkspaceManager(),
 		localExecutor:    ansible.NewLocalExecutor(),

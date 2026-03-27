@@ -1,4 +1,4 @@
-package repository
+package incident
 
 import (
 	"context"
@@ -22,7 +22,11 @@ var ErrIncidentNotFound = errors.New("工单不存在")
 
 // NewIncidentRepository 创建工单仓库
 func NewIncidentRepository() *IncidentRepository {
-	return &IncidentRepository{db: database.DB}
+	return NewIncidentRepositoryWithDB(database.DB)
+}
+
+func NewIncidentRepositoryWithDB(db *gorm.DB) *IncidentRepository {
+	return &IncidentRepository{db: db}
 }
 
 // Create 创建工单

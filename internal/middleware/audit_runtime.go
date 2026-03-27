@@ -10,6 +10,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -126,7 +127,7 @@ func parseAuditUserID(userID string) *uuid.UUID {
 	return &parsed
 }
 
-func writeAuditLogs(state *auditRequestState, actor auditActor, repo *repository.AuditLogRepository, platformRepo *repository.PlatformAuditLogRepository, db *gorm.DB) {
+func writeAuditLogs(state *auditRequestState, actor auditActor, repo *auditrepo.AuditLogRepository, platformRepo *auditrepo.PlatformAuditLogRepository, db *gorm.DB) {
 	ensureMiddlewareLifecycle().Go(func(rootCtx context.Context) {
 		defer recoverAuditPanic()
 		event := buildAuditEvent(state, actor, db)
@@ -203,7 +204,7 @@ func computeAuditChanges(status, method, action string, oldState map[string]inte
 	return computeChanges(method, action, sanitizeAuditMap(oldState), bodyJSON)
 }
 
-func persistAuditEvent(rootCtx context.Context, event auditEvent, repo *repository.AuditLogRepository, platformRepo *repository.PlatformAuditLogRepository) {
+func persistAuditEvent(rootCtx context.Context, event auditEvent, repo *auditrepo.AuditLogRepository, platformRepo *auditrepo.PlatformAuditLogRepository) {
 	ctx, cancel := newAuditContext(rootCtx, event.tenantID)
 	defer cancel()
 	if event.isPlatformAdmin {
@@ -216,11 +217,11 @@ func persistAuditEvent(rootCtx context.Context, event auditEvent, repo *reposito
 }
 
 func newAuditContext(rootCtx context.Context, tenantID uuid.UUID) (context.Context, context.CancelFunc) {
-	baseCtx := repository.WithTenantID(context.WithoutCancel(rootCtx), tenantID)
+	baseCtx := auditrepo.WithTenantID(context.WithoutCancel(rootCtx), tenantID)
 	return context.WithTimeout(baseCtx, 5*time.Second)
 }
 
-func persistPlatformAuditEvent(ctx context.Context, event auditEvent, repo *repository.AuditLogRepository, platformRepo *repository.PlatformAuditLogRepository) {
+func persistPlatformAuditEvent(ctx context.Context, event auditEvent, repo *auditrepo.AuditLogRepository, platformRepo *auditrepo.PlatformAuditLogRepository) {
 	if err := platformRepo.Create(ctx, newPlatformAuditLog(event)); err != nil {
 		logger.API("AUDIT").Error("平台审计日志写入失败: %v", err)
 	}

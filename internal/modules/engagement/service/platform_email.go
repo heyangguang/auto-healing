@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/company/auto-healing/internal/repository"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 )
 
 // ==================== 平台级邮件服务 ====================
@@ -18,13 +18,13 @@ import (
 
 // PlatformEmailService 平台级邮件服务
 type PlatformEmailService struct {
-	settingsRepo *repository.PlatformSettingsRepository
+	settingsRepo *settingsrepo.PlatformSettingsRepository
 }
 
 // NewPlatformEmailService 创建平台邮件服务
 func NewPlatformEmailService() *PlatformEmailService {
 	return &PlatformEmailService{
-		settingsRepo: repository.NewPlatformSettingsRepository(),
+		settingsRepo: settingsrepo.NewPlatformSettingsRepository(),
 	}
 }
 

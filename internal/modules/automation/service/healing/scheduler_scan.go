@@ -7,6 +7,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
@@ -84,7 +85,7 @@ func (s *Scheduler) processIncident(ctx context.Context, incident *model.Inciden
 
 func (s *Scheduler) syncIncidentSkipped(ctx context.Context, incidentID uuid.UUID) error {
 	scanned := true
-	return s.incidentRepo.SyncState(ctx, repository.IncidentSyncOptions{
+	return s.incidentRepo.SyncState(ctx, incidentrepo.IncidentSyncOptions{
 		IncidentID:    incidentID,
 		HealingStatus: "skipped",
 		Scanned:       &scanned,

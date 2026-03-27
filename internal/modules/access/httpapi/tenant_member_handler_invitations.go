@@ -10,6 +10,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	engagementservice "github.com/company/auto-healing/internal/modules/engagement/service"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
@@ -35,7 +36,7 @@ func (h *TenantHandler) InviteToTenant(c *gin.Context) {
 		return
 	}
 
-	settingsRepo := repository.NewPlatformSettingsRepository()
+	settingsRepo := settingsrepo.NewPlatformSettingsRepository()
 	inviterID, err := uuid.Parse(middleware.GetUserID(c))
 	if err != nil {
 		respondInternalError(c, "TENANT", "解析邀请人失败", err)
@@ -143,7 +144,7 @@ func (h *TenantHandler) validateTenantInvitationRequest(c *gin.Context, tenantID
 	return tenant, role, true
 }
 
-func buildInvitationURL(c *gin.Context, settingsRepo *repository.PlatformSettingsRepository, token string) string {
+func buildInvitationURL(c *gin.Context, settingsRepo *settingsrepo.PlatformSettingsRepository, token string) string {
 	baseURL := settingsRepo.GetStringValue(c.Request.Context(), "site.base_url", "")
 	if baseURL == "" {
 		baseURL = c.Request.Header.Get("Origin")
@@ -204,7 +205,7 @@ func (h *TenantHandler) ListInvitations(c *gin.Context) {
 		return
 	}
 
-	settingsRepo := repository.NewPlatformSettingsRepository()
+	settingsRepo := settingsrepo.NewPlatformSettingsRepository()
 	baseURL := buildInvitationURL(c, settingsRepo, "")
 	baseURL = strings.TrimSuffix(baseURL, "?token=")
 	for i := range invitations {

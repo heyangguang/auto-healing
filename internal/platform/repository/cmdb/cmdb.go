@@ -1,4 +1,4 @@
-package repository
+package cmdb
 
 import (
 	"context"
@@ -23,9 +23,11 @@ type CMDBItemRepository struct {
 
 // NewCMDBItemRepository 创建 CMDB 仓库
 func NewCMDBItemRepository() *CMDBItemRepository {
-	return &CMDBItemRepository{
-		db: database.DB,
-	}
+	return NewCMDBItemRepositoryWithDB(database.DB)
+}
+
+func NewCMDBItemRepositoryWithDB(db *gorm.DB) *CMDBItemRepository {
+	return &CMDBItemRepository{db: db}
 }
 
 // Create 创建配置项

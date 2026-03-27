@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/company/auto-healing/internal/repository"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/gin-gonic/gin"
 )
 
@@ -22,7 +22,7 @@ func TestRespondPluginIncidentErrorNotFound(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 
-	respondPluginIncidentError(c, "获取工单详情失败", repository.ErrIncidentNotFound)
+	respondPluginIncidentError(c, "获取工单详情失败", incidentrepo.ErrIncidentNotFound)
 
 	assertIncidentErrorResponse(t, recorder, http.StatusNotFound, "工单不存在")
 }

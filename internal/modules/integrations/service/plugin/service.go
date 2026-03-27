@@ -9,7 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/query"
-	sharedrepo "github.com/company/auto-healing/internal/repository"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -23,7 +23,7 @@ var (
 type Service struct {
 	pluginRepo  *integrationrepo.PluginRepository
 	syncLogRepo *integrationrepo.PluginSyncLogRepository
-	cmdbRepo    *sharedrepo.CMDBItemRepository
+	cmdbRepo    *cmdbrepo.CMDBItemRepository
 	httpClient  *HTTPClient
 	lifecycle   *asyncLifecycle
 }
@@ -33,7 +33,7 @@ func NewService() *Service {
 	return &Service{
 		pluginRepo:  integrationrepo.NewPluginRepository(),
 		syncLogRepo: integrationrepo.NewPluginSyncLogRepository(),
-		cmdbRepo:    sharedrepo.NewCMDBItemRepository(),
+		cmdbRepo:    cmdbrepo.NewCMDBItemRepository(),
 		httpClient:  NewHTTPClient(),
 		lifecycle:   newAsyncLifecycle(),
 	}

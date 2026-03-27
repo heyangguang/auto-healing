@@ -6,6 +6,7 @@ import (
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/notification"
 	platformevents "github.com/company/auto-healing/internal/platform/events"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/company/auto-healing/internal/repository"
 )
 
@@ -44,7 +45,7 @@ func New() *Module {
 		}),
 		SiteMessage: engagementhttp.NewSiteMessageHandlerWithDeps(engagementhttp.SiteMessageHandlerDeps{
 			SiteMessageRepo:      repository.NewSiteMessageRepository(),
-			PlatformSettingsRepo: repository.NewPlatformSettingsRepository(),
+			PlatformSettingsRepo: settingsrepo.NewPlatformSettingsRepository(),
 			EventBus:             platformevents.GetMessageEventBus(),
 			TenantRepo:           repository.NewTenantRepository(),
 			UserRepo:             repository.NewUserRepository(),

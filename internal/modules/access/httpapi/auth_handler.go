@@ -7,6 +7,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
@@ -15,16 +16,16 @@ import (
 type AuthHandler struct {
 	authSvc           *authService.Service
 	jwtSvc            *jwt.Service
-	auditRepo         *repository.AuditLogRepository
-	platformAuditRepo *repository.PlatformAuditLogRepository
+	auditRepo         *auditrepo.AuditLogRepository
+	platformAuditRepo *auditrepo.PlatformAuditLogRepository
 	userRepo          *repository.UserRepository
 }
 
 type AuthHandlerDeps struct {
 	AuthService       *authService.Service
 	JWTService        *jwt.Service
-	AuditRepo         *repository.AuditLogRepository
-	PlatformAuditRepo *repository.PlatformAuditLogRepository
+	AuditRepo         *auditrepo.AuditLogRepository
+	PlatformAuditRepo *auditrepo.PlatformAuditLogRepository
 	UserRepo          *repository.UserRepository
 }
 
@@ -40,8 +41,8 @@ func NewAuthHandler(cfg *config.Config) *AuthHandler {
 	return NewAuthHandlerWithDeps(AuthHandlerDeps{
 		AuthService:       authService.NewService(jwtSvc),
 		JWTService:        jwtSvc,
-		AuditRepo:         repository.NewAuditLogRepository(database.DB),
-		PlatformAuditRepo: repository.NewPlatformAuditLogRepository(),
+		AuditRepo:         auditrepo.NewAuditLogRepository(database.DB),
+		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
 		UserRepo:          repository.NewUserRepository(),
 	})
 }

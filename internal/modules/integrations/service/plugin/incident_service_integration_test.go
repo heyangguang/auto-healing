@@ -13,6 +13,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -112,7 +113,7 @@ func TestCloseIncidentIntegrationUpdatesSourceAndLocalState(t *testing.T) {
 		t.Fatalf("path = %v, want /integration-close/INC-9000", req["path"])
 	}
 
-	incident, err := repository.NewIncidentRepository().GetByID(ctx, incidentID)
+	incident, err := incidentrepo.NewIncidentRepository().GetByID(ctx, incidentID)
 	if err != nil {
 		t.Fatalf("reload incident: %v", err)
 	}

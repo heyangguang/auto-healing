@@ -2,14 +2,14 @@ package middleware
 
 import (
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/repository"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/gin-gonic/gin"
 )
 
 // AuditMiddleware 审计中间件 — 自动记录写操作的审计日志
 func AuditMiddleware() gin.HandlerFunc {
-	repo := repository.NewAuditLogRepository(database.DB)
-	platformRepo := repository.NewPlatformAuditLogRepository()
+	repo := auditrepo.NewAuditLogRepository(database.DB)
+	platformRepo := auditrepo.NewPlatformAuditLogRepository()
 	db := database.DB
 
 	return func(c *gin.Context) {

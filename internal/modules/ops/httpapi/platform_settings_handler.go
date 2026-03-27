@@ -9,8 +9,8 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -21,17 +21,17 @@ import (
 
 // PlatformSettingsHandler 平台设置处理器
 type PlatformSettingsHandler struct {
-	repo *repository.PlatformSettingsRepository
+	repo *settingsrepo.PlatformSettingsRepository
 }
 
 type PlatformSettingsHandlerDeps struct {
-	Repo *repository.PlatformSettingsRepository
+	Repo *settingsrepo.PlatformSettingsRepository
 }
 
 // NewPlatformSettingsHandler 创建平台设置处理器
 func NewPlatformSettingsHandler() *PlatformSettingsHandler {
 	return NewPlatformSettingsHandlerWithDeps(PlatformSettingsHandlerDeps{
-		Repo: repository.NewPlatformSettingsRepository(),
+		Repo: settingsrepo.NewPlatformSettingsRepository(),
 	})
 }
 

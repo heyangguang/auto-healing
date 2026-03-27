@@ -9,7 +9,7 @@ import (
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/query"
-	sharedrepo "github.com/company/auto-healing/internal/repository"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -18,7 +18,7 @@ var ErrBatchResetScanScopeRequired = errors.New("批量重置必须提供 ids �
 
 // IncidentService 工单服务
 type IncidentService struct {
-	incidentRepo *sharedrepo.IncidentRepository
+	incidentRepo *incidentrepo.IncidentRepository
 	pluginRepo   *integrationrepo.PluginRepository
 	httpClient   *HTTPClient
 }
@@ -26,7 +26,7 @@ type IncidentService struct {
 // NewIncidentService 创建工单服务
 func NewIncidentService() *IncidentService {
 	return &IncidentService{
-		incidentRepo: sharedrepo.NewIncidentRepository(),
+		incidentRepo: incidentrepo.NewIncidentRepository(),
 		pluginRepo:   integrationrepo.NewPluginRepository(),
 		httpClient:   NewHTTPClient(),
 	}

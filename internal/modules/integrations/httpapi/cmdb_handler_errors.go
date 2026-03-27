@@ -5,14 +5,14 @@ import (
 
 	pluginservice "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/gin-gonic/gin"
 )
 
 const cmdbNotFoundMessage = "配置项不存在"
 
 func respondCMDBItemError(c *gin.Context, publicMsg string, err error) {
-	if errors.Is(err, repository.ErrCMDBItemNotFound) {
+	if errors.Is(err, cmdbrepo.ErrCMDBItemNotFound) {
 		response.NotFound(c, cmdbNotFoundMessage)
 		return
 	}
@@ -21,7 +21,7 @@ func respondCMDBItemError(c *gin.Context, publicMsg string, err error) {
 
 func respondCMDBMaintenanceError(c *gin.Context, publicMsg string, err error) {
 	switch {
-	case errors.Is(err, repository.ErrCMDBItemNotFound):
+	case errors.Is(err, cmdbrepo.ErrCMDBItemNotFound):
 		response.NotFound(c, cmdbNotFoundMessage)
 	case errors.Is(err, pluginservice.ErrCMDBOfflineMaintenanceForbidden):
 		response.BadRequest(c, err.Error())
@@ -31,7 +31,7 @@ func respondCMDBMaintenanceError(c *gin.Context, publicMsg string, err error) {
 }
 
 func cmdbLookupFailureMessage(err error) string {
-	if errors.Is(err, repository.ErrCMDBItemNotFound) {
+	if errors.Is(err, cmdbrepo.ErrCMDBItemNotFound) {
 		return cmdbNotFoundMessage
 	}
 	return "查询配置项失败: " + err.Error()

@@ -7,7 +7,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
-	"github.com/company/auto-healing/internal/repository"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 )
 
 // Scheduler 全局自愈调度器
@@ -15,7 +15,7 @@ type Scheduler struct {
 	ruleRepo     *automationrepo.HealingRuleRepository
 	flowRepo     *automationrepo.HealingFlowRepository
 	instanceRepo *automationrepo.FlowInstanceRepository
-	incidentRepo *repository.IncidentRepository
+	incidentRepo *incidentrepo.IncidentRepository
 	approvalRepo *automationrepo.ApprovalTaskRepository
 
 	matcher  *RuleMatcher
@@ -37,7 +37,7 @@ func NewScheduler() *Scheduler {
 		ruleRepo:     automationrepo.NewHealingRuleRepository(),
 		flowRepo:     automationrepo.NewHealingFlowRepository(),
 		instanceRepo: automationrepo.NewFlowInstanceRepository(),
-		incidentRepo: repository.NewIncidentRepository(),
+		incidentRepo: incidentrepo.NewIncidentRepository(),
 		approvalRepo: automationrepo.NewApprovalTaskRepository(),
 		matcher:      NewRuleMatcher(),
 		executor:     NewFlowExecutor(),

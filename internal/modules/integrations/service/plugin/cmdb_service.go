@@ -8,6 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/query"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -15,7 +16,7 @@ import (
 
 // CMDBService CMDB 服务
 type CMDBService struct {
-	cmdbRepo *repository.CMDBItemRepository
+	cmdbRepo *cmdbrepo.CMDBItemRepository
 }
 
 var ErrCMDBOfflineMaintenanceForbidden = errors.New("已下线的配置项不能进入维护模式")
@@ -23,7 +24,7 @@ var ErrCMDBOfflineMaintenanceForbidden = errors.New("已下线的配置项不能
 // NewCMDBService 创建 CMDB 服务
 func NewCMDBService() *CMDBService {
 	return &CMDBService{
-		cmdbRepo: repository.NewCMDBItemRepository(),
+		cmdbRepo: cmdbrepo.NewCMDBItemRepository(),
 	}
 }
 
@@ -38,7 +39,7 @@ func (s *CMDBService) ListCMDBItems(ctx context.Context, page, pageSize int, plu
 }
 
 // ListCMDBItemIDs 获取符合筛选条件的配置项 ID 列表（轻量接口）
-func (s *CMDBService) ListCMDBItemIDs(ctx context.Context, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool) ([]repository.CMDBItemBasic, int64, error) {
+func (s *CMDBService) ListCMDBItemIDs(ctx context.Context, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool) ([]cmdbrepo.CMDBItemBasic, int64, error) {
 	return s.cmdbRepo.ListIDs(ctx, pluginID, itemType, status, environment, sourcePluginName, hasPlugin)
 }
 

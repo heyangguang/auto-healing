@@ -7,7 +7,7 @@ import (
 
 func TestPlatformAuditGetStatsReturnsDatabaseError(t *testing.T) {
 	db := newSQLiteTestDB(t)
-	repo := &PlatformAuditLogRepository{db: db}
+	repo := NewPlatformAuditLogRepositoryWithDB(db)
 
 	_, err := repo.GetStats(context.Background())
 	if err == nil {
