@@ -67,12 +67,12 @@ func (h *AuthHandler) applyEffectivePermissions(c *gin.Context, userID uuid.UUID
 	if err != nil {
 		return fmt.Errorf("解析当前租户失败: %w", err)
 	}
-	tenantPerms, err := accessrepo.NewPermissionRepository().GetTenantPermissionCodes(c.Request.Context(), userID, tenantID)
+	tenantPerms, err := h.permissionRepo.GetTenantPermissionCodes(c.Request.Context(), userID, tenantID)
 	if err != nil {
 		return err
 	}
 	userInfo.Permissions = tenantPerms
-	tenantRoles, err := accessrepo.NewTenantRepository().GetUserTenantRoles(c.Request.Context(), userID, tenantID)
+	tenantRoles, err := h.tenantRepo.GetUserTenantRoles(c.Request.Context(), userID, tenantID)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func (h *AuthHandler) loadLoginHistoryItems(c *gin.Context, userID uuid.UUID, li
 		return buildPlatformLoginHistoryItems(logs), nil
 	}
 
-	tenantID, err := authTenantIDOrError(c)
+	tenantID, err := h.authTenantIDOrError(c)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func (h *AuthHandler) loadProfileActivityItems(c *gin.Context, userID uuid.UUID,
 		return buildPlatformActivityItems(logs), nil
 	}
 
-	tenantID, err := authTenantIDOrError(c)
+	tenantID, err := h.authTenantIDOrError(c)
 	if err != nil {
 		return nil, err
 	}

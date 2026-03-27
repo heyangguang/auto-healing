@@ -13,8 +13,7 @@ import (
 
 // GetIncidentStats 获取工单统计数据
 func (h *PluginHandler) GetIncidentStats(c *gin.Context) {
-	incidentRepo := incidentrepo.NewIncidentRepository()
-	stats, err := incidentRepo.GetStats(c.Request.Context())
+	stats, err := h.incidentSvc.GetStats(c.Request.Context())
 	if err != nil {
 		response.InternalError(c, "获取工单统计失败")
 		return

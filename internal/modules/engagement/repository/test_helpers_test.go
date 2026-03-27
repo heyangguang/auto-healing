@@ -2,10 +2,10 @@ package repository
 
 import (
 	"context"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"path/filepath"
 	"testing"
 
-	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

@@ -1,8 +1,12 @@
 package httpapi
 
 import (
+	"context"
+
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
+	engagementservice "github.com/company/auto-healing/internal/modules/engagement/service"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 )
 
 // TenantHandler 租户处理器
@@ -11,23 +15,19 @@ type TenantHandler struct {
 	roleRepo *accessrepo.RoleRepository
 	userRepo *accessrepo.UserRepository
 	authSvc  *authService.Service
+	invRepo  *accessrepo.InvitationRepository
+	settings *settingsrepo.PlatformSettingsRepository
+	emailSvc invitationEmailService
 }
 
 type TenantHandlerDeps struct {
-	TenantRepo  *accessrepo.TenantRepository
-	RoleRepo    *accessrepo.RoleRepository
-	UserRepo    *accessrepo.UserRepository
-	AuthService *authService.Service
-}
-
-// NewTenantHandler 创建租户处理器
-func NewTenantHandler(authSvc *authService.Service) *TenantHandler {
-	return NewTenantHandlerWithDeps(TenantHandlerDeps{
-		TenantRepo:  accessrepo.NewTenantRepository(),
-		RoleRepo:    accessrepo.NewRoleRepository(),
-		UserRepo:    accessrepo.NewUserRepository(),
-		AuthService: authSvc,
-	})
+	TenantRepo     *accessrepo.TenantRepository
+	RoleRepo       *accessrepo.RoleRepository
+	UserRepo       *accessrepo.UserRepository
+	AuthService    *authService.Service
+	InvitationRepo *accessrepo.InvitationRepository
+	SettingsRepo   *settingsrepo.PlatformSettingsRepository
+	EmailService   invitationEmailService
 }
 
 func NewTenantHandlerWithDeps(deps TenantHandlerDeps) *TenantHandler {
@@ -36,8 +36,18 @@ func NewTenantHandlerWithDeps(deps TenantHandlerDeps) *TenantHandler {
 		roleRepo: deps.RoleRepo,
 		userRepo: deps.UserRepo,
 		authSvc:  deps.AuthService,
+		invRepo:  deps.InvitationRepo,
+		settings: deps.SettingsRepo,
+		emailSvc: deps.EmailService,
 	}
 }
+
+type invitationEmailService interface {
+	IsConfigured(ctx context.Context) bool
+	SendInvitationEmail(ctx context.Context, to, tenantName, roleName, inviteURL string) error
+}
+
+var _ invitationEmailService = (*engagementservice.PlatformEmailService)(nil)
 
 type createTenantRequest struct {
 	Name        string `json:"name" binding:"required"`

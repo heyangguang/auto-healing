@@ -22,22 +22,37 @@ type NotificationRetryScheduler struct {
 	retryFunc func(context.Context) error
 }
 
+type NotificationRetrySchedulerDeps struct {
+	NotificationService *notification.Service
+	Interval            time.Duration
+}
+
 // NewNotificationRetryScheduler 创建通知重试调度器
 func NewNotificationRetryScheduler() *NotificationRetryScheduler {
+	notifSvc := notification.NewConfiguredService(database.DB)
+	return NewNotificationRetrySchedulerWithDeps(NotificationRetrySchedulerDeps{
+		NotificationService: notifSvc,
+		Interval:            notificationRetryInterval(),
+	})
+}
+
+func NewNotificationRetrySchedulerWithDeps(deps NotificationRetrySchedulerDeps) *NotificationRetryScheduler {
+	return &NotificationRetryScheduler{
+		notifSvc:  deps.NotificationService,
+		interval:  deps.Interval,
+		lifecycle: schedulerx.NewLifecycle(),
+		retryFunc: deps.NotificationService.RetryFailed,
+	}
+}
+
+func notificationRetryInterval() time.Duration {
 	interval := 30 * time.Second
 	if value := os.Getenv("NOTIFICATION_RETRY_INTERVAL"); value != "" {
 		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
 			interval = parsed
 		}
 	}
-
-	notifSvc := notification.NewConfiguredService(database.DB)
-	return &NotificationRetryScheduler{
-		notifSvc:  notifSvc,
-		interval:  interval,
-		lifecycle: schedulerx.NewLifecycle(),
-		retryFunc: notifSvc.RetryFailed,
-	}
+	return interval
 }
 
 // Start 启动调度器

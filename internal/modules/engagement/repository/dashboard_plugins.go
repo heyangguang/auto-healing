@@ -2,9 +2,10 @@ package repository
 
 import (
 	"context"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -45,21 +46,21 @@ func (r *DashboardRepository) GetPluginSection(ctx context.Context) (*PluginSect
 		ByType:   []StatusCount{},
 	}
 	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := countModel(newDB(), &model.Plugin{}, &section.Total); err != nil {
+	if err := countModel(newDB(), &projection.Plugin{}, &section.Total); err != nil {
 		return nil, err
 	}
-	if err := countModel(newDB().Where("status = ?", "active"), &model.Plugin{}, &section.Active); err != nil {
+	if err := countModel(newDB().Where("status = ?", "active"), &projection.Plugin{}, &section.Active); err != nil {
 		return nil, err
 	}
-	if err := countModel(newDB().Where("status = ?", "inactive"), &model.Plugin{}, &section.Inactive); err != nil {
+	if err := countModel(newDB().Where("status = ?", "inactive"), &projection.Plugin{}, &section.Inactive); err != nil {
 		return nil, err
 	}
-	if err := countModel(newDB().Where("status = ?", "error"), &model.Plugin{}, &section.Error); err != nil {
+	if err := countModel(newDB().Where("status = ?", "error"), &projection.Plugin{}, &section.Error); err != nil {
 		return nil, err
 	}
 	rate, err := calculatePluginSyncRate(newDB())
@@ -67,13 +68,13 @@ func (r *DashboardRepository) GetPluginSection(ctx context.Context) (*PluginSect
 		return nil, err
 	}
 	section.SyncSuccessRate = rate
-	if err := scanStatusCounts(newDB(), &model.Plugin{}, "status", &section.ByStatus); err != nil {
+	if err := scanStatusCounts(newDB(), &projection.Plugin{}, "status", &section.ByStatus); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(newDB(), &model.Plugin{}, "type", &section.ByType); err != nil {
+	if err := scanStatusCounts(newDB(), &projection.Plugin{}, "type", &section.ByType); err != nil {
 		return nil, err
 	}
-	if err := scanTrendPoints(newDB(), &model.PluginSyncLog{}, "started_at", time.Now().AddDate(0, 0, -7), &section.SyncTrend7d); err != nil {
+	if err := scanTrendPoints(newDB(), &projection.PluginSyncLog{}, "started_at", time.Now().AddDate(0, 0, -7), &section.SyncTrend7d); err != nil {
 		return nil, err
 	}
 	recent, err := listPluginSyncs(newDB().Preload("Plugin", "tenant_id = ?", tenantID).Order("started_at DESC").Limit(10))
@@ -96,20 +97,20 @@ func (r *DashboardRepository) GetPluginSection(ctx context.Context) (*PluginSect
 
 func calculatePluginSyncRate(db *gorm.DB) (float64, error) {
 	var total, success int64
-	if err := countModel(db, &model.PluginSyncLog{}, &total); err != nil {
+	if err := countModel(db, &projection.PluginSyncLog{}, &total); err != nil {
 		return 0, err
 	}
 	if total == 0 {
 		return 0, nil
 	}
-	if err := countModel(db.Where("status = ?", "success"), &model.PluginSyncLog{}, &success); err != nil {
+	if err := countModel(db.Where("status = ?", "success"), &projection.PluginSyncLog{}, &success); err != nil {
 		return 0, err
 	}
 	return float64(success) / float64(total) * 100, nil
 }
 
 func listPluginSyncs(query *gorm.DB) ([]SyncItem, error) {
-	var logs []model.PluginSyncLog
+	var logs []projection.PluginSyncLog
 	if err := query.Find(&logs).Error; err != nil {
 		return nil, err
 	}
@@ -131,7 +132,7 @@ func listPluginSyncs(query *gorm.DB) ([]SyncItem, error) {
 }
 
 func listPluginItems(query *gorm.DB) ([]PluginItem, error) {
-	var plugins []model.Plugin
+	var plugins []projection.Plugin
 	if err := query.Find(&plugins).Error; err != nil {
 		return nil, err
 	}

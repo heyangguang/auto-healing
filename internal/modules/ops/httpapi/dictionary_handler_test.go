@@ -13,6 +13,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/ops/model"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -158,7 +159,11 @@ func newDictionaryHandlerTestRouterWithDB(t *testing.T, db *gorm.DB) *gin.Engine
 	logger.Init(&config.LogConfig{})
 	gin.SetMode(gin.TestMode)
 
-	h := NewDictionaryHandler()
+	h := NewDictionaryHandlerWithDeps(DictionaryHandlerDeps{
+		Service: opsservice.NewDictionaryServiceWithDeps(opsservice.DictionaryServiceDeps{
+			Repo: opsrepo.NewDictionaryRepository(),
+		}),
+	})
 	router := gin.New()
 	router.GET("/common/dictionaries", h.ListDictionaries)
 	router.GET("/common/dictionaries/types", h.ListTypes)

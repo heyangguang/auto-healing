@@ -157,7 +157,7 @@ func (h *AuthHandler) refreshUserInfo(c *gin.Context, userIDStr string) (uuid.UU
 		}
 		return uuid.Nil, nil, fmt.Errorf("加载刷新用户信息失败: %w", err)
 	}
-	user, userErr := accessrepo.NewUserRepository().GetByID(c.Request.Context(), userID)
+	user, userErr := h.userRepo.GetByID(c.Request.Context(), userID)
 	if userErr != nil {
 		if errors.Is(userErr, accessrepo.ErrUserNotFound) {
 			return uuid.Nil, nil, accessrepo.ErrUserNotFound
@@ -185,7 +185,7 @@ func (h *AuthHandler) refreshUserTenants(c *gin.Context, userInfo *authService.U
 	if userInfo.IsPlatformAdmin {
 		return nil, nil
 	}
-	return accessrepo.NewTenantRepository().GetUserTenants(c.Request.Context(), userID, "")
+	return h.tenantRepo.GetUserTenants(c.Request.Context(), userID, "")
 }
 
 func (h *AuthHandler) issueRefreshTokenPair(userInfo *authService.UserInfo, userID string, tenants []model.Tenant) (*jwt.TokenPair, string, []authService.TenantBrief, error) {

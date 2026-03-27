@@ -10,6 +10,7 @@ import (
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/query"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -21,21 +22,49 @@ var (
 
 // Service 插件服务
 type Service struct {
-	pluginRepo  *integrationrepo.PluginRepository
-	syncLogRepo *integrationrepo.PluginSyncLogRepository
-	cmdbRepo    *cmdbrepo.CMDBItemRepository
-	httpClient  *HTTPClient
-	lifecycle   *asyncLifecycle
+	pluginRepo   *integrationrepo.PluginRepository
+	syncLogRepo  *integrationrepo.PluginSyncLogRepository
+	cmdbRepo     *cmdbrepo.CMDBItemRepository
+	incidentRepo *incidentrepo.IncidentRepository
+	httpClient   *HTTPClient
+	lifecycle    *asyncLifecycle
+}
+
+type ServiceDeps struct {
+	PluginRepo   *integrationrepo.PluginRepository
+	SyncLogRepo  *integrationrepo.PluginSyncLogRepository
+	CMDBRepo     *cmdbrepo.CMDBItemRepository
+	IncidentRepo *incidentrepo.IncidentRepository
+	HTTPClient   *HTTPClient
+	Lifecycle    *asyncLifecycle
 }
 
 // NewService 创建插件服务
 func NewService() *Service {
+	return NewServiceWithDeps(ServiceDeps{
+		PluginRepo:   integrationrepo.NewPluginRepository(),
+		SyncLogRepo:  integrationrepo.NewPluginSyncLogRepository(),
+		CMDBRepo:     cmdbrepo.NewCMDBItemRepository(),
+		IncidentRepo: incidentrepo.NewIncidentRepository(),
+		HTTPClient:   NewHTTPClient(),
+		Lifecycle:    newAsyncLifecycle(),
+	})
+}
+
+func NewServiceWithDeps(deps ServiceDeps) *Service {
+	if deps.HTTPClient == nil {
+		deps.HTTPClient = NewHTTPClient()
+	}
+	if deps.Lifecycle == nil {
+		deps.Lifecycle = newAsyncLifecycle()
+	}
 	return &Service{
-		pluginRepo:  integrationrepo.NewPluginRepository(),
-		syncLogRepo: integrationrepo.NewPluginSyncLogRepository(),
-		cmdbRepo:    cmdbrepo.NewCMDBItemRepository(),
-		httpClient:  NewHTTPClient(),
-		lifecycle:   newAsyncLifecycle(),
+		pluginRepo:   deps.PluginRepo,
+		syncLogRepo:  deps.SyncLogRepo,
+		cmdbRepo:     deps.CMDBRepo,
+		incidentRepo: deps.IncidentRepo,
+		httpClient:   deps.HTTPClient,
+		lifecycle:    deps.Lifecycle,
 	}
 }
 

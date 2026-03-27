@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/company/auto-healing/internal/modules/engagement/service/notification/provider"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -254,16 +255,16 @@ func notificationRequestFormat(data model.JSON) string {
 }
 
 // SendFromExecution 从执行记录发送通知（根据状态获取对应配置）
-func (s *Service) SendFromExecution(ctx context.Context, run *model.ExecutionRun, task *model.ExecutionTask) ([]*model.NotificationLog, error) {
+func (s *Service) SendFromExecution(ctx context.Context, run *projection.ExecutionRun, task *projection.ExecutionTask) ([]*model.NotificationLog, error) {
 	return s.sendFromExecutionTrigger(ctx, run, task, run.Status)
 }
 
 // SendOnStart 发送开始执行通知
-func (s *Service) SendOnStart(ctx context.Context, run *model.ExecutionRun, task *model.ExecutionTask) ([]*model.NotificationLog, error) {
+func (s *Service) SendOnStart(ctx context.Context, run *projection.ExecutionRun, task *projection.ExecutionTask) ([]*model.NotificationLog, error) {
 	return s.sendFromExecutionTrigger(ctx, run, task, "start")
 }
 
-func (s *Service) sendFromExecutionTrigger(ctx context.Context, run *model.ExecutionRun, task *model.ExecutionTask, trigger string) ([]*model.NotificationLog, error) {
+func (s *Service) sendFromExecutionTrigger(ctx context.Context, run *projection.ExecutionRun, task *projection.ExecutionTask, trigger string) ([]*model.NotificationLog, error) {
 	if task.NotificationConfig == nil || !task.NotificationConfig.Enabled {
 		return nil, nil
 	}

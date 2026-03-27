@@ -30,15 +30,35 @@ type Service struct {
 	db         *gorm.DB
 }
 
+type ServiceDeps struct {
+	UserRepo       *accessrepo.UserRepository
+	RoleRepo       *accessrepo.RoleRepository
+	PermissionRepo *accessrepo.PermissionRepository
+	TenantRepo     *accessrepo.TenantRepository
+	JWTService     *jwt.Service
+	DB             *gorm.DB
+}
+
 // NewService 创建认证服务
 func NewService(jwtSvc *jwt.Service) *Service {
+	return NewServiceWithDeps(ServiceDeps{
+		UserRepo:       accessrepo.NewUserRepository(),
+		RoleRepo:       accessrepo.NewRoleRepository(),
+		PermissionRepo: accessrepo.NewPermissionRepository(),
+		TenantRepo:     accessrepo.NewTenantRepository(),
+		JWTService:     jwtSvc,
+		DB:             database.DB,
+	})
+}
+
+func NewServiceWithDeps(deps ServiceDeps) *Service {
 	return &Service{
-		userRepo:   accessrepo.NewUserRepository(),
-		roleRepo:   accessrepo.NewRoleRepository(),
-		permRepo:   accessrepo.NewPermissionRepository(),
-		tenantRepo: accessrepo.NewTenantRepository(),
-		jwtSvc:     jwtSvc,
-		db:         database.DB,
+		userRepo:   deps.UserRepo,
+		roleRepo:   deps.RoleRepo,
+		permRepo:   deps.PermissionRepo,
+		tenantRepo: deps.TenantRepo,
+		jwtSvc:     deps.JWTService,
+		db:         deps.DB,
 	}
 }
 

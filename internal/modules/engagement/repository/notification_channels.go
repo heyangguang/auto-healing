@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"fmt"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 
 	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -12,7 +14,7 @@ import (
 
 // CreateChannel 创建通知渠道
 func (r *NotificationRepository) CreateChannel(ctx context.Context, channel *model.NotificationChannel) error {
-	if err := FillTenantID(ctx, &channel.TenantID); err != nil {
+	if err := platformrepo.FillTenantID(ctx, &channel.TenantID); err != nil {
 		return err
 	}
 	if channel.ID == uuid.Nil {
@@ -77,7 +79,7 @@ func (r *NotificationRepository) UpdateChannel(ctx context.Context, channel *mod
 				return err
 			}
 		}
-		return UpdateTenantScopedModel(tx, ctx, channel.ID, channel)
+		return platformrepo.UpdateTenantScopedModel(tx, ctx, channel.ID, channel)
 	})
 }
 
@@ -107,7 +109,7 @@ func (r *NotificationRepository) GetChannelsByIDs(ctx context.Context, ids []uui
 // CountTasksUsingTemplate 统计使用指定模板的任务模板数量
 func (r *NotificationRepository) CountTasksUsingTemplate(ctx context.Context, templateID uuid.UUID) (int64, error) {
 	var count int64
-	query := r.tenantDB(ctx).Model(&model.ExecutionTask{})
+	query := r.tenantDB(ctx).Model(&projection.ExecutionTask{})
 	if r.db.Dialector.Name() == "sqlite" {
 		err := query.Where(`(
 			json_extract(notification_config, '$.on_start.template_id') = ? OR
@@ -129,7 +131,7 @@ func (r *NotificationRepository) CountTasksUsingTemplate(ctx context.Context, te
 // CountTasksUsingChannel 统计使用指定渠道的任务模板数量
 func (r *NotificationRepository) CountTasksUsingChannel(ctx context.Context, channelID uuid.UUID) (int64, error) {
 	var count int64
-	query := r.tenantDB(ctx).Model(&model.ExecutionTask{})
+	query := r.tenantDB(ctx).Model(&projection.ExecutionTask{})
 	if r.db.Dialector.Name() == "sqlite" {
 		err := query.Where(`(
 			EXISTS (SELECT 1 FROM json_each(COALESCE(json_extract(notification_config, '$.on_start.channel_ids'), '[]')) WHERE value = ?) OR

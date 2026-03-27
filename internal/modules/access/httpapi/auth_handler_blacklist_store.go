@@ -26,6 +26,10 @@ func newAuthTokenBlacklistStore() *authTokenBlacklistStore {
 	}
 }
 
+func NewAuthTokenBlacklistStore() *authTokenBlacklistStore {
+	return newAuthTokenBlacklistStore()
+}
+
 func (s *authTokenBlacklistStore) Add(ctx context.Context, jti string, exp time.Time) error {
 	if s.client == nil {
 		return errAuthBlacklistStoreUnavailable

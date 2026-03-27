@@ -12,12 +12,28 @@ package runtime
 
 import (
 	"sync"
+	"time"
 
+	"github.com/company/auto-healing/internal/database"
+	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	automationsched "github.com/company/auto-healing/internal/modules/automation/scheduler"
+	executionSvc "github.com/company/auto-healing/internal/modules/automation/service/execution"
+	scheduleSvc "github.com/company/auto-healing/internal/modules/automation/service/schedule"
 	engagementsched "github.com/company/auto-healing/internal/modules/engagement/scheduler"
+	notificationSvc "github.com/company/auto-healing/internal/modules/engagement/service/notification"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	integrationsched "github.com/company/auto-healing/internal/modules/integrations/scheduler"
+	gitSvc "github.com/company/auto-healing/internal/modules/integrations/service/git"
+	playbookSvc "github.com/company/auto-healing/internal/modules/integrations/service/playbook"
+	pluginSvc "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	opssched "github.com/company/auto-healing/internal/modules/ops/scheduler"
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
+	secretsrepo "github.com/company/auto-healing/internal/modules/secrets/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
+	schedulerx "github.com/company/auto-healing/internal/platform/schedulerx"
 )
 
 // Manager 调度器管理器
@@ -33,10 +49,78 @@ type Manager struct {
 
 // NewManager 创建调度器管理器
 func NewManager() *Manager {
+	executionRepo := automationrepo.NewExecutionRepository()
+	scheduleRepo := automationrepo.NewScheduleRepository()
+	flowRepo := automationrepo.NewHealingFlowRepository()
+	incidentRepository := incidentrepo.NewIncidentRepository()
+	gitRepoRepo := integrationrepo.NewGitRepositoryRepository()
+	playbookRepo := integrationrepo.NewPlaybookRepository()
+	secretRepo := secretsrepo.NewSecretsSourceRepository()
+	cmdbRepo := cmdbrepo.NewCMDBItemRepository()
+	notifSvc := notificationSvc.NewConfiguredService(database.DB)
+	execSvc := executionSvc.NewServiceWithDeps(executionSvc.ServiceDeps{
+		Repo:             executionRepo,
+		GitRepo:          gitRepoRepo,
+		SecretsRepo:      secretRepo,
+		CMDBRepo:         cmdbRepo,
+		HealingFlowRepo:  flowRepo,
+		WorkspaceManager: ansible.NewWorkspaceManager(),
+		LocalExecutor:    ansible.NewLocalExecutor(),
+		DockerExecutor:   ansible.NewDockerExecutor(),
+		NotificationSvc:  notifSvc,
+		BlacklistSvc:     opsservice.NewCommandBlacklistService(),
+		ExemptionSvc:     opsservice.NewBlacklistExemptionService(),
+	})
+	schedSvc := scheduleSvc.NewServiceWithDeps(scheduleSvc.ServiceDeps{
+		Repo:     scheduleRepo,
+		ExecRepo: executionRepo,
+	})
+	playbookFactory := func() *playbookSvc.Service {
+		return playbookSvc.NewServiceWithDeps(playbookSvc.ServiceDeps{
+			Repo:          playbookRepo,
+			GitRepo:       gitRepoRepo,
+			ExecutionRepo: executionRepo,
+		})
+	}
+	gitService := gitSvc.NewServiceWithDeps(gitSvc.ServiceDeps{
+		Repo:         gitRepoRepo,
+		PlaybookRepo: playbookRepo,
+		PlaybookSvc:  playbookFactory,
+	})
+	httpClient := pluginSvc.NewHTTPClient()
+	pluginService := pluginSvc.NewServiceWithDeps(pluginSvc.ServiceDeps{
+		PluginRepo:   integrationrepo.NewPluginRepository(),
+		SyncLogRepo:  integrationrepo.NewPluginSyncLogRepository(),
+		CMDBRepo:     cmdbRepo,
+		IncidentRepo: incidentRepository,
+		HTTPClient:   httpClient,
+	})
+	cmdbService := pluginSvc.NewCMDBServiceWithDeps(pluginSvc.CMDBServiceDeps{CMDBRepo: cmdbRepo})
 	return &Manager{
-		pluginScheduler:       integrationsched.NewPluginScheduler(),
-		executionScheduler:    automationsched.NewExecutionScheduler(),
-		gitScheduler:          integrationsched.NewGitScheduler(),
+		pluginScheduler: integrationsched.NewPluginSchedulerWithDeps(integrationsched.PluginSchedulerDeps{
+			PluginService: pluginService,
+			CMDBService:   cmdbService,
+			DB:            database.DB,
+			Interval:      30 * time.Second,
+			InFlight:      schedulerx.NewInFlightSet(),
+			Now:           time.Now,
+		}),
+		executionScheduler: automationsched.NewExecutionSchedulerWithDeps(automationsched.ExecutionSchedulerDeps{
+			ExecutionService: execSvc,
+			ScheduleService:  schedSvc,
+			ScheduleRepo:     scheduleRepo,
+			DB:               database.DB,
+			Interval:         30 * time.Second,
+			InFlight:         schedulerx.NewInFlightSet(),
+			Sem:              make(chan struct{}, 8),
+		}),
+		gitScheduler: integrationsched.NewGitSchedulerWithDeps(integrationsched.GitSchedulerDeps{
+			GitService: gitService,
+			DB:         database.DB,
+			Interval:   60 * time.Second,
+			InFlight:   schedulerx.NewInFlightSet(),
+			Now:        time.Now,
+		}),
 		notificationScheduler: engagementsched.NewNotificationRetryScheduler(),
 		blacklistScheduler:    opssched.NewBlacklistExemptionScheduler(),
 	}

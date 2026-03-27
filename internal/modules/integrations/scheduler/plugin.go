@@ -37,15 +37,55 @@ type PluginScheduler struct {
 	claimPluginSync         func(context.Context, model.Plugin) (bool, error)
 }
 
+type PluginSchedulerDeps struct {
+	PluginService *pluginService.Service
+	CMDBService   *pluginService.CMDBService
+	DB            *gorm.DB
+	Interval      time.Duration
+	Lifecycle     *schedulerx.Lifecycle
+	InFlight      *schedulerx.InFlightSet
+	Now           func() time.Time
+}
+
 // NewPluginScheduler 创建调度器
 func NewPluginScheduler() *PluginScheduler {
+	return NewPluginSchedulerWithDeps(PluginSchedulerDeps{
+		PluginService: pluginService.NewService(),
+		CMDBService:   pluginService.NewCMDBService(),
+		DB:            database.DB,
+		Interval:      30 * time.Second,
+		InFlight:      schedulerx.NewInFlightSet(),
+		Now:           time.Now,
+	})
+}
+
+func NewPluginSchedulerWithDeps(deps PluginSchedulerDeps) *PluginScheduler {
+	if deps.PluginService == nil {
+		deps.PluginService = pluginService.NewService()
+	}
+	if deps.CMDBService == nil {
+		deps.CMDBService = pluginService.NewCMDBService()
+	}
+	if deps.DB == nil {
+		deps.DB = database.DB
+	}
+	if deps.Interval == 0 {
+		deps.Interval = 30 * time.Second
+	}
+	if deps.InFlight == nil {
+		deps.InFlight = schedulerx.NewInFlightSet()
+	}
+	if deps.Now == nil {
+		deps.Now = time.Now
+	}
 	s := &PluginScheduler{
-		pluginSvc: pluginService.NewService(),
-		cmdbSvc:   pluginService.NewCMDBService(),
-		db:        database.DB,
-		interval:  30 * time.Second,
-		inFlight:  schedulerx.NewInFlightSet(),
-		now:       time.Now,
+		pluginSvc: deps.PluginService,
+		cmdbSvc:   deps.CMDBService,
+		db:        deps.DB,
+		interval:  deps.Interval,
+		lifecycle: deps.Lifecycle,
+		inFlight:  deps.InFlight,
+		now:       deps.Now,
 	}
 	s.loadPluginsNeedSync = s.getPluginsNeedSync
 	s.checkExpiredMaintenance = s.cmdbSvc.CheckExpiredMaintenance

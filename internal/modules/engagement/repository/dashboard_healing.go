@@ -2,9 +2,10 @@ package repository
 
 import (
 	"context"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -54,16 +55,16 @@ type TriggerItem struct {
 func (r *DashboardRepository) GetHealingSection(ctx context.Context, permissions []string) (*HealingSection, error) {
 	section := &HealingSection{}
 	db := r.tenantDB(ctx)
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	if repoHasPermission(permissions, "healing:flows:view") {
-		if err := countModel(db, &model.HealingFlow{}, &section.FlowsTotal); err != nil {
+		if err := countModel(db, &projection.HealingFlow{}, &section.FlowsTotal); err != nil {
 			return nil, err
 		}
-		if err := countModel(db.Where("is_active = ?", true), &model.HealingFlow{}, &section.FlowsActive); err != nil {
+		if err := countModel(db.Where("is_active = ?", true), &projection.HealingFlow{}, &section.FlowsActive); err != nil {
 			return nil, err
 		}
 		flowTop, err := listTopHealingFlows(r.db.WithContext(ctx), tenantID)
@@ -73,27 +74,27 @@ func (r *DashboardRepository) GetHealingSection(ctx context.Context, permissions
 		section.FlowTop10 = flowTop
 	}
 	if repoHasPermission(permissions, "healing:rules:view") {
-		if err := countModel(db, &model.HealingRule{}, &section.RulesTotal); err != nil {
+		if err := countModel(db, &projection.HealingRule{}, &section.RulesTotal); err != nil {
 			return nil, err
 		}
-		if err := countModel(db.Where("is_active = ?", true), &model.HealingRule{}, &section.RulesActive); err != nil {
+		if err := countModel(db.Where("is_active = ?", true), &projection.HealingRule{}, &section.RulesActive); err != nil {
 			return nil, err
 		}
-		if err := scanStatusCounts(db, &model.HealingRule{}, "trigger_mode", &section.RulesByTriggerMode); err != nil {
+		if err := scanStatusCounts(db, &projection.HealingRule{}, "trigger_mode", &section.RulesByTriggerMode); err != nil {
 			return nil, err
 		}
 	}
 	if repoHasPermission(permissions, "healing:instances:view") {
-		if err := countModel(db, &model.FlowInstance{}, &section.InstancesTotal); err != nil {
+		if err := countModel(db, &projection.FlowInstance{}, &section.InstancesTotal); err != nil {
 			return nil, err
 		}
-		if err := countModel(db.Where("status = ?", "running"), &model.FlowInstance{}, &section.InstancesRunning); err != nil {
+		if err := countModel(db.Where("status = ?", "running"), &projection.FlowInstance{}, &section.InstancesRunning); err != nil {
 			return nil, err
 		}
-		if err := scanStatusCounts(db, &model.FlowInstance{}, "status", &section.InstancesByStatus); err != nil {
+		if err := scanStatusCounts(db, &projection.FlowInstance{}, "status", &section.InstancesByStatus); err != nil {
 			return nil, err
 		}
-		if err := scanTrendPoints(db, &model.FlowInstance{}, "created_at", time.Now().AddDate(0, 0, -7), &section.InstanceTrend7d); err != nil {
+		if err := scanTrendPoints(db, &projection.FlowInstance{}, "created_at", time.Now().AddDate(0, 0, -7), &section.InstanceTrend7d); err != nil {
 			return nil, err
 		}
 		recent, err := listRecentInstances(db.Order("created_at DESC").Limit(10))
@@ -103,10 +104,10 @@ func (r *DashboardRepository) GetHealingSection(ctx context.Context, permissions
 		section.RecentInstances = recent
 	}
 	if repoHasPermission(permissions, "healing:approvals:view") {
-		if err := countModel(db.Where("status = ?", "pending"), &model.ApprovalTask{}, &section.PendingApprovals); err != nil {
+		if err := countModel(db.Where("status = ?", "pending"), &projection.ApprovalTask{}, &section.PendingApprovals); err != nil {
 			return nil, err
 		}
-		if err := scanStatusCounts(db, &model.ApprovalTask{}, "status", &section.ApprovalsByStatus); err != nil {
+		if err := scanStatusCounts(db, &projection.ApprovalTask{}, "status", &section.ApprovalsByStatus); err != nil {
 			return nil, err
 		}
 		approvals, err := listPendingApprovals(db.Where("status = ?", "pending").Order("created_at DESC").Limit(10))
@@ -116,7 +117,7 @@ func (r *DashboardRepository) GetHealingSection(ctx context.Context, permissions
 		section.PendingApprovalList = approvals
 	}
 	if repoHasPermission(permissions, "healing:trigger:view") {
-		if err := countModel(pendingTriggerQuery(db), &model.Incident{}, &section.PendingTriggers); err != nil {
+		if err := countModel(pendingTriggerQuery(db), &projection.Incident{}, &section.PendingTriggers); err != nil {
 			return nil, err
 		}
 		triggers, err := listPendingTriggers(pendingTriggerQuery(db).Order("created_at DESC").Limit(10))
@@ -148,7 +149,7 @@ func listTopHealingFlows(db *gorm.DB, tenantID uuid.UUID) ([]RankItem, error) {
 }
 
 func listRecentInstances(query *gorm.DB) ([]InstanceItem, error) {
-	var instances []model.FlowInstance
+	var instances []projection.FlowInstance
 	if err := query.Find(&instances).Error; err != nil {
 		return nil, err
 	}
@@ -165,7 +166,7 @@ func listRecentInstances(query *gorm.DB) ([]InstanceItem, error) {
 }
 
 func listPendingApprovals(query *gorm.DB) ([]ApprovalItem, error) {
-	var approvals []model.ApprovalTask
+	var approvals []projection.ApprovalTask
 	if err := query.Find(&approvals).Error; err != nil {
 		return nil, err
 	}
@@ -183,7 +184,7 @@ func listPendingApprovals(query *gorm.DB) ([]ApprovalItem, error) {
 }
 
 func listPendingTriggers(query *gorm.DB) ([]TriggerItem, error) {
-	var incidents []model.Incident
+	var incidents []projection.Incident
 	if err := query.Find(&incidents).Error; err != nil {
 		return nil, err
 	}

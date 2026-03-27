@@ -20,10 +20,20 @@ type DictionaryService struct {
 	cacheLoadErr error
 }
 
+type DictionaryServiceDeps struct {
+	Repo *opsrepo.DictionaryRepository
+}
+
 // NewDictionaryService 创建服务
 func NewDictionaryService() *DictionaryService {
+	return NewDictionaryServiceWithDeps(DictionaryServiceDeps{
+		Repo: opsrepo.NewDictionaryRepository(),
+	})
+}
+
+func NewDictionaryServiceWithDeps(deps DictionaryServiceDeps) *DictionaryService {
 	return &DictionaryService{
-		repo: opsrepo.NewDictionaryRepository(),
+		repo: deps.Repo,
 	}
 }
 

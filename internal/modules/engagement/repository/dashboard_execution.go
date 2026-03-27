@@ -2,9 +2,10 @@ package repository
 
 import (
 	"context"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -38,19 +39,19 @@ type RunItem struct {
 func (r *DashboardRepository) GetExecutionSection(ctx context.Context) (*ExecutionSection, error) {
 	section := &ExecutionSection{}
 	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now()
 
-	if err := countModel(newDB(), &model.ExecutionTask{}, &section.TasksTotal); err != nil {
+	if err := countModel(newDB(), &projection.ExecutionTask{}, &section.TasksTotal); err != nil {
 		return nil, err
 	}
-	if err := countModel(newDB(), &model.ExecutionRun{}, &section.RunsTotal); err != nil {
+	if err := countModel(newDB(), &projection.ExecutionRun{}, &section.RunsTotal); err != nil {
 		return nil, err
 	}
-	if err := countModel(newDB().Where("status = ?", "running"), &model.ExecutionRun{}, &section.Running); err != nil {
+	if err := countModel(newDB().Where("status = ?", "running"), &projection.ExecutionRun{}, &section.Running); err != nil {
 		return nil, err
 	}
 	rate, err := calculateExecutionSuccessRate(newDB(), section.RunsTotal)
@@ -63,22 +64,22 @@ func (r *DashboardRepository) GetExecutionSection(ctx context.Context) (*Executi
 		return nil, err
 	}
 	section.AvgDurationSec = avgDuration
-	if err := countModel(newDB(), &model.ExecutionSchedule{}, &section.SchedulesTotal); err != nil {
+	if err := countModel(newDB(), &projection.ExecutionSchedule{}, &section.SchedulesTotal); err != nil {
 		return nil, err
 	}
-	if err := countModel(newDB().Where("enabled = ?", true), &model.ExecutionSchedule{}, &section.SchedulesEnabled); err != nil {
+	if err := countModel(newDB().Where("enabled = ?", true), &projection.ExecutionSchedule{}, &section.SchedulesEnabled); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(newDB(), &model.ExecutionRun{}, "status", &section.RunsByStatus); err != nil {
+	if err := scanStatusCounts(newDB(), &projection.ExecutionRun{}, "status", &section.RunsByStatus); err != nil {
 		return nil, err
 	}
-	if err := scanTrendPoints(newDB(), &model.ExecutionRun{}, "created_at", now.AddDate(0, 0, -7), &section.Trend7d); err != nil {
+	if err := scanTrendPoints(newDB(), &projection.ExecutionRun{}, "created_at", now.AddDate(0, 0, -7), &section.Trend7d); err != nil {
 		return nil, err
 	}
-	if err := scanTrendPoints(newDB(), &model.ExecutionRun{}, "created_at", now.AddDate(0, 0, -30), &section.Trend30d); err != nil {
+	if err := scanTrendPoints(newDB(), &projection.ExecutionRun{}, "created_at", now.AddDate(0, 0, -30), &section.Trend30d); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(newDB(), &model.ExecutionSchedule{}, "schedule_type", &section.SchedulesByType); err != nil {
+	if err := scanStatusCounts(newDB(), &projection.ExecutionSchedule{}, "schedule_type", &section.SchedulesByType); err != nil {
 		return nil, err
 	}
 	top10, err := listTopExecutionTasks(r.db.WithContext(ctx), tenantID)
@@ -104,7 +105,7 @@ func calculateExecutionSuccessRate(db *gorm.DB, total int64) (float64, error) {
 		return 0, nil
 	}
 	var success int64
-	if err := countModel(db.Where("status = ?", "success"), &model.ExecutionRun{}, &success); err != nil {
+	if err := countModel(db.Where("status = ?", "success"), &projection.ExecutionRun{}, &success); err != nil {
 		return 0, err
 	}
 	return float64(success) / float64(total) * 100, nil
@@ -112,7 +113,7 @@ func calculateExecutionSuccessRate(db *gorm.DB, total int64) (float64, error) {
 
 func executionAvgDurationSeconds(db *gorm.DB) (float64, error) {
 	var avgDuration float64
-	query := db.Model(&model.ExecutionRun{}).
+	query := db.Model(&projection.ExecutionRun{}).
 		Where("started_at IS NOT NULL AND completed_at IS NOT NULL")
 	if db.Dialector.Name() == "sqlite" {
 		err := query.Select("COALESCE(AVG((julianday(completed_at) - julianday(started_at)) * 86400.0), 0)").
@@ -140,7 +141,7 @@ func listTopExecutionTasks(db *gorm.DB, tenantID uuid.UUID) ([]RankItem, error) 
 }
 
 func listRunItems(query *gorm.DB) ([]RunItem, error) {
-	var runs []model.ExecutionRun
+	var runs []projection.ExecutionRun
 	if err := query.Find(&runs).Error; err != nil {
 		return nil, err
 	}

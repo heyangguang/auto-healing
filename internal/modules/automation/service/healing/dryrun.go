@@ -38,20 +38,34 @@ type DryRunExecutor struct {
 	notificationRepo *engagementrepo.NotificationRepository
 }
 
+type DryRunExecutorDeps struct {
+	TaskRepo         *automationrepo.ExecutionRepository
+	CMDBRepo         *cmdbrepo.CMDBItemRepository
+	NotificationRepo *engagementrepo.NotificationRepository
+}
+
 // NewDryRunExecutor 创建 Dry-Run 执行器
 func NewDryRunExecutor() *DryRunExecutor {
-	return NewDryRunExecutorWithDependencies(
-		automationrepo.NewExecutionRepository(),
-		cmdbrepo.NewCMDBItemRepository(),
-		engagementrepo.NewNotificationRepository(database.DB),
-	)
+	return NewDryRunExecutorWithDeps(DryRunExecutorDeps{
+		TaskRepo:         automationrepo.NewExecutionRepository(),
+		CMDBRepo:         cmdbrepo.NewCMDBItemRepository(),
+		NotificationRepo: engagementrepo.NewNotificationRepository(database.DB),
+	})
 }
 
 func NewDryRunExecutorWithDependencies(taskRepo *automationrepo.ExecutionRepository, cmdbRepo *cmdbrepo.CMDBItemRepository, notificationRepo *engagementrepo.NotificationRepository) *DryRunExecutor {
+	return NewDryRunExecutorWithDeps(DryRunExecutorDeps{
+		TaskRepo:         taskRepo,
+		CMDBRepo:         cmdbRepo,
+		NotificationRepo: notificationRepo,
+	})
+}
+
+func NewDryRunExecutorWithDeps(deps DryRunExecutorDeps) *DryRunExecutor {
 	return &DryRunExecutor{
-		taskRepo:         taskRepo,
-		cmdbRepo:         cmdbRepo,
-		notificationRepo: notificationRepo,
+		taskRepo:         deps.TaskRepo,
+		cmdbRepo:         deps.CMDBRepo,
+		notificationRepo: deps.NotificationRepo,
 	}
 }
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -40,42 +40,42 @@ func (r *DashboardRepository) GetIncidentSection(ctx context.Context) (*Incident
 	weekAgo := now.AddDate(0, 0, -7)
 	monthAgo := now.AddDate(0, 0, -30)
 
-	if err := countModel(db, &model.Incident{}, &section.Total); err != nil {
+	if err := countModel(db, &projection.Incident{}, &section.Total); err != nil {
 		return nil, err
 	}
-	if err := countModel(db.Where("created_at >= ?", now.Truncate(24*time.Hour)), &model.Incident{}, &section.Today); err != nil {
+	if err := countModel(db.Where("created_at >= ?", now.Truncate(24*time.Hour)), &projection.Incident{}, &section.Today); err != nil {
 		return nil, err
 	}
-	if err := countModel(db.Where("created_at >= ?", weekAgo), &model.Incident{}, &section.ThisWeek); err != nil {
+	if err := countModel(db.Where("created_at >= ?", weekAgo), &projection.Incident{}, &section.ThisWeek); err != nil {
 		return nil, err
 	}
-	if err := countModel(db.Where("scanned = ?", false), &model.Incident{}, &section.Unscanned); err != nil {
+	if err := countModel(db.Where("scanned = ?", false), &projection.Incident{}, &section.Unscanned); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &model.Incident{}, "healing_status", &section.ByHealingStatus); err != nil {
+	if err := scanStatusCounts(db, &projection.Incident{}, "healing_status", &section.ByHealingStatus); err != nil {
 		return nil, err
 	}
 	section.HealingRate = calculateHealingRate(section.ByHealingStatus)
-	if err := scanStatusCounts(db, &model.Incident{}, "severity", &section.BySeverity); err != nil {
+	if err := scanStatusCounts(db, &projection.Incident{}, "severity", &section.BySeverity); err != nil {
 		return nil, err
 	}
-	if err := db.Model(&model.Incident{}).
+	if err := db.Model(&projection.Incident{}).
 		Select("COALESCE(NULLIF(category, ''), 'unknown') as status, count(*) as count").
 		Group("COALESCE(NULLIF(category, ''), 'unknown')").
 		Order("count DESC").
 		Scan(&section.ByCategory).Error; err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &model.Incident{}, "status", &section.ByStatus); err != nil {
+	if err := scanStatusCounts(db, &projection.Incident{}, "status", &section.ByStatus); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &model.Incident{}, "source_plugin_name", &section.BySource); err != nil {
+	if err := scanStatusCounts(db, &projection.Incident{}, "source_plugin_name", &section.BySource); err != nil {
 		return nil, err
 	}
-	if err := scanTrendPoints(db, &model.Incident{}, "created_at", weekAgo, &section.Trend7d); err != nil {
+	if err := scanTrendPoints(db, &projection.Incident{}, "created_at", weekAgo, &section.Trend7d); err != nil {
 		return nil, err
 	}
-	if err := scanTrendPoints(db, &model.Incident{}, "created_at", monthAgo, &section.Trend30d); err != nil {
+	if err := scanTrendPoints(db, &projection.Incident{}, "created_at", monthAgo, &section.Trend30d); err != nil {
 		return nil, err
 	}
 	recent, err := listRecentIncidents(db.Order("created_at DESC").Limit(10))
@@ -108,7 +108,7 @@ func calculateHealingRate(statuses []StatusCount) float64 {
 }
 
 func listRecentIncidents(query *gorm.DB) ([]RecentItem, error) {
-	var incidents []model.Incident
+	var incidents []projection.Incident
 	if err := query.Find(&incidents).Error; err != nil {
 		return nil, err
 	}

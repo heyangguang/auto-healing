@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"strings"
 
 	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -38,17 +40,17 @@ func (r *WorkbenchRepository) GetResourceOverview(ctx context.Context, permissio
 	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
 
 	if repoHasPermission(permissions, "healing:flows:view") {
-		if err := workbenchFillEnabledCount(newDB(), &model.HealingFlow{}, "is_active = ?", &overview.Flows, true); err != nil {
+		if err := workbenchFillEnabledCount(newDB(), &projection.HealingFlow{}, "is_active = ?", &overview.Flows, true); err != nil {
 			return nil, err
 		}
 	}
 	if repoHasPermission(permissions, "healing:rules:view") {
-		if err := workbenchFillEnabledCount(newDB(), &model.HealingRule{}, "is_active = ?", &overview.Rules, true); err != nil {
+		if err := workbenchFillEnabledCount(newDB(), &projection.HealingRule{}, "is_active = ?", &overview.Rules, true); err != nil {
 			return nil, err
 		}
 	}
 	if repoHasPermission(permissions, "plugin:list") {
-		if err := workbenchFillOfflineCount(newDB(), &model.CMDBItem{}, "status != ?", &overview.Hosts, "active"); err != nil {
+		if err := workbenchFillOfflineCount(newDB(), &projection.CMDBItem{}, "status != ?", &overview.Hosts, "active"); err != nil {
 			return nil, err
 		}
 		if err := workbenchFillSecretsOverview(newDB(), &overview.Secrets); err != nil {
@@ -56,12 +58,12 @@ func (r *WorkbenchRepository) GetResourceOverview(ctx context.Context, permissio
 		}
 	}
 	if repoHasPermission(permissions, "playbook:list") {
-		if err := workbenchFillNeedsReviewCount(newDB(), &model.Playbook{}, "status = ?", &overview.Playbooks, "draft"); err != nil {
+		if err := workbenchFillNeedsReviewCount(newDB(), &projection.Playbook{}, "status = ?", &overview.Playbooks, "draft"); err != nil {
 			return nil, err
 		}
 	}
 	if repoHasPermission(permissions, "task:list") {
-		if err := workbenchFillEnabledCount(newDB(), &model.ExecutionSchedule{}, "enabled = ?", &overview.Schedules, true); err != nil {
+		if err := workbenchFillEnabledCount(newDB(), &projection.ExecutionSchedule{}, "enabled = ?", &overview.Schedules, true); err != nil {
 			return nil, err
 		}
 	}
@@ -125,13 +127,13 @@ func workbenchFillNeedsReviewCount(db *gorm.DB, entity any, condition string, de
 }
 
 func workbenchFillSecretsOverview(db *gorm.DB, dest *ResourceCount) error {
-	total, err := workbenchCountWhere(db, &model.SecretsSource{}, "")
+	total, err := workbenchCountWhere(db, &projection.SecretsSource{}, "")
 	if err != nil {
 		return err
 	}
 
 	var secretTypes []string
-	if err := db.Session(&gorm.Session{}).Model(&model.SecretsSource{}).Distinct("type").Pluck("type", &secretTypes).Error; err != nil {
+	if err := db.Session(&gorm.Session{}).Model(&projection.SecretsSource{}).Distinct("type").Pluck("type", &secretTypes).Error; err != nil {
 		return err
 	}
 
@@ -157,7 +159,7 @@ func workbenchFillTemplateOverview(db *gorm.DB, dest *ResourceCount) error {
 }
 
 func (r *WorkbenchRepository) workbenchFillUserOverview(ctx context.Context, dest *ResourceCount) error {
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return err
 	}
@@ -177,7 +179,7 @@ func (r *WorkbenchRepository) workbenchFillUserOverview(ctx context.Context, des
 
 func workbenchCountDistinctTenantUsers(db *gorm.DB, tenantID uuid.UUID) (int64, error) {
 	var count int64
-	err := db.Model(&model.UserTenantRole{}).
+	err := db.Model(&projection.UserTenantRole{}).
 		Where("tenant_id = ?", tenantID).
 		Distinct("user_id").
 		Count(&count).Error

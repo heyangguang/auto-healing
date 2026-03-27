@@ -50,16 +50,61 @@ type ExecutionScheduler struct {
 
 var errExecutionSchedulerStopped = errors.New("execution scheduler stopped")
 
+type ExecutionSchedulerDeps struct {
+	ExecutionService *executionService.Service
+	ScheduleService  *scheduleService.Service
+	ScheduleRepo     *automationrepo.ScheduleRepository
+	DB               *gorm.DB
+	Interval         time.Duration
+	Lifecycle        *platformsched.Lifecycle
+	InFlight         *platformsched.InFlightSet
+	Sem              chan struct{}
+}
+
 // NewExecutionScheduler 创建执行任务调度器
 func NewExecutionScheduler() *ExecutionScheduler {
+	return NewExecutionSchedulerWithDeps(ExecutionSchedulerDeps{
+		ExecutionService: executionService.NewService(),
+		ScheduleService:  scheduleService.NewService(),
+		ScheduleRepo:     automationrepo.NewScheduleRepository(),
+		DB:               database.DB,
+		Interval:         30 * time.Second,
+		InFlight:         platformsched.NewInFlightSet(),
+		Sem:              make(chan struct{}, 8),
+	})
+}
+
+func NewExecutionSchedulerWithDeps(deps ExecutionSchedulerDeps) *ExecutionScheduler {
+	if deps.ExecutionService == nil {
+		deps.ExecutionService = executionService.NewService()
+	}
+	if deps.ScheduleService == nil {
+		deps.ScheduleService = scheduleService.NewService()
+	}
+	if deps.ScheduleRepo == nil {
+		deps.ScheduleRepo = automationrepo.NewScheduleRepository()
+	}
+	if deps.DB == nil {
+		deps.DB = database.DB
+	}
+	if deps.Interval == 0 {
+		deps.Interval = 30 * time.Second
+	}
+	if deps.InFlight == nil {
+		deps.InFlight = platformsched.NewInFlightSet()
+	}
+	if deps.Sem == nil {
+		deps.Sem = make(chan struct{}, 8)
+	}
 	s := &ExecutionScheduler{
-		execSvc:      executionService.NewService(),
-		scheduleSvc:  scheduleService.NewService(),
-		scheduleRepo: automationrepo.NewScheduleRepository(),
-		db:           database.DB,
-		interval:     30 * time.Second,
-		inFlight:     platformsched.NewInFlightSet(),
-		sem:          make(chan struct{}, 8),
+		execSvc:      deps.ExecutionService,
+		scheduleSvc:  deps.ScheduleService,
+		scheduleRepo: deps.ScheduleRepo,
+		db:           deps.DB,
+		interval:     deps.Interval,
+		lifecycle:    deps.Lifecycle,
+		inFlight:     deps.InFlight,
+		sem:          deps.Sem,
 	}
 	s.loadDueSchedules = s.scheduleRepo.GetDueSchedules
 	s.runScheduledExecution = s.executeSchedule

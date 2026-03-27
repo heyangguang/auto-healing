@@ -22,7 +22,16 @@ type Service struct {
 	repo         *integrationrepo.GitRepositoryRepository
 	playbookRepo *integrationrepo.PlaybookRepository
 	reposDir     string
+	playbookSvc  func() *playbookSvc.Service
 	lifecycle    *asyncLifecycle
+}
+
+type ServiceDeps struct {
+	Repo         *integrationrepo.GitRepositoryRepository
+	PlaybookRepo *integrationrepo.PlaybookRepository
+	ReposDir     string
+	PlaybookSvc  func() *playbookSvc.Service
+	Lifecycle    *asyncLifecycle
 }
 
 // NewService 创建 Git 仓库服务
@@ -31,11 +40,35 @@ func NewService() *Service {
 	if reposDir == "" {
 		reposDir = DefaultReposDir
 	}
+	return NewServiceWithDeps(ServiceDeps{
+		Repo:         integrationrepo.NewGitRepositoryRepository(),
+		PlaybookRepo: integrationrepo.NewPlaybookRepository(),
+		ReposDir:     reposDir,
+		PlaybookSvc:  playbookSvc.NewService,
+		Lifecycle:    newAsyncLifecycle(),
+	})
+}
+
+func NewServiceWithDeps(deps ServiceDeps) *Service {
+	if deps.ReposDir == "" {
+		reposDir := os.Getenv("GIT_REPOS_DIR")
+		if reposDir == "" {
+			reposDir = DefaultReposDir
+		}
+		deps.ReposDir = reposDir
+	}
+	if deps.PlaybookSvc == nil {
+		deps.PlaybookSvc = playbookSvc.NewService
+	}
+	if deps.Lifecycle == nil {
+		deps.Lifecycle = newAsyncLifecycle()
+	}
 	return &Service{
-		repo:         integrationrepo.NewGitRepositoryRepository(),
-		playbookRepo: integrationrepo.NewPlaybookRepository(),
-		reposDir:     reposDir,
-		lifecycle:    newAsyncLifecycle(),
+		repo:         deps.Repo,
+		playbookRepo: deps.PlaybookRepo,
+		reposDir:     deps.ReposDir,
+		playbookSvc:  deps.PlaybookSvc,
+		lifecycle:    deps.Lifecycle,
 	}
 }
 
@@ -248,7 +281,7 @@ func (s *Service) GetStats(ctx context.Context) (map[string]interface{}, error) 
 }
 
 func (s *Service) getPlaybookService() *playbookSvc.Service {
-	return playbookSvc.NewService()
+	return s.playbookSvc()
 }
 
 func cleanupRepoDirectory(path string) error {

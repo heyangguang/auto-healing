@@ -20,13 +20,6 @@ type PlatformAuditHandlerDeps struct {
 	Repo *auditrepo.PlatformAuditLogRepository
 }
 
-// NewPlatformAuditHandler 创建平台审计日志处理器
-func NewPlatformAuditHandler() *PlatformAuditHandler {
-	return NewPlatformAuditHandlerWithDeps(PlatformAuditHandlerDeps{
-		Repo: auditrepo.NewPlatformAuditLogRepository(),
-	})
-}
-
 func NewPlatformAuditHandlerWithDeps(deps PlatformAuditHandlerDeps) *PlatformAuditHandler {
 	return &PlatformAuditHandler{
 		repo: deps.Repo,

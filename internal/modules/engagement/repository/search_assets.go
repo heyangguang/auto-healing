@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"gorm.io/gorm"
 )
 
 func (r *SearchRepository) searchHosts(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	total, err := searchCount(db, &model.CMDBItem{}, "hostname ILIKE ? OR ip_address ILIKE ? OR name ILIKE ?", like, like, like)
+	total, err := searchCount(db, &projection.CMDBItem{}, "hostname ILIKE ? OR ip_address ILIKE ? OR name ILIKE ?", like, like, like)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -17,8 +17,8 @@ func (r *SearchRepository) searchHosts(ctx context.Context, db *gorm.DB, like st
 		return nil, 0, nil
 	}
 
-	var items []model.CMDBItem
-	err = db.Model(&model.CMDBItem{}).
+	var items []projection.CMDBItem
+	err = db.Model(&projection.CMDBItem{}).
 		Select("id, hostname, ip_address, name, status").
 		Where("hostname ILIKE ? OR ip_address ILIKE ? OR name ILIKE ?", like, like, like).
 		Order("name").Limit(limit).Find(&items).Error
@@ -44,7 +44,7 @@ func (r *SearchRepository) searchHosts(ctx context.Context, db *gorm.DB, like st
 }
 
 func (r *SearchRepository) searchIncidents(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	total, err := searchCount(db, &model.Incident{}, "title ILIKE ? OR external_id ILIKE ? OR description ILIKE ?", like, like, like)
+	total, err := searchCount(db, &projection.Incident{}, "title ILIKE ? OR external_id ILIKE ? OR description ILIKE ?", like, like, like)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -52,8 +52,8 @@ func (r *SearchRepository) searchIncidents(ctx context.Context, db *gorm.DB, lik
 		return nil, 0, nil
 	}
 
-	var items []model.Incident
-	err = db.Model(&model.Incident{}).
+	var items []projection.Incident
+	err = db.Model(&projection.Incident{}).
 		Select("id, title, description, external_id, severity, status, healing_status").
 		Where("title ILIKE ? OR external_id ILIKE ? OR description ILIKE ?", like, like, like).
 		Order("created_at DESC").Limit(limit).Find(&items).Error
@@ -78,7 +78,7 @@ func (r *SearchRepository) searchIncidents(ctx context.Context, db *gorm.DB, lik
 	return results, total, nil
 }
 
-func incidentTitle(item model.Incident) string {
+func incidentTitle(item projection.Incident) string {
 	if item.Title != "" {
 		return item.Title
 	}
@@ -96,7 +96,7 @@ func incidentTitle(item model.Incident) string {
 	return fmt.Sprintf("[%s] 工单 #%s", severity, externalID)
 }
 
-func incidentDescription(item model.Incident) string {
+func incidentDescription(item projection.Incident) string {
 	if item.Description != "" {
 		return item.Description
 	}
@@ -107,7 +107,7 @@ func incidentDescription(item model.Incident) string {
 }
 
 func (r *SearchRepository) searchSecrets(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	total, err := searchCount(db, &model.SecretsSource{}, "name ILIKE ?", like)
+	total, err := searchCount(db, &projection.SecretsSource{}, "name ILIKE ?", like)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -115,8 +115,8 @@ func (r *SearchRepository) searchSecrets(ctx context.Context, db *gorm.DB, like 
 		return nil, 0, nil
 	}
 
-	var items []model.SecretsSource
-	err = db.Model(&model.SecretsSource{}).
+	var items []projection.SecretsSource
+	err = db.Model(&projection.SecretsSource{}).
 		Select("id, name, type").
 		Where("name ILIKE ?", like).
 		Order("name").Limit(limit).Find(&items).Error
@@ -138,7 +138,7 @@ func (r *SearchRepository) searchSecrets(ctx context.Context, db *gorm.DB, like 
 }
 
 func (r *SearchRepository) searchGitRepos(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	total, err := searchCount(db, &model.GitRepository{}, "name ILIKE ? OR url ILIKE ?", like, like)
+	total, err := searchCount(db, &projection.GitRepository{}, "name ILIKE ? OR url ILIKE ?", like, like)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -146,8 +146,8 @@ func (r *SearchRepository) searchGitRepos(ctx context.Context, db *gorm.DB, like
 		return nil, 0, nil
 	}
 
-	var items []model.GitRepository
-	err = db.Model(&model.GitRepository{}).
+	var items []projection.GitRepository
+	err = db.Model(&projection.GitRepository{}).
 		Select("id, name, url, status, default_branch").
 		Where("name ILIKE ? OR url ILIKE ?", like, like).
 		Order("name").Limit(limit).Find(&items).Error

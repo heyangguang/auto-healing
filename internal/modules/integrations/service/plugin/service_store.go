@@ -6,14 +6,12 @@ import (
 
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
-	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/google/uuid"
 )
 
 // saveIncident 保存工单到数据库
 // 返回: (isNew, error) - isNew=true 表示新增
 func (s *Service) saveIncident(ctx context.Context, pluginID uuid.UUID, pluginName string, raw RawIncident) (bool, error) {
-	incidentRepo := incidentrepo.NewIncidentRepository()
 	incident := &platformmodel.Incident{
 		PluginID:         &pluginID,
 		SourcePluginName: pluginName,
@@ -31,7 +29,7 @@ func (s *Service) saveIncident(ctx context.Context, pluginID uuid.UUID, pluginNa
 		HealingStatus:    "pending",
 		RawData:          raw.RawData,
 	}
-	return incidentRepo.UpsertByExternalID(ctx, incident)
+	return s.incidentRepo.UpsertByExternalID(ctx, incident)
 }
 
 // saveCMDBItem 保存 CMDB 配置项到数据库

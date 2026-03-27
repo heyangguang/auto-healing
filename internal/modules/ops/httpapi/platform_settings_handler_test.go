@@ -8,6 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/ops/model"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -36,7 +37,9 @@ func TestPlatformSettingsUpdateReturnsInternalOnLookupError(t *testing.T) {
 	t.Cleanup(func() { database.DB = origDB })
 
 	router := gin.New()
-	router.PUT("/settings/:key", NewPlatformSettingsHandler().UpdateSetting)
+	router.PUT("/settings/:key", NewPlatformSettingsHandlerWithDeps(PlatformSettingsHandlerDeps{
+		Repo: settingsrepo.NewPlatformSettingsRepository(),
+	}).UpdateSetting)
 
 	req := httptest.NewRequest(http.MethodPut, "/settings/email.password", bytes.NewBufferString(`{"value":"secret"}`))
 	req.Header.Set("Content-Type", "application/json")

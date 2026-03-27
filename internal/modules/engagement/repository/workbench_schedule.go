@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/robfig/cron/v3"
 )
 
@@ -34,7 +35,7 @@ func (r *WorkbenchRepository) GetScheduleCalendar(ctx context.Context, year, mon
 }
 
 func (r *WorkbenchRepository) appendCronScheduleCalendar(ctx context.Context, result map[string][]CalendarTask, startOfMonth, endOfMonth time.Time) error {
-	var schedules []model.ExecutionSchedule
+	var schedules []projection.ExecutionSchedule
 	err := r.tenantDB(ctx).
 		Where("enabled = ? AND schedule_type = ?", true, model.ScheduleTypeCron).
 		Where("schedule_expr IS NOT NULL AND schedule_expr != ''").
@@ -54,7 +55,7 @@ func (r *WorkbenchRepository) appendCronScheduleCalendar(ctx context.Context, re
 }
 
 func (r *WorkbenchRepository) appendOnceScheduleCalendar(ctx context.Context, result map[string][]CalendarTask, startOfMonth, endOfMonth time.Time, location *time.Location) error {
-	var schedules []model.ExecutionSchedule
+	var schedules []projection.ExecutionSchedule
 	err := r.tenantDB(ctx).
 		Where("enabled = ? AND schedule_type = ?", true, model.ScheduleTypeOnce).
 		Where("scheduled_at IS NOT NULL AND scheduled_at >= ? AND scheduled_at < ?", startOfMonth, endOfMonth).
@@ -79,7 +80,7 @@ func (r *WorkbenchRepository) appendOnceScheduleCalendar(ctx context.Context, re
 	return nil
 }
 
-func (r *WorkbenchRepository) appendCronScheduleEntries(result map[string][]CalendarTask, parser cron.Parser, schedule model.ExecutionSchedule, startOfMonth, endOfMonth time.Time) error {
+func (r *WorkbenchRepository) appendCronScheduleEntries(result map[string][]CalendarTask, parser cron.Parser, schedule projection.ExecutionSchedule, startOfMonth, endOfMonth time.Time) error {
 	if schedule.ScheduleExpr == nil || *schedule.ScheduleExpr == "" {
 		return nil
 	}

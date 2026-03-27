@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -52,38 +52,38 @@ func (r *DashboardRepository) GetCMDBSection(ctx context.Context) (*CMDBSection,
 	}
 	db := r.tenantDB(ctx)
 
-	if err := countModel(db, &model.CMDBItem{}, &section.Total); err != nil {
+	if err := countModel(db, &projection.CMDBItem{}, &section.Total); err != nil {
 		return nil, err
 	}
-	if err := countModel(db.Where("status = ?", "active"), &model.CMDBItem{}, &section.Active); err != nil {
+	if err := countModel(db.Where("status = ?", "active"), &projection.CMDBItem{}, &section.Active); err != nil {
 		return nil, err
 	}
-	if err := countModel(db.Where("status = ?", "maintenance"), &model.CMDBItem{}, &section.Maintenance); err != nil {
+	if err := countModel(db.Where("status = ?", "maintenance"), &projection.CMDBItem{}, &section.Maintenance); err != nil {
 		return nil, err
 	}
-	if err := countModel(db.Where("status = ?", "offline"), &model.CMDBItem{}, &section.Offline); err != nil {
+	if err := countModel(db.Where("status = ?", "offline"), &projection.CMDBItem{}, &section.Offline); err != nil {
 		return nil, err
 	}
 	if section.Total > 0 {
 		section.ActiveRate = float64(section.Active) / float64(section.Total) * 100
 	}
 
-	if err := scanStatusCounts(db, &model.CMDBItem{}, "status", &section.ByStatus); err != nil {
+	if err := scanStatusCounts(db, &projection.CMDBItem{}, "status", &section.ByStatus); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &model.CMDBItem{}, "environment", &section.ByEnvironment); err != nil {
+	if err := scanStatusCounts(db, &projection.CMDBItem{}, "environment", &section.ByEnvironment); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &model.CMDBItem{}, "type", &section.ByType); err != nil {
+	if err := scanStatusCounts(db, &projection.CMDBItem{}, "type", &section.ByType); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &model.CMDBItem{}, "os", &section.ByOS); err != nil {
+	if err := scanStatusCounts(db, &projection.CMDBItem{}, "os", &section.ByOS); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &model.CMDBItem{}, "department", &section.ByDepartment); err != nil {
+	if err := scanStatusCounts(db, &projection.CMDBItem{}, "department", &section.ByDepartment); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &model.CMDBItem{}, "manufacturer", &section.ByManufacturer); err != nil {
+	if err := scanStatusCounts(db, &projection.CMDBItem{}, "manufacturer", &section.ByManufacturer); err != nil {
 		return nil, err
 	}
 	recent, err := listRecentMaintenance(db.Order("created_at DESC").Limit(10))
@@ -100,7 +100,7 @@ func (r *DashboardRepository) GetCMDBSection(ctx context.Context) (*CMDBSection,
 }
 
 func listRecentMaintenance(query *gorm.DB) ([]MaintenanceItem, error) {
-	var logs []model.CMDBMaintenanceLog
+	var logs []projection.CMDBMaintenanceLog
 	if err := query.Find(&logs).Error; err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func listRecentMaintenance(query *gorm.DB) ([]MaintenanceItem, error) {
 }
 
 func listOfflineAssets(query *gorm.DB) ([]AssetItem, error) {
-	var assets []model.CMDBItem
+	var assets []projection.CMDBItem
 	if err := query.Find(&assets).Error; err != nil {
 		return nil, err
 	}

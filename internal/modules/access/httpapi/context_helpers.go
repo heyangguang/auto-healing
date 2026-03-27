@@ -15,25 +15,25 @@ func detachedTimeoutContext(ctx context.Context, timeout time.Duration) (context
 	return context.WithTimeout(context.WithoutCancel(ctx), timeout)
 }
 
-func optionalAuthTenantContext() gin.HandlerFunc {
-	return authTenantContext(false)
+func optionalAuthTenantContext(tenantRepo *accessrepo.TenantRepository) gin.HandlerFunc {
+	return authTenantContext(tenantRepo, false)
 }
 
-func requiredAuthTenantContext() gin.HandlerFunc {
-	return authTenantContext(true)
+func requiredAuthTenantContext(tenantRepo *accessrepo.TenantRepository) gin.HandlerFunc {
+	return authTenantContext(tenantRepo, true)
 }
 
-func OptionalAuthTenantContext() gin.HandlerFunc {
-	return optionalAuthTenantContext()
+func OptionalAuthTenantContext(tenantRepo *accessrepo.TenantRepository) gin.HandlerFunc {
+	return optionalAuthTenantContext(tenantRepo)
 }
 
-func RequireAuthTenantContext() gin.HandlerFunc {
-	return requiredAuthTenantContext()
+func RequireAuthTenantContext(tenantRepo *accessrepo.TenantRepository) gin.HandlerFunc {
+	return requiredAuthTenantContext(tenantRepo)
 }
 
-func authTenantContext(required bool) gin.HandlerFunc {
+func authTenantContext(tenantRepo *accessrepo.TenantRepository, required bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tenantID, inject, ok := resolveAuthTenantContext(c, required)
+		tenantID, inject, ok := resolveAuthTenantContext(c, tenantRepo, required)
 		if !ok {
 			return
 		}
@@ -45,7 +45,7 @@ func authTenantContext(required bool) gin.HandlerFunc {
 	}
 }
 
-func resolveAuthTenantContext(c *gin.Context, required bool) (uuid.UUID, bool, bool) {
+func resolveAuthTenantContext(c *gin.Context, tenantRepo *accessrepo.TenantRepository, required bool) (uuid.UUID, bool, bool) {
 	if tenantID, ok := accessrepo.TenantIDFromContextOK(c.Request.Context()); ok {
 		return tenantID, true, true
 	}
@@ -55,7 +55,7 @@ func resolveAuthTenantContext(c *gin.Context, required bool) (uuid.UUID, bool, b
 	if middleware.IsPlatformAdmin(c) {
 		return uuid.Nil, false, true
 	}
-	return resolveRegularAuthTenant(c, required)
+	return resolveRegularAuthTenant(c, tenantRepo, required)
 }
 
 func resolveOptionalImpersonationTenant(c *gin.Context) (uuid.UUID, bool, bool) {
@@ -69,15 +69,15 @@ func resolveOptionalImpersonationTenant(c *gin.Context) (uuid.UUID, bool, bool) 
 	return tenantID, true, true
 }
 
-func resolveRegularAuthTenant(c *gin.Context, required bool) (uuid.UUID, bool, bool) {
+func resolveRegularAuthTenant(c *gin.Context, tenantRepo *accessrepo.TenantRepository, required bool) (uuid.UUID, bool, bool) {
 	tenantIDStr := c.GetHeader("X-Tenant-ID")
 	if tenantIDStr != "" {
-		return resolveRequestedTenant(c, tenantIDStr)
+		return resolveRequestedTenant(c, tenantRepo, tenantIDStr)
 	}
-	return resolveDefaultTenant(c, required)
+	return resolveDefaultTenant(c, tenantRepo, required)
 }
 
-func resolveDefaultTenant(c *gin.Context, required bool) (uuid.UUID, bool, bool) {
+func resolveDefaultTenant(c *gin.Context, tenantRepo *accessrepo.TenantRepository, required bool) (uuid.UUID, bool, bool) {
 	defaultTenantID := stringContextValue(c.Get(middleware.DefaultTenantIDKey))
 	if defaultTenantID == "" {
 		if required {
@@ -96,7 +96,7 @@ func resolveDefaultTenant(c *gin.Context, required bool) (uuid.UUID, bool, bool)
 		}
 		return uuid.Nil, false, true
 	}
-	ok, checkOK := currentUserHasTenant(c, tenantID.String(), required)
+	ok, checkOK := currentUserHasTenant(c, tenantRepo, tenantID.String(), required)
 	if !checkOK {
 		return uuid.Nil, false, false
 	}
@@ -111,14 +111,14 @@ func resolveDefaultTenant(c *gin.Context, required bool) (uuid.UUID, bool, bool)
 	return tenantID, true, true
 }
 
-func resolveRequestedTenant(c *gin.Context, tenantIDStr string) (uuid.UUID, bool, bool) {
+func resolveRequestedTenant(c *gin.Context, tenantRepo *accessrepo.TenantRepository, tenantIDStr string) (uuid.UUID, bool, bool) {
 	tenantID, err := uuid.Parse(tenantIDStr)
 	if err != nil {
 		response.BadRequest(c, "无效的 X-Tenant-ID 格式")
 		c.Abort()
 		return uuid.Nil, false, false
 	}
-	ok, checkOK := currentUserHasTenant(c, tenantIDStr, true)
+	ok, checkOK := currentUserHasTenant(c, tenantRepo, tenantIDStr, true)
 	if !checkOK {
 		return uuid.Nil, false, false
 	}
@@ -130,7 +130,7 @@ func resolveRequestedTenant(c *gin.Context, tenantIDStr string) (uuid.UUID, bool
 	return tenantID, true, true
 }
 
-func currentUserHasTenant(c *gin.Context, tenantID string, failOnError bool) (bool, bool) {
+func currentUserHasTenant(c *gin.Context, tenantRepo *accessrepo.TenantRepository, tenantID string, failOnError bool) (bool, bool) {
 	userID, err := uuid.Parse(middleware.GetUserID(c))
 	if err != nil {
 		if failOnError {
@@ -140,7 +140,7 @@ func currentUserHasTenant(c *gin.Context, tenantID string, failOnError bool) (bo
 		}
 		return false, true
 	}
-	tenants, err := accessrepo.NewTenantRepository().GetUserTenants(c.Request.Context(), userID, "")
+	tenants, err := tenantRepo.GetUserTenants(c.Request.Context(), userID, "")
 	if err != nil {
 		if failOnError {
 			response.InternalError(c, "加载租户上下文失败")

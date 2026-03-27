@@ -12,6 +12,7 @@ import (
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -164,12 +165,25 @@ func newTenantUserRoleHTTPTestRouter(t *testing.T, db *gorm.DB) *gin.Engine {
 		Issuer:          "tenant-user-role-test",
 	}, testBlacklistStore{})
 	authSvc := authService.NewService(jwtSvc)
-	tenantHandler := NewTenantHandler(authSvc)
-	tenantUserHandler := NewTenantUserHandler(authSvc)
+	tenantHandler := NewTenantHandlerWithDeps(TenantHandlerDeps{
+		TenantRepo:     accessrepo.NewTenantRepository(),
+		RoleRepo:       accessrepo.NewRoleRepository(),
+		UserRepo:       accessrepo.NewUserRepository(),
+		AuthService:    authSvc,
+		InvitationRepo: accessrepo.NewInvitationRepository(),
+		SettingsRepo:   settingsrepo.NewPlatformSettingsRepository(),
+		EmailService:   &stubInvitationEmailService{},
+	})
+	tenantUserHandler := NewTenantUserHandlerWithDeps(TenantUserHandlerDeps{
+		AuthService: authSvc,
+		TenantRepo:  accessrepo.NewTenantRepository(),
+		UserRepo:    accessrepo.NewUserRepository(),
+		RoleRepo:    accessrepo.NewRoleRepository(),
+	})
 
 	api := router.Group("/api/v1")
-	api.GET("/auth/invitation/:token", ValidateInvitation)
-	api.POST("/auth/register", RegisterByInvitation(authSvc))
+	api.GET("/auth/invitation/:token", tenantHandler.ValidateInvitation)
+	api.POST("/auth/register", tenantHandler.RegisterByInvitation)
 	api.GET("/platform/tenants/:id/members", tenantHandler.ListMembers)
 	api.GET("/platform/tenants/:id/invitations", tenantHandler.ListInvitations)
 

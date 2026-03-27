@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/engagement/model"
@@ -17,7 +18,7 @@ type WorkspaceRepository struct {
 
 // NewWorkspaceRepository 创建工作区仓库
 func NewWorkspaceRepository() *WorkspaceRepository {
-	return &WorkspaceRepository{db: database.DB}
+	return NewWorkspaceRepositoryWithDB(database.DB)
 }
 
 func NewWorkspaceRepositoryWithDB(db *gorm.DB) *WorkspaceRepository {
@@ -28,8 +29,8 @@ func NewWorkspaceRepositoryWithDB(db *gorm.DB) *WorkspaceRepository {
 
 // Create 创建系统工作区
 func (r *WorkspaceRepository) Create(ctx context.Context, ws *model.SystemWorkspace) error {
-	// 自动设置 tenant_id（List/GetByID 使用 TenantDB 过滤）
-	if err := FillTenantID(ctx, &ws.TenantID); err != nil {
+	// 自动设置 tenant_id（List/GetByID 使用 platformrepo.TenantDB 过滤）
+	if err := platformrepo.FillTenantID(ctx, &ws.TenantID); err != nil {
 		return err
 	}
 	return r.db.WithContext(ctx).Create(ws).Error
@@ -37,7 +38,7 @@ func (r *WorkspaceRepository) Create(ctx context.Context, ws *model.SystemWorksp
 
 // CreateAndAssignToRoles 创建工作区并在同一事务中分配给指定角色。
 func (r *WorkspaceRepository) CreateAndAssignToRoles(ctx context.Context, ws *model.SystemWorkspace, roleIDs []uuid.UUID) error {
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return err
 	}
@@ -83,7 +84,7 @@ func (r *WorkspaceRepository) CreateAndAssignToRoles(ctx context.Context, ws *mo
 // GetByID 根据 ID 获取系统工作区
 func (r *WorkspaceRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.SystemWorkspace, error) {
 	var ws model.SystemWorkspace
-	err := TenantDB(r.db, ctx).Preload("Creator").First(&ws, "id = ?", id).Error
+	err := platformrepo.TenantDB(r.db, ctx).Preload("Creator").First(&ws, "id = ?", id).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -96,25 +97,25 @@ func (r *WorkspaceRepository) GetByID(ctx context.Context, id uuid.UUID) (*model
 // List 获取所有系统工作区（包含默认工作区，默认工作区排在最前）
 func (r *WorkspaceRepository) List(ctx context.Context) ([]model.SystemWorkspace, error) {
 	var workspaces []model.SystemWorkspace
-	err := TenantDB(r.db, ctx).Preload("Creator").Order("is_default DESC, created_at DESC").Find(&workspaces).Error
+	err := platformrepo.TenantDB(r.db, ctx).Preload("Creator").Order("is_default DESC, created_at DESC").Find(&workspaces).Error
 	return workspaces, err
 }
 
 // Update 更新系统工作区
 func (r *WorkspaceRepository) Update(ctx context.Context, ws *model.SystemWorkspace) error {
-	return UpdateTenantScopedModel(r.db, ctx, ws.ID, ws)
+	return platformrepo.UpdateTenantScopedModel(r.db, ctx, ws.ID, ws)
 }
 
 // Delete 删除系统工作区（级联删除关联）
 func (r *WorkspaceRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return TenantDB(r.db, ctx).Delete(&model.SystemWorkspace{}, "id = ?", id).Error
+	return platformrepo.TenantDB(r.db, ctx).Delete(&model.SystemWorkspace{}, "id = ?", id).Error
 }
 
 // ==================== 角色-工作区关联 ====================
 
 // AssignToRole 为角色分配工作区（先删后建）
 func (r *WorkspaceRepository) AssignToRole(ctx context.Context, roleID uuid.UUID, workspaceIDs []uuid.UUID) error {
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return err
 	}
@@ -154,7 +155,7 @@ func (r *WorkspaceRepository) AssignToRole(ctx context.Context, roleID uuid.UUID
 // GetRoleWorkspaceIDs 获取角色关联的工作区 ID 列表（自动包含默认工作区）
 func (r *WorkspaceRepository) GetRoleWorkspaceIDs(ctx context.Context, roleID uuid.UUID) ([]uuid.UUID, error) {
 	var rws []model.RoleWorkspace
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +174,7 @@ func (r *WorkspaceRepository) GetRoleWorkspaceIDs(ctx context.Context, roleID uu
 
 	// 追加默认工作区 ID（对所有角色可见）
 	var defaultWs []model.SystemWorkspace
-	if err := TenantDB(r.db, ctx).Where("is_default = ?", true).Select("id").Find(&defaultWs).Error; err == nil {
+	if err := platformrepo.TenantDB(r.db, ctx).Where("is_default = ?", true).Select("id").Find(&defaultWs).Error; err == nil {
 		for _, ws := range defaultWs {
 			if !idSet[ws.ID] {
 				idSet[ws.ID] = true
@@ -188,7 +189,7 @@ func (r *WorkspaceRepository) GetRoleWorkspaceIDs(ctx context.Context, roleID uu
 // GetWorkspacesByUserRoles 获取用户所有角色关联的系统工作区 + 默认工作区（去重）
 func (r *WorkspaceRepository) GetWorkspacesByUserRoles(ctx context.Context, userID uuid.UUID) ([]model.SystemWorkspace, error) {
 	var workspaces []model.SystemWorkspace
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +213,7 @@ func (r *WorkspaceRepository) GetWorkspacesByUserRoles(ctx context.Context, user
 
 // GetUserRoleIDs 获取用户的所有角色 ID（合并平台角色 + 租户角色）
 func (r *WorkspaceRepository) GetUserRoleIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +252,7 @@ func mergeWorkspaceRoleIDs(groups ...[]uuid.UUID) []uuid.UUID {
 // GetRoleExplicitWorkspaceIDs 获取角色在 role_workspaces 表中明确分配的工作区 ID（不含自动追加的默认工作区）
 func (r *WorkspaceRepository) GetRoleExplicitWorkspaceIDs(ctx context.Context, roleID uuid.UUID) ([]uuid.UUID, error) {
 	var rws []model.RoleWorkspace
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return nil, err
 	}

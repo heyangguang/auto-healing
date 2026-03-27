@@ -7,10 +7,20 @@ type CommandBlacklistService struct {
 	repo *opsrepo.CommandBlacklistRepository
 }
 
+type CommandBlacklistServiceDeps struct {
+	Repo *opsrepo.CommandBlacklistRepository
+}
+
 // NewCommandBlacklistService 创建服务
 func NewCommandBlacklistService() *CommandBlacklistService {
+	return NewCommandBlacklistServiceWithDeps(CommandBlacklistServiceDeps{
+		Repo: opsrepo.NewCommandBlacklistRepository(),
+	})
+}
+
+func NewCommandBlacklistServiceWithDeps(deps CommandBlacklistServiceDeps) *CommandBlacklistService {
 	return &CommandBlacklistService{
-		repo: opsrepo.NewCommandBlacklistRepository(),
+		repo: deps.Repo,
 	}
 }
 

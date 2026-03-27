@@ -9,6 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	engagementmodel "github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	integrationsmodel "github.com/company/auto-healing/internal/modules/integrations/model"
 	opsmodel "github.com/company/auto-healing/internal/modules/ops/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -281,7 +282,7 @@ func toNotificationTask(task *model.ExecutionTask, playbook *integrationsmodel.P
 		Description:        task.Description,
 		TargetHosts:        task.TargetHosts,
 		ExecutorType:       task.ExecutorType,
-		NotificationConfig: task.NotificationConfig,
+		NotificationConfig: toNotificationTaskConfig(task.NotificationConfig),
 	}
 	if playbook == nil {
 		return notifyTask
@@ -306,4 +307,28 @@ func toNotificationTask(task *model.ExecutionTask, playbook *integrationsmodel.P
 	}
 	notifyTask.Playbook = notifyPlaybook
 	return notifyTask
+}
+
+func toNotificationTaskConfig(cfg *model.TaskNotificationConfig) *projection.TaskNotificationConfig {
+	if cfg == nil {
+		return nil
+	}
+	return &projection.TaskNotificationConfig{
+		Enabled:   cfg.Enabled,
+		OnStart:   toNotificationTriggerConfig(cfg.OnStart),
+		OnSuccess: toNotificationTriggerConfig(cfg.OnSuccess),
+		OnFailure: toNotificationTriggerConfig(cfg.OnFailure),
+	}
+}
+
+func toNotificationTriggerConfig(cfg *model.NotificationTriggerConfig) *projection.NotificationTriggerConfig {
+	if cfg == nil {
+		return nil
+	}
+	channelIDs := append([]uuid.UUID(nil), cfg.ChannelIDs...)
+	return &projection.NotificationTriggerConfig{
+		Enabled:    cfg.Enabled,
+		ChannelIDs: channelIDs,
+		TemplateID: cfg.TemplateID,
+	}
 }

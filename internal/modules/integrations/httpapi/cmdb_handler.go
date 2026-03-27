@@ -2,17 +2,20 @@ package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/modules/integrations/service/plugin"
+	secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
 )
 
 // CMDBHandler CMDB 处理器
 type CMDBHandler struct {
-	cmdbSvc *plugin.CMDBService
+	cmdbSvc   *plugin.CMDBService
+	secretSvc *secretsSvc.Service
 }
 
 type CMDBHandlerDeps struct {
-	Service *plugin.CMDBService
+	Service       *plugin.CMDBService
+	SecretService *secretsSvc.Service
 }
 
 // NewCMDBHandler 创建 CMDB 处理器
@@ -24,7 +27,8 @@ func NewCMDBHandler() *CMDBHandler {
 
 func NewCMDBHandlerWithDeps(deps CMDBHandlerDeps) *CMDBHandler {
 	return &CMDBHandler{
-		cmdbSvc: deps.Service,
+		cmdbSvc:   deps.Service,
+		secretSvc: deps.SecretService,
 	}
 }
 

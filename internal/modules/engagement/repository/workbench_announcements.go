@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
 	"github.com/company/auto-healing/internal/modules/engagement/model"
@@ -49,7 +50,7 @@ func (r *WorkbenchRepository) workbenchAnnouncementQuery(ctx context.Context, us
 		Model(&model.SiteMessage{}).
 		Where("category = ?", model.SiteMessageCategoryAnnouncement).
 		Where("(expires_at IS NULL OR expires_at > ?)", time.Now()).
-		Where("(target_tenant_id IS NULL OR target_tenant_id = ?)", TenantIDFromContext(ctx))
+		Where("(target_tenant_id IS NULL OR target_tenant_id = ?)", platformrepo.TenantIDFromContext(ctx))
 
 	if !userCreatedAt.IsZero() {
 		query = query.Where("created_at >= ?", userCreatedAt)

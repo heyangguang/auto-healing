@@ -19,6 +19,7 @@ import (
 	"github.com/company/auto-healing/internal/pkg/logger"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -99,48 +100,78 @@ func newAuthHandlerTestRouterWithJWTService(t *testing.T, db *gorm.DB, jwtSvc *j
 	gin.SetMode(gin.TestMode)
 	logger.Init(&config.LogConfig{})
 	router := gin.New()
+	userRepo := accessrepo.NewUserRepository()
+	roleRepo := accessrepo.NewRoleRepository()
+	tenantRepo := accessrepo.NewTenantRepository()
+	permissionRepo := accessrepo.NewPermissionRepository()
 	authHandler := &AuthHandler{
-		authSvc:           authService.NewService(jwtSvc),
+		authSvc: authService.NewServiceWithDeps(authService.ServiceDeps{
+			UserRepo:       userRepo,
+			RoleRepo:       roleRepo,
+			PermissionRepo: permissionRepo,
+			TenantRepo:     tenantRepo,
+			JWTService:     jwtSvc,
+			DB:             db,
+		}),
 		jwtSvc:            jwtSvc,
 		auditRepo:         auditrepo.NewAuditLogRepository(db),
 		platformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
-		userRepo:          accessrepo.NewUserRepository(),
+		userRepo:          userRepo,
+		tenantRepo:        tenantRepo,
+		permissionRepo:    permissionRepo,
 	}
+	tenantHandler := NewTenantHandlerWithDeps(TenantHandlerDeps{
+		TenantRepo:     tenantRepo,
+		RoleRepo:       roleRepo,
+		UserRepo:       userRepo,
+		AuthService:    authHandler.authSvc,
+		InvitationRepo: accessrepo.NewInvitationRepository(),
+		SettingsRepo:   settingsrepo.NewPlatformSettingsRepository(),
+		EmailService:   &stubInvitationEmailService{},
+	})
 
 	api := router.Group("/api/v1")
-	registerAuthTestRoutes(api, authHandler)
+	registerAuthTestRoutes(api, authHandler, tenantHandler)
 	return router
 }
 
-func registerAuthTestRoutes(api *gin.RouterGroup, authHandler *AuthHandler) {
+func registerAuthTestRoutes(api *gin.RouterGroup, authHandler *AuthHandler, tenantHandler *TenantHandler) {
 	auth := api.Group("/auth")
 	auth.POST("/login", authHandler.Login)
 	auth.POST("/refresh", authHandler.RefreshToken)
-	auth.GET("/invitation/:token", ValidateInvitation)
-	auth.POST("/register", RegisterByInvitation(authHandler.GetAuthService()))
+	auth.GET("/invitation/:token", tenantHandler.ValidateInvitation)
+	auth.POST("/register", tenantHandler.RegisterByInvitation)
 
 	authProtected := auth.Group("")
 	authProtected.Use(middleware.JWTAuth(authHandler.GetJWTService()))
 	authProtected.GET("/me",
 		middleware.ImpersonationMiddleware(),
-		RequireAuthTenantContext(),
+		RequireAuthTenantContext(tenantHandler.repo),
 		authHandler.GetCurrentUser,
 	)
 	authProtected.GET("/profile", authHandler.GetProfile)
 	authProtected.GET("/profile/login-history", authHandler.GetLoginHistory)
 	authProtected.GET("/profile/activities",
 		middleware.ImpersonationMiddleware(),
-		RequireAuthTenantContext(),
+		RequireAuthTenantContext(tenantHandler.repo),
 		authHandler.GetProfileActivities,
 	)
 
 	authAudited := authProtected.Group("")
 	authAudited.Use(middleware.ImpersonationMiddleware())
-	authAudited.Use(OptionalAuthTenantContext())
+	authAudited.Use(OptionalAuthTenantContext(tenantHandler.repo))
 	authAudited.Use(middleware.AuditMiddleware())
 	authAudited.PUT("/profile", authHandler.UpdateProfile)
 	authAudited.PUT("/password", authHandler.ChangePassword)
 	authAudited.POST("/logout", authHandler.Logout)
+}
+
+type stubInvitationEmailService struct{}
+
+func (*stubInvitationEmailService) IsConfigured(context.Context) bool { return false }
+
+func (*stubInvitationEmailService) SendInvitationEmail(context.Context, string, string, string, string) error {
+	return nil
 }
 
 func issueAuthMe(t *testing.T, router *gin.Engine, token string, headers map[string]string) authMeResponse {

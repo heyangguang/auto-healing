@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/google/uuid"
 )
 
@@ -75,7 +75,7 @@ func (r *WorkbenchRepository) GetRecentActivities(ctx context.Context, limit int
 		limit = 10
 	}
 
-	var logs []model.AuditLog
+	var logs []projection.AuditLog
 	if err := r.tenantDB(ctx).Order("created_at DESC").Limit(limit).Find(&logs).Error; err != nil {
 		return nil, err
 	}

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/config"
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"gorm.io/gorm"
 )
 
@@ -77,11 +77,11 @@ func (r *WorkbenchRepository) GetHealingStats(ctx context.Context) (*HealingStat
 	stats := &HealingStats{}
 	todayStart := workbenchDayStart(time.Now())
 
-	success, err := workbenchCountWhere(r.tenantDB(ctx), &model.FlowInstance{}, "created_at >= ? AND status = ?", todayStart, "completed")
+	success, err := workbenchCountWhere(r.tenantDB(ctx), &projection.FlowInstance{}, "created_at >= ? AND status = ?", todayStart, "completed")
 	if err != nil {
 		return nil, err
 	}
-	failed, err := workbenchCountWhere(r.tenantDB(ctx), &model.FlowInstance{}, "created_at >= ? AND status = ?", todayStart, "failed")
+	failed, err := workbenchCountWhere(r.tenantDB(ctx), &projection.FlowInstance{}, "created_at >= ? AND status = ?", todayStart, "failed")
 	if err != nil {
 		return nil, err
 	}
@@ -95,11 +95,11 @@ func (r *WorkbenchRepository) GetHealingStats(ctx context.Context) (*HealingStat
 func (r *WorkbenchRepository) GetIncidentStats(ctx context.Context) (*WorkbenchIncidentStats, error) {
 	stats := &WorkbenchIncidentStats{}
 
-	pendingCount, err := workbenchCountWhere(r.tenantDB(ctx), &model.Incident{}, "scanned = ? OR healing_status = ?", false, "pending")
+	pendingCount, err := workbenchCountWhere(r.tenantDB(ctx), &projection.Incident{}, "scanned = ? OR healing_status = ?", false, "pending")
 	if err != nil {
 		return nil, err
 	}
-	last7DaysTotal, err := workbenchCountWhere(r.tenantDB(ctx), &model.Incident{}, "created_at >= ?", time.Now().AddDate(0, 0, -7))
+	last7DaysTotal, err := workbenchCountWhere(r.tenantDB(ctx), &projection.Incident{}, "created_at >= ?", time.Now().AddDate(0, 0, -7))
 	if err != nil {
 		return nil, err
 	}
@@ -113,11 +113,11 @@ func (r *WorkbenchRepository) GetIncidentStats(ctx context.Context) (*WorkbenchI
 func (r *WorkbenchRepository) GetHostStats(ctx context.Context) (*HostStats, error) {
 	stats := &HostStats{}
 
-	onlineCount, err := workbenchCountWhere(r.tenantDB(ctx), &model.CMDBItem{}, "status = ?", "active")
+	onlineCount, err := workbenchCountWhere(r.tenantDB(ctx), &projection.CMDBItem{}, "status = ?", "active")
 	if err != nil {
 		return nil, err
 	}
-	offlineCount, err := workbenchCountWhere(r.tenantDB(ctx), &model.CMDBItem{}, "status != ?", "active")
+	offlineCount, err := workbenchCountWhere(r.tenantDB(ctx), &projection.CMDBItem{}, "status != ?", "active")
 	if err != nil {
 		return nil, err
 	}

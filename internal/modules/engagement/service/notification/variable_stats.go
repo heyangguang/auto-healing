@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 )
 
 const (
@@ -64,7 +65,7 @@ func fillDerivedStats(stats map[string]interface{}) {
 	stats["success_rate"] = fmt.Sprintf("%.0f%%", rate)
 }
 
-func (b *VariableBuilder) parseError(run *model.ExecutionRun) map[string]interface{} {
+func (b *VariableBuilder) parseError(run *projection.ExecutionRun) map[string]interface{} {
 	errorVars := map[string]interface{}{
 		"message": "",
 		"host":    "",

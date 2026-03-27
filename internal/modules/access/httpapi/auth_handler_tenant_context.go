@@ -30,19 +30,19 @@ func currentTenantOrNil(c *gin.Context) uuid.UUID {
 	return uuid.Nil
 }
 
-func authTenantIDOrError(c *gin.Context) (uuid.UUID, error) {
+func (h *AuthHandler) authTenantIDOrError(c *gin.Context) (uuid.UUID, error) {
 	tenantID := currentTenantOrNil(c)
 	if tenantID == uuid.Nil {
 		return uuid.Nil, accessrepo.ErrTenantContextRequired
 	}
-	if err := ensureAuthTenantAccessible(c, tenantID); err != nil {
+	if err := h.ensureAuthTenantAccessible(c, tenantID); err != nil {
 		return uuid.Nil, err
 	}
 	return tenantID, nil
 }
 
-func ensureAuthTenantAccessible(c *gin.Context, tenantID uuid.UUID) error {
-	tenant, err := accessrepo.NewTenantRepository().GetByID(c.Request.Context(), tenantID)
+func (h *AuthHandler) ensureAuthTenantAccessible(c *gin.Context, tenantID uuid.UUID) error {
+	tenant, err := h.tenantRepo.GetByID(c.Request.Context(), tenantID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errAuthTenantNotFound
@@ -55,18 +55,18 @@ func ensureAuthTenantAccessible(c *gin.Context, tenantID uuid.UUID) error {
 	if tenant.Status != model.TenantStatusActive {
 		return errAuthTenantDisabled
 	}
-	if err := ensureAuthTenantMembership(c, tenantID); err != nil {
+	if err := h.ensureAuthTenantMembership(c, tenantID); err != nil {
 		return err
 	}
 	return nil
 }
 
-func ensureAuthTenantMembership(c *gin.Context, tenantID uuid.UUID) error {
+func (h *AuthHandler) ensureAuthTenantMembership(c *gin.Context, tenantID uuid.UUID) error {
 	userID, err := uuid.Parse(middleware.GetUserID(c))
 	if err != nil {
 		return errAuthTenantAccess
 	}
-	tenants, queryErr := accessrepo.NewTenantRepository().GetUserTenants(c.Request.Context(), userID, "")
+	tenants, queryErr := h.tenantRepo.GetUserTenants(c.Request.Context(), userID, "")
 	if queryErr != nil {
 		return queryErr
 	}

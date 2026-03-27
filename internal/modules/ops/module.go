@@ -26,7 +26,17 @@ type Module struct {
 
 // New 创建 ops 域模块。
 func New() *Module {
-	dictSvc := opsservice.NewDictionaryService()
+	dictRepo := opsrepo.NewDictionaryRepository()
+	dictSvc := opsservice.NewDictionaryServiceWithDeps(opsservice.DictionaryServiceDeps{
+		Repo: dictRepo,
+	})
+	commandBlacklistRepo := opsrepo.NewCommandBlacklistRepository()
+	commandBlacklistSvc := opsservice.NewCommandBlacklistServiceWithDeps(opsservice.CommandBlacklistServiceDeps{
+		Repo: commandBlacklistRepo,
+	})
+	blacklistExemptionSvc := opsservice.NewBlacklistExemptionServiceWithDeps(opsservice.BlacklistExemptionServiceDeps{
+		Repo: opsrepo.NewBlacklistExemptionRepository(database.DB),
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := dictSvc.LoadCache(ctx); err != nil {
@@ -47,12 +57,12 @@ func New() *Module {
 			Service: dictSvc,
 		}),
 		CommandBlacklist: opshttp.NewCommandBlacklistHandlerWithDeps(opshttp.CommandBlacklistHandlerDeps{
-			Service: opsservice.NewCommandBlacklistService(),
+			Service: commandBlacklistSvc,
 		}),
 		BlacklistExemption: opshttp.NewBlacklistExemptionHandlerWithDeps(opshttp.BlacklistExemptionHandlerDeps{
-			Service:       opsservice.NewBlacklistExemptionService(),
+			Service:       blacklistExemptionSvc,
 			TaskRepo:      automationrepo.NewExecutionRepository(),
-			BlacklistRepo: opsrepo.NewCommandBlacklistRepository(),
+			BlacklistRepo: commandBlacklistRepo,
 		}),
 	}
 }

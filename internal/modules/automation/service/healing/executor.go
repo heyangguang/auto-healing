@@ -8,8 +8,8 @@ import (
 	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
-	notificationSvc "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/modules/automation/service/execution"
+	notificationSvc "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
@@ -34,26 +34,64 @@ type FlowExecutor struct {
 
 var runningFlowCancels sync.Map // map[uuid.UUID]context.CancelFunc
 
+type FlowExecutorDeps struct {
+	InstanceRepo    *automationrepo.FlowInstanceRepository
+	ApprovalRepo    *automationrepo.ApprovalTaskRepository
+	FlowRepo        *automationrepo.HealingFlowRepository
+	FlowLogRepo     *automationrepo.FlowLogRepository
+	CMDBRepo        *cmdbrepo.CMDBItemRepository
+	GitRepoRepo     *integrationrepo.GitRepositoryRepository
+	ExecutionRepo   *automationrepo.ExecutionRepository
+	IncidentRepo    *incidentrepo.IncidentRepository
+	ExecutionSvc    *execution.Service
+	NotificationSvc *notificationSvc.Service
+	AnsibleExecutor ansible.Executor
+	EventBus        *EventBus
+	Lifecycle       *asyncLifecycle
+}
+
+func DefaultFlowExecutorDeps(executionSvc *execution.Service, notificationService *notificationSvc.Service) FlowExecutorDeps {
+	return FlowExecutorDeps{
+		InstanceRepo:    automationrepo.NewFlowInstanceRepository(),
+		ApprovalRepo:    automationrepo.NewApprovalTaskRepository(),
+		FlowRepo:        automationrepo.NewHealingFlowRepository(),
+		FlowLogRepo:     automationrepo.NewFlowLogRepository(),
+		CMDBRepo:        cmdbrepo.NewCMDBItemRepository(),
+		GitRepoRepo:     integrationrepo.NewGitRepositoryRepository(),
+		ExecutionRepo:   automationrepo.NewExecutionRepository(),
+		IncidentRepo:    incidentrepo.NewIncidentRepository(),
+		ExecutionSvc:    executionSvc,
+		NotificationSvc: notificationService,
+		AnsibleExecutor: ansible.NewLocalExecutor(),
+		EventBus:        GetEventBus(),
+		Lifecycle:       newAsyncLifecycle(),
+	}
+}
+
 // NewFlowExecutor 创建流程执行器
 func NewFlowExecutor() *FlowExecutor {
-	return NewFlowExecutorWithDependencies(execution.NewService(), notificationSvc.NewConfiguredService(database.DB))
+	return NewFlowExecutorWithDeps(DefaultFlowExecutorDeps(execution.NewService(), notificationSvc.NewConfiguredService(database.DB)))
 }
 
 func NewFlowExecutorWithDependencies(executionSvc *execution.Service, notificationService *notificationSvc.Service) *FlowExecutor {
+	return NewFlowExecutorWithDeps(DefaultFlowExecutorDeps(executionSvc, notificationService))
+}
+
+func NewFlowExecutorWithDeps(deps FlowExecutorDeps) *FlowExecutor {
 	return &FlowExecutor{
-		instanceRepo:    automationrepo.NewFlowInstanceRepository(),
-		approvalRepo:    automationrepo.NewApprovalTaskRepository(),
-		flowRepo:        automationrepo.NewHealingFlowRepository(),
-		flowLogRepo:     automationrepo.NewFlowLogRepository(),
-		cmdbRepo:        cmdbrepo.NewCMDBItemRepository(),
-		gitRepoRepo:     integrationrepo.NewGitRepositoryRepository(),
-		executionRepo:   automationrepo.NewExecutionRepository(),
-		incidentRepo:    incidentrepo.NewIncidentRepository(),
-		executionSvc:    executionSvc,
-		notificationSvc: notificationService,
-		ansibleExecutor: ansible.NewLocalExecutor(),
-		eventBus:        GetEventBus(),
-		lifecycle:       newAsyncLifecycle(),
+		instanceRepo:    deps.InstanceRepo,
+		approvalRepo:    deps.ApprovalRepo,
+		flowRepo:        deps.FlowRepo,
+		flowLogRepo:     deps.FlowLogRepo,
+		cmdbRepo:        deps.CMDBRepo,
+		gitRepoRepo:     deps.GitRepoRepo,
+		executionRepo:   deps.ExecutionRepo,
+		incidentRepo:    deps.IncidentRepo,
+		executionSvc:    deps.ExecutionSvc,
+		notificationSvc: deps.NotificationSvc,
+		ansibleExecutor: deps.AnsibleExecutor,
+		eventBus:        deps.EventBus,
+		lifecycle:       deps.Lifecycle,
 	}
 }
 

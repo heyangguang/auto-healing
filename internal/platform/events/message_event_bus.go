@@ -20,11 +20,15 @@ var (
 	messageEventBusOnce   sync.Once
 )
 
+func NewMessageEventBus() *MessageEventBus {
+	return &MessageEventBus{
+		subscribers: make(map[uuid.UUID][]chan MessageEvent),
+	}
+}
+
 func GetMessageEventBus() *MessageEventBus {
 	messageEventBusOnce.Do(func() {
-		globalMessageEventBus = &MessageEventBus{
-			subscribers: make(map[uuid.UUID][]chan MessageEvent),
-		}
+		globalMessageEventBus = NewMessageEventBus()
 	})
 	return globalMessageEventBus
 }

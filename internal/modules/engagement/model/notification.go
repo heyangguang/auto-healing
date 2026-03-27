@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/google/uuid"
 )
 
@@ -101,11 +102,11 @@ type NotificationLog struct {
 	CreatedAt          time.Time   `json:"created_at" gorm:"default:now()"`
 
 	// 关联
-	Template         *NotificationTemplate `json:"template,omitempty" gorm:"foreignKey:TemplateID"`
-	Channel          *NotificationChannel  `json:"channel,omitempty" gorm:"foreignKey:ChannelID"`
-	ExecutionRun     *ExecutionRun         `json:"execution_run,omitempty" gorm:"foreignKey:ExecutionRunID"`
-	WorkflowInstance *WorkflowInstance     `json:"workflow_instance,omitempty" gorm:"foreignKey:WorkflowInstanceID"`
-	Incident         *Incident             `json:"incident,omitempty" gorm:"foreignKey:IncidentID"`
+	Template         *NotificationTemplate        `json:"template,omitempty" gorm:"foreignKey:TemplateID"`
+	Channel          *NotificationChannel         `json:"channel,omitempty" gorm:"foreignKey:ChannelID"`
+	ExecutionRun     *projection.ExecutionRun     `json:"execution_run,omitempty" gorm:"foreignKey:ExecutionRunID"`
+	WorkflowInstance *projection.WorkflowInstance `json:"workflow_instance,omitempty" gorm:"foreignKey:WorkflowInstanceID"`
+	Incident         *projection.Incident         `json:"incident,omitempty" gorm:"foreignKey:IncidentID"`
 }
 
 // TableName 表名

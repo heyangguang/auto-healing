@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/company/auto-healing/internal/platform/modeltypes"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
@@ -22,13 +21,6 @@ type AuditHandler struct {
 
 type AuditHandlerDeps struct {
 	Repo *auditrepo.AuditLogRepository
-}
-
-// NewAuditHandler 创建审计日志处理器
-func NewAuditHandler() *AuditHandler {
-	return NewAuditHandlerWithDeps(AuditHandlerDeps{
-		Repo: auditrepo.NewAuditLogRepository(database.DB),
-	})
 }
 
 func NewAuditHandlerWithDeps(deps AuditHandlerDeps) *AuditHandler {

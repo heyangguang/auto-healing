@@ -25,13 +25,14 @@ func TestRequiredAuthTenantContextRejectsStaleDefaultTenant(t *testing.T) {
 	userID := uuid.New()
 	insertTenant(t, db, tenantID, "Tenant A", "tenant-a")
 	insertUser(t, db, userID, "tenant-user", false)
+	tenantRepo := accessrepo.NewTenantRepository()
 
 	router := gin.New()
 	router.GET("/me", func(c *gin.Context) {
 		c.Set(middleware.UserIDKey, userID.String())
 		c.Set(middleware.DefaultTenantIDKey, tenantID.String())
 		c.Set(middleware.TenantIDsKey, []string{tenantID.String()})
-	}, requiredAuthTenantContext(), func(c *gin.Context) {
+	}, requiredAuthTenantContext(tenantRepo), func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
 
@@ -56,13 +57,14 @@ func TestOptionalAuthTenantContextAllowsMissingTenantInjection(t *testing.T) {
 	userID := uuid.New()
 	insertTenant(t, db, tenantID, "Tenant A", "tenant-a")
 	insertUser(t, db, userID, "tenant-user", false)
+	tenantRepo := accessrepo.NewTenantRepository()
 
 	router := gin.New()
 	router.POST("/logout", func(c *gin.Context) {
 		c.Set(middleware.UserIDKey, userID.String())
 		c.Set(middleware.DefaultTenantIDKey, tenantID.String())
 		c.Set(middleware.TenantIDsKey, []string{tenantID.String()})
-	}, optionalAuthTenantContext(), func(c *gin.Context) {
+	}, optionalAuthTenantContext(tenantRepo), func(c *gin.Context) {
 		if _, ok := accessrepo.TenantIDFromContextOK(c.Request.Context()); ok {
 			t.Fatal("tenant context injected unexpectedly")
 		}

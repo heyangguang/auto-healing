@@ -3,7 +3,7 @@ package repository
 import (
 	"testing"
 
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/google/uuid"
 )
 
@@ -26,7 +26,7 @@ func TestLoadExecutionTaskNamesUsesScopedDB(t *testing.T) {
 	mustExec(t, db, `INSERT INTO execution_tasks (id, tenant_id, name) VALUES (?, ?, ?)`, taskB.String(), tenantB.String(), "tenant-b-task")
 
 	repo := &SearchRepository{db: db}
-	taskNames, err := repo.loadExecutionTaskNames(db.Where("tenant_id = ?", tenantA), []model.ExecutionRun{
+	taskNames, err := repo.loadExecutionTaskNames(db.Where("tenant_id = ?", tenantA), []projection.ExecutionRun{
 		{TaskID: taskA},
 		{TaskID: taskB},
 	})

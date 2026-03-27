@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"strings"
 	"time"
 
@@ -22,7 +23,11 @@ type UserActivityRepository struct {
 
 // NewUserActivityRepository 创建用户活动仓库
 func NewUserActivityRepository() *UserActivityRepository {
-	return &UserActivityRepository{db: database.DB}
+	return NewUserActivityRepositoryWithDB(database.DB)
+}
+
+func NewUserActivityRepositoryWithDB(db *gorm.DB) *UserActivityRepository {
+	return &UserActivityRepository{db: db}
 }
 
 // ==================== 收藏 ====================
@@ -39,7 +44,7 @@ func (r *UserActivityRepository) ListFavorites(ctx context.Context, userID uuid.
 // AddFavorite 添加收藏（使用 ON CONFLICT DO NOTHING 避免先查后写竞态）
 func (r *UserActivityRepository) AddFavorite(ctx context.Context, fav *model.UserFavorite) error {
 	// 设置租户 ID；平台级公共数据使用 NULL tenant_id。
-	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+	if tenantID, ok := platformrepo.TenantIDFromContextOK(ctx); ok {
 		fav.TenantID = &tenantID
 	} else {
 		fav.TenantID = nil
@@ -84,7 +89,7 @@ func (r *UserActivityRepository) ListRecents(ctx context.Context, userID uuid.UU
 // UpsertRecent 记录最近访问（已存在则更新访问时间，超过 10 条淘汰最旧的）
 func (r *UserActivityRepository) UpsertRecent(ctx context.Context, recent *model.UserRecent) error {
 	// 设置租户 ID；平台级公共数据使用 NULL tenant_id。
-	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+	if tenantID, ok := platformrepo.TenantIDFromContextOK(ctx); ok {
 		recent.TenantID = &tenantID
 	} else {
 		recent.TenantID = nil
@@ -189,7 +194,7 @@ func staleRecentIDs(tx *gorm.DB, ctx context.Context, userID uuid.UUID) ([]uuid.
 }
 
 func applyOptionalTenantFilter(db *gorm.DB, ctx context.Context, column string) *gorm.DB {
-	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+	if tenantID, ok := platformrepo.TenantIDFromContextOK(ctx); ok {
 		return db.Where(column+" = ?", tenantID)
 	}
 	return db.Where(column + " IS NULL")

@@ -19,12 +19,26 @@ type Service struct {
 	executionRepo *automationrepo.ExecutionRepository
 }
 
+type ServiceDeps struct {
+	Repo          *integrationrepo.PlaybookRepository
+	GitRepo       *integrationrepo.GitRepositoryRepository
+	ExecutionRepo *automationrepo.ExecutionRepository
+}
+
 // NewService 创建 Playbook 服务
 func NewService() *Service {
+	return NewServiceWithDeps(ServiceDeps{
+		Repo:          integrationrepo.NewPlaybookRepository(),
+		GitRepo:       integrationrepo.NewGitRepositoryRepository(),
+		ExecutionRepo: automationrepo.NewExecutionRepository(),
+	})
+}
+
+func NewServiceWithDeps(deps ServiceDeps) *Service {
 	return &Service{
-		repo:          integrationrepo.NewPlaybookRepository(),
-		gitRepo:       integrationrepo.NewGitRepositoryRepository(),
-		executionRepo: automationrepo.NewExecutionRepository(),
+		repo:          deps.Repo,
+		gitRepo:       deps.GitRepo,
+		executionRepo: deps.ExecutionRepo,
 	}
 }
 

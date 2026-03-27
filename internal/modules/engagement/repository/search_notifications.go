@@ -4,11 +4,12 @@ import (
 	"context"
 
 	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"gorm.io/gorm"
 )
 
 func (r *SearchRepository) searchPlugins(ctx context.Context, db *gorm.DB, like string, limit int) ([]SearchResultItem, int64, error) {
-	total, err := searchCount(db, &model.Plugin{}, "name ILIKE ? OR description ILIKE ?", like, like)
+	total, err := searchCount(db, &projection.Plugin{}, "name ILIKE ? OR description ILIKE ?", like, like)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -16,8 +17,8 @@ func (r *SearchRepository) searchPlugins(ctx context.Context, db *gorm.DB, like 
 		return nil, 0, nil
 	}
 
-	var items []model.Plugin
-	err = db.Model(&model.Plugin{}).
+	var items []projection.Plugin
+	err = db.Model(&projection.Plugin{}).
 		Select("id, name, description, type, status").
 		Where("name ILIKE ? OR description ILIKE ?", like, like).
 		Order("name").Limit(limit).Find(&items).Error

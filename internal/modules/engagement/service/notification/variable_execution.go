@@ -3,12 +3,12 @@ package notification
 import (
 	"strings"
 
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 )
 
 const executionOutputMaxLen = 100000
 
-func (b *VariableBuilder) buildExecutionVariables(run *model.ExecutionRun) map[string]interface{} {
+func (b *VariableBuilder) buildExecutionVariables(run *projection.ExecutionRun) map[string]interface{} {
 	return map[string]interface{}{
 		"run_id":           run.ID.String(),
 		"status":           run.Status,
@@ -25,7 +25,7 @@ func (b *VariableBuilder) buildExecutionVariables(run *model.ExecutionRun) map[s
 	}
 }
 
-func (b *VariableBuilder) buildTaskVariables(task *model.ExecutionTask) map[string]interface{} {
+func (b *VariableBuilder) buildTaskVariables(task *projection.ExecutionTask) map[string]interface{} {
 	hosts := splitTargetHosts(task.TargetHosts)
 	return map[string]interface{}{
 		"id":            task.ID.String(),
@@ -36,7 +36,7 @@ func (b *VariableBuilder) buildTaskVariables(task *model.ExecutionTask) map[stri
 	}
 }
 
-func (b *VariableBuilder) buildPlaybookVariables(task *model.ExecutionTask) (map[string]interface{}, map[string]interface{}) {
+func (b *VariableBuilder) buildPlaybookVariables(task *projection.ExecutionTask) (map[string]interface{}, map[string]interface{}) {
 	if task.Playbook == nil {
 		return emptyPlaybookVariables(), emptyRepositoryVariables("")
 	}

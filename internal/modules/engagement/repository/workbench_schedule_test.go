@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 )
@@ -16,7 +16,7 @@ func TestAppendCronScheduleEntriesReturnsErrorForInvalidCron(t *testing.T) {
 	err := repo.appendCronScheduleEntries(
 		map[string][]CalendarTask{},
 		cron.NewParser(cron.Minute|cron.Hour|cron.Dom|cron.Month|cron.Dow),
-		model.ExecutionSchedule{
+		projection.ExecutionSchedule{
 			ID:           uuid.New(),
 			Name:         "broken",
 			ScheduleExpr: &scheduleExpr,

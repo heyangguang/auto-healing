@@ -23,15 +23,6 @@ type UserHandlerDeps struct {
 	AuthService *authService.Service
 }
 
-// NewUserHandler 创建用户处理器
-func NewUserHandler(authSvc *authService.Service) *UserHandler {
-	return NewUserHandlerWithDeps(UserHandlerDeps{
-		UserRepo:    accessrepo.NewUserRepository(),
-		RoleRepo:    accessrepo.NewRoleRepository(),
-		AuthService: authSvc,
-	})
-}
-
 func NewUserHandlerWithDeps(deps UserHandlerDeps) *UserHandler {
 	return &UserHandler{
 		userRepo: deps.UserRepo,
@@ -51,14 +42,6 @@ type RoleHandlerDeps struct {
 	PermissionRepo *accessrepo.PermissionRepository
 }
 
-// NewRoleHandler 创建角色处理器
-func NewRoleHandler() *RoleHandler {
-	return NewRoleHandlerWithDeps(RoleHandlerDeps{
-		RoleRepo:       accessrepo.NewRoleRepository(),
-		PermissionRepo: accessrepo.NewPermissionRepository(),
-	})
-}
-
 func NewRoleHandlerWithDeps(deps RoleHandlerDeps) *RoleHandler {
 	return &RoleHandler{
 		roleRepo: deps.RoleRepo,
@@ -73,13 +56,6 @@ type PermissionHandler struct {
 
 type PermissionHandlerDeps struct {
 	PermissionRepo *accessrepo.PermissionRepository
-}
-
-// NewPermissionHandler 创建权限处理器
-func NewPermissionHandler() *PermissionHandler {
-	return NewPermissionHandlerWithDeps(PermissionHandlerDeps{
-		PermissionRepo: accessrepo.NewPermissionRepository(),
-	})
 }
 
 func NewPermissionHandlerWithDeps(deps PermissionHandlerDeps) *PermissionHandler {

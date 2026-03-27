@@ -24,6 +24,11 @@ type Service struct {
 	rateLimiter      *RateLimiter
 }
 
+type ConfiguredServiceDeps struct {
+	Repo            *engagementrepo.NotificationRepository
+	HealingFlowRepo *automationrepo.HealingFlowRepository
+}
+
 // NewService 创建通知服务
 func NewService(db *gorm.DB, systemName, systemURL, systemVersion string) *Service {
 	return &Service{
@@ -37,8 +42,22 @@ func NewService(db *gorm.DB, systemName, systemURL, systemVersion string) *Servi
 }
 
 func NewConfiguredService(db *gorm.DB) *Service {
+	return NewConfiguredServiceWithDeps(ConfiguredServiceDeps{
+		Repo:            engagementrepo.NewNotificationRepository(db),
+		HealingFlowRepo: automationrepo.NewHealingFlowRepository(),
+	})
+}
+
+func NewConfiguredServiceWithDeps(deps ConfiguredServiceDeps) *Service {
 	appCfg := config.GetAppConfig()
-	return NewService(db, appCfg.Name, appCfg.URL, appCfg.Version)
+	return &Service{
+		repo:             deps.Repo,
+		healingFlowRepo:  deps.HealingFlowRepo,
+		providerRegistry: provider.NewRegistry(),
+		templateParser:   NewTemplateParser(),
+		variableBuilder:  NewVariableBuilder(appCfg.Name, appCfg.URL, appCfg.Version),
+		rateLimiter:      NewRateLimiter(),
+	}
 }
 
 // CreateChannelRequest 创建渠道请求

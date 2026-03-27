@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 
 	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/company/auto-healing/internal/pkg/query"
@@ -11,7 +12,7 @@ import (
 
 // CreateTemplate 创建通知模板
 func (r *NotificationRepository) CreateTemplate(ctx context.Context, template *model.NotificationTemplate) error {
-	if err := FillTenantID(ctx, &template.TenantID); err != nil {
+	if err := platformrepo.FillTenantID(ctx, &template.TenantID); err != nil {
 		return err
 	}
 	return r.db.WithContext(ctx).Create(template).Error
@@ -54,7 +55,7 @@ func (r *NotificationRepository) ListTemplates(ctx context.Context, opts *Templa
 
 // UpdateTemplate 更新模板
 func (r *NotificationRepository) UpdateTemplate(ctx context.Context, template *model.NotificationTemplate) error {
-	return UpdateTenantScopedModel(r.db, ctx, template.ID, template)
+	return platformrepo.UpdateTenantScopedModel(r.db, ctx, template.ID, template)
 }
 
 // DeleteTemplate 删除模板

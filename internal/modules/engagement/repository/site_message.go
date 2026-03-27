@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -19,11 +20,23 @@ type SiteMessageRepository struct {
 	platformSettings *settingsrepo.PlatformSettingsRepository
 }
 
+type SiteMessageRepositoryDeps struct {
+	DB               *gorm.DB
+	PlatformSettings *settingsrepo.PlatformSettingsRepository
+}
+
 // NewSiteMessageRepository 创建站内信仓库
 func NewSiteMessageRepository() *SiteMessageRepository {
+	return NewSiteMessageRepositoryWithDeps(SiteMessageRepositoryDeps{
+		DB:               database.DB,
+		PlatformSettings: settingsrepo.NewPlatformSettingsRepository(),
+	})
+}
+
+func NewSiteMessageRepositoryWithDeps(deps SiteMessageRepositoryDeps) *SiteMessageRepository {
 	return &SiteMessageRepository{
-		db:               database.DB,
-		platformSettings: settingsrepo.NewPlatformSettingsRepository(),
+		db:               deps.DB,
+		platformSettings: deps.PlatformSettings,
 	}
 }
 
@@ -33,7 +46,7 @@ func (r *SiteMessageRepository) List(ctx context.Context, userID uuid.UUID, tena
 	var total int64
 	var results []model.SiteMessageWithReadStatus
 
-	ctxTenantID, err := RequireTenantID(ctx)
+	ctxTenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -110,7 +123,7 @@ func siteMessageOrderClause(sortField, order string) string {
 // tenantID: 当前用户所属租户，用于过滤目标租户
 func (r *SiteMessageRepository) GetUnreadCount(ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID, userCreatedAt time.Time) (int64, error) {
 	var count int64
-	ctxTenantID, err := RequireTenantID(ctx)
+	ctxTenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -137,13 +150,13 @@ func (r *SiteMessageRepository) MarkRead(ctx context.Context, userID uuid.UUID, 
 		return nil
 	}
 
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return err
 	}
 
 	// 先过滤出实际存在的消息 ID，避免外键约束错误
-	// 注意：不使用 TenantDB，因为广播消息的 tenant_id 是创建者租户，
+	// 注意：不使用 platformrepo.TenantDB，因为广播消息的 tenant_id 是创建者租户，
 	// 在其他租户下标记已读时需要能找到这些消息
 	var existingIDs []uuid.UUID
 	if err := r.db.WithContext(ctx).
@@ -181,7 +194,7 @@ func (r *SiteMessageRepository) MarkRead(ctx context.Context, userID uuid.UUID, 
 // tenantID: 当前用户所属租户，用于过滤目标租户
 func (r *SiteMessageRepository) MarkAllRead(ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID, userCreatedAt time.Time) (int64, error) {
 	now := time.Now()
-	ctxTenantID, err := RequireTenantID(ctx)
+	ctxTenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -225,7 +238,7 @@ func (r *SiteMessageRepository) MarkAllRead(ctx context.Context, userID uuid.UUI
 func (r *SiteMessageRepository) Create(ctx context.Context, msg *model.SiteMessage) error {
 	// 自动设置 tenant_id；平台广播消息允许为空租户。
 	if msg.TenantID == nil {
-		tenantID, ok := TenantIDFromContextOK(ctx)
+		tenantID, ok := platformrepo.TenantIDFromContextOK(ctx)
 		if !ok {
 			goto retention
 		}
@@ -249,7 +262,7 @@ func (r *SiteMessageRepository) CreateBatch(ctx context.Context, msgs []*model.S
 		return nil
 	}
 
-	tenantID, hasTenant := TenantIDFromContextOK(ctx)
+	tenantID, hasTenant := platformrepo.TenantIDFromContextOK(ctx)
 	retentionDays := r.platformSettings.GetIntValue(ctx, "site_message.retention_days", 90)
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -29,7 +31,11 @@ func TestCommandBlacklistGetTreatsMissingTenantContextAsInternalError(t *testing
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	router.GET("/rules/:id", NewCommandBlacklistHandler().Get)
+	router.GET("/rules/:id", NewCommandBlacklistHandlerWithDeps(CommandBlacklistHandlerDeps{
+		Service: opsservice.NewCommandBlacklistServiceWithDeps(opsservice.CommandBlacklistServiceDeps{
+			Repo: opsrepo.NewCommandBlacklistRepository(),
+		}),
+	}).Get)
 
 	req := httptest.NewRequest(http.MethodGet, "/rules/"+uuid.NewString(), nil)
 	recorder := httptest.NewRecorder()

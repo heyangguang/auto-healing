@@ -31,19 +31,51 @@ type Scheduler struct {
 	runFlow        func(context.Context, *model.FlowInstance) error
 }
 
+type SchedulerDeps struct {
+	RuleRepo     *automationrepo.HealingRuleRepository
+	FlowRepo     *automationrepo.HealingFlowRepository
+	InstanceRepo *automationrepo.FlowInstanceRepository
+	IncidentRepo *incidentrepo.IncidentRepository
+	ApprovalRepo *automationrepo.ApprovalTaskRepository
+	Matcher      *RuleMatcher
+	Executor     *FlowExecutor
+	Interval     time.Duration
+	Lifecycle    *asyncLifecycle
+	Sem          chan struct{}
+}
+
+func DefaultSchedulerDeps(executor *FlowExecutor) SchedulerDeps {
+	return SchedulerDeps{
+		RuleRepo:     automationrepo.NewHealingRuleRepository(),
+		FlowRepo:     automationrepo.NewHealingFlowRepository(),
+		InstanceRepo: automationrepo.NewFlowInstanceRepository(),
+		IncidentRepo: incidentrepo.NewIncidentRepository(),
+		ApprovalRepo: automationrepo.NewApprovalTaskRepository(),
+		Matcher:      NewRuleMatcher(),
+		Executor:     executor,
+		Interval:     10 * time.Second,
+		Lifecycle:    newAsyncLifecycle(),
+		Sem:          make(chan struct{}, 10),
+	}
+}
+
 // NewScheduler 创建调度器
 func NewScheduler() *Scheduler {
+	return NewSchedulerWithDeps(DefaultSchedulerDeps(NewFlowExecutor()))
+}
+
+func NewSchedulerWithDeps(deps SchedulerDeps) *Scheduler {
 	s := &Scheduler{
-		ruleRepo:     automationrepo.NewHealingRuleRepository(),
-		flowRepo:     automationrepo.NewHealingFlowRepository(),
-		instanceRepo: automationrepo.NewFlowInstanceRepository(),
-		incidentRepo: incidentrepo.NewIncidentRepository(),
-		approvalRepo: automationrepo.NewApprovalTaskRepository(),
-		matcher:      NewRuleMatcher(),
-		executor:     NewFlowExecutor(),
-		interval:     10 * time.Second,
-		lifecycle:    newAsyncLifecycle(),
-		sem:          make(chan struct{}, 10),
+		ruleRepo:     deps.RuleRepo,
+		flowRepo:     deps.FlowRepo,
+		instanceRepo: deps.InstanceRepo,
+		incidentRepo: deps.IncidentRepo,
+		approvalRepo: deps.ApprovalRepo,
+		matcher:      deps.Matcher,
+		executor:     deps.Executor,
+		interval:     deps.Interval,
+		lifecycle:    deps.Lifecycle,
+		sem:          deps.Sem,
 	}
 	s.scanNow = s.scan
 	s.recoverOrphans = s.recoverOrphanedInstances

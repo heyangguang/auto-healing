@@ -3,7 +3,7 @@ package notification
 import (
 	"time"
 
-	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 )
 
 const (
@@ -36,7 +36,7 @@ func NewVariableBuilder(systemName, systemURL, systemVersion string) *VariableBu
 }
 
 // BuildFromExecution 从执行记录构建变量
-func (b *VariableBuilder) BuildFromExecution(run *model.ExecutionRun, task *model.ExecutionTask) map[string]interface{} {
+func (b *VariableBuilder) BuildFromExecution(run *projection.ExecutionRun, task *projection.ExecutionTask) map[string]interface{} {
 	now := time.Now()
 	playbookVars, repositoryVars := b.buildPlaybookVariables(task)
 

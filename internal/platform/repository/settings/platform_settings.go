@@ -23,7 +23,11 @@ type PlatformSettingsRepository struct {
 
 // NewPlatformSettingsRepository 创建平台设置仓库
 func NewPlatformSettingsRepository() *PlatformSettingsRepository {
-	return &PlatformSettingsRepository{db: database.DB}
+	return NewPlatformSettingsRepositoryWithDB(database.DB)
+}
+
+func NewPlatformSettingsRepositoryWithDB(db *gorm.DB) *PlatformSettingsRepository {
+	return &PlatformSettingsRepository{db: db}
 }
 
 // GetAll 获取所有平台设置

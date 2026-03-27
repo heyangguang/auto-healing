@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
 	"github.com/company/auto-healing/internal/modules/engagement/model"
@@ -12,7 +13,7 @@ import (
 
 // CreateLog 创建通知日志
 func (r *NotificationRepository) CreateLog(ctx context.Context, log *model.NotificationLog) error {
-	if err := FillTenantID(ctx, &log.TenantID); err != nil {
+	if err := platformrepo.FillTenantID(ctx, &log.TenantID); err != nil {
 		return err
 	}
 	if log.ID == uuid.Nil {
@@ -62,7 +63,7 @@ func (r *NotificationRepository) ListLogs(ctx context.Context, opts *Notificatio
 
 // UpdateLog 更新日志
 func (r *NotificationRepository) UpdateLog(ctx context.Context, log *model.NotificationLog) error {
-	return UpdateTenantScopedModel(r.db, ctx, log.ID, log)
+	return platformrepo.UpdateTenantScopedModel(r.db, ctx, log.ID, log)
 }
 
 // GetPendingRetryLogs 获取待重试的日志
@@ -84,7 +85,7 @@ func (r *NotificationRepository) GetPendingRetryLogsGlobal(ctx context.Context) 
 }
 
 func (r *NotificationRepository) notificationLogsBaseQuery(ctx context.Context) (*gorm.DB, error) {
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +179,7 @@ func notificationLogOrderClause(opts *NotificationLogListOptions) string {
 }
 
 func (r *NotificationRepository) preloadNotificationLogs(ctx context.Context, db *gorm.DB) *gorm.DB {
-	tenantID, err := RequireTenantID(ctx)
+	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		scoped := db.Session(&gorm.Session{})
 		scoped.AddError(err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"sync"
 
 	"github.com/company/auto-healing/internal/database"
@@ -18,7 +19,11 @@ type SearchRepository struct {
 
 // NewSearchRepository 创建全局搜索仓库
 func NewSearchRepository() *SearchRepository {
-	return &SearchRepository{db: database.DB}
+	return NewSearchRepositoryWithDB(database.DB)
+}
+
+func NewSearchRepositoryWithDB(db *gorm.DB) *SearchRepository {
+	return &SearchRepository{db: db}
 }
 
 // SearchResultItem 搜索结果项
@@ -45,12 +50,12 @@ type searchCategoryDef struct {
 }
 
 func (r *SearchRepository) tenantDB(ctx context.Context) *gorm.DB {
-	return TenantDB(r.db, ctx)
+	return platformrepo.TenantDB(r.db, ctx)
 }
 
 // GlobalSearch 全局搜索
 func (r *SearchRepository) GlobalSearch(ctx context.Context, keyword string, limit int, allowed map[string]bool) ([]SearchResultCategory, int64, error) {
-	if _, ok := TenantIDFromContextOK(ctx); !ok {
+	if _, ok := platformrepo.TenantIDFromContextOK(ctx); !ok {
 		return nil, 0, fmt.Errorf("missing tenant context")
 	}
 

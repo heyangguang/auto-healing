@@ -29,14 +29,6 @@ type BlacklistExemptionHandlerDeps struct {
 	BlacklistRepo *opsrepo.CommandBlacklistRepository
 }
 
-func NewBlacklistExemptionHandler() *BlacklistExemptionHandler {
-	return NewBlacklistExemptionHandlerWithDeps(BlacklistExemptionHandlerDeps{
-		Service:       opsservice.NewBlacklistExemptionService(),
-		TaskRepo:      automationrepo.NewExecutionRepository(),
-		BlacklistRepo: opsrepo.NewCommandBlacklistRepository(),
-	})
-}
-
 func NewBlacklistExemptionHandlerWithDeps(deps BlacklistExemptionHandlerDeps) *BlacklistExemptionHandler {
 	return &BlacklistExemptionHandler{
 		svc:           deps.Service,

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
 	"gorm.io/gorm"
@@ -21,7 +22,7 @@ func NewWorkbenchRepository(db *gorm.DB) *WorkbenchRepository {
 }
 
 func (r *WorkbenchRepository) tenantDB(ctx context.Context) *gorm.DB {
-	return TenantDB(r.db, ctx)
+	return platformrepo.TenantDB(r.db, ctx)
 }
 
 // FavoriteItem 收藏项

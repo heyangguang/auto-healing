@@ -2,13 +2,19 @@ package automation
 
 import (
 	"github.com/company/auto-healing/internal/database"
+	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	automationhttp "github.com/company/auto-healing/internal/modules/automation/httpapi"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	executionSvc "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	healingSvc "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	scheduleSvc "github.com/company/auto-healing/internal/modules/automation/service/schedule"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
+	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
+	secretsrepo "github.com/company/auto-healing/internal/modules/secrets/repository"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 )
 
@@ -21,21 +27,49 @@ type Module struct {
 
 // New 创建 automation 域模块。
 func New() *Module {
-	executionService := executionSvc.NewService()
-	scheduleService := scheduleSvc.NewService()
-	scheduler := healingSvc.DefaultScheduler()
+	executionRepo := automationrepo.NewExecutionRepository()
+	flowRepo := automationrepo.NewHealingFlowRepository()
+	ruleRepo := automationrepo.NewHealingRuleRepository()
+	instanceRepo := automationrepo.NewFlowInstanceRepository()
+	approvalRepo := automationrepo.NewApprovalTaskRepository()
+	scheduleRepo := automationrepo.NewScheduleRepository()
+	incidentRepository := incidentrepo.NewIncidentRepository()
+	notificationRepo := engagementrepo.NewNotificationRepository(database.DB)
+	notificationService := notification.NewConfiguredService(database.DB)
+	executionService := executionSvc.NewServiceWithDeps(executionSvc.ServiceDeps{
+		Repo:             executionRepo,
+		GitRepo:          integrationrepo.NewGitRepositoryRepository(),
+		SecretsRepo:      secretsrepo.NewSecretsSourceRepository(),
+		CMDBRepo:         cmdbrepo.NewCMDBItemRepository(),
+		HealingFlowRepo:  flowRepo,
+		WorkspaceManager: ansible.NewWorkspaceManager(),
+		LocalExecutor:    ansible.NewLocalExecutor(),
+		DockerExecutor:   ansible.NewDockerExecutor(),
+		NotificationSvc:  notificationService,
+		BlacklistSvc:     opsservice.NewCommandBlacklistService(),
+		ExemptionSvc:     opsservice.NewBlacklistExemptionService(),
+	})
+	scheduleService := scheduleSvc.NewServiceWithDeps(scheduleSvc.ServiceDeps{
+		Repo:     scheduleRepo,
+		ExecRepo: executionRepo,
+	})
+	flowExecutor := healingSvc.NewFlowExecutorWithDeps(healingSvc.DefaultFlowExecutorDeps(
+		executionService,
+		notificationService,
+	))
+	scheduler := healingSvc.NewSchedulerWithDeps(healingSvc.DefaultSchedulerDeps(flowExecutor))
 	module := &Module{
 		Execution: automationhttp.NewExecutionHandlerWithDeps(automationhttp.ExecutionHandlerDeps{
 			Service: executionService,
 		}),
 		Healing: automationhttp.NewHealingHandlerWithDeps(automationhttp.HealingHandlerDeps{
-			FlowRepo:         automationrepo.NewHealingFlowRepository(),
-			RuleRepo:         automationrepo.NewHealingRuleRepository(),
-			InstanceRepo:     automationrepo.NewFlowInstanceRepository(),
-			ApprovalRepo:     automationrepo.NewApprovalTaskRepository(),
-			IncidentRepo:     incidentrepo.NewIncidentRepository(),
-			NotificationRepo: engagementrepo.NewNotificationRepository(database.DB),
-			Executor:         scheduler.Executor(),
+			FlowRepo:         flowRepo,
+			RuleRepo:         ruleRepo,
+			InstanceRepo:     instanceRepo,
+			ApprovalRepo:     approvalRepo,
+			IncidentRepo:     incidentRepository,
+			NotificationRepo: notificationRepo,
+			Executor:         flowExecutor,
 			Scheduler:        scheduler,
 		}),
 		Schedule: automationhttp.NewScheduleHandlerWithDeps(automationhttp.ScheduleHandlerDeps{

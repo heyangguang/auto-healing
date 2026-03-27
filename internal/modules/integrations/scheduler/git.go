@@ -35,14 +35,49 @@ type GitScheduler struct {
 	claimRepoSync       func(context.Context, model.GitRepository) (bool, error)
 }
 
+type GitSchedulerDeps struct {
+	GitService *gitService.Service
+	DB         *gorm.DB
+	Interval   time.Duration
+	Lifecycle  *schedulerx.Lifecycle
+	InFlight   *schedulerx.InFlightSet
+	Now        func() time.Time
+}
+
 // NewGitScheduler 创建 Git 同步调度器
 func NewGitScheduler() *GitScheduler {
+	return NewGitSchedulerWithDeps(GitSchedulerDeps{
+		GitService: gitService.NewService(),
+		DB:         database.DB,
+		Interval:   60 * time.Second,
+		InFlight:   schedulerx.NewInFlightSet(),
+		Now:        time.Now,
+	})
+}
+
+func NewGitSchedulerWithDeps(deps GitSchedulerDeps) *GitScheduler {
+	if deps.GitService == nil {
+		deps.GitService = gitService.NewService()
+	}
+	if deps.DB == nil {
+		deps.DB = database.DB
+	}
+	if deps.Interval == 0 {
+		deps.Interval = 60 * time.Second
+	}
+	if deps.InFlight == nil {
+		deps.InFlight = schedulerx.NewInFlightSet()
+	}
+	if deps.Now == nil {
+		deps.Now = time.Now
+	}
 	s := &GitScheduler{
-		gitSvc:   gitService.NewService(),
-		db:       database.DB,
-		interval: 60 * time.Second,
-		inFlight: schedulerx.NewInFlightSet(),
-		now:      time.Now,
+		gitSvc:    deps.GitService,
+		db:        deps.DB,
+		interval:  deps.Interval,
+		lifecycle: deps.Lifecycle,
+		inFlight:  deps.InFlight,
+		now:       deps.Now,
 	}
 	s.loadReposNeedSync = s.getReposNeedSync
 	s.runRepoSync = s.syncRepo

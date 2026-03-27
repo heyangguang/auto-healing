@@ -39,21 +39,56 @@ type Service struct {
 	runningExecutions sync.Map // map[uuid.UUID]context.CancelFunc
 }
 
+type ServiceDeps struct {
+	Repo             *automationrepo.ExecutionRepository
+	GitRepo          *integrationrepo.GitRepositoryRepository
+	SecretsRepo      *secretsrepo.SecretsSourceRepository
+	CMDBRepo         *cmdbrepo.CMDBItemRepository
+	HealingFlowRepo  *automationrepo.HealingFlowRepository
+	WorkspaceManager *ansible.WorkspaceManager
+	LocalExecutor    *ansible.LocalExecutor
+	DockerExecutor   *ansible.DockerExecutor
+	NotificationSvc  *notification.Service
+	BlacklistSvc     *opsservice.CommandBlacklistService
+	ExemptionSvc     *opsservice.BlacklistExemptionService
+	Lifecycle        *asyncLifecycle
+}
+
 // NewService 创建执行任务服务
 func NewService() *Service {
+	return NewServiceWithDeps(ServiceDeps{
+		Repo:             automationrepo.NewExecutionRepository(),
+		GitRepo:          integrationrepo.NewGitRepositoryRepository(),
+		SecretsRepo:      secretsrepo.NewSecretsSourceRepository(),
+		CMDBRepo:         cmdbrepo.NewCMDBItemRepository(),
+		HealingFlowRepo:  automationrepo.NewHealingFlowRepository(),
+		WorkspaceManager: ansible.NewWorkspaceManager(),
+		LocalExecutor:    ansible.NewLocalExecutor(),
+		DockerExecutor:   ansible.NewDockerExecutor(),
+		NotificationSvc:  notification.NewConfiguredService(database.DB),
+		BlacklistSvc:     opsservice.NewCommandBlacklistService(),
+		ExemptionSvc:     opsservice.NewBlacklistExemptionService(),
+		Lifecycle:        newAsyncLifecycle(maxExecutionWorkers),
+	})
+}
+
+func NewServiceWithDeps(deps ServiceDeps) *Service {
+	if deps.Lifecycle == nil {
+		deps.Lifecycle = newAsyncLifecycle(maxExecutionWorkers)
+	}
 	return &Service{
-		repo:             automationrepo.NewExecutionRepository(),
-		gitRepo:          integrationrepo.NewGitRepositoryRepository(),
-		secretsRepo:      secretsrepo.NewSecretsSourceRepository(),
-		cmdbRepo:         cmdbrepo.NewCMDBItemRepository(),
-		healingFlowRepo:  automationrepo.NewHealingFlowRepository(),
-		workspaceManager: ansible.NewWorkspaceManager(),
-		localExecutor:    ansible.NewLocalExecutor(),
-		dockerExecutor:   ansible.NewDockerExecutor(),
-		notificationSvc:  notification.NewConfiguredService(database.DB),
-		blacklistSvc:     opsservice.NewCommandBlacklistService(),
-		exemptionSvc:     opsservice.NewBlacklistExemptionService(),
-		lifecycle:        newAsyncLifecycle(maxExecutionWorkers),
+		repo:             deps.Repo,
+		gitRepo:          deps.GitRepo,
+		secretsRepo:      deps.SecretsRepo,
+		cmdbRepo:         deps.CMDBRepo,
+		healingFlowRepo:  deps.HealingFlowRepo,
+		workspaceManager: deps.WorkspaceManager,
+		localExecutor:    deps.LocalExecutor,
+		dockerExecutor:   deps.DockerExecutor,
+		notificationSvc:  deps.NotificationSvc,
+		blacklistSvc:     deps.BlacklistSvc,
+		exemptionSvc:     deps.ExemptionSvc,
+		lifecycle:        deps.Lifecycle,
 	}
 }
 

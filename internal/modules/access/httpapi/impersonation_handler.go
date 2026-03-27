@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"github.com/company/auto-healing/internal/database"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
@@ -22,17 +21,6 @@ type ImpersonationHandlerDeps struct {
 	AuditRepo         *auditrepo.AuditLogRepository
 	PlatformAuditRepo *auditrepo.PlatformAuditLogRepository
 	SiteMessageRepo   *engagementrepo.SiteMessageRepository
-}
-
-// NewImpersonationHandler 创建 Impersonation 处理器
-func NewImpersonationHandler() *ImpersonationHandler {
-	return NewImpersonationHandlerWithDeps(ImpersonationHandlerDeps{
-		ImpersonationRepo: accessrepo.NewImpersonationRepository(),
-		TenantRepo:        accessrepo.NewTenantRepository(),
-		AuditRepo:         auditrepo.NewAuditLogRepository(database.DB),
-		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
-		SiteMessageRepo:   engagementrepo.NewSiteMessageRepository(),
-	})
 }
 
 func NewImpersonationHandlerWithDeps(deps ImpersonationHandlerDeps) *ImpersonationHandler {

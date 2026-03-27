@@ -3,6 +3,7 @@ package httpapi
 import (
 	"github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/response"
+	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/gin-gonic/gin"
 )
 
@@ -34,6 +35,7 @@ type PluginHandler struct {
 type PluginHandlerDeps struct {
 	PluginService   *plugin.Service
 	IncidentService *plugin.IncidentService
+	IncidentRepo    *incidentrepo.IncidentRepository
 }
 
 // NewPluginHandler 创建插件处理器

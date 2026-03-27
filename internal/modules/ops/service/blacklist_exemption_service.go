@@ -16,9 +16,19 @@ type BlacklistExemptionService struct {
 	repo *opsrepo.BlacklistExemptionRepository
 }
 
+type BlacklistExemptionServiceDeps struct {
+	Repo *opsrepo.BlacklistExemptionRepository
+}
+
 func NewBlacklistExemptionService() *BlacklistExemptionService {
+	return NewBlacklistExemptionServiceWithDeps(BlacklistExemptionServiceDeps{
+		Repo: opsrepo.NewBlacklistExemptionRepository(database.DB),
+	})
+}
+
+func NewBlacklistExemptionServiceWithDeps(deps BlacklistExemptionServiceDeps) *BlacklistExemptionService {
 	return &BlacklistExemptionService{
-		repo: opsrepo.NewBlacklistExemptionRepository(database.DB),
+		repo: deps.Repo,
 	}
 }
 

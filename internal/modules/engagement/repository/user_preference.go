@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -26,7 +27,7 @@ type UserPreferenceRepository struct {
 
 // NewUserPreferenceRepository 创建用户偏好仓库
 func NewUserPreferenceRepository() *UserPreferenceRepository {
-	return &UserPreferenceRepository{db: database.DB}
+	return NewUserPreferenceRepositoryWithDB(database.DB)
 }
 
 func NewUserPreferenceRepositoryWithDB(db *gorm.DB) *UserPreferenceRepository {
@@ -37,7 +38,7 @@ func NewUserPreferenceRepositoryWithDB(db *gorm.DB) *UserPreferenceRepository {
 func (r *UserPreferenceRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (*model.UserPreference, error) {
 	var pref model.UserPreference
 	query := r.db.WithContext(ctx).Where("user_id = ?", userID)
-	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+	if tenantID, ok := platformrepo.TenantIDFromContextOK(ctx); ok {
 		query = query.Where("tenant_id = ?", tenantID)
 	} else {
 		query = query.Where("tenant_id IS NULL")
@@ -63,7 +64,7 @@ func (r *UserPreferenceRepository) Upsert(ctx context.Context, userID uuid.UUID,
 		Preferences: preferences,
 	}
 
-	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+	if tenantID, ok := platformrepo.TenantIDFromContextOK(ctx); ok {
 		pref.TenantID = &tenantID
 		err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "user_id"}, {Name: "tenant_id"}},
@@ -93,7 +94,7 @@ func (r *UserPreferenceRepository) Upsert(ctx context.Context, userID uuid.UUID,
 func (r *UserPreferenceRepository) MergeUpdate(ctx context.Context, userID uuid.UUID, patch json.RawMessage) (*model.UserPreference, error) {
 	var pref model.UserPreference
 	query := r.db.WithContext(ctx).Where("user_id = ?", userID)
-	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+	if tenantID, ok := platformrepo.TenantIDFromContextOK(ctx); ok {
 		query = query.Where("tenant_id = ?", tenantID)
 	} else {
 		query = query.Where("tenant_id IS NULL")

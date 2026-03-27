@@ -28,13 +28,6 @@ type PlatformSettingsHandlerDeps struct {
 	Repo *settingsrepo.PlatformSettingsRepository
 }
 
-// NewPlatformSettingsHandler 创建平台设置处理器
-func NewPlatformSettingsHandler() *PlatformSettingsHandler {
-	return NewPlatformSettingsHandlerWithDeps(PlatformSettingsHandlerDeps{
-		Repo: settingsrepo.NewPlatformSettingsRepository(),
-	})
-}
-
 func NewPlatformSettingsHandlerWithDeps(deps PlatformSettingsHandlerDeps) *PlatformSettingsHandler {
 	return &PlatformSettingsHandler{
 		repo: deps.Repo,

@@ -24,20 +24,34 @@ type NodeExecutors struct {
 	notificationSvc  *notification.Service
 }
 
+type NodeExecutorsDeps struct {
+	CMDBRepo         *cmdbrepo.CMDBItemRepository
+	NotificationRepo *engagementrepo.NotificationRepository
+	NotificationSvc  *notification.Service
+}
+
 // NewNodeExecutors 创建节点执行器
 func NewNodeExecutors() *NodeExecutors {
-	return NewNodeExecutorsWithDependencies(
-		cmdbrepo.NewCMDBItemRepository(),
-		engagementrepo.NewNotificationRepository(database.DB),
-		notification.NewConfiguredService(database.DB),
-	)
+	return NewNodeExecutorsWithDeps(NodeExecutorsDeps{
+		CMDBRepo:         cmdbrepo.NewCMDBItemRepository(),
+		NotificationRepo: engagementrepo.NewNotificationRepository(database.DB),
+		NotificationSvc:  notification.NewConfiguredService(database.DB),
+	})
 }
 
 func NewNodeExecutorsWithDependencies(cmdbRepo *cmdbrepo.CMDBItemRepository, notificationRepo *engagementrepo.NotificationRepository, notificationSvc *notification.Service) *NodeExecutors {
+	return NewNodeExecutorsWithDeps(NodeExecutorsDeps{
+		CMDBRepo:         cmdbRepo,
+		NotificationRepo: notificationRepo,
+		NotificationSvc:  notificationSvc,
+	})
+}
+
+func NewNodeExecutorsWithDeps(deps NodeExecutorsDeps) *NodeExecutors {
 	return &NodeExecutors{
-		cmdbRepo:         cmdbRepo,
-		notificationRepo: notificationRepo,
-		notificationSvc:  notificationSvc,
+		cmdbRepo:         deps.CMDBRepo,
+		notificationRepo: deps.NotificationRepo,
+		notificationSvc:  deps.NotificationSvc,
 	}
 }
 

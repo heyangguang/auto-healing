@@ -23,12 +23,29 @@ type IncidentService struct {
 	httpClient   *HTTPClient
 }
 
+type IncidentServiceDeps struct {
+	IncidentRepo *incidentrepo.IncidentRepository
+	PluginRepo   *integrationrepo.PluginRepository
+	HTTPClient   *HTTPClient
+}
+
 // NewIncidentService 创建工单服务
 func NewIncidentService() *IncidentService {
+	return NewIncidentServiceWithDeps(IncidentServiceDeps{
+		IncidentRepo: incidentrepo.NewIncidentRepository(),
+		PluginRepo:   integrationrepo.NewPluginRepository(),
+		HTTPClient:   NewHTTPClient(),
+	})
+}
+
+func NewIncidentServiceWithDeps(deps IncidentServiceDeps) *IncidentService {
+	if deps.HTTPClient == nil {
+		deps.HTTPClient = NewHTTPClient()
+	}
 	return &IncidentService{
-		incidentRepo: incidentrepo.NewIncidentRepository(),
-		pluginRepo:   integrationrepo.NewPluginRepository(),
-		httpClient:   NewHTTPClient(),
+		incidentRepo: deps.IncidentRepo,
+		pluginRepo:   deps.PluginRepo,
+		httpClient:   deps.HTTPClient,
 	}
 }
 
@@ -40,6 +57,10 @@ func (s *IncidentService) GetIncident(ctx context.Context, id uuid.UUID) (*platf
 // ListIncidents 获取工单列表（支持查询已删除插件的工单）
 func (s *IncidentService) ListIncidents(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity string, sourcePluginName, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, externalID query.StringFilter, scopes ...func(*gorm.DB) *gorm.DB) ([]platformmodel.Incident, int64, error) {
 	return s.incidentRepo.List(ctx, page, pageSize, pluginID, status, healingStatus, severity, sourcePluginName, search, hasPlugin, sortBy, sortOrder, externalID, scopes...)
+}
+
+func (s *IncidentService) GetStats(ctx context.Context) (*incidentrepo.IncidentStats, error) {
+	return s.incidentRepo.GetStats(ctx)
 }
 
 // CloseIncidentResponse 关闭工单响应

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
@@ -18,7 +19,7 @@ type DashboardRepository struct {
 
 // NewDashboardRepository 创建 Dashboard 仓库
 func NewDashboardRepository() *DashboardRepository {
-	return &DashboardRepository{db: database.DB}
+	return NewDashboardRepositoryWithDB(database.DB)
 }
 
 func NewDashboardRepositoryWithDB(db *gorm.DB) *DashboardRepository {
@@ -26,14 +27,14 @@ func NewDashboardRepositoryWithDB(db *gorm.DB) *DashboardRepository {
 }
 
 func (r *DashboardRepository) tenantDB(ctx context.Context) *gorm.DB {
-	return TenantDB(r.db, ctx)
+	return platformrepo.TenantDB(r.db, ctx)
 }
 
 // GetConfigByUserID 获取用户配置
 func (r *DashboardRepository) GetConfigByUserID(ctx context.Context, userID uuid.UUID) (*model.DashboardConfig, error) {
 	var config model.DashboardConfig
 	query := r.db.WithContext(ctx).Where("user_id = ?", userID)
-	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+	if tenantID, ok := platformrepo.TenantIDFromContextOK(ctx); ok {
 		query = query.Where("tenant_id = ?", tenantID)
 	} else {
 		query = query.Where("tenant_id IS NULL")
@@ -51,7 +52,7 @@ func (r *DashboardRepository) GetConfigByUserID(ctx context.Context, userID uuid
 // UpsertConfig 创建或更新用户配置（使用 ON CONFLICT DO UPDATE 保证原子性）
 func (r *DashboardRepository) UpsertConfig(ctx context.Context, userID uuid.UUID, configData model.JSON) error {
 	config := model.DashboardConfig{UserID: userID, Config: configData}
-	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+	if tenantID, ok := platformrepo.TenantIDFromContextOK(ctx); ok {
 		config.TenantID = &tenantID
 		return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 			Columns: []clause.Column{{Name: "user_id"}, {Name: "tenant_id"}},

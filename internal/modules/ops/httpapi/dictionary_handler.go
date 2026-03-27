@@ -1,9 +1,7 @@
 package httpapi
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -36,19 +34,6 @@ type updateDictionaryRequest struct {
 	Extra     *model.JSON `json:"extra"`
 	SortOrder *int        `json:"sort_order"`
 	IsActive  *bool       `json:"is_active"`
-}
-
-// NewDictionaryHandler 创建处理器
-func NewDictionaryHandler() *DictionaryHandler {
-	svc := opsservice.NewDictionaryService()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := svc.LoadCache(ctx); err != nil {
-		panic(fmt.Errorf("初始化字典缓存失败: %w", err))
-	}
-	return NewDictionaryHandlerWithDeps(DictionaryHandlerDeps{
-		Service: svc,
-	})
 }
 
 func NewDictionaryHandlerWithDeps(deps DictionaryHandlerDeps) *DictionaryHandler {

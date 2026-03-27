@@ -9,7 +9,6 @@ import (
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
-	engagementservice "github.com/company/auto-healing/internal/modules/engagement/service"
 	"github.com/company/auto-healing/internal/pkg/response"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/gin-gonic/gin"
@@ -35,13 +34,11 @@ func (h *TenantHandler) InviteToTenant(c *gin.Context) {
 		return
 	}
 
-	settingsRepo := settingsrepo.NewPlatformSettingsRepository()
 	inviterID, err := uuid.Parse(middleware.GetUserID(c))
 	if err != nil {
 		respondInternalError(c, "TENANT", "解析邀请人失败", err)
 		return
 	}
-	invRepo := accessrepo.NewInvitationRepository()
 	invitation := &model.TenantInvitation{
 		TenantID:  tenantID,
 		Email:     req.Email,
@@ -50,15 +47,15 @@ func (h *TenantHandler) InviteToTenant(c *gin.Context) {
 		TokenHash: tokenHash,
 		Status:    model.InvitationStatusPending,
 		InvitedBy: inviterID,
-		ExpiresAt: time.Now().AddDate(0, 0, settingsRepo.GetIntValue(c.Request.Context(), "email.invitation_expire_days", 7)),
+		ExpiresAt: time.Now().AddDate(0, 0, h.settings.GetIntValue(c.Request.Context(), "email.invitation_expire_days", 7)),
 	}
-	if err := invRepo.Create(c.Request.Context(), invitation); err != nil {
+	if err := h.invRepo.Create(c.Request.Context(), invitation); err != nil {
 		response.InternalError(c, "创建邀请失败")
 		return
 	}
 
-	invitationURL := buildInvitationURL(c, settingsRepo, token)
-	invitation, err = invRepo.GetByID(c.Request.Context(), invitation.ID)
+	invitationURL := buildInvitationURL(c, h.settings, token)
+	invitation, err = h.invRepo.GetByID(c.Request.Context(), invitation.ID)
 	if err != nil {
 		respondInvitationLookupError(c, "TENANT", "查询邀请记录失败", err)
 		return
@@ -107,8 +104,7 @@ func (h *TenantHandler) validateTenantInvitationRequest(c *gin.Context, tenantID
 		return nil, nil, false
 	}
 
-	invRepo := accessrepo.NewInvitationRepository()
-	hasPending, err := invRepo.CheckEmailPendingInTenant(c.Request.Context(), tenantID, email)
+	hasPending, err := h.invRepo.CheckEmailPendingInTenant(c.Request.Context(), tenantID, email)
 	if err != nil {
 		respondInternalError(c, "TENANT", "检查待处理邀请失败", err)
 		return nil, nil, false
@@ -165,12 +161,11 @@ func (h *TenantHandler) buildInviteResponse(c *gin.Context, sendEmail bool, emai
 		return resp
 	}
 
-	emailSvc := engagementservice.NewPlatformEmailService()
-	if !emailSvc.IsConfigured(c.Request.Context()) {
+	if !h.emailSvc.IsConfigured(c.Request.Context()) {
 		resp.EmailMessage = "平台邮箱服务未配置，请在平台设置中配置 SMTP 参数，或手动复制链接发送给用户。"
 		return resp
 	}
-	if err := emailSvc.SendInvitationEmail(c.Request.Context(), email, tenantName, roleName, invitationURL); err != nil {
+	if err := h.emailSvc.SendInvitationEmail(c.Request.Context(), email, tenantName, roleName, invitationURL); err != nil {
 		resp.EmailMessage = fmt.Sprintf("邮件发送失败: %s。请手动复制链接发送给用户。", err.Error())
 		return resp
 	}
@@ -193,19 +188,17 @@ func (h *TenantHandler) ListInvitations(c *gin.Context) {
 	status := c.Query("status")
 	page, pageSize := parsePagination(c, 20)
 
-	invRepo := accessrepo.NewInvitationRepository()
-	if _, err := invRepo.ExpireOldInvitations(c.Request.Context()); err != nil {
+	if _, err := h.invRepo.ExpireOldInvitations(c.Request.Context()); err != nil {
 		respondInternalError(c, "TENANT", "更新邀请过期状态失败", err)
 		return
 	}
-	invitations, total, err := invRepo.ListByTenant(c.Request.Context(), tenantID, status, page, pageSize)
+	invitations, total, err := h.invRepo.ListByTenant(c.Request.Context(), tenantID, status, page, pageSize)
 	if err != nil {
 		response.InternalError(c, "查询邀请记录失败")
 		return
 	}
 
-	settingsRepo := settingsrepo.NewPlatformSettingsRepository()
-	baseURL := buildInvitationURL(c, settingsRepo, "")
+	baseURL := buildInvitationURL(c, h.settings, "")
 	baseURL = strings.TrimSuffix(baseURL, "?token=")
 	for i := range invitations {
 		if invitations[i].Status == model.InvitationStatusPending && invitations[i].Token != "" {
@@ -228,8 +221,7 @@ func (h *TenantHandler) CancelInvitation(c *gin.Context) {
 		return
 	}
 
-	invRepo := accessrepo.NewInvitationRepository()
-	inv, err := invRepo.GetByID(c.Request.Context(), invID)
+	inv, err := h.invRepo.GetByID(c.Request.Context(), invID)
 	if err != nil {
 		respondInvitationLookupError(c, "TENANT", "查询邀请失败", err)
 		return
@@ -242,7 +234,7 @@ func (h *TenantHandler) CancelInvitation(c *gin.Context) {
 		response.BadRequest(c, "只能取消待处理的邀请")
 		return
 	}
-	if err := invRepo.UpdateStatus(c.Request.Context(), invID, model.InvitationStatusCancelled); err != nil {
+	if err := h.invRepo.UpdateStatus(c.Request.Context(), invID, model.InvitationStatusCancelled); err != nil {
 		response.InternalError(c, "取消邀请失败")
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/modules/engagement/model"
+	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
 	"github.com/google/uuid"
 )
 
@@ -15,7 +16,7 @@ func TestVariableBuilderBuildFromExecution(t *testing.T) {
 	completedAt := startedAt.Add(2*time.Minute + 5*time.Second)
 	exitCode := 2
 
-	run := &model.ExecutionRun{
+	run := &projection.ExecutionRun{
 		ID:          uuid.New(),
 		Status:      "failed",
 		TriggeredBy: "scheduler-nightly",
@@ -31,17 +32,17 @@ func TestVariableBuilderBuildFromExecution(t *testing.T) {
 			"app-host-1": map[string]interface{}{"failures": float64(1), "unreachable": float64(0)},
 		},
 	}
-	task := &model.ExecutionTask{
+	task := &projection.ExecutionTask{
 		ID:           uuid.New(),
 		Name:         "Deploy App",
 		TargetHosts:  "app-1, app-2, , ",
 		ExecutorType: "docker",
-		Playbook: &model.Playbook{
+		Playbook: &projection.Playbook{
 			ID:       uuid.New(),
 			Name:     "deploy.yml",
 			FilePath: "playbooks/deploy.yml",
 			Status:   "ready",
-			Repository: &model.GitRepository{
+			Repository: &projection.GitRepository{
 				ID:            uuid.New(),
 				Name:          "infra",
 				URL:           "https://git.example/infra.git",

@@ -20,13 +20,6 @@ type CommandBlacklistHandlerDeps struct {
 	Service *opsservice.CommandBlacklistService
 }
 
-// NewCommandBlacklistHandler 创建处理器
-func NewCommandBlacklistHandler() *CommandBlacklistHandler {
-	return NewCommandBlacklistHandlerWithDeps(CommandBlacklistHandlerDeps{
-		Service: opsservice.NewCommandBlacklistService(),
-	})
-}
-
 func NewCommandBlacklistHandlerWithDeps(deps CommandBlacklistHandlerDeps) *CommandBlacklistHandler {
 	return &CommandBlacklistHandler{
 		svc: deps.Service,

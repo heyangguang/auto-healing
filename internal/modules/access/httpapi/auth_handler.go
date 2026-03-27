@@ -3,8 +3,6 @@ package httpapi
 import (
 	"time"
 
-	"github.com/company/auto-healing/internal/config"
-	"github.com/company/auto-healing/internal/database"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
@@ -19,6 +17,8 @@ type AuthHandler struct {
 	auditRepo         *auditrepo.AuditLogRepository
 	platformAuditRepo *auditrepo.PlatformAuditLogRepository
 	userRepo          *accessrepo.UserRepository
+	tenantRepo        *accessrepo.TenantRepository
+	permissionRepo    *accessrepo.PermissionRepository
 }
 
 type AuthHandlerDeps struct {
@@ -27,24 +27,8 @@ type AuthHandlerDeps struct {
 	AuditRepo         *auditrepo.AuditLogRepository
 	PlatformAuditRepo *auditrepo.PlatformAuditLogRepository
 	UserRepo          *accessrepo.UserRepository
-}
-
-// NewAuthHandler 创建认证处理器
-func NewAuthHandler(cfg *config.Config) *AuthHandler {
-	jwtSvc := jwt.NewService(jwt.Config{
-		Secret:          cfg.JWT.Secret,
-		AccessTokenTTL:  cfg.JWT.AccessTokenTTL(),
-		RefreshTokenTTL: cfg.JWT.RefreshTokenTTL(),
-		Issuer:          cfg.JWT.Issuer,
-	}, newAuthTokenBlacklistStore())
-
-	return NewAuthHandlerWithDeps(AuthHandlerDeps{
-		AuthService:       authService.NewService(jwtSvc),
-		JWTService:        jwtSvc,
-		AuditRepo:         auditrepo.NewAuditLogRepository(database.DB),
-		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
-		UserRepo:          accessrepo.NewUserRepository(),
-	})
+	TenantRepo        *accessrepo.TenantRepository
+	PermissionRepo    *accessrepo.PermissionRepository
 }
 
 func NewAuthHandlerWithDeps(deps AuthHandlerDeps) *AuthHandler {
@@ -54,6 +38,8 @@ func NewAuthHandlerWithDeps(deps AuthHandlerDeps) *AuthHandler {
 		auditRepo:         deps.AuditRepo,
 		platformAuditRepo: deps.PlatformAuditRepo,
 		userRepo:          deps.UserRepo,
+		tenantRepo:        deps.TenantRepo,
+		permissionRepo:    deps.PermissionRepo,
 	}
 }
 

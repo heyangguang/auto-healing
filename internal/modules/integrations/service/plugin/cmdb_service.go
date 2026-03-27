@@ -21,10 +21,20 @@ type CMDBService struct {
 
 var ErrCMDBOfflineMaintenanceForbidden = errors.New("已下线的配置项不能进入维护模式")
 
+type CMDBServiceDeps struct {
+	CMDBRepo *cmdbrepo.CMDBItemRepository
+}
+
 // NewCMDBService 创建 CMDB 服务
 func NewCMDBService() *CMDBService {
+	return NewCMDBServiceWithDeps(CMDBServiceDeps{
+		CMDBRepo: cmdbrepo.NewCMDBItemRepository(),
+	})
+}
+
+func NewCMDBServiceWithDeps(deps CMDBServiceDeps) *CMDBService {
 	return &CMDBService{
-		cmdbRepo: cmdbrepo.NewCMDBItemRepository(),
+		cmdbRepo: deps.CMDBRepo,
 	}
 }
 
