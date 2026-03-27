@@ -6,18 +6,16 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
-	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
-	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
-	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func TestDashboardConfigTenantIsolation(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createDashboardSchema(t, db)
 
-	repo := engagementrepo.NewDashboardRepositoryWithDB(db)
+	repo := NewDashboardRepositoryWithDB(db)
 	userID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
@@ -51,7 +49,7 @@ func TestWorkspaceRepositoryUsesCurrentTenantRoles(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createWorkspaceSchema(t, db)
 
-	repo := engagementrepo.NewWorkspaceRepositoryWithDB(db)
+	repo := NewWorkspaceRepositoryWithDB(db)
 	userID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
@@ -109,105 +107,11 @@ func TestWorkspaceRepositoryUsesCurrentTenantRoles(t *testing.T) {
 	}
 }
 
-func TestGetUserTenantsReturnsStableOrder(t *testing.T) {
-	db := newSQLiteTestDB(t)
-	createTenantSchema(t, db)
-
-	repo := accessrepo.NewTenantRepositoryWithDB(db)
-	userID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
-	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
-
-	mustExec(t, db, `INSERT INTO tenants (id, name, code, status) VALUES (?, ?, ?, ?)`, tenantB.String(), "Tenant B", "b", model.TenantStatusActive)
-	mustExec(t, db, `INSERT INTO tenants (id, name, code, status) VALUES (?, ?, ?, ?)`, tenantA.String(), "Tenant A", "a", model.TenantStatusActive)
-	mustExec(t, db, `INSERT INTO user_tenant_roles (id, user_id, tenant_id, role_id, created_at) VALUES (?, ?, ?, ?, ?)`, uuid.NewString(), userID.String(), tenantB.String(), uuid.NewString(), time.Now().UTC().Format(time.RFC3339))
-	mustExec(t, db, `INSERT INTO user_tenant_roles (id, user_id, tenant_id, role_id, created_at) VALUES (?, ?, ?, ?, ?)`, uuid.NewString(), userID.String(), tenantA.String(), uuid.NewString(), time.Now().UTC().Format(time.RFC3339))
-
-	tenants, err := repo.GetUserTenants(context.Background(), userID, "")
-	if err != nil {
-		t.Fatalf("GetUserTenants: %v", err)
-	}
-	if len(tenants) != 2 {
-		t.Fatalf("tenant count = %d, want 2", len(tenants))
-	}
-	if tenants[0].ID != tenantA || tenants[1].ID != tenantB {
-		t.Fatalf("tenant order = [%s, %s], want [%s, %s]", tenants[0].ID, tenants[1].ID, tenantA, tenantB)
-	}
-}
-
-func TestCMDBUpsertPreservesTenantScope(t *testing.T) {
-	db := newSQLiteTestDB(t)
-	createCMDBSchema(t, db)
-
-	repo := cmdbrepo.NewCMDBItemRepositoryWithDB(db)
-	tenantID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
-	pluginID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
-	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
-
-	item := &model.CMDBItem{
-		ID:               uuid.New(),
-		PluginID:         &pluginID,
-		SourcePluginName: "cmdb-sync",
-		ExternalID:       "host-001",
-		Name:             "host-one",
-		Status:           "active",
-		RawData:          model.JSON{"host": "one"},
-	}
-
-	isNew, err := repo.UpsertByExternalID(ctx, item)
-	if err != nil {
-		t.Fatalf("UpsertByExternalID create: %v", err)
-	}
-	if !isNew {
-		t.Fatalf("expected first upsert to create a row")
-	}
-	if item.TenantID == nil || *item.TenantID != tenantID {
-		t.Fatalf("tenant id after create = %v, want %s", item.TenantID, tenantID)
-	}
-
-	var row model.CMDBItem
-	if err := db.Where("external_id = ?", "host-001").First(&row).Error; err != nil {
-		t.Fatalf("query created row: %v", err)
-	}
-	if row.TenantID == nil || *row.TenantID != tenantID {
-		t.Fatalf("stored tenant id = %v, want %s", row.TenantID, tenantID)
-	}
-
-	updated := &model.CMDBItem{
-		PluginID:         &pluginID,
-		SourcePluginName: "cmdb-sync",
-		ExternalID:       "host-001",
-		Name:             "host-one-updated",
-		Status:           "maintenance",
-		Dependencies:     model.JSONArray{},
-		Tags:             model.JSON{},
-		RawData:          model.JSON{"host": "one-updated"},
-	}
-	isNew, err = repo.UpsertByExternalID(ctx, updated)
-	if err != nil {
-		t.Fatalf("UpsertByExternalID update: %v", err)
-	}
-	if isNew {
-		t.Fatalf("expected second upsert to update existing row")
-	}
-
-	scoped, err := repo.GetByID(ctx, row.ID)
-	if err != nil {
-		t.Fatalf("GetByID with tenant scope: %v", err)
-	}
-	if scoped.Name != "host-one-updated" {
-		t.Fatalf("updated name = %s, want host-one-updated", scoped.Name)
-	}
-	if scoped.TenantID == nil || *scoped.TenantID != tenantID {
-		t.Fatalf("tenant id after update = %v, want %s", scoped.TenantID, tenantID)
-	}
-}
-
 func TestDashboardUsersSectionUsesCurrentTenantMembership(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createDashboardUsersSchema(t, db)
 
-	repo := engagementrepo.NewDashboardRepositoryWithDB(db)
+	repo := NewDashboardRepositoryWithDB(db)
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	userA := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
@@ -248,4 +152,106 @@ func TestDashboardUsersSectionUsesCurrentTenantMembership(t *testing.T) {
 	if len(section.RecentLogins) != 1 || section.RecentLogins[0].ID != userA {
 		t.Fatalf("recent logins = %#v, want only tenant A user", section.RecentLogins)
 	}
+}
+
+func createDashboardSchema(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	mustExec(t, db, `
+		CREATE TABLE dashboard_configs (
+			id TEXT PRIMARY KEY NOT NULL DEFAULT (
+				lower(hex(randomblob(4))) || '-' ||
+				lower(hex(randomblob(2))) || '-' ||
+				lower(hex(randomblob(2))) || '-' ||
+				lower(hex(randomblob(2))) || '-' ||
+				lower(hex(randomblob(6)))
+			),
+			user_id TEXT NOT NULL,
+			tenant_id TEXT,
+			config TEXT NOT NULL DEFAULT '{}',
+			created_at DATETIME,
+			updated_at DATETIME
+		);
+	`)
+	mustExec(t, db, `CREATE UNIQUE INDEX idx_dashboard_tenant_user ON dashboard_configs(user_id, tenant_id);`)
+	mustExec(t, db, `CREATE UNIQUE INDEX idx_dashboard_configs_null_tenant_unique ON dashboard_configs(user_id) WHERE tenant_id IS NULL;`)
+}
+
+func createWorkspaceSchema(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	mustExec(t, db, `
+		CREATE TABLE system_workspaces (
+			id TEXT PRIMARY KEY NOT NULL,
+			tenant_id TEXT,
+			name TEXT NOT NULL,
+			description TEXT,
+			config TEXT NOT NULL DEFAULT '{}',
+			is_default BOOLEAN NOT NULL DEFAULT FALSE,
+			created_by TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
+		);
+	`)
+	mustExec(t, db, `
+		CREATE TABLE role_workspaces (
+			id TEXT PRIMARY KEY NOT NULL,
+			tenant_id TEXT,
+			role_id TEXT NOT NULL,
+			workspace_id TEXT NOT NULL,
+			created_at DATETIME
+		);
+	`)
+	mustExec(t, db, `
+		CREATE TABLE user_platform_roles (
+			id TEXT PRIMARY KEY NOT NULL,
+			user_id TEXT NOT NULL,
+			role_id TEXT NOT NULL,
+			created_at DATETIME
+		);
+	`)
+	mustExec(t, db, `
+		CREATE TABLE user_tenant_roles (
+			id TEXT PRIMARY KEY NOT NULL,
+			user_id TEXT NOT NULL,
+			tenant_id TEXT NOT NULL,
+			role_id TEXT NOT NULL,
+			created_at DATETIME
+		);
+	`)
+}
+
+func createDashboardUsersSchema(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	mustExec(t, db, `
+		CREATE TABLE users (
+			id TEXT PRIMARY KEY NOT NULL,
+			username TEXT NOT NULL,
+			email TEXT NOT NULL,
+			display_name TEXT,
+			status TEXT NOT NULL,
+			last_login_at DATETIME,
+			last_login_ip TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
+		);
+	`)
+	mustExec(t, db, `
+		CREATE TABLE roles (
+			id TEXT PRIMARY KEY NOT NULL,
+			name TEXT NOT NULL,
+			display_name TEXT NOT NULL,
+			scope TEXT NOT NULL,
+			tenant_id TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
+		);
+	`)
+	mustExec(t, db, `
+		CREATE TABLE user_tenant_roles (
+			id TEXT PRIMARY KEY NOT NULL,
+			user_id TEXT NOT NULL,
+			tenant_id TEXT NOT NULL,
+			role_id TEXT NOT NULL,
+			created_at DATETIME
+		);
+	`)
 }
