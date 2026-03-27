@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/company/auto-healing/internal/middleware"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
 )

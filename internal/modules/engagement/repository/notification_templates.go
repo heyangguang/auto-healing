@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"

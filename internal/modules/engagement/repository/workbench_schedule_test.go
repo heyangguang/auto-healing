@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 )

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/config"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"gorm.io/gorm"
 )
 

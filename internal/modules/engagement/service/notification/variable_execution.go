@@ -3,7 +3,7 @@ package notification
 import (
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/engagement/model"
 )
 
 const executionOutputMaxLen = 100000

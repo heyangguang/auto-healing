@@ -66,6 +66,7 @@ type ExecutionRun struct {
 	TaskID      uuid.UUID      `json:"task_id"`
 	Status      string         `json:"status"`
 	ExitCode    *int           `json:"exit_code,omitempty"`
+	Stats       JSON           `json:"stats,omitempty" gorm:"type:jsonb;default:'{}'"`
 	Stdout      string         `json:"stdout,omitempty"`
 	Stderr      string         `json:"stderr,omitempty"`
 	TriggeredBy string         `json:"triggered_by,omitempty"`

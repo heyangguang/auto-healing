@@ -3,7 +3,7 @@ package notification
 import (
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/engagement/model"
 )
 
 const (

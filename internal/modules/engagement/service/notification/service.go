@@ -5,8 +5,8 @@ import (
 	"errors"
 
 	"github.com/company/auto-healing/internal/config"
-	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	"github.com/company/auto-healing/internal/modules/engagement/model"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/modules/engagement/service/notification/provider"
 	"github.com/company/auto-healing/internal/pkg/query"

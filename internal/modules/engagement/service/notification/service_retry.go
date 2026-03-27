@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/company/auto-healing/internal/modules/engagement/service/notification/provider"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"gorm.io/gorm"

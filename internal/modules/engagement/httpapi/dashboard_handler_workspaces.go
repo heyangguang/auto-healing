@@ -4,8 +4,8 @@ import (
 	"errors"
 
 	"github.com/company/auto-healing/internal/middleware"
-	"github.com/company/auto-healing/internal/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
+	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
