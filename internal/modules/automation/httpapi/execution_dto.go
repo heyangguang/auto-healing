@@ -1,4 +1,4 @@
-package handler
+package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/model"

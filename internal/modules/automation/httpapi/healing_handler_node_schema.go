@@ -1,4 +1,4 @@
-package handler
+package httpapi
 
 func healingNodeSchema() map[string]interface{} {
 	return map[string]interface{}{

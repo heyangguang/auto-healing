@@ -2,7 +2,7 @@ package automation
 
 import (
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/handler"
+	automationhttp "github.com/company/auto-healing/internal/modules/automation/httpapi"
 	executionSvc "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	healingSvc "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	scheduleSvc "github.com/company/auto-healing/internal/modules/automation/service/schedule"
@@ -12,9 +12,9 @@ import (
 
 // Module 聚合 automation 域处理器构造。
 type Module struct {
-	Execution *handler.ExecutionHandler
-	Healing   *handler.HealingHandler
-	Schedule  *handler.ScheduleHandler
+	Execution *automationhttp.ExecutionHandler
+	Healing   *automationhttp.HealingHandler
+	Schedule  *automationhttp.ScheduleHandler
 }
 
 // New 创建 automation 域模块。
@@ -23,10 +23,10 @@ func New() *Module {
 	scheduleService := scheduleSvc.NewService()
 	scheduler := healingSvc.DefaultScheduler()
 	module := &Module{
-		Execution: handler.NewExecutionHandlerWithDeps(handler.ExecutionHandlerDeps{
+		Execution: automationhttp.NewExecutionHandlerWithDeps(automationhttp.ExecutionHandlerDeps{
 			Service: executionService,
 		}),
-		Healing: handler.NewHealingHandlerWithDeps(handler.HealingHandlerDeps{
+		Healing: automationhttp.NewHealingHandlerWithDeps(automationhttp.HealingHandlerDeps{
 			FlowRepo:         repository.NewHealingFlowRepository(),
 			RuleRepo:         repository.NewHealingRuleRepository(),
 			InstanceRepo:     repository.NewFlowInstanceRepository(),
@@ -36,7 +36,7 @@ func New() *Module {
 			Executor:         scheduler.Executor(),
 			Scheduler:        scheduler,
 		}),
-		Schedule: handler.NewScheduleHandlerWithDeps(handler.ScheduleHandlerDeps{
+		Schedule: automationhttp.NewScheduleHandlerWithDeps(automationhttp.ScheduleHandlerDeps{
 			Service: scheduleService,
 		}),
 	}

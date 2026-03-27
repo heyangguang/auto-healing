@@ -1,11 +1,12 @@
 package handler
 
 import (
+	automationhttp "github.com/company/auto-healing/internal/modules/automation/httpapi"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
 
-func registerTenantExecutionRunRoutes(runs *gin.RouterGroup, execution *ExecutionHandler) {
+func registerTenantExecutionRunRoutes(runs *gin.RouterGroup, execution *automationhttp.ExecutionHandler) {
 	runs.GET("", middleware.RequirePermission("task:list"), execution.ListAllRuns)
 	runs.GET("/stats", middleware.RequirePermission("task:list"), execution.GetRunStats)
 	runs.GET("/search-schema", middleware.RequirePermission("task:list"), execution.GetRunSearchSchema)
@@ -19,7 +20,7 @@ func registerTenantExecutionRunRoutes(runs *gin.RouterGroup, execution *Executio
 	runs.POST("/:id/cancel", middleware.RequirePermission("task:cancel"), execution.CancelRun)
 }
 
-func registerTenantHealingInstanceRoutes(instances *gin.RouterGroup, healing *HealingHandler) {
+func registerTenantHealingInstanceRoutes(instances *gin.RouterGroup, healing *automationhttp.HealingHandler) {
 	instances.GET("/search-schema", middleware.RequirePermission("healing:instances:view"), healing.GetInstanceSearchSchema)
 	instances.GET("", middleware.RequirePermission("healing:instances:view"), healing.ListInstances)
 	instances.GET("/stats", middleware.RequirePermission("healing:instances:view"), healing.GetInstanceStats)
@@ -29,7 +30,7 @@ func registerTenantHealingInstanceRoutes(instances *gin.RouterGroup, healing *He
 	instances.GET("/:id/events", middleware.RequirePermission("healing:instances:view"), healing.InstanceEvents)
 }
 
-func registerTenantIncidentRoutes(incidents *gin.RouterGroup, plugin *PluginHandler, healing *HealingHandler) {
+func registerTenantIncidentRoutes(incidents *gin.RouterGroup, plugin *PluginHandler, healing *automationhttp.HealingHandler) {
 	incidents.GET("/stats", middleware.RequirePermission("plugin:list"), plugin.GetIncidentStats)
 	incidents.GET("/search-schema", middleware.RequirePermission("plugin:list"), plugin.GetIncidentSearchSchema)
 	incidents.GET("", middleware.RequirePermission("plugin:list"), plugin.ListIncidents)
