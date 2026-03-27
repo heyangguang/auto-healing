@@ -1,15 +1,13 @@
 package httpapi
 
-import "github.com/company/auto-healing/internal/handler"
-
 type Dependencies struct {
-	Activity     *handler.UserActivityHandler
-	Dashboard    *handler.DashboardHandler
-	Notification *handler.NotificationHandler
-	Preference   *handler.PreferenceHandler
-	Search       *handler.SearchHandler
-	SiteMessage  *handler.SiteMessageHandler
-	Workbench    *handler.WorkbenchHandler
+	Activity     *UserActivityHandler
+	Dashboard    *DashboardHandler
+	Notification *NotificationHandler
+	Preference   *PreferenceHandler
+	Search       *SearchHandler
+	SiteMessage  *SiteMessageHandler
+	Workbench    *WorkbenchHandler
 }
 
 type Registrar struct {

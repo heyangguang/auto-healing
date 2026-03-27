@@ -6,19 +6,19 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/handler"
+	opshttp "github.com/company/auto-healing/internal/modules/ops/httpapi"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/repository"
 )
 
 // Module 聚合 ops 域处理器构造。
 type Module struct {
-	Audit              *handler.AuditHandler
-	PlatformAudit      *handler.PlatformAuditHandler
-	PlatformSettings   *handler.PlatformSettingsHandler
-	Dictionary         *handler.DictionaryHandler
-	CommandBlacklist   *handler.CommandBlacklistHandler
-	BlacklistExemption *handler.BlacklistExemptionHandler
+	Audit              *opshttp.AuditHandler
+	PlatformAudit      *opshttp.PlatformAuditHandler
+	PlatformSettings   *opshttp.PlatformSettingsHandler
+	Dictionary         *opshttp.DictionaryHandler
+	CommandBlacklist   *opshttp.CommandBlacklistHandler
+	BlacklistExemption *opshttp.BlacklistExemptionHandler
 }
 
 // New 创建 ops 域模块。
@@ -31,22 +31,22 @@ func New() *Module {
 	}
 
 	return &Module{
-		Audit: handler.NewAuditHandlerWithDeps(handler.AuditHandlerDeps{
+		Audit: opshttp.NewAuditHandlerWithDeps(opshttp.AuditHandlerDeps{
 			Repo: repository.NewAuditLogRepository(database.DB),
 		}),
-		PlatformAudit: handler.NewPlatformAuditHandlerWithDeps(handler.PlatformAuditHandlerDeps{
+		PlatformAudit: opshttp.NewPlatformAuditHandlerWithDeps(opshttp.PlatformAuditHandlerDeps{
 			Repo: repository.NewPlatformAuditLogRepository(),
 		}),
-		PlatformSettings: handler.NewPlatformSettingsHandlerWithDeps(handler.PlatformSettingsHandlerDeps{
+		PlatformSettings: opshttp.NewPlatformSettingsHandlerWithDeps(opshttp.PlatformSettingsHandlerDeps{
 			Repo: repository.NewPlatformSettingsRepository(),
 		}),
-		Dictionary: handler.NewDictionaryHandlerWithDeps(handler.DictionaryHandlerDeps{
+		Dictionary: opshttp.NewDictionaryHandlerWithDeps(opshttp.DictionaryHandlerDeps{
 			Service: dictSvc,
 		}),
-		CommandBlacklist: handler.NewCommandBlacklistHandlerWithDeps(handler.CommandBlacklistHandlerDeps{
+		CommandBlacklist: opshttp.NewCommandBlacklistHandlerWithDeps(opshttp.CommandBlacklistHandlerDeps{
 			Service: opsservice.NewCommandBlacklistService(),
 		}),
-		BlacklistExemption: handler.NewBlacklistExemptionHandlerWithDeps(handler.BlacklistExemptionHandlerDeps{
+		BlacklistExemption: opshttp.NewBlacklistExemptionHandlerWithDeps(opshttp.BlacklistExemptionHandlerDeps{
 			Service:       opsservice.NewBlacklistExemptionService(),
 			TaskRepo:      repository.NewExecutionRepository(),
 			BlacklistRepo: repository.NewCommandBlacklistRepository(),

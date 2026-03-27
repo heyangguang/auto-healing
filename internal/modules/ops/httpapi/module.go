@@ -1,14 +1,12 @@
 package httpapi
 
-import "github.com/company/auto-healing/internal/handler"
-
 type Dependencies struct {
-	Audit              *handler.AuditHandler
-	BlacklistExemption *handler.BlacklistExemptionHandler
-	CommandBlacklist   *handler.CommandBlacklistHandler
-	Dictionary         *handler.DictionaryHandler
-	PlatformAudit      *handler.PlatformAuditHandler
-	PlatformSettings   *handler.PlatformSettingsHandler
+	Audit              *AuditHandler
+	BlacklistExemption *BlacklistExemptionHandler
+	CommandBlacklist   *CommandBlacklistHandler
+	Dictionary         *DictionaryHandler
+	PlatformAudit      *PlatformAuditHandler
+	PlatformSettings   *PlatformSettingsHandler
 }
 
 type Registrar struct {

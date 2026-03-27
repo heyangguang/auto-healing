@@ -1,12 +1,10 @@
 package httpapi
 
-import "github.com/company/auto-healing/internal/handler"
-
 type Dependencies struct {
-	CMDB     *handler.CMDBHandler
-	GitRepo  *handler.GitRepoHandler
-	Playbook *handler.PlaybookHandler
-	Plugin   *handler.PluginHandler
+	CMDB     *CMDBHandler
+	GitRepo  *GitRepoHandler
+	Playbook *PlaybookHandler
+	Plugin   *PluginHandler
 }
 
 type Registrar struct {

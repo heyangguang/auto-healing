@@ -1,9 +1,7 @@
 package httpapi
 
-import "github.com/company/auto-healing/internal/handler"
-
 type Dependencies struct {
-	Secrets *handler.SecretsHandler
+	Secrets *SecretsHandler
 }
 
 type Registrar struct {

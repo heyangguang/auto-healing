@@ -1,19 +1,19 @@
 package secrets
 
 import (
-	"github.com/company/auto-healing/internal/handler"
+	secretshttp "github.com/company/auto-healing/internal/modules/secrets/httpapi"
 	secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 )
 
 // Module 聚合 secrets 域处理器构造。
 type Module struct {
-	Secrets *handler.SecretsHandler
+	Secrets *secretshttp.SecretsHandler
 }
 
 // New 创建 secrets 域模块。
 func New() *Module {
 	return &Module{
-		Secrets: handler.NewSecretsHandlerWithDeps(handler.SecretsHandlerDeps{
+		Secrets: secretshttp.NewSecretsHandlerWithDeps(secretshttp.SecretsHandlerDeps{
 			Service: secretsSvc.NewService(),
 		}),
 	}
