@@ -62,16 +62,3 @@ func New(cfg *config.Config) *Module {
 		}),
 	}
 }
-
-// Overrides 将 access 域处理器注入全局 handler 构造。
-func (m *Module) Overrides() handler.HandlerOverrides {
-	return handler.HandlerOverrides{
-		Auth:          m.Auth,
-		User:          m.User,
-		TenantUser:    m.TenantUser,
-		Role:          m.Role,
-		Permission:    m.Permission,
-		Tenant:        m.Tenant,
-		Impersonation: m.Impersonation,
-	}
-}
