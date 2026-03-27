@@ -1,4 +1,4 @@
-package provider
+package schedulerx
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-func TestSchedulerLifecycleStopWaitsForWorker(t *testing.T) {
-	lifecycle := newSchedulerLifecycle()
+func TestLifecycleStopWaitsForWorker(t *testing.T) {
+	lifecycle := NewLifecycle()
 	started := make(chan struct{})
 	stopped := make(chan struct{})
 
@@ -32,8 +32,8 @@ func TestSchedulerLifecycleStopWaitsForWorker(t *testing.T) {
 	}
 }
 
-func TestSchedulerLifecycleGoAfterStopDoesNotStartWorker(t *testing.T) {
-	lifecycle := newSchedulerLifecycle()
+func TestLifecycleGoAfterStopDoesNotStartWorker(t *testing.T) {
+	lifecycle := NewLifecycle()
 	lifecycle.Stop()
 
 	started := make(chan struct{}, 1)

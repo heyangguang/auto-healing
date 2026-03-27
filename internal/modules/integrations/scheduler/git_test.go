@@ -1,4 +1,4 @@
-package provider
+package scheduler
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	schedulerx "github.com/company/auto-healing/internal/platform/schedulerx"
 	"github.com/google/uuid"
 )
 
@@ -46,7 +47,7 @@ func TestGitSchedulerStopWaitsForSyncWorker(t *testing.T) {
 
 func TestGitSchedulerDispatchAfterStopDoesNotRunWorker(t *testing.T) {
 	scheduler := NewGitScheduler()
-	scheduler.lifecycle = newSchedulerLifecycle()
+	scheduler.lifecycle = schedulerx.NewLifecycle()
 	scheduler.running = true
 
 	scheduler.Stop()
@@ -67,7 +68,7 @@ func TestGitSchedulerDispatchAfterStopDoesNotRunWorker(t *testing.T) {
 
 func TestGitSchedulerDoesNotDispatchSameRepoTwiceWhileInFlight(t *testing.T) {
 	scheduler := NewGitScheduler()
-	scheduler.lifecycle = newSchedulerLifecycle()
+	scheduler.lifecycle = schedulerx.NewLifecycle()
 	defer scheduler.lifecycle.Stop()
 
 	repoID := uuid.New()

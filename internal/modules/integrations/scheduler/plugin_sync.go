@@ -1,4 +1,4 @@
-package provider
+package scheduler
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 )
 
 // syncPlugin 同步单个插件
-func (s *Scheduler) syncPlugin(ctx context.Context, plugin model.Plugin) {
+func (s *PluginScheduler) syncPlugin(ctx context.Context, plugin model.Plugin) {
 	startTime := s.now()
 	shortID := plugin.ID.String()[:8]
 	logger.Sched("SYNC").Info("[%s] 开始同步: %s", shortID, plugin.Name)
@@ -28,7 +28,7 @@ func (s *Scheduler) syncPlugin(ctx context.Context, plugin model.Plugin) {
 	s.handlePluginSyncResult(ctx, plugin, syncLog, shortID, nextSyncAt, completedAt.Sub(startTime))
 }
 
-func (s *Scheduler) handlePluginSyncError(ctx context.Context, plugin model.Plugin, shortID string, nextSyncAt time.Time, err error) {
+func (s *PluginScheduler) handlePluginSyncError(ctx context.Context, plugin model.Plugin, shortID string, nextSyncAt time.Time, err error) {
 	newCount := plugin.ConsecutiveFailures + 1
 	updates := map[string]interface{}{
 		"consecutive_failures": newCount,
@@ -58,7 +58,7 @@ func (s *Scheduler) handlePluginSyncError(ctx context.Context, plugin model.Plug
 	}
 }
 
-func (s *Scheduler) handlePluginSyncResult(ctx context.Context, plugin model.Plugin, syncLog *model.PluginSyncLog, shortID string, nextSyncAt time.Time, duration time.Duration) {
+func (s *PluginScheduler) handlePluginSyncResult(ctx context.Context, plugin model.Plugin, syncLog *model.PluginSyncLog, shortID string, nextSyncAt time.Time, duration time.Duration) {
 	if syncLog.Status != "success" {
 		s.handlePluginSyncStatusError(ctx, plugin, syncLog, shortID, nextSyncAt, duration)
 		return
@@ -90,7 +90,7 @@ func (s *Scheduler) handlePluginSyncResult(ctx context.Context, plugin model.Plu
 	)
 }
 
-func (s *Scheduler) handlePluginSyncStatusError(ctx context.Context, plugin model.Plugin, syncLog *model.PluginSyncLog, shortID string, nextSyncAt time.Time, duration time.Duration) {
+func (s *PluginScheduler) handlePluginSyncStatusError(ctx context.Context, plugin model.Plugin, syncLog *model.PluginSyncLog, shortID string, nextSyncAt time.Time, duration time.Duration) {
 	newCount := plugin.ConsecutiveFailures + 1
 	updates := map[string]interface{}{
 		"consecutive_failures": newCount,
@@ -127,7 +127,7 @@ func (s *Scheduler) handlePluginSyncStatusError(ctx context.Context, plugin mode
 	}
 }
 
-func (s *Scheduler) updatePluginSyncState(ctx context.Context, pluginID interface{}, updates map[string]interface{}) error {
+func (s *PluginScheduler) updatePluginSyncState(ctx context.Context, pluginID interface{}, updates map[string]interface{}) error {
 	return s.db.WithContext(ctx).Model(&model.Plugin{}).Where("id = ?", pluginID).Updates(updates).Error
 }
 

@@ -1,4 +1,4 @@
-package provider
+package scheduler
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	executionService "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	scheduleService "github.com/company/auto-healing/internal/modules/automation/service/schedule"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	platformsched "github.com/company/auto-healing/internal/platform/schedulerx"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -27,8 +28,8 @@ type ExecutionScheduler struct {
 	scheduleRepo          *automationrepo.ScheduleRepository
 	db                    *gorm.DB
 	interval              time.Duration
-	lifecycle             *schedulerLifecycle
-	inFlight              *inFlightSet
+	lifecycle             *platformsched.Lifecycle
+	inFlight              *platformsched.InFlightSet
 	running               bool
 	mu                    sync.Mutex
 	sem                   chan struct{}
@@ -57,7 +58,7 @@ func NewExecutionScheduler() *ExecutionScheduler {
 		scheduleRepo: automationrepo.NewScheduleRepository(),
 		db:           database.DB,
 		interval:     30 * time.Second,
-		inFlight:     newInFlightSet(),
+		inFlight:     platformsched.NewInFlightSet(),
 		sem:          make(chan struct{}, 8),
 	}
 	s.loadDueSchedules = s.scheduleRepo.GetDueSchedules
@@ -80,8 +81,8 @@ func (s *ExecutionScheduler) Start() {
 		s.mu.Unlock()
 		return
 	}
-	if s.lifecycle == nil || s.lifecycle.ctx.Err() != nil {
-		s.lifecycle = newSchedulerLifecycle()
+	if s.lifecycle == nil || s.lifecycle.Context().Err() != nil {
+		s.lifecycle = platformsched.NewLifecycle()
 	}
 	lifecycle := s.lifecycle
 	s.running = true
@@ -164,7 +165,7 @@ func (s *ExecutionScheduler) checkAndExecute(ctx context.Context) {
 	}
 }
 
-func (s *ExecutionScheduler) dispatchScheduledExecution(lifecycle *schedulerLifecycle, schedule model.ExecutionSchedule) bool {
+func (s *ExecutionScheduler) dispatchScheduledExecution(lifecycle *platformsched.Lifecycle, schedule model.ExecutionSchedule) bool {
 	if lifecycle == nil {
 		s.releaseSemaphoreToken()
 		return false
@@ -263,7 +264,7 @@ func (s *ExecutionScheduler) waitForRunTerminalStatus(ctx context.Context, runID
 	}
 }
 
-func (s *ExecutionScheduler) lifecycleSnapshot() *schedulerLifecycle {
+func (s *ExecutionScheduler) lifecycleSnapshot() *platformsched.Lifecycle {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.lifecycle

@@ -1,4 +1,4 @@
-package provider
+package schedulerx
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestInFlightSetRetainKeepsEntryUntilFinalFinish(t *testing.T) {
-	set := newInFlightSet()
+	set := NewInFlightSet()
 	id := uuid.New()
 
 	if !set.Start(id) {

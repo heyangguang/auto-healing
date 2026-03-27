@@ -1,14 +1,11 @@
-package provider
+package schedulerx
 
 import (
 	"context"
 	"sync"
-
-	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
-	"github.com/google/uuid"
 )
 
-type schedulerLifecycle struct {
+type Lifecycle struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
@@ -16,15 +13,19 @@ type schedulerLifecycle struct {
 	stopped bool
 }
 
-func newSchedulerLifecycle() *schedulerLifecycle {
+func NewLifecycle() *Lifecycle {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &schedulerLifecycle{
+	return &Lifecycle{
 		ctx:    ctx,
 		cancel: cancel,
 	}
 }
 
-func (l *schedulerLifecycle) Go(fn func(context.Context)) bool {
+func (l *Lifecycle) Context() context.Context {
+	return l.ctx
+}
+
+func (l *Lifecycle) Go(fn func(context.Context)) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.stopped || l.ctx.Err() != nil {
@@ -38,7 +39,7 @@ func (l *schedulerLifecycle) Go(fn func(context.Context)) bool {
 	return true
 }
 
-func (l *schedulerLifecycle) Stop() {
+func (l *Lifecycle) Stop() {
 	l.mu.Lock()
 	if l.stopped {
 		l.mu.Unlock()
@@ -50,11 +51,4 @@ func (l *schedulerLifecycle) Stop() {
 
 	cancel()
 	l.wg.Wait()
-}
-
-func withTenantContext(ctx context.Context, tenantID *uuid.UUID) context.Context {
-	if tenantID == nil {
-		return ctx
-	}
-	return platformrepo.WithTenantID(ctx, *tenantID)
 }

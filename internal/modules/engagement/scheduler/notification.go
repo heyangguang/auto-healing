@@ -1,4 +1,4 @@
-package provider
+package scheduler
 
 import (
 	"context"
@@ -9,13 +9,14 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	schedulerx "github.com/company/auto-healing/internal/platform/schedulerx"
 )
 
 // NotificationRetryScheduler 通知失败重试调度器
 type NotificationRetryScheduler struct {
 	notifSvc  *notification.Service
 	interval  time.Duration
-	lifecycle *schedulerLifecycle
+	lifecycle *schedulerx.Lifecycle
 	running   bool
 	mu        sync.Mutex
 	retryFunc func(context.Context) error
@@ -34,7 +35,7 @@ func NewNotificationRetryScheduler() *NotificationRetryScheduler {
 	return &NotificationRetryScheduler{
 		notifSvc:  notifSvc,
 		interval:  interval,
-		lifecycle: newSchedulerLifecycle(),
+		lifecycle: schedulerx.NewLifecycle(),
 		retryFunc: notifSvc.RetryFailed,
 	}
 }
@@ -46,8 +47,8 @@ func (s *NotificationRetryScheduler) Start() {
 		s.mu.Unlock()
 		return
 	}
-	if s.lifecycle == nil || s.lifecycle.ctx.Err() != nil {
-		s.lifecycle = newSchedulerLifecycle()
+	if s.lifecycle == nil || s.lifecycle.Context().Err() != nil {
+		s.lifecycle = schedulerx.NewLifecycle()
 	}
 	lifecycle := s.lifecycle
 	s.running = true
@@ -77,7 +78,6 @@ func (s *NotificationRetryScheduler) run(ctx context.Context) {
 	defer ticker.Stop()
 
 	s.retryOnce(ctx)
-
 	for {
 		select {
 		case <-ctx.Done():

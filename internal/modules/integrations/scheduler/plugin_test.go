@@ -1,4 +1,4 @@
-package provider
+package scheduler
 
 import (
 	"context"
@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	schedulerx "github.com/company/auto-healing/internal/platform/schedulerx"
 	"github.com/google/uuid"
 )
 
 func TestPluginSchedulerStopWaitsForSyncWorker(t *testing.T) {
-	scheduler := NewScheduler()
+	scheduler := NewPluginScheduler()
 	scheduler.interval = time.Hour
 
 	workerStarted := make(chan struct{})
@@ -46,8 +47,8 @@ func TestPluginSchedulerStopWaitsForSyncWorker(t *testing.T) {
 }
 
 func TestPluginSchedulerDispatchAfterStopDoesNotRunWorker(t *testing.T) {
-	scheduler := NewScheduler()
-	scheduler.lifecycle = newSchedulerLifecycle()
+	scheduler := NewPluginScheduler()
+	scheduler.lifecycle = schedulerx.NewLifecycle()
 	scheduler.running = true
 
 	scheduler.Stop()
@@ -67,8 +68,8 @@ func TestPluginSchedulerDispatchAfterStopDoesNotRunWorker(t *testing.T) {
 }
 
 func TestPluginSchedulerDoesNotDispatchSamePluginTwiceWhileInFlight(t *testing.T) {
-	scheduler := NewScheduler()
-	scheduler.lifecycle = newSchedulerLifecycle()
+	scheduler := NewPluginScheduler()
+	scheduler.lifecycle = schedulerx.NewLifecycle()
 	defer scheduler.lifecycle.Stop()
 
 	pluginID := uuid.New()
@@ -98,7 +99,7 @@ func TestPluginSchedulerDoesNotDispatchSamePluginTwiceWhileInFlight(t *testing.T
 }
 
 func TestPluginSchedulerSyncUsesCompletionTimeForNextSyncAt(t *testing.T) {
-	scheduler := NewScheduler()
+	scheduler := NewPluginScheduler()
 	pluginID := uuid.New()
 	base := time.Date(2026, 3, 26, 10, 0, 0, 0, time.UTC)
 	plugin := model.Plugin{

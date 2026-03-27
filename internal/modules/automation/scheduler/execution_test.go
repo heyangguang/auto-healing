@@ -1,4 +1,4 @@
-package provider
+package scheduler
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	executionService "github.com/company/auto-healing/internal/modules/automation/service/execution"
+	platformsched "github.com/company/auto-healing/internal/platform/schedulerx"
 	"github.com/google/uuid"
 )
 
@@ -67,7 +68,7 @@ func TestExecutionSchedulerStopWaitsForScheduledWorker(t *testing.T) {
 
 func TestExecutionSchedulerDispatchAfterStopDoesNotRunWorkerOrLeakSemaphore(t *testing.T) {
 	scheduler := NewExecutionScheduler()
-	scheduler.lifecycle = newSchedulerLifecycle()
+	scheduler.lifecycle = platformsched.NewLifecycle()
 	scheduler.running = true
 
 	scheduler.Stop()
@@ -93,7 +94,7 @@ func TestExecutionSchedulerDispatchAfterStopDoesNotRunWorkerOrLeakSemaphore(t *t
 
 func TestExecutionSchedulerDoesNotDispatchSameScheduleTwiceWhileInFlight(t *testing.T) {
 	scheduler := NewExecutionScheduler()
-	scheduler.lifecycle = newSchedulerLifecycle()
+	scheduler.lifecycle = platformsched.NewLifecycle()
 	defer scheduler.lifecycle.Stop()
 
 	scheduleID := uuid.New()

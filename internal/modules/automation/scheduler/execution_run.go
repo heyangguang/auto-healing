@@ -1,4 +1,4 @@
-package provider
+package scheduler
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	executionService "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
+	platformsched "github.com/company/auto-healing/internal/platform/schedulerx"
 	"github.com/google/uuid"
 )
 
@@ -64,10 +64,7 @@ func (s *ExecutionScheduler) executeSchedule(ctx context.Context, sched model.Ex
 }
 
 func scheduleTenantContext(ctx context.Context, sched model.ExecutionSchedule) context.Context {
-	if sched.TenantID == nil {
-		return ctx
-	}
-	return platformrepo.WithTenantID(ctx, *sched.TenantID)
+	return platformsched.WithTenantContext(ctx, sched.TenantID)
 }
 
 func buildExecutionOptions(sched model.ExecutionSchedule) (*executionService.ExecuteOptions, error) {
@@ -217,4 +214,11 @@ func (s *ExecutionScheduler) handleScheduledExecutionSuccess(ctx, tenantCtx cont
 		}
 	}
 	return nil
+}
+
+func truncateStr(value string, maxLen int) string {
+	if len(value) <= maxLen {
+		return value
+	}
+	return value[:maxLen] + "..."
 }

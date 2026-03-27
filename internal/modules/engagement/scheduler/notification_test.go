@@ -1,4 +1,4 @@
-package provider
+package scheduler
 
 import (
 	"context"
@@ -6,17 +6,17 @@ import (
 	"time"
 )
 
-func TestBlacklistExemptionSchedulerStopWaitsForExpireRun(t *testing.T) {
-	scheduler := NewBlacklistExemptionScheduler()
+func TestNotificationRetrySchedulerStopWaitsForRetryRun(t *testing.T) {
+	scheduler := NewNotificationRetryScheduler()
 	scheduler.interval = time.Hour
 
 	started := make(chan struct{})
 	stopped := make(chan struct{})
-	scheduler.expireFunc = func(ctx context.Context) (int64, error) {
+	scheduler.retryFunc = func(ctx context.Context) error {
 		close(started)
 		<-ctx.Done()
 		close(stopped)
-		return 0, nil
+		return nil
 	}
 
 	scheduler.Start()
@@ -24,7 +24,7 @@ func TestBlacklistExemptionSchedulerStopWaitsForExpireRun(t *testing.T) {
 	select {
 	case <-started:
 	case <-time.After(time.Second):
-		t.Fatal("expire run did not start")
+		t.Fatal("retry run did not start")
 	}
 
 	scheduler.Stop()
@@ -32,6 +32,6 @@ func TestBlacklistExemptionSchedulerStopWaitsForExpireRun(t *testing.T) {
 	select {
 	case <-stopped:
 	case <-time.After(time.Second):
-		t.Fatal("expire run did not stop before Stop returned")
+		t.Fatal("retry run did not stop before Stop returned")
 	}
 }

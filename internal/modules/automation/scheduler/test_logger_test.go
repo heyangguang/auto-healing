@@ -1,4 +1,4 @@
-package provider
+package scheduler
 
 import (
 	"github.com/company/auto-healing/internal/config"

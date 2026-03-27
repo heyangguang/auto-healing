@@ -1,4 +1,4 @@
-package provider
+package schedulerx
 
 import (
 	"sync"
@@ -6,16 +6,16 @@ import (
 	"github.com/google/uuid"
 )
 
-type inFlightSet struct {
+type InFlightSet struct {
 	mu  sync.Mutex
 	ids map[uuid.UUID]int
 }
 
-func newInFlightSet() *inFlightSet {
-	return &inFlightSet{ids: make(map[uuid.UUID]int)}
+func NewInFlightSet() *InFlightSet {
+	return &InFlightSet{ids: make(map[uuid.UUID]int)}
 }
 
-func (s *inFlightSet) Start(id uuid.UUID) bool {
+func (s *InFlightSet) Start(id uuid.UUID) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.ids[id] > 0 {
@@ -25,7 +25,7 @@ func (s *inFlightSet) Start(id uuid.UUID) bool {
 	return true
 }
 
-func (s *inFlightSet) Retain(id uuid.UUID) bool {
+func (s *InFlightSet) Retain(id uuid.UUID) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.ids[id] == 0 {
@@ -35,7 +35,7 @@ func (s *inFlightSet) Retain(id uuid.UUID) bool {
 	return true
 }
 
-func (s *inFlightSet) Finish(id uuid.UUID) {
+func (s *InFlightSet) Finish(id uuid.UUID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.ids[id] <= 1 {

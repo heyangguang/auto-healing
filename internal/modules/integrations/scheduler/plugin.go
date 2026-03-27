@@ -1,4 +1,4 @@
-package provider
+package scheduler
 
 import (
 	"context"
@@ -10,20 +10,21 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	pluginService "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	schedulerx "github.com/company/auto-healing/internal/platform/schedulerx"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 const pluginClaimLease = 40 * time.Minute
 
-// Scheduler 定时调度器
-type Scheduler struct {
+// PluginScheduler 插件同步调度器
+type PluginScheduler struct {
 	pluginSvc               *pluginService.Service
 	cmdbSvc                 *pluginService.CMDBService
 	db                      *gorm.DB
 	interval                time.Duration
-	lifecycle               *schedulerLifecycle
-	inFlight                *inFlightSet
+	lifecycle               *schedulerx.Lifecycle
+	inFlight                *schedulerx.InFlightSet
 	now                     func() time.Time
 	running                 bool
 	mu                      sync.Mutex
@@ -36,14 +37,14 @@ type Scheduler struct {
 	claimPluginSync         func(context.Context, model.Plugin) (bool, error)
 }
 
-// NewScheduler 创建调度器
-func NewScheduler() *Scheduler {
-	s := &Scheduler{
+// NewPluginScheduler 创建调度器
+func NewPluginScheduler() *PluginScheduler {
+	s := &PluginScheduler{
 		pluginSvc: pluginService.NewService(),
 		cmdbSvc:   pluginService.NewCMDBService(),
 		db:        database.DB,
 		interval:  30 * time.Second,
-		inFlight:  newInFlightSet(),
+		inFlight:  schedulerx.NewInFlightSet(),
 		now:       time.Now,
 	}
 	s.loadPluginsNeedSync = s.getPluginsNeedSync
@@ -56,14 +57,14 @@ func NewScheduler() *Scheduler {
 }
 
 // Start 启动调度器
-func (s *Scheduler) Start() {
+func (s *PluginScheduler) Start() {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
 		return
 	}
-	if s.lifecycle == nil || s.lifecycle.ctx.Err() != nil {
-		s.lifecycle = newSchedulerLifecycle()
+	if s.lifecycle == nil || s.lifecycle.Context().Err() != nil {
+		s.lifecycle = schedulerx.NewLifecycle()
 	}
 	lifecycle := s.lifecycle
 	s.running = true
@@ -74,7 +75,7 @@ func (s *Scheduler) Start() {
 }
 
 // Stop 停止调度器
-func (s *Scheduler) Stop() {
+func (s *PluginScheduler) Stop() {
 	s.mu.Lock()
 	if !s.running {
 		s.mu.Unlock()
@@ -91,7 +92,7 @@ func (s *Scheduler) Stop() {
 }
 
 // run 调度器主循环
-func (s *Scheduler) run(ctx context.Context) {
+func (s *PluginScheduler) run(ctx context.Context) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
@@ -108,7 +109,7 @@ func (s *Scheduler) run(ctx context.Context) {
 }
 
 // checkAndSync 检查并执行需要同步的插件
-func (s *Scheduler) checkAndSync(ctx context.Context) {
+func (s *PluginScheduler) checkAndSync(ctx context.Context) {
 	if count, err := s.checkExpiredMaintenance(ctx); err != nil {
 		logger.Sched("SYNC").Warn("检查维护到期失败: %v", err)
 	} else if count > 0 {
@@ -142,7 +143,7 @@ func (s *Scheduler) checkAndSync(ctx context.Context) {
 	}
 }
 
-func (s *Scheduler) dispatchPluginSync(lifecycle *schedulerLifecycle, plugin model.Plugin) bool {
+func (s *PluginScheduler) dispatchPluginSync(lifecycle *schedulerx.Lifecycle, plugin model.Plugin) bool {
 	if lifecycle == nil {
 		return false
 	}
@@ -158,10 +159,10 @@ func (s *Scheduler) dispatchPluginSync(lifecycle *schedulerLifecycle, plugin mod
 				panicErr := fmt.Errorf("panic: %v", rec)
 				shortID := p.ID.String()[:8]
 				logger.Sched("SYNC").Error("[%s] syncPlugin panic: %v", shortID, rec)
-				s.handlePluginSyncError(withTenantContext(rootCtx, p.TenantID), p, shortID, s.now().Add(time.Duration(p.SyncIntervalMinutes)*time.Minute), panicErr)
+				s.handlePluginSyncError(schedulerx.WithTenantContext(rootCtx, p.TenantID), p, shortID, s.now().Add(time.Duration(p.SyncIntervalMinutes)*time.Minute), panicErr)
 			}
 		}()
-		s.runPluginSync(withTenantContext(rootCtx, p.TenantID), p)
+		s.runPluginSync(schedulerx.WithTenantContext(rootCtx, p.TenantID), p)
 	})
 	if !started {
 		s.inFlight.Finish(p.ID)
@@ -169,19 +170,19 @@ func (s *Scheduler) dispatchPluginSync(lifecycle *schedulerLifecycle, plugin mod
 	return started
 }
 
-func (s *Scheduler) lifecycleSnapshot() *schedulerLifecycle {
+func (s *PluginScheduler) lifecycleSnapshot() *schedulerx.Lifecycle {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.lifecycle
 }
 
-func (s *Scheduler) claimPlugin(ctx context.Context, plugin model.Plugin) (bool, error) {
+func (s *PluginScheduler) claimPlugin(ctx context.Context, plugin model.Plugin) (bool, error) {
 	if plugin.NextSyncAt == nil {
 		return false, nil
 	}
 	now := s.now()
 	interval := time.Duration(plugin.SyncIntervalMinutes) * time.Minute
-	nextSyncAt := now.Add(maxDuration(interval, pluginClaimLease))
+	nextSyncAt := now.Add(schedulerx.MaxDuration(interval, pluginClaimLease))
 	result := s.db.WithContext(ctx).
 		Model(&model.Plugin{}).
 		Where("id = ? AND sync_enabled = ? AND status = ? AND next_sync_at IS NOT NULL AND next_sync_at <= ?", plugin.ID, true, "active", now).
@@ -192,7 +193,7 @@ func (s *Scheduler) claimPlugin(ctx context.Context, plugin model.Plugin) (bool,
 	return result.RowsAffected == 1, nil
 }
 
-func (s *Scheduler) rollbackPluginClaim(ctx context.Context, plugin model.Plugin) {
+func (s *PluginScheduler) rollbackPluginClaim(ctx context.Context, plugin model.Plugin) {
 	if plugin.NextSyncAt == nil {
 		return
 	}
@@ -204,7 +205,7 @@ func (s *Scheduler) rollbackPluginClaim(ctx context.Context, plugin model.Plugin
 }
 
 // getPluginsNeedSync 获取需要同步的插件列表
-func (s *Scheduler) getPluginsNeedSync(ctx context.Context) ([]model.Plugin, error) {
+func (s *PluginScheduler) getPluginsNeedSync(ctx context.Context) ([]model.Plugin, error) {
 	var plugins []model.Plugin
 	now := s.now()
 	err := s.db.WithContext(ctx).
@@ -229,10 +230,10 @@ func filterDuePlugins(plugins []model.Plugin, now time.Time) []model.Plugin {
 
 func pluginSyncDue(plugin model.Plugin, now time.Time) bool {
 	interval := time.Duration(plugin.SyncIntervalMinutes) * time.Minute
-	return !lastSyncStillCoolingDown(plugin.LastSyncAt, interval, now)
+	return !schedulerx.LastSyncStillCoolingDown(plugin.LastSyncAt, interval, now)
 }
 
-func (s *Scheduler) persistPluginState(ctx context.Context, pluginID interface{}, updates map[string]interface{}) error {
+func (s *PluginScheduler) persistPluginState(ctx context.Context, pluginID interface{}, updates map[string]interface{}) error {
 	if s.updateSyncState != nil {
 		return s.updateSyncState(ctx, pluginID, updates)
 	}

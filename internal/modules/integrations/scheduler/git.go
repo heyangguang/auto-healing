@@ -1,4 +1,4 @@
-package provider
+package scheduler
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	gitService "github.com/company/auto-healing/internal/modules/integrations/service/git"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	schedulerx "github.com/company/auto-healing/internal/platform/schedulerx"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -21,8 +22,8 @@ type GitScheduler struct {
 	gitSvc              *gitService.Service
 	db                  *gorm.DB
 	interval            time.Duration
-	lifecycle           *schedulerLifecycle
-	inFlight            *inFlightSet
+	lifecycle           *schedulerx.Lifecycle
+	inFlight            *schedulerx.InFlightSet
 	now                 func() time.Time
 	running             bool
 	mu                  sync.Mutex
@@ -40,7 +41,7 @@ func NewGitScheduler() *GitScheduler {
 		gitSvc:   gitService.NewService(),
 		db:       database.DB,
 		interval: 60 * time.Second,
-		inFlight: newInFlightSet(),
+		inFlight: schedulerx.NewInFlightSet(),
 		now:      time.Now,
 	}
 	s.loadReposNeedSync = s.getReposNeedSync
@@ -58,8 +59,8 @@ func (s *GitScheduler) Start() {
 		s.mu.Unlock()
 		return
 	}
-	if s.lifecycle == nil || s.lifecycle.ctx.Err() != nil {
-		s.lifecycle = newSchedulerLifecycle()
+	if s.lifecycle == nil || s.lifecycle.Context().Err() != nil {
+		s.lifecycle = schedulerx.NewLifecycle()
 	}
 	lifecycle := s.lifecycle
 	s.running = true
@@ -132,7 +133,7 @@ func (s *GitScheduler) checkAndSync(ctx context.Context) {
 	}
 }
 
-func (s *GitScheduler) dispatchRepoSync(lifecycle *schedulerLifecycle, repo model.GitRepository) bool {
+func (s *GitScheduler) dispatchRepoSync(lifecycle *schedulerx.Lifecycle, repo model.GitRepository) bool {
 	if lifecycle == nil {
 		return false
 	}
@@ -148,10 +149,10 @@ func (s *GitScheduler) dispatchRepoSync(lifecycle *schedulerLifecycle, repo mode
 				panicErr := fmt.Errorf("panic: %v", rec)
 				shortID := r.ID.String()[:8]
 				logger.Sched("GIT").Error("[%s] syncRepo panic: %v", shortID, rec)
-				s.handleGitSyncError(withTenantContext(rootCtx, r.TenantID), r, shortID, s.now().Add(resolveRepoSyncInterval(r)), panicErr)
+				s.handleGitSyncError(schedulerx.WithTenantContext(rootCtx, r.TenantID), r, shortID, s.now().Add(resolveRepoSyncInterval(r)), panicErr)
 			}
 		}()
-		s.runRepoSync(withTenantContext(rootCtx, r.TenantID), r)
+		s.runRepoSync(schedulerx.WithTenantContext(rootCtx, r.TenantID), r)
 	})
 	if !started {
 		s.inFlight.Finish(r.ID)
@@ -159,7 +160,7 @@ func (s *GitScheduler) dispatchRepoSync(lifecycle *schedulerLifecycle, repo mode
 	return started
 }
 
-func (s *GitScheduler) lifecycleSnapshot() *schedulerLifecycle {
+func (s *GitScheduler) lifecycleSnapshot() *schedulerx.Lifecycle {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.lifecycle
@@ -170,7 +171,7 @@ func (s *GitScheduler) claimRepo(ctx context.Context, repo model.GitRepository) 
 		return false, nil
 	}
 	now := s.now()
-	nextSyncAt := now.Add(maxDuration(resolveRepoSyncInterval(repo), gitClaimLease))
+	nextSyncAt := now.Add(schedulerx.MaxDuration(resolveRepoSyncInterval(repo), gitClaimLease))
 	result := s.db.WithContext(ctx).
 		Model(&model.GitRepository{}).
 		Where("id = ? AND sync_enabled = ? AND next_sync_at IS NOT NULL AND next_sync_at <= ?", repo.ID, true, now).
@@ -249,7 +250,7 @@ func filterDueRepos(repos []model.GitRepository, now time.Time) []model.GitRepos
 }
 
 func repoSyncDue(repo model.GitRepository, now time.Time) bool {
-	return !lastSyncStillCoolingDown(repo.LastSyncAt, resolveRepoSyncInterval(repo), now)
+	return !schedulerx.LastSyncStillCoolingDown(repo.LastSyncAt, resolveRepoSyncInterval(repo), now)
 }
 
 func (s *GitScheduler) persistRepoState(ctx context.Context, repoID interface{}, updates map[string]interface{}) error {
