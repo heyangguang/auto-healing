@@ -12,6 +12,7 @@ import (
 	"time"
 
 	httproutes "github.com/company/auto-healing/internal/app/httpapi"
+	appruntime "github.com/company/auto-healing/internal/app/runtime"
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
@@ -20,7 +21,6 @@ import (
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
-	"github.com/company/auto-healing/internal/scheduler"
 	"github.com/gin-gonic/gin"
 )
 
@@ -152,11 +152,11 @@ type lifecycleService interface {
 
 func startSchedulers() []lifecycleService {
 	schedulers := []lifecycleService{
-		scheduler.NewScheduler(),
-		scheduler.NewGitScheduler(),
-		scheduler.NewExecutionScheduler(),
-		scheduler.NewNotificationRetryScheduler(),
-		scheduler.NewBlacklistExemptionScheduler(),
+		appruntime.NewScheduler(),
+		appruntime.NewGitScheduler(),
+		appruntime.NewExecutionScheduler(),
+		appruntime.NewNotificationRetryScheduler(),
+		appruntime.NewBlacklistExemptionScheduler(),
 		healing.DefaultScheduler(),
 	}
 	for _, item := range schedulers {

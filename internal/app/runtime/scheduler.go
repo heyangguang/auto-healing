@@ -1,14 +1,14 @@
-// Package scheduler 调度器模块
+// Package runtime 应用运行时装配模块
 //
 // 本包提供各种调度器的统一接口和入口。
 // 具体调度器实现在各业务域模块内。
 //
 // 使用示例:
 //
-//	manager := scheduler.NewManager()
+//	manager := runtime.NewManager()
 //	manager.Start()
 //	defer manager.Stop()
-package scheduler
+package runtime
 
 import (
 	"sync"
