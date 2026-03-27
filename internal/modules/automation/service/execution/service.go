@@ -9,8 +9,10 @@ import (
 	"github.com/company/auto-healing/internal/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/model"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/notification"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
@@ -19,11 +21,11 @@ const maxExecutionWorkers = 10
 
 // Service 执行任务服务
 type Service struct {
-	repo             *repository.ExecutionRepository
-	gitRepo          *repository.GitRepositoryRepository
+	repo             *automationrepo.ExecutionRepository
+	gitRepo          *integrationrepo.GitRepositoryRepository
 	secretsRepo      *repository.SecretsSourceRepository
 	cmdbRepo         *repository.CMDBItemRepository
-	healingFlowRepo  *repository.HealingFlowRepository
+	healingFlowRepo  *automationrepo.HealingFlowRepository
 	workspaceManager *ansible.WorkspaceManager
 	localExecutor    *ansible.LocalExecutor
 	dockerExecutor   *ansible.DockerExecutor
@@ -39,11 +41,11 @@ type Service struct {
 // NewService 创建执行任务服务
 func NewService() *Service {
 	return &Service{
-		repo:             repository.NewExecutionRepository(),
-		gitRepo:          repository.NewGitRepositoryRepository(),
+		repo:             automationrepo.NewExecutionRepository(),
+		gitRepo:          integrationrepo.NewGitRepositoryRepository(),
 		secretsRepo:      repository.NewSecretsSourceRepository(),
 		cmdbRepo:         repository.NewCMDBItemRepository(),
-		healingFlowRepo:  repository.NewHealingFlowRepository(),
+		healingFlowRepo:  automationrepo.NewHealingFlowRepository(),
 		workspaceManager: ansible.NewWorkspaceManager(),
 		localExecutor:    ansible.NewLocalExecutor(),
 		dockerExecutor:   ansible.NewDockerExecutor(),
@@ -93,7 +95,7 @@ func (s *Service) GetTask(ctx context.Context, id uuid.UUID) (*model.ExecutionTa
 }
 
 // ListTasks 列出任务模板（支持多条件筛选）
-func (s *Service) ListTasks(ctx context.Context, opts *repository.TaskListOptions) ([]model.ExecutionTask, int64, error) {
+func (s *Service) ListTasks(ctx context.Context, opts *automationrepo.TaskListOptions) ([]model.ExecutionTask, int64, error) {
 	if opts.Page < 1 {
 		opts.Page = 1
 	}

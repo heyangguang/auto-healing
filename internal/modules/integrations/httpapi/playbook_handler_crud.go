@@ -1,8 +1,8 @@
 package httpapi
 
 import (
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -46,7 +46,7 @@ func (h *PlaybookHandler) Get(c *gin.Context) {
 
 	playbook, err := h.svc.Get(c.Request.Context(), id)
 	if err != nil {
-		respondResourceError(c, "PLAYBOOK", "获取 Playbook 详情失败", "Playbook不存在", repository.ErrPlaybookNotFound, resourceErrorModeInternal, err)
+		respondResourceError(c, "PLAYBOOK", "获取 Playbook 详情失败", "Playbook不存在", integrationrepo.ErrPlaybookNotFound, resourceErrorModeInternal, err)
 		return
 	}
 	response.Success(c, playbook)
@@ -67,7 +67,7 @@ func (h *PlaybookHandler) Update(c *gin.Context) {
 	}
 
 	if err := h.svc.Update(c.Request.Context(), id, req.ToUpdateInput()); err != nil {
-		respondResourceError(c, "PLAYBOOK", "更新 Playbook 失败", "Playbook不存在", repository.ErrPlaybookNotFound, resourceErrorModeInternal, err)
+		respondResourceError(c, "PLAYBOOK", "更新 Playbook 失败", "Playbook不存在", integrationrepo.ErrPlaybookNotFound, resourceErrorModeInternal, err)
 		return
 	}
 	response.Message(c, "更新成功")
@@ -82,7 +82,7 @@ func (h *PlaybookHandler) Delete(c *gin.Context) {
 	}
 
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		respondResourceError(c, "PLAYBOOK", "删除 Playbook 失败", "Playbook不存在", repository.ErrPlaybookNotFound, resourceErrorModeInternal, err)
+		respondResourceError(c, "PLAYBOOK", "删除 Playbook 失败", "Playbook不存在", integrationrepo.ErrPlaybookNotFound, resourceErrorModeInternal, err)
 		return
 	}
 	response.Message(c, "删除成功")
@@ -97,7 +97,7 @@ func (h *PlaybookHandler) SetReady(c *gin.Context) {
 	}
 
 	if err := h.svc.SetReady(c.Request.Context(), id); err != nil {
-		respondResourceError(c, "PLAYBOOK", "设置 Playbook ready 失败", "Playbook不存在", repository.ErrPlaybookNotFound, resourceErrorModeBadRequest, err)
+		respondResourceError(c, "PLAYBOOK", "设置 Playbook ready 失败", "Playbook不存在", integrationrepo.ErrPlaybookNotFound, resourceErrorModeBadRequest, err)
 		return
 	}
 	response.Message(c, "已设置为 ready 状态")
@@ -112,7 +112,7 @@ func (h *PlaybookHandler) SetOffline(c *gin.Context) {
 	}
 
 	if err := h.svc.SetOffline(c.Request.Context(), id); err != nil {
-		respondResourceError(c, "PLAYBOOK", "下线 Playbook 失败", "Playbook不存在", repository.ErrPlaybookNotFound, resourceErrorModeBadRequest, err)
+		respondResourceError(c, "PLAYBOOK", "下线 Playbook 失败", "Playbook不存在", integrationrepo.ErrPlaybookNotFound, resourceErrorModeBadRequest, err)
 		return
 	}
 	response.Message(c, "已下线")

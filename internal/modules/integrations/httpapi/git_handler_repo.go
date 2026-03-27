@@ -3,8 +3,8 @@ package httpapi
 import (
 	"time"
 
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -22,13 +22,13 @@ func (h *GitRepoHandler) ListRepos(c *gin.Context) {
 	response.List(c, repos, total, page, pageSize)
 }
 
-func buildGitRepoListOptions(c *gin.Context, page, pageSize int) *repository.GitRepoListOptions {
+func buildGitRepoListOptions(c *gin.Context, page, pageSize int) *integrationrepo.GitRepoListOptions {
 	sortField := c.Query("sort_by")
 	if sortField == "" {
 		sortField = c.Query("sort_field")
 	}
 
-	opts := &repository.GitRepoListOptions{
+	opts := &integrationrepo.GitRepoListOptions{
 		Page:      page,
 		PageSize:  pageSize,
 		Name:      GetStringFilter(c, "name"),
@@ -46,7 +46,7 @@ func buildGitRepoListOptions(c *gin.Context, page, pageSize int) *repository.Git
 	return opts
 }
 
-func parseGitRepoDateRange(c *gin.Context, opts *repository.GitRepoListOptions) {
+func parseGitRepoDateRange(c *gin.Context, opts *integrationrepo.GitRepoListOptions) {
 	if createdFrom := c.Query("created_from"); createdFrom != "" {
 		if t, err := time.Parse(time.RFC3339, createdFrom); err == nil {
 			opts.CreatedFrom = &t
@@ -93,7 +93,7 @@ func (h *GitRepoHandler) GetRepo(c *gin.Context) {
 
 	repo, err := h.svc.GetRepo(c.Request.Context(), id)
 	if err != nil {
-		respondResourceError(c, "GIT", "获取仓库详情失败", "仓库不存在", repository.ErrGitRepositoryNotFound, resourceErrorModeInternal, err)
+		respondResourceError(c, "GIT", "获取仓库详情失败", "仓库不存在", integrationrepo.ErrGitRepositoryNotFound, resourceErrorModeInternal, err)
 		return
 	}
 	response.Success(c, repo)
@@ -114,7 +114,7 @@ func (h *GitRepoHandler) UpdateRepo(c *gin.Context) {
 	}
 	current, err := h.svc.GetRepo(c.Request.Context(), id)
 	if err != nil {
-		respondResourceError(c, "GIT", "获取仓库详情失败", "仓库不存在", repository.ErrGitRepositoryNotFound, resourceErrorModeInternal, err)
+		respondResourceError(c, "GIT", "获取仓库详情失败", "仓库不存在", integrationrepo.ErrGitRepositoryNotFound, resourceErrorModeInternal, err)
 		return
 	}
 	if err := validateGitUpdateRequest(current, &req); err != nil {
@@ -124,7 +124,7 @@ func (h *GitRepoHandler) UpdateRepo(c *gin.Context) {
 
 	repo, err := h.svc.UpdateRepo(c.Request.Context(), id, req.DefaultBranch, req.AuthType, req.AuthConfig, req.SyncEnabled, req.SyncInterval, req.MaxFailures)
 	if err != nil {
-		respondResourceError(c, "GIT", "更新仓库失败", "仓库不存在", repository.ErrGitRepositoryNotFound, resourceErrorModeInternal, err)
+		respondResourceError(c, "GIT", "更新仓库失败", "仓库不存在", integrationrepo.ErrGitRepositoryNotFound, resourceErrorModeInternal, err)
 		return
 	}
 	response.Success(c, repo)

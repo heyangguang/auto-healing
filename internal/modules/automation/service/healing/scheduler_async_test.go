@@ -7,6 +7,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
@@ -21,7 +22,7 @@ func TestSchedulerStopWaitsForTrackedFlowWorker(t *testing.T) {
 	t.Cleanup(func() { database.DB = origDB })
 
 	scheduler := NewScheduler()
-	scheduler.instanceRepo = repository.NewFlowInstanceRepository()
+	scheduler.instanceRepo = automationrepo.NewFlowInstanceRepository()
 	scheduler.incidentRepo = repository.NewIncidentRepository()
 	scheduler.interval = time.Hour
 	tenantID := uuid.MustParse("46464646-4646-4646-4646-464646464646")

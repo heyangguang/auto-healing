@@ -3,25 +3,25 @@ package httpapi
 import (
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 // UserActivityHandler 用户活动处理器（收藏 + 最近访问）
 type UserActivityHandler struct {
-	repo *repository.UserActivityRepository
+	repo *engagementrepo.UserActivityRepository
 }
 
 type UserActivityHandlerDeps struct {
-	Repo *repository.UserActivityRepository
+	Repo *engagementrepo.UserActivityRepository
 }
 
 // NewUserActivityHandler 创建用户活动处理器
 func NewUserActivityHandler() *UserActivityHandler {
 	return NewUserActivityHandlerWithDeps(UserActivityHandlerDeps{
-		Repo: repository.NewUserActivityRepository(),
+		Repo: engagementrepo.NewUserActivityRepository(),
 	})
 }
 

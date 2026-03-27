@@ -7,20 +7,22 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/modules/automation/service/execution"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	notificationSvc "github.com/company/auto-healing/internal/notification"
 	"github.com/company/auto-healing/internal/repository"
 )
 
 // FlowExecutor 流程执行器
 type FlowExecutor struct {
-	instanceRepo    *repository.FlowInstanceRepository
-	approvalRepo    *repository.ApprovalTaskRepository
-	flowRepo        *repository.HealingFlowRepository
+	instanceRepo    *automationrepo.FlowInstanceRepository
+	approvalRepo    *automationrepo.ApprovalTaskRepository
+	flowRepo        *automationrepo.HealingFlowRepository
 	flowLogRepo     *repository.FlowLogRepository
 	cmdbRepo        *repository.CMDBItemRepository
-	gitRepoRepo     *repository.GitRepositoryRepository
-	executionRepo   *repository.ExecutionRepository
+	gitRepoRepo     *integrationrepo.GitRepositoryRepository
+	executionRepo   *automationrepo.ExecutionRepository
 	incidentRepo    *repository.IncidentRepository
 	executionSvc    *execution.Service
 	notificationSvc *notificationSvc.Service
@@ -38,13 +40,13 @@ func NewFlowExecutor() *FlowExecutor {
 
 func NewFlowExecutorWithDependencies(executionSvc *execution.Service, notificationService *notificationSvc.Service) *FlowExecutor {
 	return &FlowExecutor{
-		instanceRepo:    repository.NewFlowInstanceRepository(),
-		approvalRepo:    repository.NewApprovalTaskRepository(),
-		flowRepo:        repository.NewHealingFlowRepository(),
+		instanceRepo:    automationrepo.NewFlowInstanceRepository(),
+		approvalRepo:    automationrepo.NewApprovalTaskRepository(),
+		flowRepo:        automationrepo.NewHealingFlowRepository(),
 		flowLogRepo:     repository.NewFlowLogRepository(),
 		cmdbRepo:        repository.NewCMDBItemRepository(),
-		gitRepoRepo:     repository.NewGitRepositoryRepository(),
-		executionRepo:   repository.NewExecutionRepository(),
+		gitRepoRepo:     integrationrepo.NewGitRepositoryRepository(),
+		executionRepo:   automationrepo.NewExecutionRepository(),
 		incidentRepo:    repository.NewIncidentRepository(),
 		executionSvc:    executionSvc,
 		notificationSvc: notificationService,

@@ -9,6 +9,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -92,7 +93,7 @@ func TestAppendLogErrPersistsSequentialLogs(t *testing.T) {
 	database.DB = db
 	defer func() { database.DB = origDB }()
 
-	svc := &Service{repo: repository.NewExecutionRepository()}
+	svc := &Service{repo: automationrepo.NewExecutionRepository()}
 	runID := uuid.New()
 	ctx := repository.WithTenantID(context.Background(), uuid.New())
 

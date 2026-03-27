@@ -7,6 +7,7 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
@@ -15,22 +16,22 @@ import (
 
 // DashboardHandler Dashboard 处理器
 type DashboardHandler struct {
-	repo     *repository.DashboardRepository
-	wsRepo   *repository.WorkspaceRepository
+	repo     *engagementrepo.DashboardRepository
+	wsRepo   *engagementrepo.WorkspaceRepository
 	roleRepo *repository.RoleRepository
 }
 
 type DashboardHandlerDeps struct {
-	DashboardRepo *repository.DashboardRepository
-	WorkspaceRepo *repository.WorkspaceRepository
+	DashboardRepo *engagementrepo.DashboardRepository
+	WorkspaceRepo *engagementrepo.WorkspaceRepository
 	RoleRepo      *repository.RoleRepository
 }
 
 // NewDashboardHandler 创建 Dashboard 处理器
 func NewDashboardHandler() *DashboardHandler {
 	return NewDashboardHandlerWithDeps(DashboardHandlerDeps{
-		DashboardRepo: repository.NewDashboardRepository(),
-		WorkspaceRepo: repository.NewWorkspaceRepository(),
+		DashboardRepo: engagementrepo.NewDashboardRepository(),
+		WorkspaceRepo: engagementrepo.NewWorkspaceRepository(),
 		RoleRepo:      repository.NewRoleRepository(),
 	})
 }

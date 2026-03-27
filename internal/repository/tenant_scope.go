@@ -2,56 +2,36 @@ package repository
 
 import (
 	"context"
-	"errors"
 
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-var ErrTenantContextRequired = errors.New("tenant context is required")
-
-// tenantIDKey 上下文中存储 tenantID 的 key
-type tenantIDKey struct{}
+var ErrTenantContextRequired = platformrepo.ErrTenantContextRequired
 
 // WithTenantID 将租户 ID 注入到 context 中
 func WithTenantID(ctx context.Context, tenantID uuid.UUID) context.Context {
-	return context.WithValue(ctx, tenantIDKey{}, tenantID)
+	return platformrepo.WithTenantID(ctx, tenantID)
 }
 
 // TenantIDFromContext 从 context 中获取租户 ID。
 // 如果不存在，返回 uuid.Nil；tenant-only 路径应改用 RequireTenantID。
 func TenantIDFromContext(ctx context.Context) uuid.UUID {
-	if id, ok := ctx.Value(tenantIDKey{}).(uuid.UUID); ok {
-		return id
-	}
-	return uuid.Nil
+	return platformrepo.TenantIDFromContext(ctx)
 }
 
 // TenantIDFromContextOK 从 context 中获取租户 ID，并返回是否显式设置
 func TenantIDFromContextOK(ctx context.Context) (uuid.UUID, bool) {
-	if id, ok := ctx.Value(tenantIDKey{}).(uuid.UUID); ok {
-		return id, true
-	}
-	return uuid.Nil, false
+	return platformrepo.TenantIDFromContextOK(ctx)
 }
 
 func RequireTenantID(ctx context.Context) (uuid.UUID, error) {
-	if id, ok := TenantIDFromContextOK(ctx); ok {
-		return id, nil
-	}
-	return uuid.Nil, ErrTenantContextRequired
+	return platformrepo.RequireTenantID(ctx)
 }
 
 func FillTenantID(ctx context.Context, tenantID **uuid.UUID) error {
-	if *tenantID != nil {
-		return nil
-	}
-	id, err := RequireTenantID(ctx)
-	if err != nil {
-		return err
-	}
-	*tenantID = &id
-	return nil
+	return platformrepo.FillTenantID(ctx, tenantID)
 }
 
 // TenantScope 租户过滤 scope，自动为查询添加 tenant_id 过滤条件
@@ -69,21 +49,9 @@ func TenantScope(tenantID uuid.UUID) func(db *gorm.DB) *gorm.DB {
 //
 // 自动应用 WHERE tenant_id = ? 条件
 func TenantDB(db *gorm.DB, ctx context.Context) *gorm.DB {
-	tenantID, err := RequireTenantID(ctx)
-	if err != nil {
-		scoped := db.WithContext(ctx)
-		scoped.AddError(err)
-		return scoped
-	}
-	return db.WithContext(ctx).Where("tenant_id = ?", tenantID)
+	return platformrepo.TenantDB(db, ctx)
 }
 
 func UpdateTenantScopedModel(db *gorm.DB, ctx context.Context, id uuid.UUID, entity interface{}, omit ...string) error {
-	fieldsToOmit := append([]string{"id", "created_at"}, omit...)
-	return TenantDB(db, ctx).
-		Model(entity).
-		Where("id = ?", id).
-		Select("*").
-		Omit(fieldsToOmit...).
-		Updates(entity).Error
+	return platformrepo.UpdateTenantScopedModel(db, ctx, id, entity, omit...)
 }

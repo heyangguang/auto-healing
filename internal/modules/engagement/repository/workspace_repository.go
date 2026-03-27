@@ -20,6 +20,10 @@ func NewWorkspaceRepository() *WorkspaceRepository {
 	return &WorkspaceRepository{db: database.DB}
 }
 
+func NewWorkspaceRepositoryWithDB(db *gorm.DB) *WorkspaceRepository {
+	return &WorkspaceRepository{db: db}
+}
+
 // ==================== 系统工作区 CRUD ====================
 
 // Create 创建系统工作区

@@ -7,7 +7,8 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
+	sharedrepo "github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -34,7 +35,7 @@ func TestWriteBackIncidentCloseIgnoresMissingPlugin(t *testing.T) {
 
 	pluginID := uuid.New()
 	svc := NewIncidentService()
-	ctx := repository.WithTenantID(context.Background(), uuid.New())
+	ctx := sharedrepo.WithTenantID(context.Background(), uuid.New())
 	incident := &model.Incident{PluginID: &pluginID}
 
 	sourceUpdated, err := svc.writeBackIncidentClose(ctx, uuid.New(), incident, "", "", "", "resolved")
@@ -55,14 +56,14 @@ func TestWriteBackIncidentCloseReturnsPluginLookupError(t *testing.T) {
 
 	pluginID := uuid.New()
 	svc := NewIncidentService()
-	ctx := repository.WithTenantID(context.Background(), uuid.New())
+	ctx := sharedrepo.WithTenantID(context.Background(), uuid.New())
 	incident := &model.Incident{PluginID: &pluginID}
 
 	_, err := svc.writeBackIncidentClose(ctx, uuid.New(), incident, "", "", "", "resolved")
 	if err == nil {
 		t.Fatal("writeBackIncidentClose() expected plugin lookup error")
 	}
-	if errors.Is(err, repository.ErrPluginNotFound) {
+	if errors.Is(err, integrationrepo.ErrPluginNotFound) {
 		t.Fatalf("writeBackIncidentClose() should wrap unexpected lookup failures, got %v", err)
 	}
 }

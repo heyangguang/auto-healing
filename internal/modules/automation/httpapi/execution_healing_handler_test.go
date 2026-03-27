@@ -11,6 +11,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	executionSvc "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	healingSvc "github.com/company/auto-healing/internal/modules/automation/service/healing"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -66,8 +67,8 @@ func TestHealingInstanceCancelAPIUpdatesInstanceApprovalAndIncident(t *testing.T
 	insertHealingHandlerCancelFixture(t, db, tenantID, instanceID, incidentID, approvalID)
 
 	handler := &HealingHandler{
-		instanceRepo: repository.NewFlowInstanceRepository(),
-		approvalRepo: repository.NewApprovalTaskRepository(),
+		instanceRepo: automationrepo.NewFlowInstanceRepository(),
+		approvalRepo: automationrepo.NewApprovalTaskRepository(),
 		incidentRepo: repository.NewIncidentRepository(),
 		executor:     healingSvc.NewFlowExecutor(),
 	}

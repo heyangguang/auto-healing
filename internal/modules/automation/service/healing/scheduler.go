@@ -6,16 +6,17 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/repository"
 )
 
 // Scheduler 全局自愈调度器
 type Scheduler struct {
-	ruleRepo     *repository.HealingRuleRepository
-	flowRepo     *repository.HealingFlowRepository
-	instanceRepo *repository.FlowInstanceRepository
+	ruleRepo     *automationrepo.HealingRuleRepository
+	flowRepo     *automationrepo.HealingFlowRepository
+	instanceRepo *automationrepo.FlowInstanceRepository
 	incidentRepo *repository.IncidentRepository
-	approvalRepo *repository.ApprovalTaskRepository
+	approvalRepo *automationrepo.ApprovalTaskRepository
 
 	matcher  *RuleMatcher
 	executor *FlowExecutor
@@ -33,11 +34,11 @@ type Scheduler struct {
 // NewScheduler 创建调度器
 func NewScheduler() *Scheduler {
 	s := &Scheduler{
-		ruleRepo:     repository.NewHealingRuleRepository(),
-		flowRepo:     repository.NewHealingFlowRepository(),
-		instanceRepo: repository.NewFlowInstanceRepository(),
+		ruleRepo:     automationrepo.NewHealingRuleRepository(),
+		flowRepo:     automationrepo.NewHealingFlowRepository(),
+		instanceRepo: automationrepo.NewFlowInstanceRepository(),
 		incidentRepo: repository.NewIncidentRepository(),
-		approvalRepo: repository.NewApprovalTaskRepository(),
+		approvalRepo: automationrepo.NewApprovalTaskRepository(),
 		matcher:      NewRuleMatcher(),
 		executor:     NewFlowExecutor(),
 		interval:     10 * time.Second,

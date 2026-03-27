@@ -10,6 +10,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
@@ -18,14 +19,14 @@ import (
 
 // WorkbenchHandler 工作台处理器
 type WorkbenchHandler struct {
-	repo         *repository.WorkbenchRepository
-	activityRepo *repository.UserActivityRepository
+	repo         *engagementrepo.WorkbenchRepository
+	activityRepo *engagementrepo.UserActivityRepository
 	userRepo     *repository.UserRepository
 }
 
 type WorkbenchHandlerDeps struct {
-	WorkbenchRepo *repository.WorkbenchRepository
-	ActivityRepo  *repository.UserActivityRepository
+	WorkbenchRepo *engagementrepo.WorkbenchRepository
+	ActivityRepo  *engagementrepo.UserActivityRepository
 	UserRepo      *repository.UserRepository
 }
 
@@ -37,8 +38,8 @@ type workbenchSection struct {
 // NewWorkbenchHandler 创建工作台处理器
 func NewWorkbenchHandler() *WorkbenchHandler {
 	return NewWorkbenchHandlerWithDeps(WorkbenchHandlerDeps{
-		WorkbenchRepo: repository.NewWorkbenchRepository(database.DB),
-		ActivityRepo:  repository.NewUserActivityRepository(),
+		WorkbenchRepo: engagementrepo.NewWorkbenchRepository(database.DB),
+		ActivityRepo:  engagementrepo.NewUserActivityRepository(),
 		UserRepo:      repository.NewUserRepository(),
 	})
 }

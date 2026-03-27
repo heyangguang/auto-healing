@@ -5,7 +5,7 @@ import (
 
 	"github.com/company/auto-healing/internal/modules/automation/service/execution"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -73,8 +73,8 @@ func (h *ExecutionHandler) GetRunSearchSchema(c *gin.Context) {
 	response.Success(c, gin.H{"fields": runSearchSchema})
 }
 
-func buildTaskListOptions(c *gin.Context, page, pageSize int) *repository.TaskListOptions {
-	opts := &repository.TaskListOptions{
+func buildTaskListOptions(c *gin.Context, page, pageSize int) *automationrepo.TaskListOptions {
+	opts := &automationrepo.TaskListOptions{
 		Name:           GetStringFilter(c, "name"),
 		Description:    GetStringFilter(c, "description"),
 		ExecutorType:   c.Query("executor_type"),
@@ -111,8 +111,8 @@ func buildTaskListOptions(c *gin.Context, page, pageSize int) *repository.TaskLi
 	return opts
 }
 
-func buildRunListOptions(c *gin.Context, page, pageSize int) *repository.RunListOptions {
-	opts := &repository.RunListOptions{
+func buildRunListOptions(c *gin.Context, page, pageSize int) *automationrepo.RunListOptions {
+	opts := &automationrepo.RunListOptions{
 		RunID:       c.Query("run_id"),
 		TaskName:    GetStringFilter(c, "task_name"),
 		Status:      c.Query("status"),

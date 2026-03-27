@@ -1,16 +1,16 @@
 package service
 
-import "github.com/company/auto-healing/internal/repository"
+import opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 
 // CommandBlacklistService 高危指令黑名单服务
 type CommandBlacklistService struct {
-	repo *repository.CommandBlacklistRepository
+	repo *opsrepo.CommandBlacklistRepository
 }
 
 // NewCommandBlacklistService 创建服务
 func NewCommandBlacklistService() *CommandBlacklistService {
 	return &CommandBlacklistService{
-		repo: repository.NewCommandBlacklistRepository(),
+		repo: opsrepo.NewCommandBlacklistRepository(),
 	}
 }
 

@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/company/auto-healing/internal/middleware"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	respPkg "github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -23,7 +23,7 @@ func TestGetPreferencesReturnsEmptyObjectWhenNotFound(t *testing.T) {
 	db := newPreferenceTestDB(t)
 	createUserPreferenceSchema(t, db)
 	handler := &PreferenceHandler{
-		prefRepo: repository.NewUserPreferenceRepositoryWithDB(db),
+		prefRepo: engagementrepo.NewUserPreferenceRepositoryWithDB(db),
 	}
 
 	recorder := httptest.NewRecorder()
@@ -57,7 +57,7 @@ func TestGetPreferencesReturnsInternalErrorOnRepositoryFailure(t *testing.T) {
 
 	db := newPreferenceTestDB(t)
 	handler := &PreferenceHandler{
-		prefRepo: repository.NewUserPreferenceRepositoryWithDB(db),
+		prefRepo: engagementrepo.NewUserPreferenceRepositoryWithDB(db),
 	}
 
 	recorder := httptest.NewRecorder()
@@ -80,7 +80,7 @@ func TestGetPreferencesReturnsInternalErrorWhenStoredDataIsNull(t *testing.T) {
 	userID := uuid.New()
 	mustExecPreferenceTest(t, db, `INSERT INTO user_preferences (id, user_id, preferences) VALUES (?, ?, ?)`, uuid.NewString(), userID.String(), []byte("null"))
 	handler := &PreferenceHandler{
-		prefRepo: repository.NewUserPreferenceRepositoryWithDB(db),
+		prefRepo: engagementrepo.NewUserPreferenceRepositoryWithDB(db),
 	}
 
 	recorder := httptest.NewRecorder()
@@ -101,7 +101,7 @@ func TestUpdatePreferencesRejectsNullObject(t *testing.T) {
 	db := newPreferenceTestDB(t)
 	createUserPreferenceSchema(t, db)
 	handler := &PreferenceHandler{
-		prefRepo: repository.NewUserPreferenceRepositoryWithDB(db),
+		prefRepo: engagementrepo.NewUserPreferenceRepositoryWithDB(db),
 	}
 
 	recorder := httptest.NewRecorder()
@@ -125,7 +125,7 @@ func TestPatchPreferencesReturnsInternalErrorWhenStoredDataIsCorrupted(t *testin
 	userID := uuid.New()
 	mustExecPreferenceTest(t, db, `INSERT INTO user_preferences (id, user_id, preferences) VALUES (?, ?, ?)`, uuid.NewString(), userID.String(), []byte("not-json"))
 	handler := &PreferenceHandler{
-		prefRepo: repository.NewUserPreferenceRepositoryWithDB(db),
+		prefRepo: engagementrepo.NewUserPreferenceRepositoryWithDB(db),
 	}
 
 	recorder := httptest.NewRecorder()
@@ -149,7 +149,7 @@ func TestPatchPreferencesReturnsInternalErrorWhenStoredDataIsNull(t *testing.T) 
 	userID := uuid.New()
 	mustExecPreferenceTest(t, db, `INSERT INTO user_preferences (id, user_id, preferences) VALUES (?, ?, ?)`, uuid.NewString(), userID.String(), []byte("null"))
 	handler := &PreferenceHandler{
-		prefRepo: repository.NewUserPreferenceRepositoryWithDB(db),
+		prefRepo: engagementrepo.NewUserPreferenceRepositoryWithDB(db),
 	}
 
 	recorder := httptest.NewRecorder()

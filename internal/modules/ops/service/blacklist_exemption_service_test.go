@@ -4,12 +4,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/company/auto-healing/internal/repository"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 )
 
 func TestNormalizeBlacklistExemptionMutationErrorPreservesSentinel(t *testing.T) {
-	err := normalizeBlacklistExemptionMutationError(repository.ErrBlacklistExemptionNotPending)
-	if !errors.Is(err, repository.ErrBlacklistExemptionNotPending) {
+	err := normalizeBlacklistExemptionMutationError(opsrepo.ErrBlacklistExemptionNotPending)
+	if !errors.Is(err, opsrepo.ErrBlacklistExemptionNotPending) {
 		t.Fatalf("error = %v, want ErrBlacklistExemptionNotPending", err)
 	}
 }

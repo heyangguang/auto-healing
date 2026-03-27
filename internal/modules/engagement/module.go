@@ -3,6 +3,7 @@ package engagement
 import (
 	"github.com/company/auto-healing/internal/database"
 	engagementhttp "github.com/company/auto-healing/internal/modules/engagement/httpapi"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/notification"
 	platformevents "github.com/company/auto-healing/internal/platform/events"
 	"github.com/company/auto-healing/internal/repository"
@@ -28,18 +29,18 @@ func New() *Module {
 			NotificationRepo: repository.NewNotificationRepository(db),
 		}),
 		Dashboard: engagementhttp.NewDashboardHandlerWithDeps(engagementhttp.DashboardHandlerDeps{
-			DashboardRepo: repository.NewDashboardRepository(),
-			WorkspaceRepo: repository.NewWorkspaceRepository(),
+			DashboardRepo: engagementrepo.NewDashboardRepository(),
+			WorkspaceRepo: engagementrepo.NewWorkspaceRepository(),
 			RoleRepo:      repository.NewRoleRepository(),
 		}),
 		Preference: engagementhttp.NewPreferenceHandlerWithDeps(engagementhttp.PreferenceHandlerDeps{
-			PreferenceRepo: repository.NewUserPreferenceRepository(),
+			PreferenceRepo: engagementrepo.NewUserPreferenceRepository(),
 		}),
 		Activity: engagementhttp.NewUserActivityHandlerWithDeps(engagementhttp.UserActivityHandlerDeps{
-			Repo: repository.NewUserActivityRepository(),
+			Repo: engagementrepo.NewUserActivityRepository(),
 		}),
 		Search: engagementhttp.NewSearchHandlerWithDeps(engagementhttp.SearchHandlerDeps{
-			Repo: repository.NewSearchRepository(),
+			Repo: engagementrepo.NewSearchRepository(),
 		}),
 		SiteMessage: engagementhttp.NewSiteMessageHandlerWithDeps(engagementhttp.SiteMessageHandlerDeps{
 			SiteMessageRepo:      repository.NewSiteMessageRepository(),
@@ -49,8 +50,8 @@ func New() *Module {
 			UserRepo:             repository.NewUserRepository(),
 		}),
 		Workbench: engagementhttp.NewWorkbenchHandlerWithDeps(engagementhttp.WorkbenchHandlerDeps{
-			WorkbenchRepo: repository.NewWorkbenchRepository(db),
-			ActivityRepo:  repository.NewUserActivityRepository(),
+			WorkbenchRepo: engagementrepo.NewWorkbenchRepository(db),
+			ActivityRepo:  engagementrepo.NewUserActivityRepository(),
 			UserRepo:      repository.NewUserRepository(),
 		}),
 	}

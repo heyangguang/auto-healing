@@ -5,7 +5,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/modules/automation/service/schedule"
-	"github.com/company/auto-healing/internal/repository"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -130,8 +130,8 @@ func (r *UpdateScheduleRequest) ToUpdateInput() *schedule.UpdateInput {
 	return input
 }
 
-func buildScheduleListOptions(c *gin.Context, page, pageSize int) *repository.ScheduleListOptions {
-	opts := &repository.ScheduleListOptions{
+func buildScheduleListOptions(c *gin.Context, page, pageSize int) *automationrepo.ScheduleListOptions {
+	opts := &automationrepo.ScheduleListOptions{
 		Name:      GetStringFilter(c, "name"),
 		SortBy:    c.Query("sort_by"),
 		SortOrder: c.Query("sort_order"),
@@ -145,7 +145,7 @@ func buildScheduleListOptions(c *gin.Context, page, pageSize int) *repository.Sc
 	return opts
 }
 
-func parseScheduleUUIDFilters(c *gin.Context, opts *repository.ScheduleListOptions) {
+func parseScheduleUUIDFilters(c *gin.Context, opts *automationrepo.ScheduleListOptions) {
 	if taskIDStr := c.Query("task_id"); taskIDStr != "" {
 		if id, err := uuid.Parse(taskIDStr); err == nil {
 			opts.TaskID = &id
@@ -153,7 +153,7 @@ func parseScheduleUUIDFilters(c *gin.Context, opts *repository.ScheduleListOptio
 	}
 }
 
-func parseScheduleBoolFilters(c *gin.Context, opts *repository.ScheduleListOptions) {
+func parseScheduleBoolFilters(c *gin.Context, opts *automationrepo.ScheduleListOptions) {
 	if enabledStr := c.Query("enabled"); enabledStr != "" {
 		enabled := enabledStr == "true"
 		opts.Enabled = &enabled
@@ -168,7 +168,7 @@ func parseScheduleBoolFilters(c *gin.Context, opts *repository.ScheduleListOptio
 	}
 }
 
-func parseScheduleStringFilters(c *gin.Context, opts *repository.ScheduleListOptions) {
+func parseScheduleStringFilters(c *gin.Context, opts *automationrepo.ScheduleListOptions) {
 	if scheduleType := c.Query("schedule_type"); scheduleType != "" {
 		opts.ScheduleType = &scheduleType
 	}
@@ -177,7 +177,7 @@ func parseScheduleStringFilters(c *gin.Context, opts *repository.ScheduleListOpt
 	}
 }
 
-func parseScheduleDateFilters(c *gin.Context, opts *repository.ScheduleListOptions) {
+func parseScheduleDateFilters(c *gin.Context, opts *automationrepo.ScheduleListOptions) {
 	if createdFromStr := c.Query("created_from"); createdFromStr != "" {
 		if t, err := time.Parse(time.RFC3339, createdFromStr); err == nil {
 			opts.CreatedFrom = &t

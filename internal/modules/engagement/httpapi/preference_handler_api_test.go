@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/company/auto-healing/internal/repository"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/google/uuid"
 )
 
@@ -18,7 +18,7 @@ func TestPreferenceRoutesRespectTenantIsolation(t *testing.T) {
 	tenantA := uuid.NewString()
 	tenantB := uuid.NewString()
 	handler := &PreferenceHandler{
-		prefRepo: repository.NewUserPreferenceRepositoryWithDB(db),
+		prefRepo: engagementrepo.NewUserPreferenceRepositoryWithDB(db),
 	}
 
 	router := newOwnedScopeTestRouter(ownedScopeTestContext{
@@ -50,7 +50,7 @@ func TestPreferenceUpdateRouteRejectsNullPreferences(t *testing.T) {
 	db := newPreferenceTestDB(t)
 	createUserPreferenceSchema(t, db)
 	handler := &PreferenceHandler{
-		prefRepo: repository.NewUserPreferenceRepositoryWithDB(db),
+		prefRepo: engagementrepo.NewUserPreferenceRepositoryWithDB(db),
 	}
 
 	router := newOwnedScopeTestRouter(ownedScopeTestContext{

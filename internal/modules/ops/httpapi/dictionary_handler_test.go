@@ -12,8 +12,8 @@ import (
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -127,7 +127,7 @@ func TestListTypesReturnsArray(t *testing.T) {
 	}
 
 	var payload struct {
-		Data []repository.DictTypeInfo `json:"data"`
+		Data []opsrepo.DictTypeInfo `json:"data"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode response: %v", err)

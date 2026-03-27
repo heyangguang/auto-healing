@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
@@ -137,7 +138,7 @@ func (s *Scheduler) createFlowInstance(ctx context.Context, incident *model.Inci
 		Context:    model.JSON{"incident": incidentToMap(incident)},
 	}
 	scanned := true
-	if err := s.instanceRepo.CreateWithIncidentSync(ctx, instance, repository.IncidentSyncOptions{
+	if err := s.instanceRepo.CreateWithIncidentSync(ctx, instance, automationrepo.IncidentSyncOptions{
 		IncidentID:     incident.ID,
 		HealingStatus:  "processing",
 		MatchedRuleID:  &rule.ID,

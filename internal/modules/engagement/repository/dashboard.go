@@ -21,6 +21,10 @@ func NewDashboardRepository() *DashboardRepository {
 	return &DashboardRepository{db: database.DB}
 }
 
+func NewDashboardRepositoryWithDB(db *gorm.DB) *DashboardRepository {
+	return &DashboardRepository{db: db}
+}
+
 func (r *DashboardRepository) tenantDB(ctx context.Context) *gorm.DB {
 	return TenantDB(r.db, ctx)
 }

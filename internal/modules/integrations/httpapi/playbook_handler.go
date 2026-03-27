@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/modules/integrations/service/playbook"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -62,8 +62,8 @@ type UpdateVariablesRequest struct {
 	Variables model.JSONArray `json:"variables" binding:"required"`
 }
 
-func buildPlaybookListOptions(c *gin.Context, page, pageSize int) *repository.PlaybookListOptions {
-	opts := &repository.PlaybookListOptions{
+func buildPlaybookListOptions(c *gin.Context, page, pageSize int) *integrationrepo.PlaybookListOptions {
+	opts := &integrationrepo.PlaybookListOptions{
 		Page:       page,
 		PageSize:   pageSize,
 		Name:       GetStringFilter(c, "name"),
@@ -80,7 +80,7 @@ func buildPlaybookListOptions(c *gin.Context, page, pageSize int) *repository.Pl
 	return opts
 }
 
-func parsePlaybookListUUIDFilters(c *gin.Context, opts *repository.PlaybookListOptions) {
+func parsePlaybookListUUIDFilters(c *gin.Context, opts *integrationrepo.PlaybookListOptions) {
 	if repoIDStr := c.Query("repository_id"); repoIDStr != "" {
 		if id, err := uuid.Parse(repoIDStr); err == nil {
 			opts.RepositoryID = &id
@@ -88,7 +88,7 @@ func parsePlaybookListUUIDFilters(c *gin.Context, opts *repository.PlaybookListO
 	}
 }
 
-func parsePlaybookListBoolFilters(c *gin.Context, opts *repository.PlaybookListOptions) {
+func parsePlaybookListBoolFilters(c *gin.Context, opts *integrationrepo.PlaybookListOptions) {
 	if hasVarsStr := c.Query("has_variables"); hasVarsStr != "" {
 		hasVars := hasVarsStr == "true"
 		opts.HasVariables = &hasVars
@@ -99,7 +99,7 @@ func parsePlaybookListBoolFilters(c *gin.Context, opts *repository.PlaybookListO
 	}
 }
 
-func parsePlaybookListCountFilters(c *gin.Context, opts *repository.PlaybookListOptions) {
+func parsePlaybookListCountFilters(c *gin.Context, opts *integrationrepo.PlaybookListOptions) {
 	if minVarsStr := c.Query("min_variables"); minVarsStr != "" {
 		if v, err := strconv.Atoi(minVarsStr); err == nil && v >= 0 {
 			opts.MinVariables = &v
@@ -112,7 +112,7 @@ func parsePlaybookListCountFilters(c *gin.Context, opts *repository.PlaybookList
 	}
 }
 
-func parsePlaybookListDateFilters(c *gin.Context, opts *repository.PlaybookListOptions) {
+func parsePlaybookListDateFilters(c *gin.Context, opts *integrationrepo.PlaybookListOptions) {
 	if createdFrom := c.Query("created_from"); createdFrom != "" {
 		if t, err := time.Parse(time.RFC3339, createdFrom); err == nil {
 			opts.CreatedFrom = &t

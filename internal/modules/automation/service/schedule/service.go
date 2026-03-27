@@ -6,23 +6,23 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 )
 
 // Service 定时任务调度服务
 type Service struct {
-	repo     *repository.ScheduleRepository
-	execRepo *repository.ExecutionRepository
+	repo     *automationrepo.ScheduleRepository
+	execRepo *automationrepo.ExecutionRepository
 }
 
 // NewService 创建定时任务调度服务
 func NewService() *Service {
 	return &Service{
-		repo:     repository.NewScheduleRepository(),
-		execRepo: repository.NewExecutionRepository(),
+		repo:     automationrepo.NewScheduleRepository(),
+		execRepo: automationrepo.NewExecutionRepository(),
 	}
 }
 
@@ -80,7 +80,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*model.ExecutionSchedu
 }
 
 // List 列出定时任务调度（支持多条件筛选）
-func (s *Service) List(ctx context.Context, opts *repository.ScheduleListOptions) ([]model.ExecutionSchedule, int64, error) {
+func (s *Service) List(ctx context.Context, opts *automationrepo.ScheduleListOptions) ([]model.ExecutionSchedule, int64, error) {
 	if opts.Page < 1 {
 		opts.Page = 1
 	}
@@ -241,6 +241,6 @@ func (s *Service) GetStats(ctx context.Context) (map[string]interface{}, error) 
 }
 
 // ListTimeline 获取调度时间线（轻量接口，用于可视化）
-func (s *Service) ListTimeline(ctx context.Context, date time.Time, enabled *bool, scheduleType string) ([]repository.ScheduleTimelineItem, error) {
+func (s *Service) ListTimeline(ctx context.Context, date time.Time, enabled *bool, scheduleType string) ([]automationrepo.ScheduleTimelineItem, error) {
 	return s.repo.ListTimeline(ctx, date, enabled, scheduleType)
 }

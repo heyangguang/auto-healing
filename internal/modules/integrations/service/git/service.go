@@ -10,8 +10,8 @@ import (
 
 	gitclient "github.com/company/auto-healing/internal/git"
 	"github.com/company/auto-healing/internal/model"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	playbookSvc "github.com/company/auto-healing/internal/modules/integrations/service/playbook"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
 
@@ -19,8 +19,8 @@ const DefaultReposDir = "/var/lib/auto-healing/repos"
 
 // Service Git 仓库服务
 type Service struct {
-	repo         *repository.GitRepositoryRepository
-	playbookRepo *repository.PlaybookRepository
+	repo         *integrationrepo.GitRepositoryRepository
+	playbookRepo *integrationrepo.PlaybookRepository
 	reposDir     string
 	lifecycle    *asyncLifecycle
 }
@@ -32,8 +32,8 @@ func NewService() *Service {
 		reposDir = DefaultReposDir
 	}
 	return &Service{
-		repo:         repository.NewGitRepositoryRepository(),
-		playbookRepo: repository.NewPlaybookRepository(),
+		repo:         integrationrepo.NewGitRepositoryRepository(),
+		playbookRepo: integrationrepo.NewPlaybookRepository(),
 		reposDir:     reposDir,
 		lifecycle:    newAsyncLifecycle(),
 	}
@@ -134,7 +134,7 @@ func (s *Service) UpdateRepo(ctx context.Context, id uuid.UUID, defaultBranch, a
 	if err := validateRepoMutation(repo.AuthType, repo.SyncEnabled, repo.SyncInterval, repo.MaxFailures); err != nil {
 		return nil, err
 	}
-	if err := s.repo.UpdateConfig(ctx, repo.ID, repository.GitRepositoryConfigUpdate{
+	if err := s.repo.UpdateConfig(ctx, repo.ID, integrationrepo.GitRepositoryConfigUpdate{
 		DefaultBranch: repo.DefaultBranch,
 		AuthType:      repo.AuthType,
 		AuthConfig:    repo.AuthConfig,
@@ -208,7 +208,7 @@ func (s *Service) ListRepos(ctx context.Context, status string) ([]model.GitRepo
 }
 
 // ListReposWithOptions 列出仓库（支持完整查询参数）
-func (s *Service) ListReposWithOptions(ctx context.Context, opts *repository.GitRepoListOptions) ([]model.GitRepository, int64, error) {
+func (s *Service) ListReposWithOptions(ctx context.Context, opts *integrationrepo.GitRepoListOptions) ([]model.GitRepository, int64, error) {
 	if opts.Page < 1 {
 		opts.Page = 1
 	}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
@@ -66,7 +67,7 @@ func TestRestartFailedInstanceSyncsIncidentStatusToProcessing(t *testing.T) {
 	mustExecHealing(t, db, `INSERT INTO flow_instances (id, tenant_id, status) VALUES (?, ?, ?)`, instanceID.String(), tenantID.String(), model.FlowInstanceStatusFailed)
 	mustExecHealing(t, db, `INSERT INTO incidents (id, tenant_id, healing_status) VALUES (?, ?, ?)`, incidentID.String(), tenantID.String(), "failed")
 
-	executor := &FlowExecutor{instanceRepo: repository.NewFlowInstanceRepository()}
+	executor := &FlowExecutor{instanceRepo: automationrepo.NewFlowInstanceRepository()}
 	instance := &model.FlowInstance{
 		ID:         instanceID,
 		IncidentID: &incidentID,

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
@@ -86,7 +87,7 @@ func buildInvitationRegisterRequest(req RegisterByInvitationRequest, inv *model.
 }
 
 func loadValidInvitation(c *gin.Context, token string) (*model.TenantInvitation, bool) {
-	invRepo := repository.NewInvitationRepository()
+	invRepo := accessrepo.NewInvitationRepository()
 	if _, err := invRepo.ExpireOldInvitations(c.Request.Context()); err != nil {
 		respondInternalError(c, "TENANT", "更新邀请过期状态失败", err)
 		return nil, false
@@ -136,7 +137,7 @@ func completeInvitationRegistration(ctx context.Context, userID uuid.UUID, inv *
 	if err := tenantRepo.AddMember(ctx, userID, inv.TenantID, inv.RoleID); err != nil {
 		return rollbackInvitationRegistration(ctx, userID, inv.TenantID, fmt.Errorf("关联邀请角色失败: %w", err))
 	}
-	if err := repository.NewInvitationRepository().UpdateStatus(ctx, inv.ID, model.InvitationStatusAccepted); err != nil {
+	if err := accessrepo.NewInvitationRepository().UpdateStatus(ctx, inv.ID, model.InvitationStatusAccepted); err != nil {
 		return rollbackInvitationRegistration(ctx, userID, inv.TenantID, fmt.Errorf("更新邀请状态失败: %w", err))
 	}
 	return nil

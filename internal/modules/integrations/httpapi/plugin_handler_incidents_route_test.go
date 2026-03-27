@@ -13,7 +13,6 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
-	automationhttp "github.com/company/auto-healing/internal/modules/automation/httpapi"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
@@ -185,9 +184,15 @@ func newIncidentRouteTestHarness(t *testing.T, permissions []string, schemas ...
 	t.Cleanup(pluginHandler.Shutdown)
 	router := gin.New()
 	router.Use(injectIncidentRouteContext(tenantID, permissions))
-	registerTenantIncidentRoutes(router.Group("/api/v1/tenant/incidents"), pluginHandler, &automationhttp.HealingHandler{})
+	registerTenantIncidentRoutes(router.Group("/api/v1/tenant/incidents"), pluginHandler, &stubIncidentHealingActions{})
 	return router, db, tenantID
 }
+
+type stubIncidentHealingActions struct{}
+
+func (s *stubIncidentHealingActions) TriggerIncidentManually(c *gin.Context) {}
+
+func (s *stubIncidentHealingActions) DismissIncident(c *gin.Context) {}
 
 func openIncidentRouteTestDB(t *testing.T) *gorm.DB {
 	t.Helper()

@@ -8,6 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	engagementservice "github.com/company/auto-healing/internal/modules/engagement/service"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
@@ -40,7 +41,7 @@ func (h *TenantHandler) InviteToTenant(c *gin.Context) {
 		respondInternalError(c, "TENANT", "解析邀请人失败", err)
 		return
 	}
-	invRepo := repository.NewInvitationRepository()
+	invRepo := accessrepo.NewInvitationRepository()
 	invitation := &model.TenantInvitation{
 		TenantID:  tenantID,
 		Email:     req.Email,
@@ -106,7 +107,7 @@ func (h *TenantHandler) validateTenantInvitationRequest(c *gin.Context, tenantID
 		return nil, nil, false
 	}
 
-	invRepo := repository.NewInvitationRepository()
+	invRepo := accessrepo.NewInvitationRepository()
 	hasPending, err := invRepo.CheckEmailPendingInTenant(c.Request.Context(), tenantID, email)
 	if err != nil {
 		respondInternalError(c, "TENANT", "检查待处理邀请失败", err)
@@ -192,7 +193,7 @@ func (h *TenantHandler) ListInvitations(c *gin.Context) {
 	status := c.Query("status")
 	page, pageSize := parsePagination(c, 20)
 
-	invRepo := repository.NewInvitationRepository()
+	invRepo := accessrepo.NewInvitationRepository()
 	if _, err := invRepo.ExpireOldInvitations(c.Request.Context()); err != nil {
 		respondInternalError(c, "TENANT", "更新邀请过期状态失败", err)
 		return
@@ -227,7 +228,7 @@ func (h *TenantHandler) CancelInvitation(c *gin.Context) {
 		return
 	}
 
-	invRepo := repository.NewInvitationRepository()
+	invRepo := accessrepo.NewInvitationRepository()
 	inv, err := invRepo.GetByID(c.Request.Context(), invID)
 	if err != nil {
 		respondInvitationLookupError(c, "TENANT", "查询邀请失败", err)

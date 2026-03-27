@@ -7,23 +7,24 @@ import (
 	"strings"
 
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
+	sharedrepo "github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
 
 // Service Playbook 服务
 type Service struct {
-	repo          *repository.PlaybookRepository
-	gitRepo       *repository.GitRepositoryRepository
-	executionRepo *repository.ExecutionRepository
+	repo          *integrationrepo.PlaybookRepository
+	gitRepo       *integrationrepo.GitRepositoryRepository
+	executionRepo *sharedrepo.ExecutionRepository
 }
 
 // NewService 创建 Playbook 服务
 func NewService() *Service {
 	return &Service{
-		repo:          repository.NewPlaybookRepository(),
-		gitRepo:       repository.NewGitRepositoryRepository(),
-		executionRepo: repository.NewExecutionRepository(),
+		repo:          integrationrepo.NewPlaybookRepository(),
+		gitRepo:       integrationrepo.NewGitRepositoryRepository(),
+		executionRepo: sharedrepo.NewExecutionRepository(),
 	}
 }
 
@@ -31,7 +32,7 @@ func NewService() *Service {
 func (s *Service) Create(ctx context.Context, repositoryID uuid.UUID, name, filePath, description, configMode string) (*model.Playbook, error) {
 	gitRepo, err := s.gitRepo.GetByID(ctx, repositoryID)
 	if err != nil {
-		if errors.Is(err, repository.ErrGitRepositoryNotFound) {
+		if errors.Is(err, integrationrepo.ErrGitRepositoryNotFound) {
 			return nil, fmt.Errorf("仓库不存在: %w", err)
 		}
 		return nil, fmt.Errorf("获取仓库失败: %w", err)
@@ -82,7 +83,7 @@ func (s *Service) List(ctx context.Context, repositoryID *uuid.UUID, status stri
 }
 
 // ListWithOptions 列出 Playbooks（支持完整查询参数）
-func (s *Service) ListWithOptions(ctx context.Context, opts *repository.PlaybookListOptions) ([]model.Playbook, int64, error) {
+func (s *Service) ListWithOptions(ctx context.Context, opts *integrationrepo.PlaybookListOptions) ([]model.Playbook, int64, error) {
 	if opts.Page < 1 {
 		opts.Page = 1
 	}

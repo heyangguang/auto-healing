@@ -7,6 +7,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -91,7 +92,7 @@ func (h *HealingHandler) ApproveTask(c *gin.Context) {
 		return
 	}
 	if err := h.approvalRepo.Approve(c.Request.Context(), id, *userID, req.Comment); err != nil {
-		if errors.Is(err, repository.ErrApprovalTaskNotPending) {
+		if errors.Is(err, automationrepo.ErrApprovalTaskNotPending) {
 			response.Conflict(c, "审批任务已处理，请刷新后查看最新状态")
 			return
 		}
@@ -178,7 +179,7 @@ func (h *HealingHandler) RejectTask(c *gin.Context) {
 	}
 
 	if err := h.approvalRepo.Reject(c.Request.Context(), id, *userID, req.Comment); err != nil {
-		if errors.Is(err, repository.ErrApprovalTaskNotPending) {
+		if errors.Is(err, automationrepo.ErrApprovalTaskNotPending) {
 			response.Conflict(c, "审批任务已处理，请刷新后查看最新状态")
 			return
 		}

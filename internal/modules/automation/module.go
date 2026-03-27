@@ -7,6 +7,7 @@ import (
 	healingSvc "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	scheduleSvc "github.com/company/auto-healing/internal/modules/automation/service/schedule"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/repository"
 )
 
@@ -27,10 +28,10 @@ func New() *Module {
 			Service: executionService,
 		}),
 		Healing: automationhttp.NewHealingHandlerWithDeps(automationhttp.HealingHandlerDeps{
-			FlowRepo:         repository.NewHealingFlowRepository(),
-			RuleRepo:         repository.NewHealingRuleRepository(),
-			InstanceRepo:     repository.NewFlowInstanceRepository(),
-			ApprovalRepo:     repository.NewApprovalTaskRepository(),
+			FlowRepo:         automationrepo.NewHealingFlowRepository(),
+			RuleRepo:         automationrepo.NewHealingRuleRepository(),
+			InstanceRepo:     automationrepo.NewFlowInstanceRepository(),
+			ApprovalRepo:     automationrepo.NewApprovalTaskRepository(),
 			IncidentRepo:     repository.NewIncidentRepository(),
 			NotificationRepo: repository.NewNotificationRepository(database.DB),
 			Executor:         scheduler.Executor(),

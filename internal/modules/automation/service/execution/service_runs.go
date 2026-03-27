@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
 
@@ -150,7 +150,7 @@ func (s *Service) GetRunsByTaskID(ctx context.Context, taskID uuid.UUID, page, p
 }
 
 // ListAllRuns 获取所有执行记录列表（跨任务模板）
-func (s *Service) ListAllRuns(ctx context.Context, opts *repository.RunListOptions) ([]model.ExecutionRun, int64, error) {
+func (s *Service) ListAllRuns(ctx context.Context, opts *automationrepo.RunListOptions) ([]model.ExecutionRun, int64, error) {
 	if opts.Page < 1 {
 		opts.Page = 1
 	}
@@ -173,27 +173,27 @@ func (s *Service) Shutdown() {
 
 // ==================== 统计方法 ====================
 
-func (s *Service) GetRunStats(ctx context.Context) (*repository.RunStats, error) {
+func (s *Service) GetRunStats(ctx context.Context) (*automationrepo.RunStats, error) {
 	return s.repo.GetRunStats(ctx)
 }
 
-func (s *Service) GetRunTrend(ctx context.Context, days int) ([]repository.RunTrendItem, error) {
+func (s *Service) GetRunTrend(ctx context.Context, days int) ([]automationrepo.RunTrendItem, error) {
 	return s.repo.GetRunTrend(ctx, days)
 }
 
-func (s *Service) GetTriggerDistribution(ctx context.Context) ([]repository.TriggerDistItem, error) {
+func (s *Service) GetTriggerDistribution(ctx context.Context) ([]automationrepo.TriggerDistItem, error) {
 	return s.repo.GetTriggerDistribution(ctx)
 }
 
-func (s *Service) GetTopFailedTasks(ctx context.Context, limit int) ([]repository.TaskFailRate, error) {
+func (s *Service) GetTopFailedTasks(ctx context.Context, limit int) ([]automationrepo.TaskFailRate, error) {
 	return s.repo.GetTopFailedTasks(ctx, limit)
 }
 
-func (s *Service) GetTopActiveTasks(ctx context.Context, limit int) ([]repository.TaskActivity, error) {
+func (s *Service) GetTopActiveTasks(ctx context.Context, limit int) ([]automationrepo.TaskActivity, error) {
 	return s.repo.GetTopActiveTasks(ctx, limit)
 }
 
-func (s *Service) GetTaskStats(ctx context.Context) (*repository.TaskStats, error) {
+func (s *Service) GetTaskStats(ctx context.Context) (*automationrepo.TaskStats, error) {
 	return s.repo.GetTaskStats(ctx)
 }
 

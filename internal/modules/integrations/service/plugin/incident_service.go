@@ -6,9 +6,10 @@ import (
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/query"
-	"github.com/company/auto-healing/internal/repository"
+	sharedrepo "github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -17,16 +18,16 @@ var ErrBatchResetScanScopeRequired = errors.New("批量重置必须提供 ids �
 
 // IncidentService 工单服务
 type IncidentService struct {
-	incidentRepo *repository.IncidentRepository
-	pluginRepo   *repository.PluginRepository
+	incidentRepo *sharedrepo.IncidentRepository
+	pluginRepo   *integrationrepo.PluginRepository
 	httpClient   *HTTPClient
 }
 
 // NewIncidentService 创建工单服务
 func NewIncidentService() *IncidentService {
 	return &IncidentService{
-		incidentRepo: repository.NewIncidentRepository(),
-		pluginRepo:   repository.NewPluginRepository(),
+		incidentRepo: sharedrepo.NewIncidentRepository(),
+		pluginRepo:   integrationrepo.NewPluginRepository(),
 		httpClient:   NewHTTPClient(),
 	}
 }
@@ -81,7 +82,7 @@ func (s *IncidentService) writeBackIncidentClose(ctx context.Context, id uuid.UU
 	}
 	plugin, err := s.pluginRepo.GetByID(ctx, *incident.PluginID)
 	if err != nil {
-		if errors.Is(err, repository.ErrPluginNotFound) {
+		if errors.Is(err, integrationrepo.ErrPluginNotFound) {
 			return false, nil
 		}
 		return false, fmt.Errorf("获取来源插件失败: %w", err)

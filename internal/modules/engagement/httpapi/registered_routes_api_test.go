@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/company/auto-healing/internal/repository"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/google/uuid"
 )
 
@@ -47,7 +47,7 @@ func TestPreferencePatchRouteMergesStoredPreferences(t *testing.T) {
 	db := newPreferenceTestDB(t)
 	createUserPreferenceSchema(t, db)
 	handler := &PreferenceHandler{
-		prefRepo: repository.NewUserPreferenceRepositoryWithDB(db),
+		prefRepo: engagementrepo.NewUserPreferenceRepositoryWithDB(db),
 	}
 	userID := uuid.NewString()
 

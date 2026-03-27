@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/database"
 	opshttp "github.com/company/auto-healing/internal/modules/ops/httpapi"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/repository"
 )
@@ -48,8 +50,8 @@ func New() *Module {
 		}),
 		BlacklistExemption: opshttp.NewBlacklistExemptionHandlerWithDeps(opshttp.BlacklistExemptionHandlerDeps{
 			Service:       opsservice.NewBlacklistExemptionService(),
-			TaskRepo:      repository.NewExecutionRepository(),
-			BlacklistRepo: repository.NewCommandBlacklistRepository(),
+			TaskRepo:      automationrepo.NewExecutionRepository(),
+			BlacklistRepo: opsrepo.NewCommandBlacklistRepository(),
 		}),
 	}
 }

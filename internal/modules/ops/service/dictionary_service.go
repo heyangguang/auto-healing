@@ -7,14 +7,14 @@ import (
 	"sync"
 
 	"github.com/company/auto-healing/internal/model"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
 
 // DictionaryService 字典值服务（含内存缓存）
 type DictionaryService struct {
-	repo         *repository.DictionaryRepository
+	repo         *opsrepo.DictionaryRepository
 	mu           sync.RWMutex
 	cache        map[string][]model.Dictionary // dict_type -> []Dictionary
 	cacheLoadErr error
@@ -23,7 +23,7 @@ type DictionaryService struct {
 // NewDictionaryService 创建服务
 func NewDictionaryService() *DictionaryService {
 	return &DictionaryService{
-		repo: repository.NewDictionaryRepository(),
+		repo: opsrepo.NewDictionaryRepository(),
 	}
 }
 
@@ -98,7 +98,7 @@ func (s *DictionaryService) GetAll(ctx context.Context, types []string, activeOn
 }
 
 // GetTypes 查询可用类型列表
-func (s *DictionaryService) GetTypes(ctx context.Context) ([]repository.DictTypeInfo, error) {
+func (s *DictionaryService) GetTypes(ctx context.Context) ([]opsrepo.DictTypeInfo, error) {
 	return s.repo.ListTypes(ctx)
 }
 

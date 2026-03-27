@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/google/uuid"
 )
 
@@ -17,7 +17,7 @@ func (s *CommandBlacklistService) Create(ctx context.Context, rule *model.Comman
 	rule.CreatedAt = time.Now()
 	rule.UpdatedAt = time.Now()
 	rule.IsSystem = false
-	if err := repository.FillTenantID(ctx, &rule.TenantID); err != nil {
+	if err := opsrepo.FillTenantID(ctx, &rule.TenantID); err != nil {
 		return err
 	}
 	if err := validateCommandBlacklistRule(rule.MatchType, rule.Pattern, rule.Severity); err != nil {
@@ -59,7 +59,7 @@ func (s *CommandBlacklistService) GetByID(ctx context.Context, id uuid.UUID) (*m
 }
 
 // List 列表查询
-func (s *CommandBlacklistService) List(ctx context.Context, opts *repository.CommandBlacklistListOptions) ([]model.CommandBlacklist, int64, error) {
+func (s *CommandBlacklistService) List(ctx context.Context, opts *opsrepo.CommandBlacklistListOptions) ([]model.CommandBlacklist, int64, error) {
 	if opts.Page < 1 {
 		opts.Page = 1
 	}

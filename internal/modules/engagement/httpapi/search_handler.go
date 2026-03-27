@@ -4,24 +4,24 @@ import (
 	"strconv"
 
 	"github.com/company/auto-healing/internal/middleware"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 )
 
 // SearchHandler 全局搜索处理器
 type SearchHandler struct {
-	repo *repository.SearchRepository
+	repo *engagementrepo.SearchRepository
 }
 
 type SearchHandlerDeps struct {
-	Repo *repository.SearchRepository
+	Repo *engagementrepo.SearchRepository
 }
 
 // NewSearchHandler 创建全局搜索处理器
 func NewSearchHandler() *SearchHandler {
 	return NewSearchHandlerWithDeps(SearchHandlerDeps{
-		Repo: repository.NewSearchRepository(),
+		Repo: engagementrepo.NewSearchRepository(),
 	})
 }
 

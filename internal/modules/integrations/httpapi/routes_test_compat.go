@@ -1,12 +1,16 @@
 package httpapi
 
 import (
-	automationhttp "github.com/company/auto-healing/internal/modules/automation/httpapi"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
 
-func registerTenantIncidentRoutes(incidents *gin.RouterGroup, plugin *PluginHandler, healing *automationhttp.HealingHandler) {
+type incidentHealingActions interface {
+	TriggerIncidentManually(*gin.Context)
+	DismissIncident(*gin.Context)
+}
+
+func registerTenantIncidentRoutes(incidents *gin.RouterGroup, plugin *PluginHandler, healing incidentHealingActions) {
 	incidents.GET("/stats", middleware.RequirePermission("plugin:list"), plugin.GetIncidentStats)
 	incidents.GET("/search-schema", middleware.RequirePermission("plugin:list"), plugin.GetIncidentSearchSchema)
 	incidents.GET("", middleware.RequirePermission("plugin:list"), plugin.ListIncidents)

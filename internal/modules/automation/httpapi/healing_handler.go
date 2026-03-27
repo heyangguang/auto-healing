@@ -4,16 +4,17 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	healing "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	"github.com/company/auto-healing/internal/pkg/response"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 )
 
 // HealingHandler 自愈引擎处理器
 type HealingHandler struct {
-	flowRepo     *repository.HealingFlowRepository
-	ruleRepo     *repository.HealingRuleRepository
-	instanceRepo *repository.FlowInstanceRepository
-	approvalRepo *repository.ApprovalTaskRepository
+	flowRepo     *automationrepo.HealingFlowRepository
+	ruleRepo     *automationrepo.HealingRuleRepository
+	instanceRepo *automationrepo.FlowInstanceRepository
+	approvalRepo *automationrepo.ApprovalTaskRepository
 	incidentRepo *repository.IncidentRepository
 	notifRepo    *repository.NotificationRepository
 	executor     *healing.FlowExecutor
@@ -21,10 +22,10 @@ type HealingHandler struct {
 }
 
 type HealingHandlerDeps struct {
-	FlowRepo         *repository.HealingFlowRepository
-	RuleRepo         *repository.HealingRuleRepository
-	InstanceRepo     *repository.FlowInstanceRepository
-	ApprovalRepo     *repository.ApprovalTaskRepository
+	FlowRepo         *automationrepo.HealingFlowRepository
+	RuleRepo         *automationrepo.HealingRuleRepository
+	InstanceRepo     *automationrepo.FlowInstanceRepository
+	ApprovalRepo     *automationrepo.ApprovalTaskRepository
 	IncidentRepo     *repository.IncidentRepository
 	NotificationRepo *repository.NotificationRepository
 	Executor         *healing.FlowExecutor
@@ -35,10 +36,10 @@ type HealingHandlerDeps struct {
 func NewHealingHandler() *HealingHandler {
 	scheduler := healing.DefaultScheduler()
 	return NewHealingHandlerWithDeps(HealingHandlerDeps{
-		FlowRepo:         repository.NewHealingFlowRepository(),
-		RuleRepo:         repository.NewHealingRuleRepository(),
-		InstanceRepo:     repository.NewFlowInstanceRepository(),
-		ApprovalRepo:     repository.NewApprovalTaskRepository(),
+		FlowRepo:         automationrepo.NewHealingFlowRepository(),
+		RuleRepo:         automationrepo.NewHealingRuleRepository(),
+		InstanceRepo:     automationrepo.NewFlowInstanceRepository(),
+		ApprovalRepo:     automationrepo.NewApprovalTaskRepository(),
 		IncidentRepo:     repository.NewIncidentRepository(),
 		NotificationRepo: repository.NewNotificationRepository(database.DB),
 		Executor:         scheduler.Executor(),

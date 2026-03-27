@@ -6,9 +6,11 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	sharedrepo "github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -16,21 +18,21 @@ import (
 
 type BlacklistExemptionHandler struct {
 	svc           *opsservice.BlacklistExemptionService
-	taskRepo      *repository.ExecutionRepository
-	blacklistRepo *repository.CommandBlacklistRepository
+	taskRepo      *automationrepo.ExecutionRepository
+	blacklistRepo *opsrepo.CommandBlacklistRepository
 }
 
 type BlacklistExemptionHandlerDeps struct {
 	Service       *opsservice.BlacklistExemptionService
-	TaskRepo      *repository.ExecutionRepository
-	BlacklistRepo *repository.CommandBlacklistRepository
+	TaskRepo      *automationrepo.ExecutionRepository
+	BlacklistRepo *opsrepo.CommandBlacklistRepository
 }
 
 func NewBlacklistExemptionHandler() *BlacklistExemptionHandler {
 	return NewBlacklistExemptionHandlerWithDeps(BlacklistExemptionHandlerDeps{
 		Service:       opsservice.NewBlacklistExemptionService(),
-		TaskRepo:      repository.NewExecutionRepository(),
-		BlacklistRepo: repository.NewCommandBlacklistRepository(),
+		TaskRepo:      automationrepo.NewExecutionRepository(),
+		BlacklistRepo: opsrepo.NewCommandBlacklistRepository(),
 	})
 }
 
@@ -46,7 +48,7 @@ func NewBlacklistExemptionHandlerWithDeps(deps BlacklistExemptionHandlerDeps) *B
 func (h *BlacklistExemptionHandler) List(c *gin.Context) {
 	page, pageSize := parsePagination(c, 10)
 
-	opts := repository.ExemptionListOptions{
+	opts := opsrepo.ExemptionListOptions{
 		Page:      page,
 		PageSize:  pageSize,
 		Status:    c.Query("status"),
@@ -228,7 +230,7 @@ func (h *BlacklistExemptionHandler) Reject(c *gin.Context) {
 func (h *BlacklistExemptionHandler) GetPending(c *gin.Context) {
 	page, pageSize := parsePagination(c, 10)
 
-	opts := repository.ExemptionListOptions{
+	opts := opsrepo.ExemptionListOptions{
 		Page:      page,
 		PageSize:  pageSize,
 		Search:    c.Query("search"),
@@ -303,9 +305,9 @@ func respondBlacklistExemptionMutationError(c *gin.Context, err error, internalM
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		response.NotFound(c, "豁免申请不存在")
-	case errors.Is(err, repository.ErrBlacklistExemptionNotPending):
+	case errors.Is(err, opsrepo.ErrBlacklistExemptionNotPending):
 		response.Conflict(c, "该豁免申请已被其他审批人处理")
-	case errors.Is(err, repository.ErrTenantContextRequired):
+	case errors.Is(err, sharedrepo.ErrTenantContextRequired):
 		respondInternalError(c, "BLACKLIST", internalMsg, err)
 	default:
 		if isBlacklistExemptionBadRequest(err) {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -66,7 +67,7 @@ func TestApplyCommandBlacklistUpdatePreservesOmittedOptionalFields(t *testing.T)
 }
 
 func TestSimulateFilesUsesPerFileLineNumbers(t *testing.T) {
-	results, err := (&CommandBlacklistService{}).Simulate(&SimulateRequest{
+	results, err := (&CommandBlacklistService{repo: opsrepo.NewCommandBlacklistRepository()}).Simulate(&SimulateRequest{
 		Pattern:   "rm",
 		MatchType: "contains",
 		Files: []SimulateFileReq{

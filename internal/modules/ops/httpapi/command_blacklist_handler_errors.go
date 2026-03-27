@@ -5,14 +5,15 @@ import (
 	"strconv"
 	"strings"
 
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func buildCommandBlacklistListOptions(c *gin.Context, page, pageSize int) (*repository.CommandBlacklistListOptions, error) {
-	opts := &repository.CommandBlacklistListOptions{
+func buildCommandBlacklistListOptions(c *gin.Context, page, pageSize int) (*opsrepo.CommandBlacklistListOptions, error) {
+	opts := &opsrepo.CommandBlacklistListOptions{
 		Page:         page,
 		PageSize:     pageSize,
 		Name:         c.Query("name"),

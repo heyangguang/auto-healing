@@ -8,22 +8,22 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/google/uuid"
 )
 
 type BlacklistExemptionService struct {
-	repo *repository.BlacklistExemptionRepository
+	repo *opsrepo.BlacklistExemptionRepository
 }
 
 func NewBlacklistExemptionService() *BlacklistExemptionService {
 	return &BlacklistExemptionService{
-		repo: repository.NewBlacklistExemptionRepository(database.DB),
+		repo: opsrepo.NewBlacklistExemptionRepository(database.DB),
 	}
 }
 
 // List 列表查询
-func (s *BlacklistExemptionService) List(ctx context.Context, opts repository.ExemptionListOptions) ([]model.BlacklistExemption, int64, error) {
+func (s *BlacklistExemptionService) List(ctx context.Context, opts opsrepo.ExemptionListOptions) ([]model.BlacklistExemption, int64, error) {
 	return s.repo.List(ctx, opts)
 }
 
@@ -49,7 +49,7 @@ func (s *BlacklistExemptionService) Create(ctx context.Context, item *model.Blac
 	item.UpdatedAt = time.Now()
 
 	// 设置租户ID
-	if err := repository.FillTenantID(ctx, &item.TenantID); err != nil {
+	if err := opsrepo.FillTenantID(ctx, &item.TenantID); err != nil {
 		return err
 	}
 
@@ -115,7 +115,7 @@ func (s *BlacklistExemptionService) GetApprovedByTaskID(ctx context.Context, tas
 }
 
 // ListPending 获取待审批列表
-func (s *BlacklistExemptionService) ListPending(ctx context.Context, opts repository.ExemptionListOptions) ([]model.BlacklistExemption, int64, error) {
+func (s *BlacklistExemptionService) ListPending(ctx context.Context, opts opsrepo.ExemptionListOptions) ([]model.BlacklistExemption, int64, error) {
 	return s.repo.ListPending(ctx, opts)
 }
 
@@ -125,8 +125,8 @@ func (s *BlacklistExemptionService) ExpireOverdue(ctx context.Context) (int64, e
 }
 
 func normalizeBlacklistExemptionMutationError(err error) error {
-	if errors.Is(err, repository.ErrBlacklistExemptionNotPending) {
-		return fmt.Errorf("%w: 该豁免申请已被其他审批人处理", repository.ErrBlacklistExemptionNotPending)
+	if errors.Is(err, opsrepo.ErrBlacklistExemptionNotPending) {
+		return fmt.Errorf("%w: 该豁免申请已被其他审批人处理", opsrepo.ErrBlacklistExemptionNotPending)
 	}
 	return err
 }

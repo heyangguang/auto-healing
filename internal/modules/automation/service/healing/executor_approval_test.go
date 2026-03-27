@@ -8,6 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -46,7 +47,7 @@ func TestMarkInstanceWaitingApprovalUsesExistingWaitingState(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = origDB })
 
-	executor := &FlowExecutor{instanceRepo: repository.NewFlowInstanceRepository()}
+	executor := &FlowExecutor{instanceRepo: automationrepo.NewFlowInstanceRepository()}
 
 	instance := &model.FlowInstance{ID: instanceID, NodeStates: model.JSON{}}
 	task := &model.ApprovalTask{ID: uuid.MustParse("56565656-5656-5656-5656-565656565656")}

@@ -5,25 +5,25 @@ import (
 	"errors"
 
 	"github.com/company/auto-healing/internal/middleware"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 // PreferenceHandler 用户偏好处理器
 type PreferenceHandler struct {
-	prefRepo *repository.UserPreferenceRepository
+	prefRepo *engagementrepo.UserPreferenceRepository
 }
 
 type PreferenceHandlerDeps struct {
-	PreferenceRepo *repository.UserPreferenceRepository
+	PreferenceRepo *engagementrepo.UserPreferenceRepository
 }
 
 // NewPreferenceHandler 创建用户偏好处理器
 func NewPreferenceHandler() *PreferenceHandler {
 	return NewPreferenceHandlerWithDeps(PreferenceHandlerDeps{
-		PreferenceRepo: repository.NewUserPreferenceRepository(),
+		PreferenceRepo: engagementrepo.NewUserPreferenceRepository(),
 	})
 }
 
@@ -48,7 +48,7 @@ func (h *PreferenceHandler) GetPreferences(c *gin.Context) {
 
 	pref, err := h.prefRepo.GetByUserID(c.Request.Context(), userID)
 	if err != nil {
-		if errors.Is(err, repository.ErrPreferenceNotFound) {
+		if errors.Is(err, engagementrepo.ErrPreferenceNotFound) {
 			response.Success(c, map[string]interface{}{
 				"user_id":     userID,
 				"preferences": json.RawMessage("{}"),

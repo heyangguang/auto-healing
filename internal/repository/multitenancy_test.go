@@ -13,7 +13,7 @@ func TestDashboardConfigTenantIsolation(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createDashboardSchema(t, db)
 
-	repo := &DashboardRepository{db: db}
+	repo := NewDashboardRepositoryWithDB(db)
 	userID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
@@ -47,7 +47,7 @@ func TestWorkspaceRepositoryUsesCurrentTenantRoles(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createWorkspaceSchema(t, db)
 
-	repo := &WorkspaceRepository{db: db}
+	repo := NewWorkspaceRepositoryWithDB(db)
 	userID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
@@ -203,7 +203,7 @@ func TestDashboardUsersSectionUsesCurrentTenantMembership(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createDashboardUsersSchema(t, db)
 
-	repo := &DashboardRepository{db: db}
+	repo := NewDashboardRepositoryWithDB(db)
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	userA := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")

@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/query"
-	"github.com/company/auto-healing/internal/repository"
+	sharedrepo "github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -20,9 +21,9 @@ var (
 
 // Service 插件服务
 type Service struct {
-	pluginRepo  *repository.PluginRepository
-	syncLogRepo *repository.PluginSyncLogRepository
-	cmdbRepo    *repository.CMDBItemRepository
+	pluginRepo  *integrationrepo.PluginRepository
+	syncLogRepo *integrationrepo.PluginSyncLogRepository
+	cmdbRepo    *sharedrepo.CMDBItemRepository
 	httpClient  *HTTPClient
 	lifecycle   *asyncLifecycle
 }
@@ -30,9 +31,9 @@ type Service struct {
 // NewService 创建插件服务
 func NewService() *Service {
 	return &Service{
-		pluginRepo:  repository.NewPluginRepository(),
-		syncLogRepo: repository.NewPluginSyncLogRepository(),
-		cmdbRepo:    repository.NewCMDBItemRepository(),
+		pluginRepo:  integrationrepo.NewPluginRepository(),
+		syncLogRepo: integrationrepo.NewPluginSyncLogRepository(),
+		cmdbRepo:    sharedrepo.NewCMDBItemRepository(),
 		httpClient:  NewHTTPClient(),
 		lifecycle:   newAsyncLifecycle(),
 	}
@@ -76,7 +77,7 @@ func (s *Service) UpdatePlugin(ctx context.Context, id uuid.UUID, description, v
 	}
 	plugin.NextSyncAt = calculateNextSyncAt(plugin.SyncEnabled, plugin.SyncIntervalMinutes)
 
-	if err := s.pluginRepo.UpdateConfig(ctx, plugin.ID, repository.PluginConfigUpdate{
+	if err := s.pluginRepo.UpdateConfig(ctx, plugin.ID, integrationrepo.PluginConfigUpdate{
 		Description:         plugin.Description,
 		Version:             plugin.Version,
 		Config:              plugin.Config,

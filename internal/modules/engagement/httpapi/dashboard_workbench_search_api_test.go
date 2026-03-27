@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	respPkg "github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -67,7 +67,7 @@ func TestWorkbenchOverviewRouteHidesPlaybooksWithoutPlaybookPermission(t *testin
 		permissions:     []string{"plugin:list"},
 	})
 	router.GET("/common/workbench/overview", (&WorkbenchHandler{
-		repo: repository.NewWorkbenchRepository(db),
+		repo: engagementrepo.NewWorkbenchRepository(db),
 	}).GetOverview)
 
 	req := httptest.NewRequest(http.MethodGet, "/common/workbench/overview", nil)
