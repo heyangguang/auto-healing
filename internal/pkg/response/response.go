@@ -59,6 +59,16 @@ func List(c *gin.Context, data any, total int64, page, pageSize int) {
 	})
 }
 
+// Collection 集合响应（无分页，但有 total）
+func Collection(c *gin.Context, data any, total int64) {
+	c.JSON(http.StatusOK, Response{
+		Code:    CodeSuccess,
+		Message: "success",
+		Data:    data,
+		Total:   &total,
+	})
+}
+
 // Message 纯消息响应（如删除成功）
 func Message(c *gin.Context, msg string) {
 	c.JSON(http.StatusOK, Response{

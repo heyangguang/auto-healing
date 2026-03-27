@@ -490,7 +490,7 @@ kubectl apply -f deployments/kubernetes/
 
 | Document | Description |
 |----------|-------------|
-| [API Reference](docs/openapi.yaml) | OpenAPI 3.0 specification |
+| [API Reference](api/openapi.yaml) | OpenAPI 3.0 specification |
 | [API Testing Guide](docs/api-testing-guide.md) | cURL examples and test workflows |
 | [Project Introduction](docs/auto_healing_project_intro.md) | Comprehensive product overview |
 | [Internal Architecture](internal/README.md) | Internal directory structure |

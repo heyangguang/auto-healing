@@ -17,11 +17,9 @@ import (
 	"gorm.io/gorm"
 )
 
-type authItemsResponse[T any] struct {
+type authListResponse[T any] struct {
 	Code int `json:"code"`
-	Data struct {
-		Items []T `json:"items"`
-	} `json:"data"`
+	Data []T `json:"data"`
 }
 
 func TestSetupAuthRoutesProfileLoginHistoryUsesCurrentTenantClaim(t *testing.T) {
@@ -52,12 +50,12 @@ func TestSetupAuthRoutesProfileLoginHistoryUsesCurrentTenantClaim(t *testing.T) 
 		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
 	}
 
-	var resp authItemsResponse[LoginHistoryItem]
+	var resp authListResponse[LoginHistoryItem]
 	if err := json.Unmarshal(recorder.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(resp.Data.Items) != 1 || resp.Data.Items[0].Action != "login-b" {
-		t.Fatalf("items = %+v, want tenant-b history only", resp.Data.Items)
+	if len(resp.Data) != 1 || resp.Data[0].Action != "login-b" {
+		t.Fatalf("items = %+v, want tenant-b history only", resp.Data)
 	}
 }
 
@@ -89,12 +87,12 @@ func TestSetupAuthRoutesProfileActivitiesUsesCurrentTenantClaim(t *testing.T) {
 		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
 	}
 
-	var resp authItemsResponse[ProfileActivityItem]
+	var resp authListResponse[ProfileActivityItem]
 	if err := json.Unmarshal(recorder.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(resp.Data.Items) != 1 || resp.Data.Items[0].Action != "op-b" {
-		t.Fatalf("items = %+v, want tenant-b activities only", resp.Data.Items)
+	if len(resp.Data) != 1 || resp.Data[0].Action != "op-b" {
+		t.Fatalf("items = %+v, want tenant-b activities only", resp.Data)
 	}
 }
 

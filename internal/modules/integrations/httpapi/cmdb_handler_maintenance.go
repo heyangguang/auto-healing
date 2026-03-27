@@ -94,7 +94,7 @@ func (h *CMDBHandler) GetMaintenanceLogs(c *gin.Context) {
 		respondInternalError(c, "CMDB", "获取维护日志失败", err)
 		return
 	}
-	response.Success(c, map[string]interface{}{"data": logs, "total": total, "page": page, "page_size": pageSize})
+	response.List(c, logs, total, page, pageSize)
 }
 
 // BatchEnterMaintenance 批量进入维护模式

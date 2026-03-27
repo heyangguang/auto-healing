@@ -23,18 +23,7 @@ PLATFORM_USERS_DOC_PATH = ROOT / "docs/api/platform-users.md"
 PLATFORM_ROLES_DOC_PATH = ROOT / "docs/api/platform-roles.md"
 AUDIT_LOGS_DOC_PATH = ROOT / "docs/api/audit-logs.md"
 PLATFORM_AUDIT_DOC_PATH = ROOT / "docs/api/platform-audit-logs.md"
-ROUTE_FILES = [
-    ROOT / "internal/handler/routes.go",
-    ROOT / "internal/handler/routes_platform.go",
-    ROOT / "internal/handler/routes_tenant_core.go",
-    ROOT / "internal/handler/routes_tenant_operations.go",
-]
-ROUTE_FILE_ROOT_PREFIXES = {
-    "routes.go": {"api": ""},
-    "routes_platform.go": {"platform": "/platform"},
-    "routes_tenant_core.go": {"tenant": ""},
-    "routes_tenant_operations.go": {"tenant": ""},
-}
+ROUTE_FILES = sorted(ROOT.glob("internal/modules/*/httpapi/routes*.go"))
 
 INCIDENT_HEALING_ENUM = "pending, processing, healed, failed, skipped, dismissed"
 INCIDENT_HEALING_MD = "`pending` / `processing` / `healed` / `failed` / `skipped` / `dismissed`"
@@ -75,13 +64,25 @@ def parse_openapi_methods(content: str) -> dict:
 
 def collect_route_methods(route_files: List[Path]) -> dict:
     route_methods = {}
+    function_re = re.compile(r"func \(r Registrar\) Register(Auth|Common|Platform|Tenant)Routes\((\w+) \*gin\.RouterGroup\)")
     group_re = re.compile(r'(\w+)\s*:=\s*(\w+)\.Group\("([^"]*)"\)')
     route_re = re.compile(r'(\w+)\.(GET|POST|PUT|PATCH|DELETE)\("([^"]*)"')
+    root_prefixes = {
+        "Auth": "",
+        "Common": "/common",
+        "Platform": "/platform",
+        "Tenant": "/tenant",
+    }
 
     for route_file in route_files:
-        prefixes = dict(ROUTE_FILE_ROOT_PREFIXES.get(route_file.name, {"api": ""}))
+        prefixes = {}
         route_content = read_text(route_file)
         for line in route_content.splitlines():
+            function_match = function_re.search(line)
+            if function_match:
+                route_kind, var_name = function_match.groups()
+                prefixes[var_name] = root_prefixes[route_kind]
+                continue
             group_match = group_re.search(line)
             if group_match:
                 group_name, parent_name, suffix = group_match.groups()
@@ -96,8 +97,6 @@ def collect_route_methods(route_files: List[Path]) -> dict:
             full_path = prefixes[group_name] + suffix
             if full_path.startswith("/public"):
                 continue
-            if full_path.startswith("/tenant"):
-                full_path = full_path[len("/tenant"):] or "/"
             full_path = re.sub(r":([A-Za-z0-9_]+)", r"{\1}", full_path)
             route_methods.setdefault(full_path, set()).add(method)
     return route_methods

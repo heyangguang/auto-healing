@@ -1081,7 +1081,7 @@ paths:
         '201':
           $ref: '#/components/responses/Success'
 
-  /users:
+  /tenant/users:
     get:
       tags: [用户管理]
       summary: 获取用户列表
@@ -1146,7 +1146,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
 
-  /users/{id}:
+  /tenant/users/{id}:
     get:
       tags: [用户管理]
       summary: 获取用户详情
@@ -1196,7 +1196,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /users/{id}/reset-password:
+  /tenant/users/{id}/reset-password:
     post:
       tags: [用户管理]
       summary: 重置用户密码
@@ -1216,7 +1216,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /users/{id}/roles:
+  /tenant/users/{id}/roles:
     put:
       tags: [用户管理]
       summary: 分配用户角色
@@ -1240,7 +1240,7 @@ paths:
           $ref: '#/components/responses/Success'
 
   # ==================== 角色管理 ====================
-  /roles:
+  /tenant/roles:
     get:
       tags: [角色管理]
       summary: 获取角色列表
@@ -1282,7 +1282,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Role'
 
-  /roles/{id}:
+  /tenant/roles/{id}:
     get:
       tags: [角色管理]
       summary: 获取角色详情
@@ -1329,7 +1329,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /roles/{id}/permissions:
+  /tenant/roles/{id}/permissions:
     put:
       tags: [角色管理]
       summary: 分配角色权限
@@ -1353,7 +1353,7 @@ paths:
           $ref: '#/components/responses/Success'
 
   # ==================== 权限 ====================
-  /permissions:
+  /tenant/permissions:
     get:
       tags: [权限]
       summary: 获取权限列表
@@ -1370,7 +1370,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/Permission'
 
-  /permissions/tree:
+  /tenant/permissions/tree:
     get:
       tags: [权限]
       summary: 获取权限树（按模块分组）
@@ -1390,7 +1390,7 @@ paths:
                         $ref: '#/components/schemas/Permission'
 
   # ==================== 插件管理 ====================
-  /plugins:
+  /tenant/plugins:
     get:
       tags: [插件管理]
       summary: 获取插件列表
@@ -1450,38 +1450,6 @@ paths:
                   example:
                     url: https://itsm.example.com/api/incidents
 
-  /plugins/search-schema:
-    get:
-      tags: [插件管理]
-      summary: 获取插件搜索字段定义
-      responses:
-        '200':
-          description: 成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SearchSchemaResponse'
-
-  /plugins/stats:
-    get:
-      tags: [插件管理]
-      summary: 获取插件统计
-      description: 返回插件的总数、类型分布、状态分布、同步配置统计等信息
-      responses:
-        '200':
-          description: 成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PluginStats'
-                    auth_type: basic
-                    username: admin
-                    password: admin123
-                    since_param: updated_after
-                    response_data_path: data.items
-                    extra_params:
-                      sysparm_limit: "100"
-                      sysparm_display_value: "true"
                 field_mapping:
                   type: object
                   description: 字段映射规则
@@ -1513,7 +1481,37 @@ paths:
               schema:
                 $ref: '#/components/schemas/Plugin'
 
-  /plugins/{id}:
+  /tenant/plugins/search-schema:
+    get:
+      tags: [插件管理]
+      summary: 获取插件搜索字段定义
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchSchemaResponse'
+
+  /tenant/plugins/stats:
+    get:
+      tags: [插件管理]
+      summary: 获取插件统计
+      description: 返回插件的总数、类型分布、状态分布、同步配置统计等信息
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PluginStats'
+
+  /tenant/plugins/{id}:
     get:
       tags: [插件管理]
       summary: 获取插件详情
@@ -1586,7 +1584,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /plugins/{id}/test:
+  /tenant/plugins/{id}/test:
     post:
       tags: [插件管理]
       summary: 测试插件连接
@@ -1611,7 +1609,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /plugins/{id}/activate:
+  /tenant/plugins/{id}/activate:
     post:
       tags: [插件管理]
       summary: 激活插件
@@ -1636,7 +1634,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /plugins/{id}/deactivate:
+  /tenant/plugins/{id}/deactivate:
     post:
       tags: [插件管理]
       summary: 停用插件
@@ -1655,7 +1653,7 @@ paths:
                     type: string
                     example: 插件已停用
 
-  /plugins/{id}/sync:
+  /tenant/plugins/{id}/sync:
     post:
       tags: [插件管理]
       summary: 触发手动同步
@@ -1669,7 +1667,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PluginSyncLog'
 
-  /plugins/{id}/logs:
+  /tenant/plugins/{id}/logs:
     get:
       tags: [插件管理]
       summary: 获取插件同步日志
@@ -1693,7 +1691,7 @@ paths:
                           $ref: '#/components/schemas/PluginSyncLog'
 
   # ==================== 工单管理 ====================
-  /incidents/stats:
+  /tenant/incidents/stats:
     get:
       tags: [工单管理]
       summary: 获取工单统计
@@ -1756,7 +1754,7 @@ paths:
                         description: 已忽略数
                         example: 2
 
-  /incidents/search-schema:
+  /tenant/incidents/search-schema:
     get:
       tags: [工单管理]
       summary: 获取工单搜索字段定义
@@ -1768,7 +1766,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SearchSchemaResponse'
 
-  /incidents:
+  /tenant/incidents:
     get:
       tags: [工单管理]
       summary: 获取工单列表
@@ -1845,7 +1843,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/Incident'
 
-  /incidents/{id}:
+  /tenant/incidents/{id}:
     get:
       tags: [工单管理]
       summary: 获取工单详情
@@ -1859,7 +1857,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Incident'
 
-  /incidents/{id}/close:
+  /tenant/incidents/{id}/close:
     post:
       tags: [工单管理]
       summary: 关闭工单
@@ -1879,7 +1877,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CloseIncidentResponse'
 
-  /incidents/{id}/trigger:
+  /tenant/incidents/{id}/trigger:
     post:
       tags: [工单管理]
       summary: 手动触发工单自愈
@@ -1893,7 +1891,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/FlowInstance'
 
-  /incidents/{id}/dismiss:
+  /tenant/incidents/{id}/dismiss:
     post:
       tags: [工单管理]
       summary: 忽略待触发工单
@@ -1911,7 +1909,7 @@ paths:
                     type: string
                     example: 工单已忽略
 
-  /incidents/{id}/reset-scan:
+  /tenant/incidents/{id}/reset-scan:
     post:
       tags: [工单管理]
       summary: 重置工单扫描状态
@@ -1932,7 +1930,7 @@ paths:
                     type: string
                     example: 工单扫描状态已重置，将被重新扫描
 
-  /incidents/batch-reset-scan:
+  /tenant/incidents/batch-reset-scan:
     post:
       tags: [工单管理]
       summary: 批量重置工单扫描状态
@@ -1979,7 +1977,7 @@ paths:
                     type: string
                     example: 成功重置 5 条工单的扫描状态
 
-  /cmdb:
+  /tenant/cmdb:
     get:
       tags: [CMDB]
       summary: 获取 CMDB 配置项列表
@@ -2024,7 +2022,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/CMDBItem'
 
-  /cmdb/batch-test-connection:
+  /tenant/cmdb/batch-test-connection:
     post:
       tags: [CMDB]
       summary: 批量测试 SSH 连接
@@ -2069,7 +2067,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/ConnectionTestResult'
 
-  /cmdb/{id}/test-connection:
+  /tenant/cmdb/{id}/test-connection:
     post:
       tags: [CMDB]
       summary: 测试单个 CMDB 配置项的 SSH 连接
@@ -2101,7 +2099,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ConnectionTestResult'
 
-  /cmdb/{id}/maintenance:
+  /tenant/cmdb/{id}/maintenance:
     post:
       tags: [CMDB]
       summary: 进入维护模式
@@ -2138,7 +2136,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
 
-  /cmdb/{id}/resume:
+  /tenant/cmdb/{id}/resume:
     post:
       tags: [CMDB]
       summary: 退出维护模式
@@ -2158,7 +2156,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
 
-  /cmdb/{id}/maintenance-logs:
+  /tenant/cmdb/{id}/maintenance-logs:
     get:
       tags: [CMDB]
       summary: 获取维护日志
@@ -2191,7 +2189,7 @@ paths:
                   page_size:
                     type: integer
 
-  /cmdb/batch/maintenance:
+  /tenant/cmdb/batch/maintenance:
     post:
       tags: [CMDB]
       summary: 批量进入维护模式
@@ -2232,7 +2230,7 @@ paths:
                   failed:
                     type: integer
 
-  /cmdb/batch/resume:
+  /tenant/cmdb/batch/resume:
     post:
       tags: [CMDB]
       summary: 批量退出维护模式
@@ -2267,7 +2265,7 @@ paths:
                     type: integer
 
 
-  /cmdb/stats:
+  /tenant/cmdb/stats:
     get:
       tags: [CMDB]
       summary: 获取 CMDB 统计信息
@@ -2279,7 +2277,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CMDBStats'
 
-  /cmdb/{id}:
+  /tenant/cmdb/{id}:
     get:
       tags: [CMDB]
       summary: 获取 CMDB 配置项详情
@@ -2294,7 +2292,7 @@ paths:
                 $ref: '#/components/schemas/CMDBItem'
 
   # ==================== 密钥管理 ====================
-  /secrets-sources:
+  /tenant/secrets-sources:
     get:
       tags: [密钥管理]
       summary: 获取密钥源列表
@@ -2343,7 +2341,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SecretsSource'
 
-  /secrets-sources/stats:
+  /tenant/secrets-sources/stats:
     get:
       tags: [密钥管理]
       summary: 获取密钥源统计
@@ -2361,7 +2359,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /secrets-sources/{id}:
+  /tenant/secrets-sources/{id}:
     get:
       tags: [密钥管理]
       summary: 获取密钥源详情
@@ -2401,7 +2399,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /secrets-sources/{id}/test:
+  /tenant/secrets-sources/{id}/test:
     post:
       tags: [密钥管理]
       summary: 测试密钥源连接
@@ -2412,7 +2410,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /secrets-sources/{id}/test-query:
+  /tenant/secrets-sources/{id}/test-query:
     post:
       tags: [密钥管理]
       summary: 测试主机凭据获取
@@ -2474,7 +2472,7 @@ paths:
                   fail_count:
                     type: integer
 
-  /secrets-sources/{id}/enable:
+  /tenant/secrets-sources/{id}/enable:
     post:
       tags: [密钥管理]
       summary: 启用密钥源
@@ -2485,7 +2483,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /secrets-sources/{id}/disable:
+  /tenant/secrets-sources/{id}/disable:
     post:
       tags: [密钥管理]
       summary: 禁用密钥源
@@ -2495,7 +2493,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /secrets/query:
+  /tenant/secrets/query:
     post:
       tags: [密钥管理]
       summary: 按主机查询密钥
@@ -2514,7 +2512,7 @@ paths:
                 $ref: '#/components/schemas/Secret'
 
   # ==================== Git仓库 ====================
-  /git-repos:
+  /tenant/git-repos:
     get:
       tags: [Git仓库]
       summary: 获取 Git 仓库列表
@@ -2553,7 +2551,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/GitRepository'
 
-  /git-repos/{id}:
+  /tenant/git-repos/{id}:
     get:
       tags: [Git仓库]
       summary: 获取仓库详情
@@ -2596,7 +2594,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /git-repos/{id}/sync:
+  /tenant/git-repos/{id}/sync:
     post:
       tags: [Git仓库]
       summary: 同步仓库
@@ -2606,7 +2604,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /git-repos/validate:
+  /tenant/git-repos/validate:
     post:
       tags: [Git仓库]
       summary: 验证仓库（创建前获取分支列表）
@@ -2634,7 +2632,7 @@ paths:
         '200':
           description: 验证成功
 
-  /git-repos/stats:
+  /tenant/git-repos/stats:
     get:
       tags: [Git仓库]
       summary: 获取 Git 仓库统计
@@ -2652,7 +2650,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /git-repos/search-schema:
+  /tenant/git-repos/search-schema:
     get:
       tags: [Git仓库]
       summary: 获取 Git 仓库搜索字段定义
@@ -2684,7 +2682,7 @@ paths:
         '400':
           description: 验证失败（URL 无效、认证失败等）
 
-  /git-repos/{id}/commits:
+  /tenant/git-repos/{id}/commits:
     get:
       tags: [Git仓库]
       summary: 获取 Commit 历史
@@ -2712,7 +2710,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/CommitInfo'
 
-  /git-repos/{id}/files:
+  /tenant/git-repos/{id}/files:
     get:
       tags: [Git仓库]
       summary: 获取文件树
@@ -2728,7 +2726,7 @@ paths:
           description: 成功
 
   # ==================== Playbook 模板 ====================
-  /playbooks:
+  /tenant/playbooks:
     get:
       tags: [Playbook模板]
       summary: 获取 Playbook 模板列表
@@ -2790,7 +2788,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Playbook'
 
-  /playbooks/stats:
+  /tenant/playbooks/stats:
     get:
       tags: [Playbook模板]
       summary: 获取 Playbook 统计
@@ -2808,7 +2806,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /playbooks/{id}:
+  /tenant/playbooks/{id}:
     get:
       tags: [Playbook模板]
       summary: 获取 Playbook 模板详情
@@ -2849,7 +2847,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /playbooks/{id}/scan:
+  /tenant/playbooks/{id}/scan:
     post:
       tags: [Playbook模板]
       summary: 扫描 Playbook 变量
@@ -2871,7 +2869,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PlaybookScanLog'
 
-  /playbooks/{id}/variables:
+  /tenant/playbooks/{id}/variables:
     put:
       tags: [Playbook模板]
       summary: 更新变量配置
@@ -2894,7 +2892,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /playbooks/{id}/ready:
+  /tenant/playbooks/{id}/ready:
     post:
       tags: [Playbook模板]
       summary: 上线（设置为 Ready 状态）
@@ -2905,7 +2903,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /playbooks/{id}/offline:
+  /tenant/playbooks/{id}/offline:
     post:
       tags: [Playbook模板]
       summary: 下线（设置为 Pending 状态）
@@ -2916,7 +2914,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /playbooks/{id}/files:
+  /tenant/playbooks/{id}/files:
     get:
       tags: [Playbook模板]
       summary: 获取文件列表
@@ -2949,7 +2947,7 @@ paths:
                               description: 文件类型
                               enum: [entry, task, vars, defaults, handlers, template, file, role, include]
 
-  /playbooks/{id}/scan-logs:
+  /tenant/playbooks/{id}/scan-logs:
     get:
       tags: [Playbook模板]
       summary: 获取扫描日志
@@ -2966,7 +2964,7 @@ paths:
                 $ref: '#/components/schemas/PaginatedPlaybookScanLogs'
 
   # ==================== 执行任务模板 ====================
-  /execution-tasks:
+  /tenant/execution-tasks:
     get:
       tags: [执行任务]
       summary: 获取任务模板列表
@@ -3068,7 +3066,7 @@ paths:
                   format: uuid
                   description: Playbook ID（状态必须为 ready 或 outdated）
 
-  /execution-tasks/stats:
+  /tenant/execution-tasks/stats:
     get:
       tags: [执行任务]
       summary: 获取任务模板统计
@@ -3085,7 +3083,7 @@ paths:
                       data:
                         $ref: '#/components/schemas/ExecutionTaskStats'
 
-  /execution-tasks/search-schema:
+  /tenant/execution-tasks/search-schema:
     get:
       tags: [执行任务]
       summary: 获取任务模板搜索字段定义
@@ -3124,7 +3122,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExecutionTask'
 
-  /execution-tasks/{id}:
+  /tenant/execution-tasks/{id}:
     get:
       tags: [执行任务]
       summary: 获取任务模板详情
@@ -3205,7 +3203,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExecutionTask'
 
-  /execution-tasks/{id}/execute:
+  /tenant/execution-tasks/{id}/execute:
     post:
       tags: [执行任务]
       summary: 执行任务（创建执行记录并运行）
@@ -3251,7 +3249,7 @@ paths:
         '400':
           description: 执行失败（如 needs_review = true）
 
-  /execution-tasks/{id}/confirm-review:
+  /tenant/execution-tasks/{id}/confirm-review:
     post:
       tags: [执行任务]
       summary: 确认审核变量变更
@@ -3268,7 +3266,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExecutionTask'
 
-  /execution-tasks/{id}/runs:
+  /tenant/execution-tasks/{id}/runs:
     get:
       tags: [执行任务]
       summary: 获取任务的执行历史
@@ -3292,7 +3290,7 @@ paths:
                     type: integer
 
   # ==================== 定时任务调度 ====================
-  /execution-schedules:
+  /tenant/execution-schedules:
     get:
       tags: [定时调度]
       summary: 获取定时任务调度列表
@@ -3397,7 +3395,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExecutionSchedule'
 
-  /execution-schedules/{id}:
+  /tenant/execution-schedules/{id}:
     get:
       tags: [定时调度]
       summary: 获取定时任务调度详情
@@ -3466,7 +3464,7 @@ paths:
         '204':
           description: 删除成功
 
-  /execution-schedules/{id}/enable:
+  /tenant/execution-schedules/{id}/enable:
     post:
       tags: [定时调度]
       summary: 启用定时任务调度
@@ -3476,7 +3474,7 @@ paths:
         '200':
           description: 启用成功
 
-  /execution-schedules/{id}/disable:
+  /tenant/execution-schedules/{id}/disable:
     post:
       tags: [定时调度]
       summary: 禁用定时任务调度
@@ -3487,7 +3485,7 @@ paths:
           description: 禁用成功
 
   # ==================== 执行记录 ====================
-  /execution-runs:
+  /tenant/execution-runs:
     get:
       tags: [执行记录]
       summary: 获取执行记录列表
@@ -3541,7 +3539,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/ExecutionRun'
 
-  /execution-runs/search-schema:
+  /tenant/execution-runs/search-schema:
     get:
       tags: [执行记录]
       summary: 获取执行记录搜索字段定义
@@ -3553,7 +3551,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SearchSchemaResponse'
 
-  /execution-runs/stats:
+  /tenant/execution-runs/stats:
     get:
       tags: [执行记录]
       summary: 获取执行记录统计概览
@@ -3570,7 +3568,7 @@ paths:
                       data:
                         $ref: '#/components/schemas/ExecutionRunStats'
 
-  /execution-runs/trend:
+  /tenant/execution-runs/trend:
     get:
       tags: [执行记录]
       summary: 获取执行趋势
@@ -3603,7 +3601,7 @@ paths:
                             type: integer
                             example: 7
 
-  /execution-runs/trigger-distribution:
+  /tenant/execution-runs/trigger-distribution:
     get:
       tags: [执行记录]
       summary: 获取触发方式分布
@@ -3622,7 +3620,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/ExecutionRunTriggerDistributionItem'
 
-  /execution-runs/top-failed:
+  /tenant/execution-runs/top-failed:
     get:
       tags: [执行记录]
       summary: 获取失败率最高的任务
@@ -3649,7 +3647,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/ExecutionRunTopFailedItem'
 
-  /execution-runs/top-active:
+  /tenant/execution-runs/top-active:
     get:
       tags: [执行记录]
       summary: 获取最活跃的任务
@@ -3676,7 +3674,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/ExecutionRunTopActiveItem'
 
-  /execution-runs/{id}:
+  /tenant/execution-runs/{id}:
     get:
       tags: [执行记录]
       summary: 获取执行记录详情
@@ -3690,7 +3688,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExecutionRun'
 
-  /execution-runs/{id}/logs:
+  /tenant/execution-runs/{id}/logs:
     get:
       tags: [执行记录]
       summary: 获取执行日志
@@ -3711,7 +3709,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/ExecutionLog'
 
-  /execution-runs/{id}/cancel:
+  /tenant/execution-runs/{id}/cancel:
     post:
       tags: [执行记录]
       summary: 取消执行
@@ -3721,7 +3719,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /execution-runs/{id}/stream:
+  /tenant/execution-runs/{id}/stream:
     get:
       tags: [执行记录]
       summary: SSE 实时日志流
@@ -3746,7 +3744,7 @@ paths:
                   data: {"status":"success","exit_code":0}
 
   # ==================== 通知渠道管理 ====================
-  /channels:
+  /tenant/channels:
     get:
       tags: [通知渠道]
       summary: 获取渠道列表
@@ -3789,7 +3787,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/NotificationChannel'
 
-  /channels/{id}:
+  /tenant/channels/{id}:
     get:
       tags: [通知渠道]
       summary: 获取渠道详情
@@ -3825,7 +3823,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /channels/{id}/test:
+  /tenant/channels/{id}/test:
     post:
       tags: [通知渠道]
       summary: 测试渠道连接
@@ -3836,7 +3834,7 @@ paths:
           $ref: '#/components/responses/Success'
 
   # ==================== 通知模板管理 ====================
-  /templates:
+  /tenant/templates:
     get:
       tags: [通知模板]
       summary: 获取模板列表
@@ -3910,7 +3908,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/NotificationTemplate'
 
-  /templates/{id}:
+  /tenant/templates/{id}:
     get:
       tags: [通知模板]
       summary: 获取模板详情
@@ -3946,7 +3944,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /templates/{id}/preview:
+  /tenant/templates/{id}/preview:
     post:
       tags: [通知模板]
       summary: 预览模板
@@ -3979,7 +3977,7 @@ paths:
                     description: 渲染后的正文
 
   # ==================== 模板变量查询 ====================
-  /template-variables:
+  /tenant/template-variables:
     get:
       tags: [模板变量]
       summary: 获取所有可用模板变量
@@ -4019,7 +4017,7 @@ paths:
                       description: Ansible 错误输出 (最大 100000 字符)
 
   # ==================== 通知记录查询 ====================
-  /notifications/send:
+  /tenant/notifications/send:
     post:
       tags: [通知记录]
       summary: 发送通知
@@ -4077,7 +4075,7 @@ paths:
                             items:
                               $ref: '#/components/schemas/Notification'
 
-  /notifications:
+  /tenant/notifications:
     get:
       tags: [通知记录]
       summary: 获取通知发送记录
@@ -4157,7 +4155,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/Notification'
 
-  /notifications/stats:
+  /tenant/notifications/stats:
     get:
       tags: [通知记录]
       summary: 获取通知统计
@@ -4174,7 +4172,7 @@ paths:
                       data:
                         $ref: '#/components/schemas/NotificationStats'
 
-  /notifications/{id}:
+  /tenant/notifications/{id}:
     get:
       tags: [通知记录]
       summary: 获取通知详情
@@ -4189,7 +4187,7 @@ paths:
                 $ref: '#/components/schemas/Notification'
 
   # ==================== 自愈引擎 ====================
-  /healing/flows:
+  /tenant/healing/flows:
     get:
       tags: [自愈流程]
       summary: 获取自愈流程列表
@@ -4231,7 +4229,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealingFlow'
 
-  /healing/flows/{id}:
+  /tenant/healing/flows/{id}:
     get:
       tags: [自愈流程]
       summary: 获取自愈流程详情
@@ -4286,7 +4284,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /healing/rules:
+  /tenant/healing/rules:
     get:
       tags: [自愈规则]
       summary: 获取自愈规则列表
@@ -4333,7 +4331,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealingRule'
 
-  /healing/rules/{id}:
+  /tenant/healing/rules/{id}:
     get:
       tags: [自愈规则]
       summary: 获取自愈规则详情
@@ -4409,7 +4407,7 @@ paths:
                   message:
                     type: string
 
-  /healing/rules/{id}/activate:
+  /tenant/healing/rules/{id}/activate:
     post:
       tags: [自愈规则]
       summary: 启用自愈规则
@@ -4424,7 +4422,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /healing/rules/{id}/deactivate:
+  /tenant/healing/rules/{id}/deactivate:
     post:
       tags: [自愈规则]
       summary: 停用自愈规则
@@ -4439,7 +4437,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /healing/instances:
+  /tenant/healing/instances:
     get:
       tags: [流程实例]
       summary: 获取流程实例列表
@@ -4588,7 +4586,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/FlowInstance'
 
-  /healing/instances/stats:
+  /tenant/healing/instances/stats:
     get:
       tags: [流程实例]
       summary: 获取流程实例统计
@@ -4624,7 +4622,7 @@ paths:
                               type: integer
                               example: 10
 
-  /healing/instances/{id}:
+  /tenant/healing/instances/{id}:
     get:
       tags: [流程实例]
       summary: 获取流程实例详情
@@ -4643,7 +4641,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/FlowInstance'
 
-  /healing/instances/{id}/cancel:
+  /tenant/healing/instances/{id}/cancel:
     post:
       tags: [流程实例]
       summary: 取消流程实例
@@ -4658,7 +4656,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /healing/instances/{id}/retry:
+  /tenant/healing/instances/{id}/retry:
     post:
       tags: [流程实例]
       summary: 重试流程实例
@@ -4683,7 +4681,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /healing/instances/{id}/events:
+  /tenant/healing/instances/{id}/events:
     get:
       tags: [流程实例]
       summary: 流程实例事件流
@@ -4710,7 +4708,7 @@ paths:
                   event: node_start
                   data: {"event":"node_start","data":{"node_id":"approval"},"timestamp":"2026-03-26T10:00:02Z"}
 
-  /healing/approvals:
+  /tenant/healing/approvals:
     get:
       tags: [审批任务]
       summary: 获取审批任务列表
@@ -4742,7 +4740,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/ApprovalTask'
 
-  /healing/approvals/pending:
+  /tenant/healing/approvals/pending:
     get:
       tags: [审批任务]
       summary: 获取待审批任务列表
@@ -4779,7 +4777,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/ApprovalTask'
 
-  /healing/pending/trigger:
+  /tenant/healing/pending/trigger:
     get:
       tags: [待触发工单]
       summary: 获取待触发工单列表
@@ -4821,7 +4819,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/Incident'
 
-  /healing/pending/dismissed:
+  /tenant/healing/pending/dismissed:
     get:
       tags: [待触发工单]
       summary: 获取已忽略工单列表
@@ -4863,7 +4861,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/Incident'
 
-  /healing/approvals/{id}:
+  /tenant/healing/approvals/{id}:
     get:
       tags: [审批任务]
       summary: 获取审批任务详情
@@ -4882,7 +4880,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApprovalTask'
 
-  /healing/approvals/{id}/approve:
+  /tenant/healing/approvals/{id}/approve:
     post:
       tags: [审批任务]
       summary: 批准审批任务
@@ -4906,7 +4904,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /healing/approvals/{id}/reject:
+  /tenant/healing/approvals/{id}/reject:
     post:
       tags: [审批任务]
       summary: 拒绝审批任务
@@ -4930,7 +4928,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /audit-logs:
+  /tenant/audit-logs:
     get:
       tags: [审计日志]
       summary: 获取租户审计日志列表
@@ -4938,7 +4936,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /audit-logs/stats:
+  /tenant/audit-logs/stats:
     get:
       tags: [审计日志]
       summary: 获取审计统计概览
@@ -4956,7 +4954,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /audit-logs/user-ranking:
+  /tenant/audit-logs/user-ranking:
     get:
       tags: [审计日志]
       summary: 获取用户操作排行
@@ -4985,7 +4983,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /audit-logs/action-grouping:
+  /tenant/audit-logs/action-grouping:
     get:
       tags: [审计日志]
       summary: 按操作类型分组统计
@@ -5013,7 +5011,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /audit-logs/resource-stats:
+  /tenant/audit-logs/resource-stats:
     get:
       tags: [审计日志]
       summary: 获取资源类型统计
@@ -5037,7 +5035,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /audit-logs/trend:
+  /tenant/audit-logs/trend:
     get:
       tags: [审计日志]
       summary: 获取操作趋势
@@ -5061,7 +5059,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /audit-logs/high-risk:
+  /tenant/audit-logs/high-risk:
     get:
       tags: [审计日志]
       summary: 获取高危操作日志
@@ -5084,7 +5082,7 @@ paths:
                           type: object
                           additionalProperties: true
 
-  /audit-logs/export:
+  /tenant/audit-logs/export:
     get:
       tags: [审计日志]
       summary: 导出审计日志
@@ -5096,7 +5094,7 @@ paths:
               schema:
                 type: string
 
-  /cmdb/search-schema:
+  /tenant/cmdb/search-schema:
     get:
       tags: [CMDB]
       summary: 获取 CMDB 搜索字段定义
@@ -5108,7 +5106,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SearchSchemaResponse'
 
-  /cmdb/ids:
+  /tenant/cmdb/ids:
     get:
       tags: [CMDB]
       summary: 获取符合筛选条件的 CMDB ID 列表
@@ -5159,7 +5157,7 @@ paths:
                           total:
                             type: integer
 
-  /dashboard/overview:
+  /tenant/dashboard/overview:
     get:
       tags: [Dashboard]
       summary: 获取 Dashboard 概览
@@ -5183,7 +5181,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /dashboard/config:
+  /tenant/dashboard/config:
     get:
       tags: [Dashboard]
       summary: 获取 Dashboard 配置
@@ -5214,7 +5212,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /dashboard/workspaces:
+  /tenant/dashboard/workspaces:
     get:
       tags: [Dashboard]
       summary: 获取系统工作区列表
@@ -5264,7 +5262,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /execution-schedules/stats:
+  /tenant/execution-schedules/stats:
     get:
       tags: [定时调度]
       summary: 获取定时任务统计
@@ -5282,7 +5280,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /execution-schedules/timeline:
+  /tenant/execution-schedules/timeline:
     get:
       tags: [定时调度]
       summary: 获取调度时间线
@@ -5316,7 +5314,7 @@ paths:
                           type: object
                           additionalProperties: true
 
-  /execution-tasks/batch-confirm-review:
+  /tenant/execution-tasks/batch-confirm-review:
     post:
       tags: [执行任务]
       summary: 批量确认审核
@@ -5353,7 +5351,7 @@ paths:
                           message:
                             type: string
 
-  /healing/flows/node-schema:
+  /tenant/healing/flows/node-schema:
     get:
       tags: [自愈流程]
       summary: 获取节点类型 Schema
@@ -5373,7 +5371,7 @@ paths:
                           type: object
                           additionalProperties: true
 
-  /healing/flows/search-schema:
+  /tenant/healing/flows/search-schema:
     get:
       tags: [自愈流程]
       summary: 获取流程搜索字段定义
@@ -5385,7 +5383,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SearchSchemaResponse'
 
-  /healing/flows/stats:
+  /tenant/healing/flows/stats:
     get:
       tags: [自愈流程]
       summary: 获取流程统计
@@ -5403,7 +5401,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /healing/rules/search-schema:
+  /tenant/healing/rules/search-schema:
     get:
       tags: [自愈规则]
       summary: 获取规则搜索字段定义
@@ -5415,7 +5413,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SearchSchemaResponse'
 
-  /healing/rules/stats:
+  /tenant/healing/rules/stats:
     get:
       tags: [自愈规则]
       summary: 获取规则统计
@@ -5433,7 +5431,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /healing/instances/search-schema:
+  /tenant/healing/instances/search-schema:
     get:
       tags: [流程实例]
       summary: 获取流程实例搜索字段定义
@@ -5445,7 +5443,57 @@ paths:
               schema:
                 $ref: '#/components/schemas/SearchSchemaResponse'
 
-  /site-messages/unread-count:
+  /tenant/site-messages:
+    get:
+      tags: [站内信]
+      summary: 查询站内信列表
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: keyword
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: is_read
+          in: query
+          schema:
+            type: string
+        - name: date_from
+          in: query
+          schema:
+            type: string
+        - name: date_to
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: order
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SiteMessage'
+
+  /tenant/site-messages/unread-count:
     get:
       tags: [站内信]
       summary: 获取未读消息数
@@ -5465,7 +5513,7 @@ paths:
                           unread_count:
                             type: integer
 
-  /site-messages/read:
+  /tenant/site-messages/read:
     put:
       tags: [站内信]
       summary: 批量标记已读
@@ -5486,7 +5534,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /site-messages/read-all:
+  /tenant/site-messages/read-all:
     put:
       tags: [站内信]
       summary: 标记全部已读
@@ -5506,7 +5554,7 @@ paths:
                           marked_count:
                             type: integer
 
-  /site-messages/events:
+  /tenant/site-messages/events:
     get:
       tags: [站内信]
       summary: 站内信实时事件流
@@ -5518,7 +5566,94 @@ paths:
               schema:
                 type: string
 
-  /blacklist-exemptions/pending:
+  /tenant/blacklist-exemptions:
+    get:
+      tags: [黑名单豁免]
+      summary: 获取黑名单豁免列表
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: task_id
+          in: query
+          schema:
+            type: string
+        - name: rule_id
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          additionalProperties: true
+    post:
+      tags: [黑名单豁免]
+      summary: 创建黑名单豁免申请
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task_id, rule_id, reason]
+              properties:
+                task_id:
+                  type: string
+                  format: uuid
+                task_name:
+                  type: string
+                rule_id:
+                  type: string
+                  format: uuid
+                rule_name:
+                  type: string
+                rule_severity:
+                  type: string
+                rule_pattern:
+                  type: string
+                reason:
+                  type: string
+                validity_days:
+                  type: integer
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        additionalProperties: true
+
+  /tenant/blacklist-exemptions/pending:
     get:
       tags: [黑名单豁免]
       summary: 获取待审批豁免列表
@@ -5541,7 +5676,7 @@ paths:
                           type: object
                           additionalProperties: true
 
-  /blacklist-exemptions/search-schema:
+  /tenant/blacklist-exemptions/search-schema:
     get:
       tags: [黑名单豁免]
       summary: 获取黑名单豁免搜索字段定义
@@ -5559,7 +5694,81 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /command-blacklist/batch-toggle:
+  /tenant/command-blacklist:
+    get:
+      tags: [高危指令黑名单]
+      summary: 获取黑名单规则列表
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: severity
+          in: query
+          schema:
+            type: string
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+        - name: match_type
+          in: query
+          schema:
+            type: string
+        - name: pattern
+          in: query
+          schema:
+            type: string
+        - name: operator
+          in: query
+          schema:
+            type: string
+        - name: scope
+          in: query
+          schema:
+            type: string
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CommandBlacklist'
+    post:
+      tags: [高危指令黑名单]
+      summary: 创建黑名单规则
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandBlacklist'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandBlacklist'
+
+  /tenant/command-blacklist/batch-toggle:
     post:
       tags: [高危指令黑名单]
       summary: 批量启用或禁用规则
@@ -5592,7 +5801,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /command-blacklist/search-schema:
+  /tenant/command-blacklist/search-schema:
     get:
       tags: [高危指令黑名单]
       summary: 获取黑名单搜索字段定义
@@ -5610,7 +5819,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /command-blacklist/simulate:
+  /tenant/command-blacklist/simulate:
     post:
       tags: [高危指令黑名单]
       summary: 仿真测试黑名单匹配
@@ -5649,7 +5858,7 @@ paths:
                           type: object
                           additionalProperties: true
 
-  /impersonation/history:
+  /tenant/impersonation/history:
     get:
       tags: [租户身份代入]
       summary: 获取审批历史
@@ -5684,7 +5893,7 @@ paths:
                           type: object
                           additionalProperties: true
 
-  /impersonation/pending:
+  /tenant/impersonation/pending:
     get:
       tags: [租户身份代入]
       summary: 获取待审批列表
@@ -5704,7 +5913,7 @@ paths:
                           type: object
                           additionalProperties: true
 
-  /settings/impersonation-approvers:
+  /tenant/settings/impersonation-approvers:
     get:
       tags: [租户设置]
       summary: 获取身份代入审批人
@@ -5742,7 +5951,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /users/simple:
+  /tenant/users/simple:
     get:
       tags: [用户管理]
       summary: 获取简要用户列表
@@ -5771,7 +5980,7 @@ paths:
                           type: object
                           additionalProperties: true
 
-  /roles/{id}/users:
+  /tenant/roles/{id}/users:
     get:
       tags: [角色管理]
       summary: 获取角色关联用户
@@ -5799,7 +6008,7 @@ paths:
                           type: object
                           additionalProperties: true
 
-  /audit-logs/{id}:
+  /tenant/audit-logs/{id}:
     get:
       tags: [审计日志]
       summary: 获取审计日志详情
@@ -5819,7 +6028,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /git-repos/{id}/reset-status:
+  /tenant/git-repos/{id}/reset-status:
     post:
       tags: [Git仓库]
       summary: 重置仓库状态
@@ -5834,7 +6043,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /git-repos/{id}/logs:
+  /tenant/git-repos/{id}/logs:
     get:
       tags: [Git仓库]
       summary: 获取同步日志
@@ -5858,7 +6067,7 @@ paths:
                           type: object
                           additionalProperties: true
 
-  /healing/flows/{id}/dry-run:
+  /tenant/healing/flows/{id}/dry-run:
     post:
       tags: [自愈流程]
       summary: 试运行流程
@@ -5885,7 +6094,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /healing/flows/{id}/dry-run-stream:
+  /tenant/healing/flows/{id}/dry-run-stream:
     post:
       tags: [自愈流程]
       summary: 流式试运行流程
@@ -5906,7 +6115,7 @@ paths:
               schema:
                 type: string
 
-  /dashboard/workspaces/{id}:
+  /tenant/dashboard/workspaces/{id}:
     put:
       tags: [Dashboard]
       summary: 更新系统工作区
@@ -5941,7 +6150,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /dashboard/roles/{roleId}/workspaces:
+  /tenant/dashboard/roles/{roleId}/workspaces:
     get:
       tags: [Dashboard]
       summary: 获取角色关联工作区
@@ -6007,7 +6216,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /impersonation/{id}/approve:
+  /tenant/impersonation/{id}/approve:
     post:
       tags: [租户身份代入]
       summary: 批准身份代入申请
@@ -6017,7 +6226,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /impersonation/{id}/reject:
+  /tenant/impersonation/{id}/reject:
     post:
       tags: [租户身份代入]
       summary: 拒绝身份代入申请
@@ -6027,7 +6236,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /command-blacklist/{id}:
+  /tenant/command-blacklist/{id}:
     get:
       tags: [高危指令黑名单]
       summary: 获取黑名单规则详情
@@ -6080,7 +6289,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /command-blacklist/{id}/toggle:
+  /tenant/command-blacklist/{id}/toggle:
     post:
       tags: [高危指令黑名单]
       summary: 启用或禁用黑名单规则
@@ -6100,7 +6309,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /blacklist-exemptions/{id}:
+  /tenant/blacklist-exemptions/{id}:
     get:
       tags: [黑名单豁免]
       summary: 获取豁免申请详情
@@ -6120,7 +6329,7 @@ paths:
                         type: object
                         additionalProperties: true
 
-  /blacklist-exemptions/{id}/approve:
+  /tenant/blacklist-exemptions/{id}/approve:
     post:
       tags: [黑名单豁免]
       summary: 批准豁免申请
@@ -6130,7 +6339,7 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
 
-  /blacklist-exemptions/{id}/reject:
+  /tenant/blacklist-exemptions/{id}/reject:
     post:
       tags: [黑名单豁免]
       summary: 拒绝豁免申请

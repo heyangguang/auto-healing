@@ -153,7 +153,7 @@ func (h *AuthHandler) GetLoginHistory(c *gin.Context) {
 		respondProfileAuditQueryError(c, "获取登录历史失败", err)
 		return
 	}
-	response.Success(c, map[string]interface{}{"items": items})
+	response.Success(c, items)
 }
 
 func authHistoryLimit(c *gin.Context, defaultValue int) int {
@@ -198,7 +198,7 @@ func (h *AuthHandler) GetProfileActivities(c *gin.Context) {
 		respondProfileAuditQueryError(c, "获取操作记录失败", err)
 		return
 	}
-	response.Success(c, map[string]interface{}{"items": items})
+	response.Success(c, items)
 }
 
 func (h *AuthHandler) loadProfileActivityItems(c *gin.Context, userID uuid.UUID, limit int) ([]ProfileActivityItem, error) {

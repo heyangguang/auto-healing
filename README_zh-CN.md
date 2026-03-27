@@ -578,7 +578,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/plugins |
 
 | 文档 | 说明 |
 |------|------|
-| [API 规范](docs/openapi.yaml) | OpenAPI 3.0 接口文档 |
+| [API 规范](api/openapi.yaml) | OpenAPI 3.0 接口文档 |
 | [API 测试指南](docs/api-testing-guide.md) | cURL 示例与测试流程 |
 | [项目全面介绍](docs/auto_healing_project_intro.md) | 产品深度介绍文档 |
 | [内部架构说明](internal/README.md) | 内部目录结构详解 |

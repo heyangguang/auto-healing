@@ -85,7 +85,7 @@ func (h *CMDBHandler) ListCMDBItemIDs(c *gin.Context) {
 		respondInternalError(c, "CMDB", "获取 CMDB ID 列表失败", err)
 		return
 	}
-	response.Success(c, map[string]interface{}{"items": items, "total": total})
+	response.Collection(c, items, total)
 }
 
 // GetCMDBItem 获取 CMDB 详情

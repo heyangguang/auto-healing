@@ -116,9 +116,7 @@ func (h *WorkbenchHandler) GetActivities(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, map[string]interface{}{
-		"items": items,
-	})
+	response.Success(c, items)
 }
 
 // GetScheduleCalendar 获取定时任务日历
@@ -190,9 +188,7 @@ func (h *WorkbenchHandler) GetAnnouncements(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, map[string]interface{}{
-		"items": items,
-	})
+	response.Success(c, items)
 }
 
 // GetFavorites 获取用户收藏（复用 user_favorites 表，与侧边栏一致）
@@ -223,9 +219,7 @@ func (h *WorkbenchHandler) GetFavorites(c *gin.Context) {
 		})
 	}
 
-	response.Success(c, map[string]interface{}{
-		"items": items,
-	})
+	response.Success(c, items)
 }
 
 // ==================== 权限辅助函数 ====================
