@@ -24,7 +24,7 @@ func (h *AuditHandler) GetUserRanking(c *gin.Context) {
 		respondInternalError(c, "AUDIT", "获取审计用户排行失败", err)
 		return
 	}
-	response.Success(c, gin.H{"rankings": rankings, "limit": limit, "days": days})
+	response.Success(c, rankings)
 }
 
 // GetActionGrouping 按操作类型分组统计
@@ -36,7 +36,7 @@ func (h *AuditHandler) GetActionGrouping(c *gin.Context) {
 		respondInternalError(c, "AUDIT", "获取审计操作分组失败", err)
 		return
 	}
-	response.Success(c, gin.H{"items": items, "action": action, "days": days})
+	response.Success(c, items)
 }
 
 // GetResourceTypeStats 获取资源类型统计
@@ -47,7 +47,7 @@ func (h *AuditHandler) GetResourceTypeStats(c *gin.Context) {
 		respondInternalError(c, "AUDIT", "获取审计资源统计失败", err)
 		return
 	}
-	response.Success(c, gin.H{"items": items, "days": days})
+	response.Success(c, items)
 }
 
 // GetTrend 获取操作趋势
@@ -58,5 +58,5 @@ func (h *AuditHandler) GetTrend(c *gin.Context) {
 		respondInternalError(c, "AUDIT", "获取审计趋势失败", err)
 		return
 	}
-	response.Success(c, gin.H{"items": items, "days": days})
+	response.Success(c, items)
 }

@@ -55,5 +55,5 @@ var cmdbSearchSchema = []SearchableField{
 
 // GetCMDBSearchSchema 返回 CMDB 搜索 schema
 func (h *CMDBHandler) GetCMDBSearchSchema(c *gin.Context) {
-	response.Success(c, gin.H{"fields": cmdbSearchSchema})
+	response.Success(c, cmdbSearchSchema)
 }

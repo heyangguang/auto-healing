@@ -174,7 +174,7 @@ func (h *DashboardHandler) GetRoleWorkspaces(c *gin.Context) {
 		respondInternalError(c, "DASHBOARD", "failed to get role workspaces", err)
 		return
 	}
-	response.Success(c, map[string]interface{}{"workspace_ids": ids})
+	response.Success(c, ids)
 }
 
 func requireDashboardWorkspaceManage(c *gin.Context) bool {

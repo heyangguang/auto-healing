@@ -133,5 +133,5 @@ func (h *NotificationHandler) PreviewTemplate(c *gin.Context) {
 // GetAvailableVariables 获取可用变量列表
 func (h *NotificationHandler) GetAvailableVariables(c *gin.Context) {
 	variables := h.svc.GetAvailableVariables()
-	response.Success(c, gin.H{"variables": variables})
+	response.Success(c, variables)
 }

@@ -60,10 +60,10 @@ func (h *PluginHandler) Shutdown() {
 
 // GetPluginSearchSchema 获取插件搜索字段定义
 func (h *PluginHandler) GetPluginSearchSchema(c *gin.Context) {
-	response.Success(c, gin.H{"fields": pluginSearchSchema})
+	response.Success(c, pluginSearchSchema)
 }
 
 // GetIncidentSearchSchema 获取工单搜索字段定义
 func (h *PluginHandler) GetIncidentSearchSchema(c *gin.Context) {
-	response.Success(c, gin.H{"fields": incidentSearchSchema})
+	response.Success(c, incidentSearchSchema)
 }

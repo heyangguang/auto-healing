@@ -20,7 +20,7 @@ func (h *PlaybookHandler) GetFiles(c *gin.Context) {
 		respondResourceError(c, "PLAYBOOK", "获取 Playbook 文件失败", "Playbook不存在", integrationrepo.ErrPlaybookNotFound, resourceErrorModeBadRequest, err)
 		return
 	}
-	response.Success(c, map[string]any{"files": files})
+	response.Success(c, files)
 }
 
 // ScanVariables 扫描变量

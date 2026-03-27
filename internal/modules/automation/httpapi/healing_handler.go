@@ -113,15 +113,15 @@ var instanceSearchSchema = []SearchableField{
 
 // GetFlowSearchSchema 返回自愈流程搜索字段声明
 func (h *HealingHandler) GetFlowSearchSchema(c *gin.Context) {
-	response.Success(c, gin.H{"fields": flowSearchSchema})
+	response.Success(c, flowSearchSchema)
 }
 
 // GetRuleSearchSchema 返回自愈规则搜索字段声明
 func (h *HealingHandler) GetRuleSearchSchema(c *gin.Context) {
-	response.Success(c, gin.H{"fields": ruleSearchSchema})
+	response.Success(c, ruleSearchSchema)
 }
 
 // GetInstanceSearchSchema 返回流程实例搜索字段声明
 func (h *HealingHandler) GetInstanceSearchSchema(c *gin.Context) {
-	response.Success(c, gin.H{"fields": instanceSearchSchema})
+	response.Success(c, instanceSearchSchema)
 }

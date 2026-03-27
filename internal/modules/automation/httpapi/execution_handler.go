@@ -61,12 +61,12 @@ var runSearchSchema = []SearchableField{
 
 // GetTaskSearchSchema 返回任务模板搜索 schema
 func (h *ExecutionHandler) GetTaskSearchSchema(c *gin.Context) {
-	response.Success(c, gin.H{"fields": taskSearchSchema})
+	response.Success(c, taskSearchSchema)
 }
 
 // GetRunSearchSchema 返回执行记录搜索 schema
 func (h *ExecutionHandler) GetRunSearchSchema(c *gin.Context) {
-	response.Success(c, gin.H{"fields": runSearchSchema})
+	response.Success(c, runSearchSchema)
 }
 
 func buildTaskListOptions(c *gin.Context, page, pageSize int) *automationrepo.TaskListOptions {

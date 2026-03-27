@@ -49,5 +49,5 @@ var gitRepoSearchSchema = []SearchableField{
 
 // GetSearchSchema 返回 Git 仓库搜索 schema
 func (h *GitRepoHandler) GetSearchSchema(c *gin.Context) {
-	response.Success(c, gin.H{"fields": gitRepoSearchSchema})
+	response.Success(c, gitRepoSearchSchema)
 }

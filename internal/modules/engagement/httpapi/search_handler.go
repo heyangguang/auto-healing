@@ -50,10 +50,7 @@ func (h *SearchHandler) GlobalSearch(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, map[string]interface{}{
-		"results":     results,
-		"total_count": totalCount,
-	})
+	response.Collection(c, results, totalCount)
 }
 
 func buildSearchAllowlist(perms []string) map[string]bool {

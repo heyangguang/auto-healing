@@ -63,7 +63,7 @@ func (h *SiteMessageHandler) GetUnreadCount(c *gin.Context) {
 		response.InternalError(c, "获取未读数量失败")
 		return
 	}
-	response.Success(c, gin.H{"unread_count": count})
+	response.Success(c, count)
 }
 
 // MarkRead 批量标记已读
@@ -110,7 +110,7 @@ func (h *SiteMessageHandler) MarkAllRead(c *gin.Context) {
 		response.InternalError(c, "全部标记已读失败")
 		return
 	}
-	response.Success(c, gin.H{"marked_count": count})
+	response.Success(c, count)
 }
 
 // CreateMessage 创建站内信（管理员）
@@ -169,7 +169,7 @@ func (h *SiteMessageHandler) createTenantScopedMessages(c *gin.Context, req crea
 		return
 	}
 	h.eventBus.Broadcast()
-	response.Success(c, gin.H{"created_count": len(messages)})
+	response.Success(c, len(messages))
 }
 
 // GetCategories 获取消息分类枚举列表

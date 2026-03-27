@@ -23,7 +23,7 @@ func (h *ExecutionHandler) GetRunTrend(c *gin.Context) {
 		respondInternalError(c, "EXEC", "获取执行趋势失败", err)
 		return
 	}
-	response.Success(c, gin.H{"items": items, "days": days})
+	response.Success(c, items)
 }
 
 // GetTriggerDistribution 获取触发方式分布
