@@ -1,8 +1,8 @@
 package httpapi
 
 import (
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -14,7 +14,7 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 	if sortField == "" {
 		sortField = c.Query("sort_field")
 	}
-	params := &repository.UserListParams{
+	params := &accessrepo.UserListParams{
 		Page:         getQueryInt(c, "page", 1),
 		PageSize:     getQueryInt(c, "page_size", 20),
 		Status:       c.Query("status"),

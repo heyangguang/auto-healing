@@ -7,9 +7,9 @@ import (
 	executionSvc "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	healingSvc "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	scheduleSvc "github.com/company/auto-healing/internal/modules/automation/service/schedule"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"github.com/company/auto-healing/internal/repository"
 )
 
 // Module 聚合 automation 域处理器构造。
@@ -34,7 +34,7 @@ func New() *Module {
 			InstanceRepo:     automationrepo.NewFlowInstanceRepository(),
 			ApprovalRepo:     automationrepo.NewApprovalTaskRepository(),
 			IncidentRepo:     incidentrepo.NewIncidentRepository(),
-			NotificationRepo: repository.NewNotificationRepository(database.DB),
+			NotificationRepo: engagementrepo.NewNotificationRepository(database.DB),
 			Executor:         scheduler.Executor(),
 			Scheduler:        scheduler,
 		}),

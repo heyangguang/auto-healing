@@ -6,10 +6,10 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -80,14 +80,14 @@ func (h *TenantHandler) SetTenantAdmin(c *gin.Context) {
 func (h *TenantHandler) assignTenantAdmin(c *gin.Context, userID, tenantID, adminRoleID uuid.UUID) error {
 	existingMember, err := h.repo.GetMember(c.Request.Context(), userID, tenantID)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
+		if errors.Is(err, accessrepo.ErrUserNotFound) {
 			return h.addTenantAdminMember(c, userID, tenantID, adminRoleID)
 		}
 		return fmt.Errorf("查询成员关系失败")
 	}
 	if existingMember != nil {
 		if updateErr := h.repo.UpdateMemberRole(c.Request.Context(), userID, tenantID, adminRoleID); updateErr != nil {
-			if errors.Is(updateErr, repository.ErrUserNotFound) {
+			if errors.Is(updateErr, accessrepo.ErrUserNotFound) {
 				return h.addTenantAdminMember(c, userID, tenantID, adminRoleID)
 			}
 			return fmt.Errorf("升级管理员角色失败")
@@ -120,7 +120,7 @@ func (h *TenantHandler) UpdateMemberRole(c *gin.Context) {
 		return
 	}
 	if err := h.repo.UpdateMemberRole(c.Request.Context(), userID, tenantID, roleID); err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
+		if errors.Is(err, accessrepo.ErrUserNotFound) {
 			response.NotFound(c, "该用户不属于此租户")
 			return
 		}

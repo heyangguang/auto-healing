@@ -7,7 +7,6 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -76,7 +75,7 @@ func (h *TenantUserHandler) loadTenantUser(c *gin.Context) (uuid.UUID, *model.Us
 
 	tenantID, ok := requireTenantID(c, "TENANT_USER")
 	if !ok {
-		return uuid.Nil, nil, nil, nil, repository.ErrTenantContextRequired
+		return uuid.Nil, nil, nil, nil, accessrepo.ErrTenantContextRequired
 	}
 	member, err := h.tenantRepo.GetMember(c.Request.Context(), userID, tenantID)
 	if err != nil {

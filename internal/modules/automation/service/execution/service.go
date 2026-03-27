@@ -11,10 +11,10 @@ import (
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
+	secretsrepo "github.com/company/auto-healing/internal/modules/secrets/repository"
 	"github.com/company/auto-healing/internal/notification"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
 
@@ -24,7 +24,7 @@ const maxExecutionWorkers = 10
 type Service struct {
 	repo             *automationrepo.ExecutionRepository
 	gitRepo          *integrationrepo.GitRepositoryRepository
-	secretsRepo      *repository.SecretsSourceRepository
+	secretsRepo      *secretsrepo.SecretsSourceRepository
 	cmdbRepo         *cmdbrepo.CMDBItemRepository
 	healingFlowRepo  *automationrepo.HealingFlowRepository
 	workspaceManager *ansible.WorkspaceManager
@@ -44,7 +44,7 @@ func NewService() *Service {
 	return &Service{
 		repo:             automationrepo.NewExecutionRepository(),
 		gitRepo:          integrationrepo.NewGitRepositoryRepository(),
-		secretsRepo:      repository.NewSecretsSourceRepository(),
+		secretsRepo:      secretsrepo.NewSecretsSourceRepository(),
 		cmdbRepo:         cmdbrepo.NewCMDBItemRepository(),
 		healingFlowRepo:  automationrepo.NewHealingFlowRepository(),
 		workspaceManager: ansible.NewWorkspaceManager(),

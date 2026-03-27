@@ -4,9 +4,9 @@ import (
 	"errors"
 
 	"github.com/company/auto-healing/internal/middleware"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -39,7 +39,7 @@ func (h *TenantUserHandler) UpdateTenantUser(c *gin.Context) {
 		return
 	}
 	if err := h.tenantRepo.UpdateMemberRole(c.Request.Context(), member.UserID, tenantID, *targetRoleID); err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
+		if errors.Is(err, accessrepo.ErrUserNotFound) {
 			response.NotFound(c, "用户不存在或不属于当前租户")
 			return
 		}
@@ -155,7 +155,7 @@ func (h *TenantUserHandler) AssignTenantUserRoles(c *gin.Context) {
 	}
 
 	if err := h.tenantRepo.UpdateMemberRole(c.Request.Context(), user.ID, tenantID, role.ID); err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
+		if errors.Is(err, accessrepo.ErrUserNotFound) {
 			response.NotFound(c, "用户不存在或不属于当前租户")
 			return
 		}

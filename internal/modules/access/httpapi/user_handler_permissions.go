@@ -4,14 +4,14 @@ import (
 	"strings"
 
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 )
 
 // ListPermissions 获取权限列表
 func (h *PermissionHandler) ListPermissions(c *gin.Context) {
-	filter := repository.PermissionFilter{
+	filter := accessrepo.PermissionFilter{
 		Module: c.Query("module"),
 		Name:   c.Query("name"),
 		Code:   c.Query("code"),
@@ -26,7 +26,7 @@ func (h *PermissionHandler) ListPermissions(c *gin.Context) {
 
 // GetPermissionTree 获取权限树
 func (h *PermissionHandler) GetPermissionTree(c *gin.Context) {
-	perms, err := h.listScopedPermissions(c, repository.PermissionFilter{})
+	perms, err := h.listScopedPermissions(c, accessrepo.PermissionFilter{})
 	if err != nil {
 		response.InternalError(c, "获取权限列表失败")
 		return
@@ -39,7 +39,7 @@ func (h *PermissionHandler) GetPermissionTree(c *gin.Context) {
 	response.Success(c, tree)
 }
 
-func (h *PermissionHandler) listScopedPermissions(c *gin.Context, filter repository.PermissionFilter) ([]model.Permission, error) {
+func (h *PermissionHandler) listScopedPermissions(c *gin.Context, filter accessrepo.PermissionFilter) ([]model.Permission, error) {
 	if isTenantPermissionRequest(c) {
 		return h.permRepo.ListTenantWithFilter(c.Request.Context(), filter)
 	}

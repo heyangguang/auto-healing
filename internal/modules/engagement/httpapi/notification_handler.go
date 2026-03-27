@@ -2,19 +2,19 @@ package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/database"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/notification"
-	"github.com/company/auto-healing/internal/repository"
 )
 
 // NotificationHandler 通知处理器
 type NotificationHandler struct {
 	svc       *notification.Service
-	notifRepo *repository.NotificationRepository
+	notifRepo *engagementrepo.NotificationRepository
 }
 
 type NotificationHandlerDeps struct {
 	Service          *notification.Service
-	NotificationRepo *repository.NotificationRepository
+	NotificationRepo *engagementrepo.NotificationRepository
 }
 
 // NewNotificationHandler 创建通知处理器
@@ -22,7 +22,7 @@ func NewNotificationHandler() *NotificationHandler {
 	db := database.DB
 	return NewNotificationHandlerWithDeps(NotificationHandlerDeps{
 		Service:          notification.NewConfiguredService(db),
-		NotificationRepo: repository.NewNotificationRepository(db),
+		NotificationRepo: engagementrepo.NewNotificationRepository(db),
 	})
 }
 

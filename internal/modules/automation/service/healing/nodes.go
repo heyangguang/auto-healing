@@ -9,17 +9,17 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/notification"
 	"github.com/company/auto-healing/internal/pkg/query"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
 
 // NodeExecutors 节点执行器集合
 type NodeExecutors struct {
 	cmdbRepo         *cmdbrepo.CMDBItemRepository
-	notificationRepo *repository.NotificationRepository
+	notificationRepo *engagementrepo.NotificationRepository
 	notificationSvc  *notification.Service
 }
 
@@ -27,12 +27,12 @@ type NodeExecutors struct {
 func NewNodeExecutors() *NodeExecutors {
 	return NewNodeExecutorsWithDependencies(
 		cmdbrepo.NewCMDBItemRepository(),
-		repository.NewNotificationRepository(database.DB),
+		engagementrepo.NewNotificationRepository(database.DB),
 		notification.NewConfiguredService(database.DB),
 	)
 }
 
-func NewNodeExecutorsWithDependencies(cmdbRepo *cmdbrepo.CMDBItemRepository, notificationRepo *repository.NotificationRepository, notificationSvc *notification.Service) *NodeExecutors {
+func NewNodeExecutorsWithDependencies(cmdbRepo *cmdbrepo.CMDBItemRepository, notificationRepo *engagementrepo.NotificationRepository, notificationSvc *notification.Service) *NodeExecutors {
 	return &NodeExecutors{
 		cmdbRepo:         cmdbRepo,
 		notificationRepo: notificationRepo,

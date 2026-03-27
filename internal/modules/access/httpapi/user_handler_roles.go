@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -15,7 +15,7 @@ var errRoleCreateWithPermissions = errors.New("创建角色时不能直接提交
 
 // ListSystemTenantRoles 平台级：获取系统级租户角色列表
 func (h *RoleHandler) ListSystemTenantRoles(c *gin.Context) {
-	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), repository.RoleFilter{Scope: "tenant"})
+	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), accessrepo.RoleFilter{Scope: "tenant"})
 	if err != nil {
 		response.InternalError(c, "获取角色列表失败")
 		return
@@ -32,7 +32,7 @@ func (h *RoleHandler) ListSystemTenantRoles(c *gin.Context) {
 
 // ListRoles 平台级：获取所有角色列表（含统计信息）
 func (h *RoleHandler) ListRoles(c *gin.Context) {
-	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), repository.RoleFilter{
+	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), accessrepo.RoleFilter{
 		Name:  c.Query("name"),
 		Scope: "platform",
 	})
@@ -54,7 +54,7 @@ func (h *RoleHandler) ListTenantRoles(c *gin.Context) {
 	if !ok {
 		return
 	}
-	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), repository.RoleFilter{
+	roles, err := h.roleRepo.ListWithFilter(c.Request.Context(), accessrepo.RoleFilter{
 		Name:     c.Query("name"),
 		Scope:    "tenant",
 		TenantID: tenantID,
@@ -111,7 +111,7 @@ func (h *RoleHandler) getScopedRole(c *gin.Context, id uuid.UUID) (*model.Role, 
 	if isTenantRoleRequest(c) {
 		tenantID, ok := requireTenantID(c, "ROLE")
 		if !ok {
-			return nil, repository.ErrTenantContextRequired
+			return nil, accessrepo.ErrTenantContextRequired
 		}
 		return h.roleRepo.GetTenantRoleByID(c.Request.Context(), tenantID, id)
 	}
@@ -121,7 +121,7 @@ func (h *RoleHandler) getScopedRole(c *gin.Context, id uuid.UUID) (*model.Role, 
 		return nil, err
 	}
 	if role.Scope != "platform" {
-		return nil, repository.ErrRoleNotFound
+		return nil, accessrepo.ErrRoleNotFound
 	}
 	return role, nil
 }
@@ -265,7 +265,7 @@ func (h *RoleHandler) AssignRolePermissions(c *gin.Context) {
 		return
 	}
 	if err := h.roleRepo.AssignPermissions(c.Request.Context(), id, req.PermissionIDs); err != nil {
-		if errors.Is(err, repository.ErrTenantPermissionScope) {
+		if errors.Is(err, accessrepo.ErrTenantPermissionScope) {
 			response.BadRequest(c, err.Error())
 			return
 		}

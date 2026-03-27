@@ -6,8 +6,8 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
-	"github.com/company/auto-healing/internal/repository"
 )
 
 // DryRunResult Dry-Run 执行结果
@@ -34,7 +34,7 @@ type DryRunNodeResult struct {
 type DryRunExecutor struct {
 	taskRepo         *automationrepo.ExecutionRepository
 	cmdbRepo         *cmdbrepo.CMDBItemRepository
-	notificationRepo *repository.NotificationRepository
+	notificationRepo *engagementrepo.NotificationRepository
 }
 
 // NewDryRunExecutor 创建 Dry-Run 执行器
@@ -42,11 +42,11 @@ func NewDryRunExecutor() *DryRunExecutor {
 	return NewDryRunExecutorWithDependencies(
 		automationrepo.NewExecutionRepository(),
 		cmdbrepo.NewCMDBItemRepository(),
-		repository.NewNotificationRepository(database.DB),
+		engagementrepo.NewNotificationRepository(database.DB),
 	)
 }
 
-func NewDryRunExecutorWithDependencies(taskRepo *automationrepo.ExecutionRepository, cmdbRepo *cmdbrepo.CMDBItemRepository, notificationRepo *repository.NotificationRepository) *DryRunExecutor {
+func NewDryRunExecutorWithDependencies(taskRepo *automationrepo.ExecutionRepository, cmdbRepo *cmdbrepo.CMDBItemRepository, notificationRepo *engagementrepo.NotificationRepository) *DryRunExecutor {
 	return &DryRunExecutor{
 		taskRepo:         taskRepo,
 		cmdbRepo:         cmdbRepo,

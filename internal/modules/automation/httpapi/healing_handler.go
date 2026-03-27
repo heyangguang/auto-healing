@@ -4,9 +4,9 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	healing "github.com/company/auto-healing/internal/modules/automation/service/healing"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,7 +17,7 @@ type HealingHandler struct {
 	instanceRepo *automationrepo.FlowInstanceRepository
 	approvalRepo *automationrepo.ApprovalTaskRepository
 	incidentRepo *incidentrepo.IncidentRepository
-	notifRepo    *repository.NotificationRepository
+	notifRepo    *engagementrepo.NotificationRepository
 	executor     *healing.FlowExecutor
 	scheduler    *healing.Scheduler
 }
@@ -28,7 +28,7 @@ type HealingHandlerDeps struct {
 	InstanceRepo     *automationrepo.FlowInstanceRepository
 	ApprovalRepo     *automationrepo.ApprovalTaskRepository
 	IncidentRepo     *incidentrepo.IncidentRepository
-	NotificationRepo *repository.NotificationRepository
+	NotificationRepo *engagementrepo.NotificationRepository
 	Executor         *healing.FlowExecutor
 	Scheduler        *healing.Scheduler
 }
@@ -42,7 +42,7 @@ func NewHealingHandler() *HealingHandler {
 		InstanceRepo:     automationrepo.NewFlowInstanceRepository(),
 		ApprovalRepo:     automationrepo.NewApprovalTaskRepository(),
 		IncidentRepo:     incidentrepo.NewIncidentRepository(),
-		NotificationRepo: repository.NewNotificationRepository(database.DB),
+		NotificationRepo: engagementrepo.NewNotificationRepository(database.DB),
 		Executor:         scheduler.Executor(),
 		Scheduler:        scheduler,
 	})

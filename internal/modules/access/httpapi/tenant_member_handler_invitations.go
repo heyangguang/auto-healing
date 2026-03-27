@@ -10,9 +10,8 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	engagementservice "github.com/company/auto-healing/internal/modules/engagement/service"
-	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -120,7 +119,7 @@ func (h *TenantHandler) validateTenantInvitationRequest(c *gin.Context, tenantID
 	}
 
 	existingUser, err := h.userRepo.GetByEmail(c.Request.Context(), email)
-	if err != nil && !errors.Is(err, repository.ErrUserNotFound) {
+	if err != nil && !errors.Is(err, accessrepo.ErrUserNotFound) {
 		respondInternalError(c, "TENANT", "查询用户失败", err)
 		return nil, nil, false
 	}
@@ -130,7 +129,7 @@ func (h *TenantHandler) validateTenantInvitationRequest(c *gin.Context, tenantID
 			return nil, nil, false
 		}
 		existingMember, err := h.repo.GetMember(c.Request.Context(), existingUser.ID, tenantID)
-		if err != nil && !errors.Is(err, repository.ErrUserNotFound) {
+		if err != nil && !errors.Is(err, accessrepo.ErrUserNotFound) {
 			respondInternalError(c, "TENANT", "查询成员关系失败", err)
 			return nil, nil, false
 		}
