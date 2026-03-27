@@ -8,7 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/notification/provider"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"gorm.io/gorm"
 )
 
@@ -23,7 +23,7 @@ func (s *Service) RetryFailed(ctx context.Context) error {
 	for _, log := range logs {
 		retryCtx := ctx
 		if log.TenantID != nil {
-			retryCtx = repository.WithTenantID(ctx, *log.TenantID)
+			retryCtx = platformrepo.WithTenantID(ctx, *log.TenantID)
 		}
 		if err := s.retryNotificationLog(retryCtx, &log); err != nil {
 			retryErrs = append(retryErrs, fmt.Errorf("retry log %s: %w", log.ID, err))

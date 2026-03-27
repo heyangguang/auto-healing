@@ -1,9 +1,9 @@
 package httpapi
 
 import (
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/notification"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -21,8 +21,8 @@ func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 	response.List(c, templates, total, page, pageSize)
 }
 
-func buildTemplateListOptions(c *gin.Context, page, pageSize int) *repository.TemplateListOptions {
-	opts := &repository.TemplateListOptions{
+func buildTemplateListOptions(c *gin.Context, page, pageSize int) *engagementrepo.TemplateListOptions {
+	opts := &engagementrepo.TemplateListOptions{
 		Page:             page,
 		PageSize:         pageSize,
 		Name:             GetStringFilter(c, "name"),

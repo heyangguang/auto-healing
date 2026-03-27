@@ -4,9 +4,9 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/notification"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -51,8 +51,8 @@ func (h *NotificationHandler) ListNotifications(c *gin.Context) {
 	response.List(c, logs, total, page, pageSize)
 }
 
-func buildNotificationLogListOptions(c *gin.Context, page, pageSize int) *repository.NotificationLogListOptions {
-	opts := &repository.NotificationLogListOptions{
+func buildNotificationLogListOptions(c *gin.Context, page, pageSize int) *engagementrepo.NotificationLogListOptions {
+	opts := &engagementrepo.NotificationLogListOptions{
 		Page:        page,
 		PageSize:    pageSize,
 		Status:      c.Query("status"),
@@ -67,7 +67,7 @@ func buildNotificationLogListOptions(c *gin.Context, page, pageSize int) *reposi
 	return opts
 }
 
-func parseOptionalNotificationUUIDs(c *gin.Context, opts *repository.NotificationLogListOptions) {
+func parseOptionalNotificationUUIDs(c *gin.Context, opts *engagementrepo.NotificationLogListOptions) {
 	if cidStr := c.Query("channel_id"); cidStr != "" {
 		if cid, err := uuid.Parse(cidStr); err == nil {
 			opts.ChannelID = &cid
@@ -90,7 +90,7 @@ func parseOptionalNotificationUUIDs(c *gin.Context, opts *repository.Notificatio
 	}
 }
 
-func parseOptionalNotificationDates(c *gin.Context, opts *repository.NotificationLogListOptions) {
+func parseOptionalNotificationDates(c *gin.Context, opts *engagementrepo.NotificationLogListOptions) {
 	if afterStr := c.Query("created_after"); afterStr != "" {
 		if after, err := time.Parse(time.RFC3339, afterStr); err == nil {
 			opts.CreatedAfter = &after
