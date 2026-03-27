@@ -1,4 +1,4 @@
-package handler
+package httpx
 
 import (
 	"encoding/json"
@@ -9,13 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// SSEWriter SSE 写入器
 type SSEWriter struct {
 	w       http.ResponseWriter
 	flusher http.Flusher
 }
 
-// NewSSEWriter 创建 SSE 写入器
 func NewSSEWriter(c *gin.Context) (*SSEWriter, error) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
@@ -34,14 +32,12 @@ func NewSSEWriter(c *gin.Context) (*SSEWriter, error) {
 	}, nil
 }
 
-// SSEEvent SSE 事件
 type SSEEvent struct {
 	Event     string      `json:"event"`
 	Data      interface{} `json:"data"`
 	Timestamp time.Time   `json:"timestamp"`
 }
 
-// WriteEvent 写入 SSE 事件
 func (s *SSEWriter) WriteEvent(event string, data interface{}) error {
 	eventData := map[string]interface{}{
 		"event":     event,
@@ -65,7 +61,6 @@ func (s *SSEWriter) WriteEvent(event string, data interface{}) error {
 	return nil
 }
 
-// WriteData 写入数据（无事件类型）
 func (s *SSEWriter) WriteData(data interface{}) error {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -80,7 +75,6 @@ func (s *SSEWriter) WriteData(data interface{}) error {
 	return nil
 }
 
-// WriteComment 写入注释（心跳）
 func (s *SSEWriter) WriteComment(comment string) {
 	if err := s.writeString(": %s\n\n", comment); err != nil {
 		return
@@ -88,7 +82,6 @@ func (s *SSEWriter) WriteComment(comment string) {
 	s.flusher.Flush()
 }
 
-// Close 关闭连接
 func (s *SSEWriter) Close() {
 	_ = s.WriteEvent("close", map[string]string{"message": "stream closed"})
 }

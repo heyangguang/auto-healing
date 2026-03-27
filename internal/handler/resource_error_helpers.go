@@ -1,27 +1,17 @@
 package handler
 
 import (
-	"errors"
-
-	"github.com/company/auto-healing/internal/pkg/response"
+	platformhttp "github.com/company/auto-healing/internal/platform/httpx"
 	"github.com/gin-gonic/gin"
 )
 
-type resourceErrorMode int
+type resourceErrorMode = platformhttp.ResourceErrorMode
 
 const (
-	resourceErrorModeInternal resourceErrorMode = iota
-	resourceErrorModeBadRequest
+	resourceErrorModeInternal   = platformhttp.ResourceErrorModeInternal
+	resourceErrorModeBadRequest = platformhttp.ResourceErrorModeBadRequest
 )
 
 func respondResourceError(c *gin.Context, sub, publicMsg, notFoundMsg string, notFoundErr error, mode resourceErrorMode, err error) {
-	if errors.Is(err, notFoundErr) {
-		response.NotFound(c, notFoundMsg)
-		return
-	}
-	if mode == resourceErrorModeBadRequest {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	respondInternalError(c, sub, publicMsg, err)
+	platformhttp.RespondResourceError(c, sub, publicMsg, notFoundMsg, notFoundErr, mode, err)
 }

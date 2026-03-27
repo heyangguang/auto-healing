@@ -1,15 +1,13 @@
 package httpapi
 
-import "github.com/company/auto-healing/internal/handler"
-
 type Dependencies struct {
-	Auth          *handler.AuthHandler
-	Impersonation *handler.ImpersonationHandler
-	Permission    *handler.PermissionHandler
-	Role          *handler.RoleHandler
-	Tenant        *handler.TenantHandler
-	TenantUser    *handler.TenantUserHandler
-	User          *handler.UserHandler
+	Auth          *AuthHandler
+	Impersonation *ImpersonationHandler
+	Permission    *PermissionHandler
+	Role          *RoleHandler
+	Tenant        *TenantHandler
+	TenantUser    *TenantUserHandler
+	User          *UserHandler
 }
 
 type Registrar struct {
