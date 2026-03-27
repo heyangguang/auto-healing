@@ -5,14 +5,14 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 )
 
 func TestCreateChannelReturnsConflictForDuplicateName(t *testing.T) {
 	db := newNotificationTestDB(t)
 	createNotificationChannelSchema(t, db)
 	svc := newNotificationTestService(db, &fakeNotificationProvider{})
-	ctx := repository.WithTenantID(context.Background(), testNotificationTenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), testNotificationTenantID)
 
 	_, err := svc.CreateChannel(ctx, CreateChannelRequest{
 		Name: "dup-name",

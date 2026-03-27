@@ -12,7 +12,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
 	secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -40,7 +40,7 @@ func TestQuerySecretReturnsBadGatewayOnProviderFailure(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	req := httptest.NewRequest(http.MethodPost, "/secrets/query", body)
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(repository.WithTenantID(req.Context(), tenantID))
+	req = req.WithContext(platformrepo.WithTenantID(req.Context(), tenantID))
 	c.Request = req
 	c.Set(middleware.PermissionsKey, []string{"secrets:query"})
 
@@ -75,7 +75,7 @@ func TestTestQueryMasksProviderFailureInResult(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	req := httptest.NewRequest(http.MethodPost, "/secrets/sources/"+sourceID.String()+"/test-query", body)
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(repository.WithTenantID(req.Context(), tenantID))
+	req = req.WithContext(platformrepo.WithTenantID(req.Context(), tenantID))
 	c.Request = req
 	c.Params = gin.Params{{Key: "id", Value: sourceID.String()}}
 
@@ -113,7 +113,7 @@ func TestQuerySecretRejectsMissingHostnameAndIPAddress(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	req := httptest.NewRequest(http.MethodPost, "/secrets/query", bytes.NewBufferString(`{}`))
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(repository.WithTenantID(req.Context(), uuid.New()))
+	req = req.WithContext(platformrepo.WithTenantID(req.Context(), uuid.New()))
 	c.Request = req
 	c.Set(middleware.PermissionsKey, []string{"secrets:query"})
 

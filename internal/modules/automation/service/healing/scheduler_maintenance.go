@@ -7,7 +7,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -36,7 +36,7 @@ func (s *Scheduler) processExpiredApprovals(ctx context.Context) {
 func (s *Scheduler) failExpiredApprovalTask(ctx context.Context, task model.ApprovalTask) {
 	taskCtx := ctx
 	if task.TenantID != nil {
-		taskCtx = repository.WithTenantID(ctx, *task.TenantID)
+		taskCtx = platformrepo.WithTenantID(ctx, *task.TenantID)
 	}
 	opts := incidentFailureSyncOptions(taskCtx, s.instanceRepo, task.FlowInstanceID)
 	updated, err := s.instanceRepo.UpdateStatusWithIncidentSync(
@@ -96,7 +96,7 @@ func (s *Scheduler) recoverOrphanedInstance(ctx context.Context, instance model.
 	errMsg := fmt.Sprintf("服务重启恢复: 实例已停滞超过 %v (上次更新: %s)", staleThreshold, instance.UpdatedAt.Format("2006-01-02 15:04:05"))
 	instanceCtx := ctx
 	if instance.TenantID != nil {
-		instanceCtx = repository.WithTenantID(ctx, *instance.TenantID)
+		instanceCtx = platformrepo.WithTenantID(ctx, *instance.TenantID)
 	}
 	updated, err := s.instanceRepo.UpdateStatusWithIncidentSync(
 		instanceCtx,

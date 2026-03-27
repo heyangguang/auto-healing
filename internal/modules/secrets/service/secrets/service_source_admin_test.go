@@ -11,7 +11,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -111,7 +111,7 @@ func TestDeleteSourceReturnsNotFoundForMissingSource(t *testing.T) {
 	t.Cleanup(func() { database.DB = originalDB })
 
 	svc := NewService()
-	ctx := repository.WithTenantID(context.Background(), uuid.New())
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 
 	err := svc.DeleteSource(ctx, uuid.New())
 	if !errors.Is(err, ErrSecretsSourceNotFound) {
@@ -126,7 +126,7 @@ func TestCreateSourceRequestedDefaultBecomesDefault(t *testing.T) {
 
 	svc := NewService()
 	tenantID := uuid.New()
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	source, err := svc.CreateSource(ctx, &model.SecretsSource{
 		Name:      "default-source",
 		Type:      "webhook",
@@ -168,7 +168,7 @@ func TestDisableSourcePromotesNextActiveDefault(t *testing.T) {
 		`{"url":"http://example.com","method":"GET","query_key":"hostname"}`, false, 2, "active", now, now)
 
 	svc := NewService()
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	if err := svc.Disable(ctx, defaultID); err != nil {
 		t.Fatalf("Disable() error = %v", err)
 	}
@@ -211,7 +211,7 @@ func TestEnableSourceAssignsDefaultWhenMissing(t *testing.T) {
 		config, false, 1, "inactive", now, now)
 
 	svc := NewService()
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	if err := svc.Enable(ctx, sourceID); err != nil {
 		t.Fatalf("Enable() error = %v", err)
 	}
@@ -245,7 +245,7 @@ func TestUpdateSourceRejectsReferencedConfigChange(t *testing.T) {
 	`, uuid.NewString(), tenantID.String(), `["`+sourceID.String()+`"]`)
 
 	svc := NewService()
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	_, err := svc.UpdateSource(ctx, sourceID, model.JSON{
 		"url":       "http://changed.example.com",
 		"method":    "GET",
@@ -270,7 +270,7 @@ func TestUpdateSourceRejectsInactiveDefaultAtServiceLevel(t *testing.T) {
 
 	setDefault := true
 	svc := NewService()
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	_, err := svc.UpdateSource(ctx, sourceID, nil, &setDefault, nil, "inactive")
 	if !errors.Is(err, ErrDefaultSourceMustBeActive) {
 		t.Fatalf("UpdateSource() error = %v, want %v", err, ErrDefaultSourceMustBeActive)
@@ -290,7 +290,7 @@ func TestDisablePreservesConcurrentAdminFields(t *testing.T) {
 		`{"url":"http://example.com","method":"GET","query_key":"hostname"}`, true, 7, "active", now, now)
 
 	svc := NewService()
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	if err := svc.Disable(ctx, sourceID); err != nil {
 		t.Fatalf("Disable() error = %v", err)
 	}

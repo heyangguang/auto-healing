@@ -14,7 +14,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -99,7 +99,7 @@ func TestCloseIncidentIntegrationUpdatesSourceAndLocalState(t *testing.T) {
 	insertIncidentServiceIncident(t, db, incidentID, tenantID, pluginID)
 
 	svc := NewIncidentService()
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	resp, err := svc.CloseIncident(ctx, incidentID, "done", "integration", "auto", "closed")
 	if err != nil {
 		t.Fatalf("CloseIncident() error = %v", err)
@@ -137,7 +137,7 @@ func TestCloseIncidentIntegrationKeepsLocalStateWhenPluginLookupFails(t *testing
 	mustExecIncidentServiceSQL(t, db, `DROP TABLE plugins;`)
 
 	svc := NewIncidentService()
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	if _, err := svc.CloseIncident(ctx, incidentID, "done", "integration", "auto", "closed"); err == nil {
 		t.Fatal("CloseIncident() expected plugin lookup error")
 	}

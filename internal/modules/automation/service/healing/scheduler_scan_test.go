@@ -7,7 +7,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -59,7 +59,7 @@ func TestProcessIncidentWithoutMatchedRuleMarksIncidentSkipped(t *testing.T) {
 
 	tenantID := uuid.MustParse("91919191-9191-9191-9191-919191919191")
 	incidentID := uuid.MustParse("a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1")
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	mustExecHealing(t, db, `INSERT INTO incidents (id, tenant_id, healing_status, scanned) VALUES (?, ?, ?, ?)`, incidentID.String(), tenantID.String(), "pending", false)
 
 	scheduler := &Scheduler{}

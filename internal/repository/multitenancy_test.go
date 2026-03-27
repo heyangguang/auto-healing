@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/google/uuid"
 )
 
@@ -13,7 +16,7 @@ func TestDashboardConfigTenantIsolation(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createDashboardSchema(t, db)
 
-	repo := NewDashboardRepositoryWithDB(db)
+	repo := engagementrepo.NewDashboardRepositoryWithDB(db)
 	userID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
@@ -47,7 +50,7 @@ func TestWorkspaceRepositoryUsesCurrentTenantRoles(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createWorkspaceSchema(t, db)
 
-	repo := NewWorkspaceRepositoryWithDB(db)
+	repo := engagementrepo.NewWorkspaceRepositoryWithDB(db)
 	userID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
@@ -109,7 +112,7 @@ func TestGetUserTenantsReturnsStableOrder(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createTenantSchema(t, db)
 
-	repo := NewTenantRepositoryWithDB(db)
+	repo := accessrepo.NewTenantRepositoryWithDB(db)
 	userID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
@@ -135,7 +138,7 @@ func TestCMDBUpsertPreservesTenantScope(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createCMDBSchema(t, db)
 
-	repo := NewCMDBItemRepositoryWithDB(db)
+	repo := cmdbrepo.NewCMDBItemRepositoryWithDB(db)
 	tenantID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	pluginID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	ctx := WithTenantID(context.Background(), tenantID)
@@ -203,7 +206,7 @@ func TestDashboardUsersSectionUsesCurrentTenantMembership(t *testing.T) {
 	db := newSQLiteTestDB(t)
 	createDashboardUsersSchema(t, db)
 
-	repo := NewDashboardRepositoryWithDB(db)
+	repo := engagementrepo.NewDashboardRepositoryWithDB(db)
 	tenantA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	tenantB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	userA := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")

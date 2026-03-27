@@ -9,7 +9,7 @@ import (
 	gitclient "github.com/company/auto-healing/internal/git"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -181,7 +181,7 @@ func withTenantLifecycleContext(ctx context.Context, tenantID *uuid.UUID) contex
 	if tenantID == nil {
 		return ctx
 	}
-	return repository.WithTenantID(ctx, *tenantID)
+	return platformrepo.WithTenantID(ctx, *tenantID)
 }
 
 func (s *Service) checkPlaybooksAfterSync(ctx context.Context, repositoryID uuid.UUID) {

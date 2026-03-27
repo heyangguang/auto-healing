@@ -13,7 +13,6 @@ import (
 	notificationSvc "github.com/company/auto-healing/internal/notification"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"github.com/company/auto-healing/internal/repository"
 )
 
 // FlowExecutor 流程执行器
@@ -21,7 +20,7 @@ type FlowExecutor struct {
 	instanceRepo    *automationrepo.FlowInstanceRepository
 	approvalRepo    *automationrepo.ApprovalTaskRepository
 	flowRepo        *automationrepo.HealingFlowRepository
-	flowLogRepo     *repository.FlowLogRepository
+	flowLogRepo     *automationrepo.FlowLogRepository
 	cmdbRepo        *cmdbrepo.CMDBItemRepository
 	gitRepoRepo     *integrationrepo.GitRepositoryRepository
 	executionRepo   *automationrepo.ExecutionRepository
@@ -45,7 +44,7 @@ func NewFlowExecutorWithDependencies(executionSvc *execution.Service, notificati
 		instanceRepo:    automationrepo.NewFlowInstanceRepository(),
 		approvalRepo:    automationrepo.NewApprovalTaskRepository(),
 		flowRepo:        automationrepo.NewHealingFlowRepository(),
-		flowLogRepo:     repository.NewFlowLogRepository(),
+		flowLogRepo:     automationrepo.NewFlowLogRepository(),
 		cmdbRepo:        cmdbrepo.NewCMDBItemRepository(),
 		gitRepoRepo:     integrationrepo.NewGitRepositoryRepository(),
 		executionRepo:   automationrepo.NewExecutionRepository(),

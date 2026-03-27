@@ -8,7 +8,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
-	sharedrepo "github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -35,7 +35,7 @@ func TestWriteBackIncidentCloseIgnoresMissingPlugin(t *testing.T) {
 
 	pluginID := uuid.New()
 	svc := NewIncidentService()
-	ctx := sharedrepo.WithTenantID(context.Background(), uuid.New())
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	incident := &model.Incident{PluginID: &pluginID}
 
 	sourceUpdated, err := svc.writeBackIncidentClose(ctx, uuid.New(), incident, "", "", "", "resolved")
@@ -56,7 +56,7 @@ func TestWriteBackIncidentCloseReturnsPluginLookupError(t *testing.T) {
 
 	pluginID := uuid.New()
 	svc := NewIncidentService()
-	ctx := sharedrepo.WithTenantID(context.Background(), uuid.New())
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	incident := &model.Incident{PluginID: &pluginID}
 
 	_, err := svc.writeBackIncidentClose(ctx, uuid.New(), incident, "", "", "", "resolved")

@@ -7,8 +7,9 @@ import (
 	"testing"
 
 	"github.com/company/auto-healing/internal/model"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/notification/provider"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -47,7 +48,7 @@ func TestResolveChannelsRejectsMissingOrInactiveChannels(t *testing.T) {
 	insertNotificationChannel(t, db, inactiveID, tenantID, false)
 
 	svc := newNotificationTestService(db, &fakeNotificationProvider{})
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 
 	if _, err := svc.resolveChannels(ctx, []uuid.UUID{activeID, uuid.New()}); err == nil {
 		t.Fatal("resolveChannels() error = nil, want missing channel error")
@@ -66,7 +67,7 @@ func TestSendFailsBeforeProviderWhenLogPersistenceFails(t *testing.T) {
 
 	fakeProvider := &fakeNotificationProvider{}
 	svc := newNotificationTestService(db, fakeProvider)
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 
 	logs, err := svc.Send(ctx, SendNotificationRequest{
 		ChannelIDs: []uuid.UUID{channelID},
@@ -95,7 +96,7 @@ func TestSendReturnsErrorWhenAllChannelsFail(t *testing.T) {
 		resp: &provider.SendResponse{Success: false, ErrorMessage: "downstream failed"},
 	}
 	svc := newNotificationTestService(db, fakeProvider)
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 
 	logs, err := svc.Send(ctx, SendNotificationRequest{
 		ChannelIDs: []uuid.UUID{channelID},
@@ -151,7 +152,7 @@ func newNotificationTestService(db *gorm.DB, fake provider.Provider) *Service {
 	registry := provider.NewRegistry()
 	registry.Register(fake)
 	return &Service{
-		repo:             repository.NewNotificationRepository(db),
+		repo:             engagementrepo.NewNotificationRepository(db),
 		providerRegistry: registry,
 		templateParser:   NewTemplateParser(),
 		variableBuilder:  NewVariableBuilder("test", "http://localhost", "v1"),

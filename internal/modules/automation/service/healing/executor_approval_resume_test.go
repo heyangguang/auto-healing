@@ -7,7 +7,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -40,7 +40,7 @@ func TestResumeAfterApprovalFailsInstanceWhenCurrentNodeIsNotApproval(t *testing
 	tenantID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	instanceID := uuid.MustParse("99999999-9999-9999-9999-999999999999")
 	flowID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 
 	nodes := `[{"id":"start-node","type":"start","position":{"x":0,"y":0},"data":{}}]`
 	mustExecHealing(t, db, `INSERT INTO flow_instances (id, tenant_id, flow_id, status, current_node_id, flow_nodes, flow_edges, node_states) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

@@ -11,7 +11,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -34,7 +34,7 @@ func TestCreateSourceReturnsConflictOnDuplicateName(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	req := httptest.NewRequest(http.MethodPost, "/secrets/sources", body)
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(repository.WithTenantID(req.Context(), tenantID))
+	req = req.WithContext(platformrepo.WithTenantID(req.Context(), tenantID))
 	c.Request = req
 
 	h := &SecretsHandler{svc: secretsSvc.NewService()}
@@ -55,7 +55,7 @@ func TestGetSourceReturnsNotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	req := httptest.NewRequest(http.MethodGet, "/secrets/sources/"+uuid.NewString(), nil)
-	req = req.WithContext(repository.WithTenantID(req.Context(), tenantID))
+	req = req.WithContext(platformrepo.WithTenantID(req.Context(), tenantID))
 	c.Request = req
 	c.Params = gin.Params{{Key: "id", Value: uuid.NewString()}}
 
@@ -89,7 +89,7 @@ func TestEnableReturnsBadGatewayWhenProviderUnavailable(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	req := httptest.NewRequest(http.MethodPost, "/secrets/sources/"+sourceID.String()+"/enable", nil)
-	req = req.WithContext(repository.WithTenantID(req.Context(), tenantID))
+	req = req.WithContext(platformrepo.WithTenantID(req.Context(), tenantID))
 	c.Request = req
 	c.Params = gin.Params{{Key: "id", Value: sourceID.String()}}
 

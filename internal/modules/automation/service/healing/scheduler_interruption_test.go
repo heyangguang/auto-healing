@@ -9,7 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -62,7 +62,7 @@ func TestExecuteTrackedFlowMarksRunningInstanceFailedOnStop(t *testing.T) {
 	instanceID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
 	incidentID := uuid.MustParse("45454545-4545-4545-4545-454545454545")
 	rootCtx, cancel := context.WithCancel(context.Background())
-	execCtx := repository.WithTenantID(rootCtx, tenantID)
+	execCtx := platformrepo.WithTenantID(rootCtx, tenantID)
 
 	insertSchedulerFlowInstance(t, db, instanceID, incidentID, tenantID, model.FlowInstanceStatusRunning)
 	insertSchedulerIncident(t, db, incidentID, tenantID, "processing")

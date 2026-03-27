@@ -8,7 +8,7 @@ import (
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -52,7 +52,7 @@ func (s *Scheduler) markIncidentsScannedWithoutRules(ctx context.Context, incide
 
 func schedulerTenantContext(ctx context.Context, incident *model.Incident) context.Context {
 	if incident.TenantID != nil {
-		return repository.WithTenantID(ctx, *incident.TenantID)
+		return platformrepo.WithTenantID(ctx, *incident.TenantID)
 	}
 	return ctx
 }

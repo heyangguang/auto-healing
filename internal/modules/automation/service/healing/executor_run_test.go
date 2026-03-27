@@ -7,7 +7,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -62,7 +62,7 @@ func TestRestartFailedInstanceSyncsIncidentStatusToProcessing(t *testing.T) {
 	instanceID := uuid.MustParse("10101010-1010-1010-1010-101010101010")
 	incidentID := uuid.MustParse("20202020-2020-2020-2020-202020202020")
 	tenantID := uuid.MustParse("30303030-3030-3030-3030-303030303030")
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 
 	mustExecHealing(t, db, `INSERT INTO flow_instances (id, tenant_id, status) VALUES (?, ?, ?)`, instanceID.String(), tenantID.String(), model.FlowInstanceStatusFailed)
 	mustExecHealing(t, db, `INSERT INTO incidents (id, tenant_id, healing_status) VALUES (?, ?, ?)`, incidentID.String(), tenantID.String(), "failed")

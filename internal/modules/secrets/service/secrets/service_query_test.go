@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -19,7 +19,7 @@ func TestResolveSecretsSourceNoDefault(t *testing.T) {
 	installSecretsServiceDB(t, db)
 
 	svc := NewService()
-	_, err := svc.resolveSecretsSource(repository.WithTenantID(context.Background(), uuid.New()), "")
+	_, err := svc.resolveSecretsSource(platformrepo.WithTenantID(context.Background(), uuid.New()), "")
 	if !errors.Is(err, ErrDefaultSecretsSourceUnavailable) {
 		t.Fatalf("resolveSecretsSource() error = %v, want %v", err, ErrDefaultSecretsSourceUnavailable)
 	}
@@ -31,7 +31,7 @@ func TestResolveSecretsSourceRejectsInvalidID(t *testing.T) {
 	installSecretsServiceDB(t, db)
 
 	svc := NewService()
-	_, err := svc.resolveSecretsSource(repository.WithTenantID(context.Background(), uuid.New()), "bad-id")
+	_, err := svc.resolveSecretsSource(platformrepo.WithTenantID(context.Background(), uuid.New()), "bad-id")
 	if !errors.Is(err, ErrSecretsSourceInvalidID) {
 		t.Fatalf("resolveSecretsSource() error = %v, want %v", err, ErrSecretsSourceInvalidID)
 	}
@@ -50,7 +50,7 @@ func TestResolveSecretsSourceRejectsInactiveSource(t *testing.T) {
 		`{"url":"http://example.com","method":"GET","query_key":"hostname"}`, false, 1, "inactive", now, now)
 
 	svc := NewService()
-	_, err := svc.resolveSecretsSource(repository.WithTenantID(context.Background(), tenantID), sourceID.String())
+	_, err := svc.resolveSecretsSource(platformrepo.WithTenantID(context.Background(), tenantID), sourceID.String())
 	if !errors.Is(err, ErrSecretsSourceInactive) {
 		t.Fatalf("resolveSecretsSource() error = %v, want %v", err, ErrSecretsSourceInactive)
 	}
@@ -76,7 +76,7 @@ func TestQuerySecretUsesDefaultSource(t *testing.T) {
 		config, true, 1, "active", now, now)
 
 	svc := NewService()
-	secret, err := svc.QuerySecret(repository.WithTenantID(context.Background(), tenantID), model.SecretQuery{Hostname: "host-a"})
+	secret, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), tenantID), model.SecretQuery{Hostname: "host-a"})
 	if err != nil {
 		t.Fatalf("QuerySecret() error = %v", err)
 	}
@@ -104,7 +104,7 @@ func TestQuerySecretReturnsProviderError(t *testing.T) {
 		config, true, 1, "active", now, now)
 
 	svc := NewService()
-	_, err := svc.QuerySecret(repository.WithTenantID(context.Background(), tenantID), model.SecretQuery{Hostname: "host-a"})
+	_, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), tenantID), model.SecretQuery{Hostname: "host-a"})
 	if !errors.Is(err, ErrSecretsProviderRequestFailed) {
 		t.Fatalf("QuerySecret() error = %v, want %v", err, ErrSecretsProviderRequestFailed)
 	}
@@ -116,7 +116,7 @@ func TestQuerySecretRequiresHostnameOrIPAddress(t *testing.T) {
 	installSecretsServiceDB(t, db)
 
 	svc := NewService()
-	_, err := svc.QuerySecret(repository.WithTenantID(context.Background(), uuid.New()), model.SecretQuery{})
+	_, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), uuid.New()), model.SecretQuery{})
 	if !errors.Is(err, ErrSecretsQueryTargetRequired) {
 		t.Fatalf("QuerySecret() error = %v, want %v", err, ErrSecretsQueryTargetRequired)
 	}

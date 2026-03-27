@@ -5,8 +5,9 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -188,7 +189,7 @@ func (h *DashboardHandler) filterTenantRoleIDs(c *gin.Context, roleIDs []uuid.UU
 	tenantRoleIDs := make([]uuid.UUID, 0, len(roleIDs))
 	for _, roleID := range roleIDs {
 		role, err := h.requireTenantRole(c, roleID)
-		if errors.Is(err, repository.ErrRoleNotFound) {
+		if errors.Is(err, accessrepo.ErrRoleNotFound) {
 			continue
 		}
 		if err != nil {
@@ -204,13 +205,13 @@ func (h *DashboardHandler) filterTenantRoleIDs(c *gin.Context, roleIDs []uuid.UU
 func (h *DashboardHandler) requireTenantRole(c *gin.Context, roleID uuid.UUID) (*model.Role, error) {
 	tenantID, ok := requireTenantID(c, "DASHBOARD")
 	if !ok {
-		return nil, repository.ErrTenantContextRequired
+		return nil, platformrepo.ErrTenantContextRequired
 	}
 	return h.roleRepo.GetTenantRoleByID(c.Request.Context(), tenantID, roleID)
 }
 
 func writeDashboardRoleScopeError(c *gin.Context, err error) {
-	if errors.Is(err, repository.ErrRoleNotFound) {
+	if errors.Is(err, accessrepo.ErrRoleNotFound) {
 		response.NotFound(c, "role not found in current tenant")
 		return
 	}

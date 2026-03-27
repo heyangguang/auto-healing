@@ -9,7 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -64,7 +64,7 @@ func TestSchedulerStopWaitsForTrackedFlowWorker(t *testing.T) {
 		t.Fatal("flow worker did not stop before Stop returned")
 	}
 
-	flowCtx := repository.WithTenantID(context.Background(), tenantID)
+	flowCtx := platformrepo.WithTenantID(context.Background(), tenantID)
 	instance, err := scheduler.instanceRepo.GetByID(flowCtx, instanceID)
 	if err != nil {
 		t.Fatalf("GetByID(): %v", err)

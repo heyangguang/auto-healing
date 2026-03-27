@@ -4,18 +4,18 @@ import (
 	"context"
 	"testing"
 
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
 func TestDetachContextPreservesTenantAndRemovesCancellation(t *testing.T) {
 	tenantID := uuid.New()
-	parent, cancel := context.WithCancel(repository.WithTenantID(context.Background(), tenantID))
+	parent, cancel := context.WithCancel(platformrepo.WithTenantID(context.Background(), tenantID))
 	cancel()
 
 	detached := detachContext(parent)
 
-	gotTenantID, err := repository.RequireTenantID(detached)
+	gotTenantID, err := platformrepo.RequireTenantID(detached)
 	if err != nil {
 		t.Fatalf("RequireTenantID() error = %v", err)
 	}

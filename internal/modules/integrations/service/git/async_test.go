@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
 func TestDetachTenantContextRemovesCancellationAndPreservesTenant(t *testing.T) {
 	tenantID := uuid.New()
-	parent, cancel := context.WithCancel(repository.WithTenantID(context.Background(), tenantID))
+	parent, cancel := context.WithCancel(platformrepo.WithTenantID(context.Background(), tenantID))
 	cancel()
 
 	detached := detachTenantContext(parent, nil)
 
-	if _, err := repository.RequireTenantID(detached); err != nil {
+	if _, err := platformrepo.RequireTenantID(detached); err != nil {
 		t.Fatalf("RequireTenantID() error = %v", err)
 	}
 	if err := detached.Err(); err != nil {
@@ -26,12 +26,12 @@ func TestDetachTenantContextRemovesCancellationAndPreservesTenant(t *testing.T) 
 }
 
 func TestDetachTenantContextOverridesTenantWhenProvided(t *testing.T) {
-	parent := repository.WithTenantID(context.Background(), uuid.New())
+	parent := platformrepo.WithTenantID(context.Background(), uuid.New())
 	overrideTenant := uuid.New()
 
 	detached := detachTenantContext(parent, &overrideTenant)
 
-	tenantID, err := repository.RequireTenantID(detached)
+	tenantID, err := platformrepo.RequireTenantID(detached)
 	if err != nil {
 		t.Fatalf("RequireTenantID() error = %v", err)
 	}
@@ -43,9 +43,9 @@ func TestDetachTenantContextOverridesTenantWhenProvided(t *testing.T) {
 func TestDetachTenantContextWithoutTenantLeavesMissingTenantVisible(t *testing.T) {
 	detached := detachTenantContext(context.Background(), nil)
 
-	_, err := repository.RequireTenantID(detached)
-	if !errors.Is(err, repository.ErrTenantContextRequired) {
-		t.Fatalf("RequireTenantID() error = %v, want %v", err, repository.ErrTenantContextRequired)
+	_, err := platformrepo.RequireTenantID(detached)
+	if !errors.Is(err, platformrepo.ErrTenantContextRequired) {
+		t.Fatalf("RequireTenantID() error = %v, want %v", err, platformrepo.ErrTenantContextRequired)
 	}
 }
 

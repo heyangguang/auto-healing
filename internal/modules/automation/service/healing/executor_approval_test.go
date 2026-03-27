@@ -9,7 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -39,7 +39,7 @@ func TestMarkInstanceWaitingApprovalUsesExistingWaitingState(t *testing.T) {
 	tenantID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	instanceID := uuid.MustParse("34343434-3434-3434-3434-343434343434")
 	flowID := uuid.MustParse("78787878-7878-7878-7878-787878787878")
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	mustExecHealing(t, db, `INSERT INTO healing_flows (id, name, nodes, edges) VALUES (?, ?, ?, ?)`, flowID.String(), "flow", "[]", "[]")
 	mustExecHealing(t, db, `INSERT INTO flow_instances (id, tenant_id, flow_id, status, node_states) VALUES (?, ?, ?, ?, ?)`, instanceID.String(), tenantID.String(), flowID.String(), model.FlowInstanceStatusWaitingApproval, "{}")
 

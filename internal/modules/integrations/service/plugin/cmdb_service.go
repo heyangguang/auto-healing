@@ -9,7 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -112,7 +112,7 @@ func (s *CMDBService) CheckExpiredMaintenance(ctx context.Context) (int, error) 
 		// 注入该配置项所属租户的上下文，确保 ExitMaintenance 在正确租户范围内操作
 		itemCtx := ctx
 		if item.TenantID != nil {
-			itemCtx = repository.WithTenantID(ctx, *item.TenantID)
+			itemCtx = platformrepo.WithTenantID(ctx, *item.TenantID)
 		}
 		if err := s.ExitMaintenance(itemCtx, item.ID, "auto", "system"); err == nil {
 			count++
