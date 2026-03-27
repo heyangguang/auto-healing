@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	"github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -104,7 +105,7 @@ func cmdbConnectionHostname(item *model.CMDBItem) string {
 func (h *CMDBHandler) testSSHConnection(ctx context.Context, cmdbID, ipAddress, hostname, secretsSourceID string) ConnectionTestResult {
 	result := ConnectionTestResult{CMDBID: cmdbID, Host: ipAddress}
 
-	secret, err := secrets.NewService().QuerySecret(ctx, model.SecretQuery{
+	secret, err := secrets.NewService().QuerySecret(ctx, secretsmodel.SecretQuery{
 		SourceID:  secretsSourceID,
 		Hostname:  hostname,
 		IPAddress: ipAddress,
