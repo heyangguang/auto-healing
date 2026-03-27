@@ -29,10 +29,6 @@ func RequirePlatformAdminWithDeps(deps RuntimeDeps) gin.HandlerFunc {
 	}
 }
 
-func reloadPlatformPermissions(c *gin.Context) error {
-	return reloadPlatformPermissionsWithRepo(c, NewRuntimeDeps().PermissionRepo)
-}
-
 func reloadPlatformPermissionsWithRepo(c *gin.Context, permRepo permissionCodeRepository) error {
 	userID, err := uuid.Parse(GetUserID(c))
 	if err != nil {

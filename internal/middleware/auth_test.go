@@ -11,6 +11,7 @@ import (
 
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
@@ -72,9 +73,10 @@ func TestEnsureActiveUserReturnsInternalErrorWhenLookupFails(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodGet, "/secure", nil)
+	userRepo := accessrepo.NewUserRepositoryWithDB(db)
 
-	if ensureActiveUser(c, uuid.NewString()) {
-		t.Fatal("ensureActiveUser() = true, want false")
+	if ensureActiveUserWithRepo(c, userRepo, uuid.NewString()) {
+		t.Fatal("ensureActiveUserWithRepo() = true, want false")
 	}
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
@@ -105,9 +107,10 @@ func TestEnsureActiveUserReturnsUnauthorizedForInactiveUser(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodGet, "/secure", nil)
+	userRepo := accessrepo.NewUserRepositoryWithDB(db)
 
-	if ensureActiveUser(c, userID.String()) {
-		t.Fatal("ensureActiveUser() = true, want false")
+	if ensureActiveUserWithRepo(c, userRepo, userID.String()) {
+		t.Fatal("ensureActiveUserWithRepo() = true, want false")
 	}
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)

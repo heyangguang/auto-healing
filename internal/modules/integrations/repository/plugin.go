@@ -26,7 +26,11 @@ type PluginRepository struct {
 
 // NewPluginRepository 创建插件仓库
 func NewPluginRepository() *PluginRepository {
-	return &PluginRepository{db: database.DB}
+	return NewPluginRepositoryWithDB(database.DB)
+}
+
+func NewPluginRepositoryWithDB(db *gorm.DB) *PluginRepository {
+	return &PluginRepository{db: db}
 }
 
 // Create 创建插件
@@ -171,7 +175,11 @@ type PluginSyncLogRepository struct {
 
 // NewPluginSyncLogRepository 创建同步日志仓库
 func NewPluginSyncLogRepository() *PluginSyncLogRepository {
-	return &PluginSyncLogRepository{db: database.DB}
+	return NewPluginSyncLogRepositoryWithDB(database.DB)
+}
+
+func NewPluginSyncLogRepositoryWithDB(db *gorm.DB) *PluginSyncLogRepository {
+	return &PluginSyncLogRepository{db: db}
 }
 
 // Create 创建同步日志

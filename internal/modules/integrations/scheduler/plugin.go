@@ -48,10 +48,14 @@ type PluginSchedulerDeps struct {
 }
 
 func DefaultPluginSchedulerDeps() PluginSchedulerDeps {
+	return DefaultPluginSchedulerDepsWithDB(database.DB)
+}
+
+func DefaultPluginSchedulerDepsWithDB(db *gorm.DB) PluginSchedulerDeps {
 	return PluginSchedulerDeps{
-		PluginService: pluginService.NewService(),
-		CMDBService:   pluginService.NewCMDBService(),
-		DB:            database.DB,
+		PluginService: pluginService.NewServiceWithDB(db),
+		CMDBService:   pluginService.NewCMDBServiceWithDB(db),
+		DB:            db,
 		Interval:      30 * time.Second,
 		InFlight:      schedulerx.NewInFlightSet(),
 		Now:           time.Now,
@@ -60,18 +64,22 @@ func DefaultPluginSchedulerDeps() PluginSchedulerDeps {
 
 // NewPluginScheduler 创建调度器
 func NewPluginScheduler() *PluginScheduler {
-	return NewPluginSchedulerWithDeps(DefaultPluginSchedulerDeps())
+	return NewPluginSchedulerWithDB(database.DB)
+}
+
+func NewPluginSchedulerWithDB(db *gorm.DB) *PluginScheduler {
+	return NewPluginSchedulerWithDeps(DefaultPluginSchedulerDepsWithDB(db))
 }
 
 func NewPluginSchedulerWithDeps(deps PluginSchedulerDeps) *PluginScheduler {
-	if deps.PluginService == nil {
-		deps.PluginService = pluginService.NewService()
-	}
-	if deps.CMDBService == nil {
-		deps.CMDBService = pluginService.NewCMDBService()
-	}
 	if deps.DB == nil {
 		deps.DB = database.DB
+	}
+	if deps.PluginService == nil {
+		deps.PluginService = pluginService.NewServiceWithDB(deps.DB)
+	}
+	if deps.CMDBService == nil {
+		deps.CMDBService = pluginService.NewCMDBServiceWithDB(deps.DB)
 	}
 	if deps.Interval == 0 {
 		deps.Interval = 30 * time.Second

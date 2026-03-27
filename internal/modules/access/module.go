@@ -11,6 +11,7 @@ import (
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
+	"gorm.io/gorm"
 )
 
 // Module 聚合 access 域的处理器构造。
@@ -42,7 +43,14 @@ type ModuleDeps struct {
 
 // New 创建 access 域模块。
 func New(cfg *config.Config) *Module {
-	db := database.DB
+	return NewWithDB(cfg, database.DB)
+}
+
+func NewWithDB(cfg *config.Config, db *gorm.DB) *Module {
+	return NewWithDeps(DefaultModuleDepsWithDB(cfg, db))
+}
+
+func DefaultModuleDepsWithDB(cfg *config.Config, db *gorm.DB) ModuleDeps {
 	settingsRepo := settingsrepo.NewPlatformSettingsRepositoryWithDB(db)
 	userRepo := accessrepo.NewUserRepositoryWithDB(db)
 	roleRepo := accessrepo.NewRoleRepositoryWithDB(db)
@@ -60,7 +68,7 @@ func New(cfg *config.Config) *Module {
 		RefreshTokenTTL: cfg.JWT.RefreshTokenTTL(),
 		Issuer:          cfg.JWT.Issuer,
 	}, accesshttp.NewAuthTokenBlacklistStore())
-	return NewWithDeps(ModuleDeps{
+	return ModuleDeps{
 		AuthService: authservice.NewServiceWithDeps(authservice.ServiceDeps{
 			UserRepo:       userRepo,
 			RoleRepo:       roleRepo,
@@ -74,7 +82,7 @@ func New(cfg *config.Config) *Module {
 		RoleRepo:          roleRepo,
 		PermissionRepo:    permissionRepo,
 		TenantRepo:        tenantRepo,
-		InvitationRepo: invitationRepo,
+		InvitationRepo:    invitationRepo,
 		ImpersonationRepo: impersonationRepo,
 		SiteMessageRepo:   siteMessageRepo,
 		SettingsRepo:      settingsRepo,
@@ -83,7 +91,7 @@ func New(cfg *config.Config) *Module {
 		}),
 		AuditRepo:         auditrepo.NewAuditLogRepository(db),
 		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
-	})
+	}
 }
 
 func NewWithDeps(deps ModuleDeps) *Module {

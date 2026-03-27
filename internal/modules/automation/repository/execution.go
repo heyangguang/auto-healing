@@ -52,7 +52,11 @@ type RunListOptions struct {
 
 // NewExecutionRepository 创建执行任务仓库
 func NewExecutionRepository() *ExecutionRepository {
-	return &ExecutionRepository{db: database.DB}
+	return NewExecutionRepositoryWithDB(database.DB)
+}
+
+func NewExecutionRepositoryWithDB(db *gorm.DB) *ExecutionRepository {
+	return &ExecutionRepository{db: db}
 }
 
 func (r *ExecutionRepository) tenantDB(ctx context.Context) *gorm.DB {

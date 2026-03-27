@@ -10,6 +10,7 @@ import (
 	"github.com/company/auto-healing/internal/modules/ops/model"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type BlacklistExemptionService struct {
@@ -21,8 +22,12 @@ type BlacklistExemptionServiceDeps struct {
 }
 
 func NewBlacklistExemptionService() *BlacklistExemptionService {
+	return NewBlacklistExemptionServiceWithDB(database.DB)
+}
+
+func NewBlacklistExemptionServiceWithDB(db *gorm.DB) *BlacklistExemptionService {
 	return NewBlacklistExemptionServiceWithDeps(BlacklistExemptionServiceDeps{
-		Repo: opsrepo.NewBlacklistExemptionRepository(database.DB),
+		Repo: opsrepo.NewBlacklistExemptionRepository(db),
 	})
 }
 

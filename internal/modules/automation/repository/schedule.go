@@ -53,7 +53,11 @@ type ScheduleTimelineItem struct {
 
 // NewScheduleRepository 创建定时任务调度仓库
 func NewScheduleRepository() *ScheduleRepository {
-	return &ScheduleRepository{db: database.DB}
+	return NewScheduleRepositoryWithDB(database.DB)
+}
+
+func NewScheduleRepositoryWithDB(db *gorm.DB) *ScheduleRepository {
+	return &ScheduleRepository{db: db}
 }
 
 func (r *ScheduleRepository) tenantDB(ctx context.Context) *gorm.DB {

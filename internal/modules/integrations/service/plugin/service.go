@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/query"
@@ -40,11 +41,15 @@ type ServiceDeps struct {
 }
 
 func DefaultServiceDeps() ServiceDeps {
+	return DefaultServiceDepsWithDB(database.DB)
+}
+
+func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	return ServiceDeps{
-		PluginRepo:   integrationrepo.NewPluginRepository(),
-		SyncLogRepo:  integrationrepo.NewPluginSyncLogRepository(),
-		CMDBRepo:     cmdbrepo.NewCMDBItemRepository(),
-		IncidentRepo: incidentrepo.NewIncidentRepository(),
+		PluginRepo:   integrationrepo.NewPluginRepositoryWithDB(db),
+		SyncLogRepo:  integrationrepo.NewPluginSyncLogRepositoryWithDB(db),
+		CMDBRepo:     cmdbrepo.NewCMDBItemRepositoryWithDB(db),
+		IncidentRepo: incidentrepo.NewIncidentRepositoryWithDB(db),
 		HTTPClient:   NewHTTPClient(),
 		Lifecycle:    newAsyncLifecycle(),
 	}
@@ -52,7 +57,11 @@ func DefaultServiceDeps() ServiceDeps {
 
 // NewService 创建插件服务
 func NewService() *Service {
-	return NewServiceWithDeps(DefaultServiceDeps())
+	return NewServiceWithDB(database.DB)
+}
+
+func NewServiceWithDB(db *gorm.DB) *Service {
+	return NewServiceWithDeps(DefaultServiceDepsWithDB(db))
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

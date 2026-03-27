@@ -36,10 +36,6 @@ func TenantMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
 	}
 }
 
-func resolveTenantRouteTenant(c *gin.Context, tenantIDs []string, defaultTenantID string) (uuid.UUID, bool) {
-	return resolveTenantRouteTenantWithRepo(c, NewRuntimeDeps().TenantRepo, tenantIDs, defaultTenantID)
-}
-
 func resolveTenantRouteTenantWithRepo(c *gin.Context, tenantRepo userTenantLister, tenantIDs []string, defaultTenantID string) (uuid.UUID, bool) {
 	if IsPlatformAdmin(c) {
 		return resolveImpersonationTenant(c)
@@ -66,10 +62,6 @@ func resolveImpersonationTenant(c *gin.Context) (uuid.UUID, bool) {
 	return tenantID, true
 }
 
-func resolveRegularTenant(c *gin.Context, tenantIDs []string, defaultTenantID string) (uuid.UUID, bool) {
-	return resolveRegularTenantWithRepo(c, NewRuntimeDeps().TenantRepo, tenantIDs, defaultTenantID)
-}
-
 func resolveRegularTenantWithRepo(c *gin.Context, tenantRepo userTenantLister, tenantIDs []string, defaultTenantID string) (uuid.UUID, bool) {
 	tenantIDStr := c.GetHeader("X-Tenant-ID")
 	if tenantIDStr == "" {
@@ -82,9 +74,9 @@ func resolveRegularTenantWithRepo(c *gin.Context, tenantRepo userTenantLister, t
 			abortForbidden(c, "默认租户无效，请重新登录", ErrorCodeDefaultTenantInvalid)
 			return uuid.Nil, false
 		}
-			if !ensureTenantMembership(c, tenantRepo, tenantIDs, defaultTenantID) {
-				return uuid.Nil, false
-			}
+		if !ensureTenantMembership(c, tenantRepo, tenantIDs, defaultTenantID) {
+			return uuid.Nil, false
+		}
 		return tenantID, true
 	}
 

@@ -11,11 +11,13 @@ import (
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	secretsrepo "github.com/company/auto-healing/internal/modules/secrets/repository"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
+	"gorm.io/gorm"
 )
 
 // Module 聚合 automation 域处理器构造。
@@ -26,51 +28,56 @@ type Module struct {
 }
 
 type ModuleDeps struct {
-	ExecutionRepo     *automationrepo.ExecutionRepository
-	FlowRepo          *automationrepo.HealingFlowRepository
-	RuleRepo          *automationrepo.HealingRuleRepository
-	InstanceRepo      *automationrepo.FlowInstanceRepository
-	ApprovalRepo      *automationrepo.ApprovalTaskRepository
-	ScheduleRepo      *automationrepo.ScheduleRepository
-	IncidentRepo      *incidentrepo.IncidentRepository
-	NotificationRepo  *engagementrepo.NotificationRepository
-	ExecutionService  *executionSvc.Service
-	ScheduleService   *scheduleSvc.Service
-	FlowExecutor      *healingSvc.FlowExecutor
-	HealingScheduler  *healingSvc.Scheduler
+	ExecutionRepo    *automationrepo.ExecutionRepository
+	FlowRepo         *automationrepo.HealingFlowRepository
+	RuleRepo         *automationrepo.HealingRuleRepository
+	InstanceRepo     *automationrepo.FlowInstanceRepository
+	ApprovalRepo     *automationrepo.ApprovalTaskRepository
+	ScheduleRepo     *automationrepo.ScheduleRepository
+	IncidentRepo     *incidentrepo.IncidentRepository
+	NotificationRepo *engagementrepo.NotificationRepository
+	ExecutionService *executionSvc.Service
+	ScheduleService  *scheduleSvc.Service
+	FlowExecutor     *healingSvc.FlowExecutor
+	HealingScheduler *healingSvc.Scheduler
 }
 
 func DefaultModuleDeps() ModuleDeps {
-	executionRepo := automationrepo.NewExecutionRepository()
-	flowRepo := automationrepo.NewHealingFlowRepository()
-	ruleRepo := automationrepo.NewHealingRuleRepository()
-	instanceRepo := automationrepo.NewFlowInstanceRepository()
-	approvalRepo := automationrepo.NewApprovalTaskRepository()
-	scheduleRepo := automationrepo.NewScheduleRepository()
-	incidentRepo := incidentrepo.NewIncidentRepository()
-	notificationRepo := engagementrepo.NewNotificationRepository(database.DB)
-	notificationService := notification.NewConfiguredService(database.DB)
+	return DefaultModuleDepsWithDB(database.DB)
+}
+
+func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
+	executionRepo := automationrepo.NewExecutionRepositoryWithDB(db)
+	flowRepo := automationrepo.NewHealingFlowRepositoryWithDB(db)
+	ruleRepo := automationrepo.NewHealingRuleRepositoryWithDB(db)
+	instanceRepo := automationrepo.NewFlowInstanceRepositoryWithDB(db)
+	approvalRepo := automationrepo.NewApprovalTaskRepositoryWithDB(db)
+	scheduleRepo := automationrepo.NewScheduleRepositoryWithDB(db)
+	incidentRepo := incidentrepo.NewIncidentRepositoryWithDB(db)
+	notificationRepo := engagementrepo.NewNotificationRepository(db)
+	notificationService := notification.NewConfiguredService(db)
 	executionService := executionSvc.NewServiceWithDeps(executionSvc.ServiceDeps{
 		Repo:             executionRepo,
-		GitRepo:          integrationrepo.NewGitRepositoryRepository(),
-		SecretsRepo:      secretsrepo.NewSecretsSourceRepository(),
-		CMDBRepo:         cmdbrepo.NewCMDBItemRepository(),
+		GitRepo:          integrationrepo.NewGitRepositoryRepositoryWithDB(db),
+		SecretsRepo:      secretsrepo.NewSecretsSourceRepositoryWithDB(db),
+		CMDBRepo:         cmdbrepo.NewCMDBItemRepositoryWithDB(db),
 		HealingFlowRepo:  flowRepo,
 		WorkspaceManager: ansible.NewWorkspaceManager(),
 		LocalExecutor:    ansible.NewLocalExecutor(),
 		DockerExecutor:   ansible.NewDockerExecutor(),
 		NotificationSvc:  notificationService,
-		BlacklistSvc:     opsservice.NewCommandBlacklistService(),
-		ExemptionSvc:     opsservice.NewBlacklistExemptionService(),
+		BlacklistSvc: opsservice.NewCommandBlacklistServiceWithDeps(opsservice.CommandBlacklistServiceDeps{
+			Repo: opsrepo.NewCommandBlacklistRepositoryWithDB(db),
+		}),
+		ExemptionSvc: opsservice.NewBlacklistExemptionServiceWithDeps(opsservice.BlacklistExemptionServiceDeps{
+			Repo: opsrepo.NewBlacklistExemptionRepository(db),
+		}),
 	})
 	scheduleService := scheduleSvc.NewServiceWithDeps(scheduleSvc.ServiceDeps{
 		Repo:     scheduleRepo,
 		ExecRepo: executionRepo,
 	})
-	flowExecutor := healingSvc.NewFlowExecutorWithDeps(healingSvc.DefaultFlowExecutorDeps(
-		executionService,
-		notificationService,
-	))
+	flowExecutor := healingSvc.NewFlowExecutorWithDeps(healingSvc.DefaultFlowExecutorDepsWithDB(db, executionService, notificationService))
 	return ModuleDeps{
 		ExecutionRepo:    executionRepo,
 		FlowRepo:         flowRepo,
@@ -83,13 +90,17 @@ func DefaultModuleDeps() ModuleDeps {
 		ExecutionService: executionService,
 		ScheduleService:  scheduleService,
 		FlowExecutor:     flowExecutor,
-		HealingScheduler: healingSvc.NewSchedulerWithDeps(healingSvc.DefaultSchedulerDeps(flowExecutor)),
+		HealingScheduler: healingSvc.NewSchedulerWithDeps(healingSvc.DefaultSchedulerDepsWithDB(db, flowExecutor)),
 	}
 }
 
 // New 创建 automation 域模块。
 func New() *Module {
-	return NewWithDeps(DefaultModuleDeps())
+	return NewWithDB(database.DB)
+}
+
+func NewWithDB(db *gorm.DB) *Module {
+	return NewWithDeps(DefaultModuleDepsWithDB(db))
 }
 
 func NewWithDeps(deps ModuleDeps) *Module {

@@ -9,6 +9,7 @@ import (
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	platformevents "github.com/company/auto-healing/internal/platform/events"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
+	"gorm.io/gorm"
 )
 
 // Module 聚合 engagement 域处理器构造。
@@ -41,12 +42,19 @@ type ModuleDeps struct {
 
 // New 创建 engagement 域模块。
 func New() *Module {
-	db := database.DB
+	return NewWithDB(database.DB)
+}
+
+func NewWithDB(db *gorm.DB) *Module {
+	return NewWithDeps(DefaultModuleDepsWithDB(db))
+}
+
+func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 	settingsRepo := settingsrepo.NewPlatformSettingsRepositoryWithDB(db)
 	notificationRepo := engagementrepo.NewNotificationRepository(db)
 	activityRepo := engagementrepo.NewUserActivityRepositoryWithDB(db)
-	userRepo := accessrepo.NewUserRepository()
-	return NewWithDeps(ModuleDeps{
+	userRepo := accessrepo.NewUserRepositoryWithDB(db)
+	return ModuleDeps{
 		NotificationService: notification.NewConfiguredServiceWithDeps(notification.ConfiguredServiceDeps{
 			Repo:            notificationRepo,
 			HealingFlowRepo: automationrepo.NewHealingFlowRepository(),
@@ -55,16 +63,16 @@ func New() *Module {
 		DashboardRepo:        engagementrepo.NewDashboardRepositoryWithDB(db),
 		WorkspaceRepo:        engagementrepo.NewWorkspaceRepositoryWithDB(db),
 		WorkbenchRepo:        engagementrepo.NewWorkbenchRepository(db),
-		RoleRepo:             accessrepo.NewRoleRepository(),
+		RoleRepo:             accessrepo.NewRoleRepositoryWithDB(db),
 		PreferenceRepo:       engagementrepo.NewUserPreferenceRepositoryWithDB(db),
 		ActivityRepo:         activityRepo,
 		SearchRepo:           engagementrepo.NewSearchRepositoryWithDB(db),
 		SiteMessageRepo:      engagementrepo.NewSiteMessageRepositoryWithDeps(engagementrepo.SiteMessageRepositoryDeps{DB: db, PlatformSettings: settingsRepo}),
 		PlatformSettingsRepo: settingsRepo,
 		EventBus:             platformevents.NewMessageEventBus(),
-		TenantRepo:           accessrepo.NewTenantRepository(),
+		TenantRepo:           accessrepo.NewTenantRepositoryWithDB(db),
 		UserRepo:             userRepo,
-	})
+	}
 }
 
 func NewWithDeps(deps ModuleDeps) *Module {

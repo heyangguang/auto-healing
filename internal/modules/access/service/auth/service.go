@@ -41,14 +41,22 @@ type ServiceDeps struct {
 
 // NewService 创建认证服务
 func NewService(jwtSvc *jwt.Service) *Service {
-	return NewServiceWithDeps(ServiceDeps{
-		UserRepo:       accessrepo.NewUserRepository(),
-		RoleRepo:       accessrepo.NewRoleRepository(),
-		PermissionRepo: accessrepo.NewPermissionRepository(),
-		TenantRepo:     accessrepo.NewTenantRepository(),
+	return NewServiceWithDB(database.DB, jwtSvc)
+}
+
+func NewServiceWithDB(db *gorm.DB, jwtSvc *jwt.Service) *Service {
+	return NewServiceWithDeps(DefaultServiceDepsWithDB(db, jwtSvc))
+}
+
+func DefaultServiceDepsWithDB(db *gorm.DB, jwtSvc *jwt.Service) ServiceDeps {
+	return ServiceDeps{
+		UserRepo:       accessrepo.NewUserRepositoryWithDB(db),
+		RoleRepo:       accessrepo.NewRoleRepositoryWithDB(db),
+		PermissionRepo: accessrepo.NewPermissionRepositoryWithDB(db),
+		TenantRepo:     accessrepo.NewTenantRepositoryWithDB(db),
 		JWTService:     jwtSvc,
-		DB:             database.DB,
-	})
+		DB:             db,
+	}
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

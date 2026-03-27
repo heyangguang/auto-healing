@@ -61,11 +61,15 @@ type ExecutionSchedulerDeps struct {
 }
 
 func DefaultExecutionSchedulerDeps() ExecutionSchedulerDeps {
+	return DefaultExecutionSchedulerDepsWithDB(database.DB)
+}
+
+func DefaultExecutionSchedulerDepsWithDB(db *gorm.DB) ExecutionSchedulerDeps {
 	return ExecutionSchedulerDeps{
-		ExecutionService: executionService.NewService(),
-		ScheduleService:  scheduleService.NewService(),
-		ScheduleRepo:     automationrepo.NewScheduleRepository(),
-		DB:               database.DB,
+		ExecutionService: executionService.NewServiceWithDB(db),
+		ScheduleService:  scheduleService.NewServiceWithDB(db),
+		ScheduleRepo:     automationrepo.NewScheduleRepositoryWithDB(db),
+		DB:               db,
 		Interval:         30 * time.Second,
 		InFlight:         platformsched.NewInFlightSet(),
 		Sem:              make(chan struct{}, 8),
@@ -74,21 +78,25 @@ func DefaultExecutionSchedulerDeps() ExecutionSchedulerDeps {
 
 // NewExecutionScheduler 创建执行任务调度器
 func NewExecutionScheduler() *ExecutionScheduler {
-	return NewExecutionSchedulerWithDeps(DefaultExecutionSchedulerDeps())
+	return NewExecutionSchedulerWithDB(database.DB)
+}
+
+func NewExecutionSchedulerWithDB(db *gorm.DB) *ExecutionScheduler {
+	return NewExecutionSchedulerWithDeps(DefaultExecutionSchedulerDepsWithDB(db))
 }
 
 func NewExecutionSchedulerWithDeps(deps ExecutionSchedulerDeps) *ExecutionScheduler {
-	if deps.ExecutionService == nil {
-		deps.ExecutionService = executionService.NewService()
-	}
-	if deps.ScheduleService == nil {
-		deps.ScheduleService = scheduleService.NewService()
-	}
-	if deps.ScheduleRepo == nil {
-		deps.ScheduleRepo = automationrepo.NewScheduleRepository()
-	}
 	if deps.DB == nil {
 		deps.DB = database.DB
+	}
+	if deps.ExecutionService == nil {
+		deps.ExecutionService = executionService.NewServiceWithDB(deps.DB)
+	}
+	if deps.ScheduleService == nil {
+		deps.ScheduleService = scheduleService.NewServiceWithDB(deps.DB)
+	}
+	if deps.ScheduleRepo == nil {
+		deps.ScheduleRepo = automationrepo.NewScheduleRepositoryWithDB(deps.DB)
 	}
 	if deps.Interval == 0 {
 		deps.Interval = 30 * time.Second

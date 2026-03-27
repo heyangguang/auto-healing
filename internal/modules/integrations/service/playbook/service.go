@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/company/auto-healing/internal/database"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Service Playbook 服务
@@ -26,16 +28,24 @@ type ServiceDeps struct {
 }
 
 func DefaultServiceDeps() ServiceDeps {
+	return DefaultServiceDepsWithDB(database.DB)
+}
+
+func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	return ServiceDeps{
-		Repo:          integrationrepo.NewPlaybookRepository(),
-		GitRepo:       integrationrepo.NewGitRepositoryRepository(),
-		ExecutionRepo: automationrepo.NewExecutionRepository(),
+		Repo:          integrationrepo.NewPlaybookRepositoryWithDB(db),
+		GitRepo:       integrationrepo.NewGitRepositoryRepositoryWithDB(db),
+		ExecutionRepo: automationrepo.NewExecutionRepositoryWithDB(db),
 	}
 }
 
 // NewService 创建 Playbook 服务
 func NewService() *Service {
-	return NewServiceWithDeps(DefaultServiceDeps())
+	return NewServiceWithDB(database.DB)
+}
+
+func NewServiceWithDB(db *gorm.DB) *Service {
+	return NewServiceWithDeps(DefaultServiceDepsWithDB(db))
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

@@ -15,6 +15,7 @@ import (
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // NodeExecutors 节点执行器集合
@@ -32,10 +33,14 @@ type NodeExecutorsDeps struct {
 
 // NewNodeExecutors 创建节点执行器
 func NewNodeExecutors() *NodeExecutors {
+	return NewNodeExecutorsWithDB(database.DB)
+}
+
+func NewNodeExecutorsWithDB(db *gorm.DB) *NodeExecutors {
 	return NewNodeExecutorsWithDeps(NodeExecutorsDeps{
-		CMDBRepo:         cmdbrepo.NewCMDBItemRepository(),
-		NotificationRepo: engagementrepo.NewNotificationRepository(database.DB),
-		NotificationSvc:  notification.NewConfiguredService(database.DB),
+		CMDBRepo:         cmdbrepo.NewCMDBItemRepositoryWithDB(db),
+		NotificationRepo: engagementrepo.NewNotificationRepository(db),
+		NotificationSvc:  notification.NewConfiguredService(db),
 	})
 }
 

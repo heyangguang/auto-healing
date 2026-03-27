@@ -1,10 +1,12 @@
 package httpapi
 
 import (
+	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/response"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // ══════ 插件搜索白名单 ══════
@@ -40,9 +42,13 @@ type PluginHandlerDeps struct {
 
 // NewPluginHandler 创建插件处理器
 func NewPluginHandler() *PluginHandler {
+	return NewPluginHandlerWithDB(database.DB)
+}
+
+func NewPluginHandlerWithDB(db *gorm.DB) *PluginHandler {
 	return NewPluginHandlerWithDeps(PluginHandlerDeps{
-		PluginService:   plugin.NewService(),
-		IncidentService: plugin.NewIncidentService(),
+		PluginService:   plugin.NewServiceWithDB(db),
+		IncidentService: plugin.NewIncidentServiceWithDB(db),
 	})
 }
 

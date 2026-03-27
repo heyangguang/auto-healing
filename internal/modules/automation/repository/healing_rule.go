@@ -18,7 +18,11 @@ type HealingRuleRepository struct {
 
 // NewHealingRuleRepository 创建自愈规则仓库
 func NewHealingRuleRepository() *HealingRuleRepository {
-	return &HealingRuleRepository{db: database.DB}
+	return NewHealingRuleRepositoryWithDB(database.DB)
+}
+
+func NewHealingRuleRepositoryWithDB(db *gorm.DB) *HealingRuleRepository {
+	return &HealingRuleRepository{db: db}
 }
 
 // Create 创建自愈规则

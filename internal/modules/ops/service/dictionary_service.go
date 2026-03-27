@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/ops/model"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // DictionaryService 字典值服务（含内存缓存）
@@ -26,8 +28,12 @@ type DictionaryServiceDeps struct {
 
 // NewDictionaryService 创建服务
 func NewDictionaryService() *DictionaryService {
+	return NewDictionaryServiceWithDB(database.DB)
+}
+
+func NewDictionaryServiceWithDB(db *gorm.DB) *DictionaryService {
 	return NewDictionaryServiceWithDeps(DictionaryServiceDeps{
-		Repo: opsrepo.NewDictionaryRepository(),
+		Repo: opsrepo.NewDictionaryRepositoryWithDB(db),
 	})
 }
 

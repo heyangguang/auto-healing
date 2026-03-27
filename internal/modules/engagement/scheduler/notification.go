@@ -10,6 +10,7 @@ import (
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	schedulerx "github.com/company/auto-healing/internal/platform/schedulerx"
+	"gorm.io/gorm"
 )
 
 // NotificationRetryScheduler 通知失败重试调度器
@@ -29,7 +30,11 @@ type NotificationRetrySchedulerDeps struct {
 
 // NewNotificationRetryScheduler 创建通知重试调度器
 func NewNotificationRetryScheduler() *NotificationRetryScheduler {
-	notifSvc := notification.NewConfiguredService(database.DB)
+	return NewNotificationRetrySchedulerWithDB(database.DB)
+}
+
+func NewNotificationRetrySchedulerWithDB(db *gorm.DB) *NotificationRetryScheduler {
+	notifSvc := notification.NewConfiguredService(db)
 	return NewNotificationRetrySchedulerWithDeps(NotificationRetrySchedulerDeps{
 		NotificationService: notifSvc,
 		Interval:            notificationRetryInterval(),

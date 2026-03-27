@@ -8,11 +8,13 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/company/auto-healing/internal/database"
 	gitclient "github.com/company/auto-healing/internal/modules/integrations/gitclient"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	playbookSvc "github.com/company/auto-healing/internal/modules/integrations/service/playbook"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const DefaultReposDir = "/var/lib/auto-healing/repos"
@@ -35,12 +37,18 @@ type ServiceDeps struct {
 }
 
 func DefaultServiceDeps() ServiceDeps {
+	return DefaultServiceDepsWithDB(database.DB)
+}
+
+func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	return ServiceDeps{
-		Repo:         integrationrepo.NewGitRepositoryRepository(),
-		PlaybookRepo: integrationrepo.NewPlaybookRepository(),
+		Repo:         integrationrepo.NewGitRepositoryRepositoryWithDB(db),
+		PlaybookRepo: integrationrepo.NewPlaybookRepositoryWithDB(db),
 		ReposDir:     defaultReposDir(),
-		PlaybookSvc:  playbookSvc.NewService,
-		Lifecycle:    newAsyncLifecycle(),
+		PlaybookSvc: func() *playbookSvc.Service {
+			return playbookSvc.NewServiceWithDB(db)
+		},
+		Lifecycle: newAsyncLifecycle(),
 	}
 }
 
@@ -54,7 +62,11 @@ func defaultReposDir() string {
 
 // NewService 创建 Git 仓库服务
 func NewService() *Service {
-	return NewServiceWithDeps(DefaultServiceDeps())
+	return NewServiceWithDB(database.DB)
+}
+
+func NewServiceWithDB(db *gorm.DB) *Service {
+	return NewServiceWithDeps(DefaultServiceDepsWithDB(db))
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {
@@ -62,7 +74,9 @@ func NewServiceWithDeps(deps ServiceDeps) *Service {
 		deps.ReposDir = defaultReposDir()
 	}
 	if deps.PlaybookSvc == nil {
-		deps.PlaybookSvc = playbookSvc.NewService
+		deps.PlaybookSvc = func() *playbookSvc.Service {
+			return playbookSvc.NewServiceWithDB(database.DB)
+		}
 	}
 	if deps.Lifecycle == nil {
 		deps.Lifecycle = newAsyncLifecycle()

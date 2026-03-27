@@ -9,6 +9,7 @@ import (
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
+	"gorm.io/gorm"
 )
 
 // DryRunResult Dry-Run 执行结果
@@ -46,10 +47,14 @@ type DryRunExecutorDeps struct {
 
 // NewDryRunExecutor 创建 Dry-Run 执行器
 func NewDryRunExecutor() *DryRunExecutor {
+	return NewDryRunExecutorWithDB(database.DB)
+}
+
+func NewDryRunExecutorWithDB(db *gorm.DB) *DryRunExecutor {
 	return NewDryRunExecutorWithDeps(DryRunExecutorDeps{
-		TaskRepo:         automationrepo.NewExecutionRepository(),
-		CMDBRepo:         cmdbrepo.NewCMDBItemRepository(),
-		NotificationRepo: engagementrepo.NewNotificationRepository(database.DB),
+		TaskRepo:         automationrepo.NewExecutionRepositoryWithDB(db),
+		CMDBRepo:         cmdbrepo.NewCMDBItemRepositoryWithDB(db),
+		NotificationRepo: engagementrepo.NewNotificationRepository(db),
 	})
 }
 

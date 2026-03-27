@@ -16,7 +16,11 @@ type FlowLogRepository struct {
 
 // NewFlowLogRepository 创建流程执行日志仓库
 func NewFlowLogRepository() *FlowLogRepository {
-	return &FlowLogRepository{db: database.DB}
+	return NewFlowLogRepositoryWithDB(database.DB)
+}
+
+func NewFlowLogRepositoryWithDB(db *gorm.DB) *FlowLogRepository {
+	return &FlowLogRepository{db: db}
 }
 
 // Create 创建日志

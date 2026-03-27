@@ -40,7 +40,11 @@ type PlaybookListOptions struct {
 
 // NewPlaybookRepository 创建 Playbook 仓库
 func NewPlaybookRepository() *PlaybookRepository {
-	return &PlaybookRepository{db: database.DB}
+	return NewPlaybookRepositoryWithDB(database.DB)
+}
+
+func NewPlaybookRepositoryWithDB(db *gorm.DB) *PlaybookRepository {
+	return &PlaybookRepository{db: db}
 }
 
 func (r *PlaybookRepository) tenantDB(ctx context.Context) *gorm.DB {

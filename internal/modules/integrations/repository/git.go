@@ -23,8 +23,12 @@ type GitRepositoryRepository struct {
 
 // NewGitRepositoryRepository 创建 Git 仓库仓储
 func NewGitRepositoryRepository() *GitRepositoryRepository {
+	return NewGitRepositoryRepositoryWithDB(database.DB)
+}
+
+func NewGitRepositoryRepositoryWithDB(db *gorm.DB) *GitRepositoryRepository {
 	return &GitRepositoryRepository{
-		db: database.DB,
+		db: db,
 	}
 }
 

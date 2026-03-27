@@ -8,6 +8,7 @@ import (
 	"github.com/company/auto-healing/internal/pkg/response"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // HealingHandler 自愈引擎处理器
@@ -35,14 +36,18 @@ type HealingHandlerDeps struct {
 
 // NewHealingHandler 创建自愈引擎处理器
 func NewHealingHandler() *HealingHandler {
-	scheduler := healing.DefaultScheduler()
+	return NewHealingHandlerWithDB(database.DB)
+}
+
+func NewHealingHandlerWithDB(db *gorm.DB) *HealingHandler {
+	scheduler := healing.NewSchedulerWithDB(db)
 	return NewHealingHandlerWithDeps(HealingHandlerDeps{
-		FlowRepo:         automationrepo.NewHealingFlowRepository(),
-		RuleRepo:         automationrepo.NewHealingRuleRepository(),
-		InstanceRepo:     automationrepo.NewFlowInstanceRepository(),
-		ApprovalRepo:     automationrepo.NewApprovalTaskRepository(),
-		IncidentRepo:     incidentrepo.NewIncidentRepository(),
-		NotificationRepo: engagementrepo.NewNotificationRepository(database.DB),
+		FlowRepo:         automationrepo.NewHealingFlowRepositoryWithDB(db),
+		RuleRepo:         automationrepo.NewHealingRuleRepositoryWithDB(db),
+		InstanceRepo:     automationrepo.NewFlowInstanceRepositoryWithDB(db),
+		ApprovalRepo:     automationrepo.NewApprovalTaskRepositoryWithDB(db),
+		IncidentRepo:     incidentrepo.NewIncidentRepositoryWithDB(db),
+		NotificationRepo: engagementrepo.NewNotificationRepository(db),
 		Executor:         scheduler.Executor(),
 		Scheduler:        scheduler,
 	})

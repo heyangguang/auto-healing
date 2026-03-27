@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"github.com/company/auto-healing/internal/database"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	integrationhttp "github.com/company/auto-healing/internal/modules/integrations/httpapi"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
@@ -12,6 +13,7 @@ import (
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
+	"gorm.io/gorm"
 )
 
 // Module 聚合 integrations 域处理器构造。
@@ -32,13 +34,17 @@ type ModuleDeps struct {
 }
 
 func DefaultModuleDeps() ModuleDeps {
-	gitRepoRepo := integrationrepo.NewGitRepositoryRepository()
-	playbookRepo := integrationrepo.NewPlaybookRepository()
-	executionRepo := automationrepo.NewExecutionRepository()
-	pluginRepo := integrationrepo.NewPluginRepository()
-	pluginSyncLogRepo := integrationrepo.NewPluginSyncLogRepository()
-	cmdbRepo := cmdbrepo.NewCMDBItemRepository()
-	incidentRepo := incidentrepo.NewIncidentRepository()
+	return DefaultModuleDepsWithDB(database.DB)
+}
+
+func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
+	gitRepoRepo := integrationrepo.NewGitRepositoryRepositoryWithDB(db)
+	playbookRepo := integrationrepo.NewPlaybookRepositoryWithDB(db)
+	executionRepo := automationrepo.NewExecutionRepositoryWithDB(db)
+	pluginRepo := integrationrepo.NewPluginRepositoryWithDB(db)
+	pluginSyncLogRepo := integrationrepo.NewPluginSyncLogRepositoryWithDB(db)
+	cmdbRepo := cmdbrepo.NewCMDBItemRepositoryWithDB(db)
+	incidentRepo := incidentrepo.NewIncidentRepositoryWithDB(db)
 	httpClient := plugin.NewHTTPClient()
 	pluginService := plugin.NewServiceWithDeps(plugin.ServiceDeps{
 		PluginRepo:   pluginRepo,
@@ -61,11 +67,7 @@ func DefaultModuleDeps() ModuleDeps {
 			Repo:         gitRepoRepo,
 			PlaybookRepo: playbookRepo,
 			PlaybookSvc: func() *playbook.Service {
-				return playbook.NewServiceWithDeps(playbook.ServiceDeps{
-					Repo:          playbookRepo,
-					GitRepo:       gitRepoRepo,
-					ExecutionRepo: executionRepo,
-				})
+				return playbook.NewServiceWithDB(db)
 			},
 		}),
 		PlaybookService: playbook.NewServiceWithDeps(playbook.ServiceDeps{
@@ -74,14 +76,18 @@ func DefaultModuleDeps() ModuleDeps {
 			ExecutionRepo: executionRepo,
 		}),
 		SecretService: secretsSvc.NewServiceWithDeps(secretsSvc.ServiceDeps{
-			Repo: secretsrepo.NewSecretsSourceRepository(),
+			Repo: secretsrepo.NewSecretsSourceRepositoryWithDB(db),
 		}),
 	}
 }
 
 // New 创建 integrations 域模块。
 func New() *Module {
-	return NewWithDeps(DefaultModuleDeps())
+	return NewWithDB(database.DB)
+}
+
+func NewWithDB(db *gorm.DB) *Module {
+	return NewWithDeps(DefaultModuleDepsWithDB(db))
 }
 
 func NewWithDeps(deps ModuleDeps) *Module {

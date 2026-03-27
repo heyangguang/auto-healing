@@ -1,10 +1,12 @@
 package httpapi
 
 import (
+	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // CMDBHandler CMDB 处理器
@@ -20,8 +22,13 @@ type CMDBHandlerDeps struct {
 
 // NewCMDBHandler 创建 CMDB 处理器
 func NewCMDBHandler() *CMDBHandler {
+	return NewCMDBHandlerWithDB(database.DB)
+}
+
+func NewCMDBHandlerWithDB(db *gorm.DB) *CMDBHandler {
 	return NewCMDBHandlerWithDeps(CMDBHandlerDeps{
-		Service: plugin.NewCMDBService(),
+		Service:       plugin.NewCMDBServiceWithDB(db),
+		SecretService: secretsSvc.NewServiceWithDB(db),
 	})
 }
 

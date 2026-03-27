@@ -18,7 +18,11 @@ type HealingFlowRepository struct {
 
 // NewHealingFlowRepository 创建自愈流程仓库
 func NewHealingFlowRepository() *HealingFlowRepository {
-	return &HealingFlowRepository{db: database.DB}
+	return NewHealingFlowRepositoryWithDB(database.DB)
+}
+
+func NewHealingFlowRepositoryWithDB(db *gorm.DB) *HealingFlowRepository {
+	return &HealingFlowRepository{db: db}
 }
 
 // Create 创建自愈流程

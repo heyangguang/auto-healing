@@ -5,9 +5,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
+	"gorm.io/gorm"
 )
 
 // Scheduler 全局自愈调度器
@@ -45,12 +47,16 @@ type SchedulerDeps struct {
 }
 
 func DefaultSchedulerDeps(executor *FlowExecutor) SchedulerDeps {
+	return DefaultSchedulerDepsWithDB(database.DB, executor)
+}
+
+func DefaultSchedulerDepsWithDB(db *gorm.DB, executor *FlowExecutor) SchedulerDeps {
 	return SchedulerDeps{
-		RuleRepo:     automationrepo.NewHealingRuleRepository(),
-		FlowRepo:     automationrepo.NewHealingFlowRepository(),
-		InstanceRepo: automationrepo.NewFlowInstanceRepository(),
-		IncidentRepo: incidentrepo.NewIncidentRepository(),
-		ApprovalRepo: automationrepo.NewApprovalTaskRepository(),
+		RuleRepo:     automationrepo.NewHealingRuleRepositoryWithDB(db),
+		FlowRepo:     automationrepo.NewHealingFlowRepositoryWithDB(db),
+		InstanceRepo: automationrepo.NewFlowInstanceRepositoryWithDB(db),
+		IncidentRepo: incidentrepo.NewIncidentRepositoryWithDB(db),
+		ApprovalRepo: automationrepo.NewApprovalTaskRepositoryWithDB(db),
 		Matcher:      NewRuleMatcher(),
 		Executor:     executor,
 		Interval:     10 * time.Second,
@@ -60,12 +66,20 @@ func DefaultSchedulerDeps(executor *FlowExecutor) SchedulerDeps {
 }
 
 func DefaultSchedulerRuntimeDeps() SchedulerDeps {
-	return DefaultSchedulerDeps(NewFlowExecutor())
+	return DefaultSchedulerRuntimeDepsWithDB(database.DB)
+}
+
+func DefaultSchedulerRuntimeDepsWithDB(db *gorm.DB) SchedulerDeps {
+	return DefaultSchedulerDepsWithDB(db, NewFlowExecutorWithDB(db))
 }
 
 // NewScheduler 创建调度器
 func NewScheduler() *Scheduler {
-	return NewSchedulerWithDeps(DefaultSchedulerRuntimeDeps())
+	return NewSchedulerWithDB(database.DB)
+}
+
+func NewSchedulerWithDB(db *gorm.DB) *Scheduler {
+	return NewSchedulerWithDeps(DefaultSchedulerRuntimeDepsWithDB(db))
 }
 
 func NewSchedulerWithDeps(deps SchedulerDeps) *Scheduler {

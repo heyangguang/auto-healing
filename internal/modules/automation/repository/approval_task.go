@@ -18,7 +18,11 @@ type ApprovalTaskRepository struct {
 
 // NewApprovalTaskRepository 创建审批任务仓库
 func NewApprovalTaskRepository() *ApprovalTaskRepository {
-	return &ApprovalTaskRepository{db: database.DB}
+	return NewApprovalTaskRepositoryWithDB(database.DB)
+}
+
+func NewApprovalTaskRepositoryWithDB(db *gorm.DB) *ApprovalTaskRepository {
+	return &ApprovalTaskRepository{db: db}
 }
 
 // Create 创建审批任务

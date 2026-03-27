@@ -28,7 +28,11 @@ type IncidentSyncOptions struct {
 
 // NewFlowInstanceRepository 创建流程实例仓库
 func NewFlowInstanceRepository() *FlowInstanceRepository {
-	return &FlowInstanceRepository{db: database.DB}
+	return NewFlowInstanceRepositoryWithDB(database.DB)
+}
+
+func NewFlowInstanceRepositoryWithDB(db *gorm.DB) *FlowInstanceRepository {
+	return &FlowInstanceRepository{db: db}
 }
 
 // Create 创建流程实例

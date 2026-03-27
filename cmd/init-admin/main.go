@@ -14,6 +14,7 @@ import (
 	"github.com/company/auto-healing/internal/pkg/crypto"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // 初始化超级管理员脚本
@@ -23,7 +24,7 @@ func main() {
 	defer database.Close()
 
 	ctx := context.Background()
-	repos := newAdminRepos()
+	repos := newAdminReposWithDB(database.DB)
 
 	ensureUsersTableEmpty(ctx, repos.user)
 	admin, password, err := bootstrapInitialAdmin(ctx, repos)
@@ -77,10 +78,14 @@ type adminRepos struct {
 }
 
 func newAdminRepos() adminRepos {
+	return newAdminReposWithDB(database.DB)
+}
+
+func newAdminReposWithDB(db *gorm.DB) adminRepos {
 	return adminRepos{
-		user:       accessrepo.NewUserRepositoryWithDB(database.DB),
-		role:       accessrepo.NewRoleRepositoryWithDB(database.DB),
-		permission: accessrepo.NewPermissionRepositoryWithDB(database.DB),
+		user:       accessrepo.NewUserRepositoryWithDB(db),
+		role:       accessrepo.NewRoleRepositoryWithDB(db),
+		permission: accessrepo.NewPermissionRepositoryWithDB(db),
 	}
 }
 

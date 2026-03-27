@@ -98,10 +98,6 @@ func queryTokenHeader(c *gin.Context) string {
 	return ""
 }
 
-func ensureActiveUser(c *gin.Context, subject string) bool {
-	return ensureActiveUserWithRepo(c, NewRuntimeDeps().UserRepo, subject)
-}
-
 func ensureActiveUserWithRepo(c *gin.Context, userRepo *accessrepo.UserRepository, subject string) bool {
 	uid, err := uuid.Parse(subject)
 	if err != nil {

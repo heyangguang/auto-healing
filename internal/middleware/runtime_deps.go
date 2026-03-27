@@ -52,9 +52,9 @@ func NewRuntimeDepsWithDB(db *gorm.DB) RuntimeDeps {
 		TenantRepo:        accessrepo.NewTenantRepositoryWithDB(db),
 		PermissionRepo:    accessrepo.NewPermissionRepositoryWithDB(db),
 		RoleRepo:          accessrepo.NewRoleRepositoryWithDB(db),
-		ImpersonationRepo: accessrepo.NewImpersonationRepository(),
+		ImpersonationRepo: accessrepo.NewImpersonationRepositoryWithDB(db),
 		AuditRepo:         auditrepo.NewAuditLogRepository(db),
-		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
+		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepositoryWithDB(db),
 		DB:                db,
 	}
 }
@@ -76,13 +76,13 @@ func (deps RuntimeDeps) withDefaults() RuntimeDeps {
 		deps.RoleRepo = accessrepo.NewRoleRepositoryWithDB(deps.DB)
 	}
 	if deps.ImpersonationRepo == nil {
-		deps.ImpersonationRepo = accessrepo.NewImpersonationRepository()
+		deps.ImpersonationRepo = accessrepo.NewImpersonationRepositoryWithDB(deps.DB)
 	}
 	if deps.AuditRepo == nil {
 		deps.AuditRepo = auditrepo.NewAuditLogRepository(deps.DB)
 	}
 	if deps.PlatformAuditRepo == nil {
-		deps.PlatformAuditRepo = auditrepo.NewPlatformAuditLogRepository()
+		deps.PlatformAuditRepo = auditrepo.NewPlatformAuditLogRepositoryWithDB(deps.DB)
 	}
 	return deps
 }

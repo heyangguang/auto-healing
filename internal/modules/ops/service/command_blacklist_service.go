@@ -1,6 +1,10 @@
 package service
 
-import opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
+import (
+	"github.com/company/auto-healing/internal/database"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
+	"gorm.io/gorm"
+)
 
 // CommandBlacklistService 高危指令黑名单服务
 type CommandBlacklistService struct {
@@ -13,8 +17,12 @@ type CommandBlacklistServiceDeps struct {
 
 // NewCommandBlacklistService 创建服务
 func NewCommandBlacklistService() *CommandBlacklistService {
+	return NewCommandBlacklistServiceWithDB(database.DB)
+}
+
+func NewCommandBlacklistServiceWithDB(db *gorm.DB) *CommandBlacklistService {
 	return NewCommandBlacklistServiceWithDeps(CommandBlacklistServiceDeps{
-		Repo: opsrepo.NewCommandBlacklistRepository(),
+		Repo: opsrepo.NewCommandBlacklistRepositoryWithDB(db),
 	})
 }
 

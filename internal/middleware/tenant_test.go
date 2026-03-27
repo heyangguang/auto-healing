@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/company/auto-healing/internal/database"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -96,9 +97,10 @@ func TestEnsureActiveTenantReturnsInternalErrorWhenLookupFails(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodGet, "/tenant", nil)
+	tenantRepo := accessrepo.NewTenantRepositoryWithDB(db)
 
-	if ensureActiveTenant(c, uuid.New()) {
-		t.Fatal("ensureActiveTenant() = true, want false")
+	if ensureActiveTenantWithRepo(c, tenantRepo, uuid.New()) {
+		t.Fatal("ensureActiveTenantWithRepo() = true, want false")
 	}
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
@@ -205,9 +207,10 @@ func TestResolveRegularTenantRejectsInvalidDefaultTenantID(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodGet, "/tenant", nil)
+	tenantRepo := accessrepo.NewTenantRepositoryWithDB(newMiddlewareTestDB(t))
 
-	if _, ok := resolveRegularTenant(c, nil, "not-a-uuid"); ok {
-		t.Fatal("resolveRegularTenant() ok = true, want false")
+	if _, ok := resolveRegularTenantWithRepo(c, tenantRepo, nil, "not-a-uuid"); ok {
+		t.Fatal("resolveRegularTenantWithRepo() ok = true, want false")
 	}
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
@@ -235,9 +238,10 @@ func TestResolveRegularTenantReturnsInternalErrorWhenMembershipLookupFails(t *te
 	req.Header.Set("X-Tenant-ID", tenantID.String())
 	c.Request = req
 	c.Set(UserIDKey, uuid.NewString())
+	tenantRepo := accessrepo.NewTenantRepositoryWithDB(db)
 
-	if _, ok := resolveRegularTenant(c, nil, ""); ok {
-		t.Fatal("resolveRegularTenant() ok = true, want false")
+	if _, ok := resolveRegularTenantWithRepo(c, tenantRepo, nil, ""); ok {
+		t.Fatal("resolveRegularTenantWithRepo() ok = true, want false")
 	}
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
@@ -281,9 +285,10 @@ func TestResolveRegularTenantRejectsDefaultTenantWhenMembershipRevoked(t *testin
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodGet, "/tenant", nil)
 	c.Set(UserIDKey, userID.String())
+	tenantRepo := accessrepo.NewTenantRepositoryWithDB(db)
 
-	if _, ok := resolveRegularTenant(c, []string{tenantID.String()}, tenantID.String()); ok {
-		t.Fatal("resolveRegularTenant() ok = true, want false")
+	if _, ok := resolveRegularTenantWithRepo(c, tenantRepo, []string{tenantID.String()}, tenantID.String()); ok {
+		t.Fatal("resolveRegularTenantWithRepo() ok = true, want false")
 	}
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
@@ -329,9 +334,10 @@ func TestResolveCommonRouteTenantRejectsDefaultTenantWhenMembershipRevoked(t *te
 	c.Set(UserIDKey, userID.String())
 	c.Set(DefaultTenantIDKey, tenantID.String())
 	c.Set(TenantIDsKey, []string{tenantID.String()})
+	tenantRepo := accessrepo.NewTenantRepositoryWithDB(db)
 
-	if _, ok := resolveCommonRouteTenant(c); ok {
-		t.Fatal("resolveCommonRouteTenant() ok = true, want false")
+	if _, ok := resolveCommonRouteTenantWithRepo(c, tenantRepo); ok {
+		t.Fatal("resolveCommonRouteTenantWithRepo() ok = true, want false")
 	}
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)

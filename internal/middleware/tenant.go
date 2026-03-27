@@ -30,10 +30,6 @@ const (
 	ErrorCodeDefaultTenantInvalid       = "DEFAULT_TENANT_INVALID"
 )
 
-func ensureActiveTenant(c *gin.Context, tenantID uuid.UUID) bool {
-	return ensureActiveTenantWithRepo(c, NewRuntimeDeps().TenantRepo, tenantID)
-}
-
 func ensureActiveTenantWithRepo(c *gin.Context, tenantRepo *accessrepo.TenantRepository, tenantID uuid.UUID) bool {
 	tenant, tenantErr := tenantRepo.GetByID(c.Request.Context(), tenantID)
 	if tenantErr != nil {

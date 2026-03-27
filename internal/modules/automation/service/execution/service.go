@@ -11,11 +11,13 @@ import (
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	secretsrepo "github.com/company/auto-healing/internal/modules/secrets/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const maxExecutionWorkers = 10
@@ -55,25 +57,37 @@ type ServiceDeps struct {
 }
 
 func DefaultServiceDeps() ServiceDeps {
+	return DefaultServiceDepsWithDB(database.DB)
+}
+
+func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	return ServiceDeps{
-		Repo:             automationrepo.NewExecutionRepository(),
-		GitRepo:          integrationrepo.NewGitRepositoryRepository(),
-		SecretsRepo:      secretsrepo.NewSecretsSourceRepository(),
-		CMDBRepo:         cmdbrepo.NewCMDBItemRepository(),
-		HealingFlowRepo:  automationrepo.NewHealingFlowRepository(),
+		Repo:             automationrepo.NewExecutionRepositoryWithDB(db),
+		GitRepo:          integrationrepo.NewGitRepositoryRepositoryWithDB(db),
+		SecretsRepo:      secretsrepo.NewSecretsSourceRepositoryWithDB(db),
+		CMDBRepo:         cmdbrepo.NewCMDBItemRepositoryWithDB(db),
+		HealingFlowRepo:  automationrepo.NewHealingFlowRepositoryWithDB(db),
 		WorkspaceManager: ansible.NewWorkspaceManager(),
 		LocalExecutor:    ansible.NewLocalExecutor(),
 		DockerExecutor:   ansible.NewDockerExecutor(),
-		NotificationSvc:  notification.NewConfiguredService(database.DB),
-		BlacklistSvc:     opsservice.NewCommandBlacklistService(),
-		ExemptionSvc:     opsservice.NewBlacklistExemptionService(),
-		Lifecycle:        newAsyncLifecycle(maxExecutionWorkers),
+		NotificationSvc:  notification.NewConfiguredService(db),
+		BlacklistSvc: opsservice.NewCommandBlacklistServiceWithDeps(opsservice.CommandBlacklistServiceDeps{
+			Repo: opsrepo.NewCommandBlacklistRepositoryWithDB(db),
+		}),
+		ExemptionSvc: opsservice.NewBlacklistExemptionServiceWithDeps(opsservice.BlacklistExemptionServiceDeps{
+			Repo: opsrepo.NewBlacklistExemptionRepository(db),
+		}),
+		Lifecycle: newAsyncLifecycle(maxExecutionWorkers),
 	}
 }
 
 // NewService 创建执行任务服务
 func NewService() *Service {
-	return NewServiceWithDeps(DefaultServiceDeps())
+	return NewServiceWithDB(database.DB)
+}
+
+func NewServiceWithDB(db *gorm.DB) *Service {
+	return NewServiceWithDeps(DefaultServiceDepsWithDB(db))
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

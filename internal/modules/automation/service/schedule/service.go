@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
+	"gorm.io/gorm"
 )
 
 // Service 定时任务调度服务
@@ -24,15 +26,23 @@ type ServiceDeps struct {
 }
 
 func DefaultServiceDeps() ServiceDeps {
+	return DefaultServiceDepsWithDB(database.DB)
+}
+
+func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 	return ServiceDeps{
-		Repo:     automationrepo.NewScheduleRepository(),
-		ExecRepo: automationrepo.NewExecutionRepository(),
+		Repo:     automationrepo.NewScheduleRepositoryWithDB(db),
+		ExecRepo: automationrepo.NewExecutionRepositoryWithDB(db),
 	}
 }
 
 // NewService 创建定时任务调度服务
 func NewService() *Service {
-	return NewServiceWithDeps(DefaultServiceDeps())
+	return NewServiceWithDB(database.DB)
+}
+
+func NewServiceWithDB(db *gorm.DB) *Service {
+	return NewServiceWithDeps(DefaultServiceDepsWithDB(db))
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {

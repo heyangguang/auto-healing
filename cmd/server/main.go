@@ -44,13 +44,14 @@ func main() {
 	cleanup := initializeInfrastructure(cfg)
 	defer cleanup()
 	defer middleware.Shutdown()
-	if err := runStartupJobs(signalCtx); err != nil {
+	db := database.DB
+	if err := runStartupJobsWithDeps(signalCtx, newStartupDepsWithDB(db)); err != nil {
 		logger.Fatal("启动任务失败: %v", err)
 	}
-	schedulers := startSchedulers()
+	schedulers := startSchedulersWithDB(db)
 	defer stopSchedulers(schedulers)
 
-	r := newRouter(cfg)
+	r := newRouterWithDB(cfg, db)
 	defer platformlifecycle.Cleanup()
 	server := newHTTPServer(cfg, r)
 	logger.Info("启动服务于 %s", server.Addr)
@@ -107,15 +108,11 @@ type startupDeps struct {
 
 var listStartupSeedJobs = startupSeedJobs
 
-func runStartupJobs(ctx context.Context) error {
-	return runStartupJobsWithDeps(ctx, newStartupDepsWithDB(database.DB))
-}
-
 func newStartupDepsWithDB(db *gorm.DB) startupDeps {
 	settingsRepo := settingsrepo.NewPlatformSettingsRepositoryWithDB(db)
 	return startupDeps{
 		dictionary: opsservice.NewDictionaryServiceWithDeps(opsservice.DictionaryServiceDeps{
-			Repo: opsrepo.NewDictionaryRepository(),
+			Repo: opsrepo.NewDictionaryRepositoryWithDB(db),
 		}),
 		cleaner: engagementrepo.NewSiteMessageRepositoryWithDeps(engagementrepo.SiteMessageRepositoryDeps{
 			DB:               db,
@@ -166,8 +163,12 @@ type lifecycleService interface {
 }
 
 func startSchedulers() []lifecycleService {
+	return startSchedulersWithDB(database.DB)
+}
+
+func startSchedulersWithDB(db *gorm.DB) []lifecycleService {
 	schedulers := []lifecycleService{
-		appruntime.NewManagerWithDeps(appruntime.ManagerDeps{DB: database.DB}),
+		appruntime.NewManagerWithDeps(appruntime.ManagerDeps{DB: db}),
 		healing.DefaultScheduler(),
 	}
 	for _, item := range schedulers {
@@ -183,6 +184,10 @@ func stopSchedulers(schedulers []lifecycleService) {
 }
 
 func newRouter(cfg *config.Config) *gin.Engine {
+	return newRouterWithDB(cfg, database.DB)
+}
+
+func newRouterWithDB(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -195,7 +200,7 @@ func newRouter(cfg *config.Config) *gin.Engine {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
-	httproutes.SetupRoutes(r, cfg)
+	httproutes.SetupRoutesWithDB(r, cfg, db)
 	middleware.ValidateAuditResourceTypes(r)
 	return r
 }

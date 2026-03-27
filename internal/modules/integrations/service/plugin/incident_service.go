@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/company/auto-healing/internal/database"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/query"
@@ -30,16 +31,24 @@ type IncidentServiceDeps struct {
 }
 
 func DefaultIncidentServiceDeps() IncidentServiceDeps {
+	return DefaultIncidentServiceDepsWithDB(database.DB)
+}
+
+func DefaultIncidentServiceDepsWithDB(db *gorm.DB) IncidentServiceDeps {
 	return IncidentServiceDeps{
-		IncidentRepo: incidentrepo.NewIncidentRepository(),
-		PluginRepo:   integrationrepo.NewPluginRepository(),
+		IncidentRepo: incidentrepo.NewIncidentRepositoryWithDB(db),
+		PluginRepo:   integrationrepo.NewPluginRepositoryWithDB(db),
 		HTTPClient:   NewHTTPClient(),
 	}
 }
 
 // NewIncidentService 创建工单服务
 func NewIncidentService() *IncidentService {
-	return NewIncidentServiceWithDeps(DefaultIncidentServiceDeps())
+	return NewIncidentServiceWithDB(database.DB)
+}
+
+func NewIncidentServiceWithDB(db *gorm.DB) *IncidentService {
+	return NewIncidentServiceWithDeps(DefaultIncidentServiceDepsWithDB(db))
 }
 
 func NewIncidentServiceWithDeps(deps IncidentServiceDeps) *IncidentService {

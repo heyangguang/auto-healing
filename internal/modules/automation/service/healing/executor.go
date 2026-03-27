@@ -13,6 +13,7 @@ import (
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
+	"gorm.io/gorm"
 )
 
 // FlowExecutor 流程执行器
@@ -51,15 +52,19 @@ type FlowExecutorDeps struct {
 }
 
 func DefaultFlowExecutorDeps(executionSvc *execution.Service, notificationService *notificationSvc.Service) FlowExecutorDeps {
+	return DefaultFlowExecutorDepsWithDB(database.DB, executionSvc, notificationService)
+}
+
+func DefaultFlowExecutorDepsWithDB(db *gorm.DB, executionSvc *execution.Service, notificationService *notificationSvc.Service) FlowExecutorDeps {
 	return FlowExecutorDeps{
-		InstanceRepo:    automationrepo.NewFlowInstanceRepository(),
-		ApprovalRepo:    automationrepo.NewApprovalTaskRepository(),
-		FlowRepo:        automationrepo.NewHealingFlowRepository(),
-		FlowLogRepo:     automationrepo.NewFlowLogRepository(),
-		CMDBRepo:        cmdbrepo.NewCMDBItemRepository(),
-		GitRepoRepo:     integrationrepo.NewGitRepositoryRepository(),
-		ExecutionRepo:   automationrepo.NewExecutionRepository(),
-		IncidentRepo:    incidentrepo.NewIncidentRepository(),
+		InstanceRepo:    automationrepo.NewFlowInstanceRepositoryWithDB(db),
+		ApprovalRepo:    automationrepo.NewApprovalTaskRepositoryWithDB(db),
+		FlowRepo:        automationrepo.NewHealingFlowRepositoryWithDB(db),
+		FlowLogRepo:     automationrepo.NewFlowLogRepositoryWithDB(db),
+		CMDBRepo:        cmdbrepo.NewCMDBItemRepositoryWithDB(db),
+		GitRepoRepo:     integrationrepo.NewGitRepositoryRepositoryWithDB(db),
+		ExecutionRepo:   automationrepo.NewExecutionRepositoryWithDB(db),
+		IncidentRepo:    incidentrepo.NewIncidentRepositoryWithDB(db),
 		ExecutionSvc:    executionSvc,
 		NotificationSvc: notificationService,
 		AnsibleExecutor: ansible.NewLocalExecutor(),
@@ -69,12 +74,20 @@ func DefaultFlowExecutorDeps(executionSvc *execution.Service, notificationServic
 }
 
 func DefaultFlowExecutorRuntimeDeps() FlowExecutorDeps {
-	return DefaultFlowExecutorDeps(execution.NewService(), notificationSvc.NewConfiguredService(database.DB))
+	return DefaultFlowExecutorRuntimeDepsWithDB(database.DB)
+}
+
+func DefaultFlowExecutorRuntimeDepsWithDB(db *gorm.DB) FlowExecutorDeps {
+	return DefaultFlowExecutorDepsWithDB(db, execution.NewServiceWithDB(db), notificationSvc.NewConfiguredService(db))
 }
 
 // NewFlowExecutor 创建流程执行器
 func NewFlowExecutor() *FlowExecutor {
-	return NewFlowExecutorWithDeps(DefaultFlowExecutorRuntimeDeps())
+	return NewFlowExecutorWithDB(database.DB)
+}
+
+func NewFlowExecutorWithDB(db *gorm.DB) *FlowExecutor {
+	return NewFlowExecutorWithDeps(DefaultFlowExecutorRuntimeDepsWithDB(db))
 }
 
 func NewFlowExecutorWithDependencies(executionSvc *execution.Service, notificationService *notificationSvc.Service) *FlowExecutor {

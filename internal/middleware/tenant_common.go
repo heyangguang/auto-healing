@@ -42,19 +42,11 @@ func CommonTenantMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
 
 const ErrorCodeTenantPermissionReloadFailed = "TENANT_PERMISSION_RELOAD_FAILED"
 
-func reloadCommonRoutePermissions(c *gin.Context) error {
-	return reloadCommonRoutePermissionsWithRepo(c, NewRuntimeDeps().PermissionRepo)
-}
-
 func reloadCommonRoutePermissionsWithRepo(c *gin.Context, permRepo permissionCodeRepository) error {
 	if !IsPlatformAdmin(c) || IsImpersonating(c) {
 		return nil
 	}
 	return reloadPlatformPermissionsWithRepo(c, permRepo)
-}
-
-func resolveCommonRouteTenant(c *gin.Context) (uuid.UUID, bool) {
-	return resolveCommonRouteTenantWithRepo(c, NewRuntimeDeps().TenantRepo)
 }
 
 func resolveCommonRouteTenantWithRepo(c *gin.Context, tenantRepo userTenantLister) (uuid.UUID, bool) {
@@ -77,10 +69,10 @@ func resolveCommonRouteTenantWithRepo(c *gin.Context, tenantRepo userTenantListe
 			abortForbidden(c, "默认租户无效，请重新登录", ErrorCodeDefaultTenantInvalid)
 			return uuid.Nil, false
 		}
-			if !ensureTenantMembership(c, tenantRepo, tenantIDs, defaultTenantID) {
-				return uuid.Nil, false
-			}
-			return tenantID, true
+		if !ensureTenantMembership(c, tenantRepo, tenantIDs, defaultTenantID) {
+			return uuid.Nil, false
+		}
+		return tenantID, true
 	}
 
 	tenantID, err := uuid.Parse(tenantIDStr)

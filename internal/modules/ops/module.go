@@ -12,6 +12,7 @@ import (
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
+	"gorm.io/gorm"
 )
 
 // Module 聚合 ops 域处理器构造。
@@ -25,19 +26,26 @@ type Module struct {
 }
 
 type ModuleDeps struct {
-	DictionaryService    *opsservice.DictionaryService
-	CommandBlacklistSvc  *opsservice.CommandBlacklistService
+	DictionaryService     *opsservice.DictionaryService
+	CommandBlacklistSvc   *opsservice.CommandBlacklistService
 	BlacklistExemptionSvc *opsservice.BlacklistExemptionService
-	AuditRepo            *auditrepo.AuditLogRepository
-	PlatformAuditRepo    *auditrepo.PlatformAuditLogRepository
-	PlatformSettingsRepo *settingsrepo.PlatformSettingsRepository
-	CommandBlacklistRepo *opsrepo.CommandBlacklistRepository
-	ExecutionRepo        *automationrepo.ExecutionRepository
+	AuditRepo             *auditrepo.AuditLogRepository
+	PlatformAuditRepo     *auditrepo.PlatformAuditLogRepository
+	PlatformSettingsRepo  *settingsrepo.PlatformSettingsRepository
+	CommandBlacklistRepo  *opsrepo.CommandBlacklistRepository
+	ExecutionRepo         *automationrepo.ExecutionRepository
 }
 
 // New 创建 ops 域模块。
 func New() *Module {
-	db := database.DB
+	return NewWithDB(database.DB)
+}
+
+func NewWithDB(db *gorm.DB) *Module {
+	return NewWithDeps(DefaultModuleDepsWithDB(db))
+}
+
+func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 	dictRepo := opsrepo.NewDictionaryRepositoryWithDB(db)
 	dictSvc := opsservice.NewDictionaryServiceWithDeps(opsservice.DictionaryServiceDeps{Repo: dictRepo})
 	commandBlacklistRepo := opsrepo.NewCommandBlacklistRepositoryWithDB(db)
@@ -52,7 +60,7 @@ func New() *Module {
 	if err := dictSvc.LoadCache(ctx); err != nil {
 		panic(fmt.Errorf("初始化字典缓存失败: %w", err))
 	}
-	return NewWithDeps(ModuleDeps{
+	return ModuleDeps{
 		DictionaryService:     dictSvc,
 		CommandBlacklistSvc:   commandBlacklistSvc,
 		BlacklistExemptionSvc: blacklistExemptionSvc,
@@ -61,7 +69,7 @@ func New() *Module {
 		PlatformSettingsRepo:  settingsrepo.NewPlatformSettingsRepositoryWithDB(db),
 		CommandBlacklistRepo:  commandBlacklistRepo,
 		ExecutionRepo:         automationrepo.NewExecutionRepository(),
-	})
+	}
 }
 
 func NewWithDeps(deps ModuleDeps) *Module {

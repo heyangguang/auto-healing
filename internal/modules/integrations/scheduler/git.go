@@ -45,9 +45,13 @@ type GitSchedulerDeps struct {
 }
 
 func DefaultGitSchedulerDeps() GitSchedulerDeps {
+	return DefaultGitSchedulerDepsWithDB(database.DB)
+}
+
+func DefaultGitSchedulerDepsWithDB(db *gorm.DB) GitSchedulerDeps {
 	return GitSchedulerDeps{
-		GitService: gitService.NewService(),
-		DB:         database.DB,
+		GitService: gitService.NewServiceWithDB(db),
+		DB:         db,
 		Interval:   60 * time.Second,
 		InFlight:   schedulerx.NewInFlightSet(),
 		Now:        time.Now,
@@ -56,15 +60,19 @@ func DefaultGitSchedulerDeps() GitSchedulerDeps {
 
 // NewGitScheduler 创建 Git 同步调度器
 func NewGitScheduler() *GitScheduler {
-	return NewGitSchedulerWithDeps(DefaultGitSchedulerDeps())
+	return NewGitSchedulerWithDB(database.DB)
+}
+
+func NewGitSchedulerWithDB(db *gorm.DB) *GitScheduler {
+	return NewGitSchedulerWithDeps(DefaultGitSchedulerDepsWithDB(db))
 }
 
 func NewGitSchedulerWithDeps(deps GitSchedulerDeps) *GitScheduler {
-	if deps.GitService == nil {
-		deps.GitService = gitService.NewService()
-	}
 	if deps.DB == nil {
 		deps.DB = database.DB
+	}
+	if deps.GitService == nil {
+		deps.GitService = gitService.NewServiceWithDB(deps.DB)
 	}
 	if deps.Interval == 0 {
 		deps.Interval = 60 * time.Second

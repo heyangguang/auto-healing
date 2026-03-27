@@ -16,6 +16,7 @@ import (
 	opshttp "github.com/company/auto-healing/internal/modules/ops/httpapi"
 	secretsmodule "github.com/company/auto-healing/internal/modules/secrets"
 	secretshttp "github.com/company/auto-healing/internal/modules/secrets/httpapi"
+	"gorm.io/gorm"
 )
 
 type moduleSet struct {
@@ -38,7 +39,14 @@ type moduleRegistrars struct {
 }
 
 func newModules(cfg *config.Config) moduleSet {
-	middlewareDeps := middleware.NewRuntimeDepsWithDB(database.DB)
+	return newModulesWithDB(cfg, database.DB)
+}
+
+func newModulesWithDB(cfg *config.Config, db *gorm.DB) moduleSet {
+	if db == nil {
+		db = database.DB
+	}
+	middlewareDeps := middleware.NewRuntimeDepsWithDB(db)
 	access := accessmodule.New(cfg)
 	automation := automationmodule.New()
 	engagement := engagementmodule.New()
@@ -53,14 +61,14 @@ func newModules(cfg *config.Config) moduleSet {
 		integrations: integrations,
 		ops:          ops,
 		secrets:      secrets,
-			routes: moduleRegistrars{
-				access: accesshttp.New(accesshttp.Dependencies{
-					Auth:          access.Auth,
-					Impersonation: access.Impersonation,
-					Middleware:    middlewareDeps,
-					Permission:    access.Permission,
-					Role:          access.Role,
-					Tenant:        access.Tenant,
+		routes: moduleRegistrars{
+			access: accesshttp.New(accesshttp.Dependencies{
+				Auth:          access.Auth,
+				Impersonation: access.Impersonation,
+				Middleware:    middlewareDeps,
+				Permission:    access.Permission,
+				Role:          access.Role,
+				Tenant:        access.Tenant,
 				TenantUser:    access.TenantUser,
 				User:          access.User,
 			}),

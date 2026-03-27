@@ -4,11 +4,16 @@ import (
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // SetupRoutes 按业务域模块注册 API 路由。
 func SetupRoutes(r *gin.Engine, cfg *config.Config) {
-	modules := newModules(cfg)
+	SetupRoutesWithDB(r, cfg, nil)
+}
+
+func SetupRoutesWithDB(r *gin.Engine, cfg *config.Config, db *gorm.DB) {
+	modules := newModulesWithDB(cfg, db)
 	api := r.Group("/api/v1")
 
 	modules.routes.access.RegisterAuthRoutes(api)
