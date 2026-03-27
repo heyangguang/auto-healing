@@ -9,6 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformevents "github.com/company/auto-healing/internal/platform/events"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -18,7 +19,7 @@ import (
 type SiteMessageHandler struct {
 	repo             *repository.SiteMessageRepository
 	platformSettings *repository.PlatformSettingsRepository
-	eventBus         *MessageEventBus
+	eventBus         *platformevents.MessageEventBus
 	tenantRepo       *repository.TenantRepository
 	userRepo         *repository.UserRepository
 }
@@ -26,7 +27,7 @@ type SiteMessageHandler struct {
 type SiteMessageHandlerDeps struct {
 	SiteMessageRepo      *repository.SiteMessageRepository
 	PlatformSettingsRepo *repository.PlatformSettingsRepository
-	EventBus             *MessageEventBus
+	EventBus             *platformevents.MessageEventBus
 	TenantRepo           *repository.TenantRepository
 	UserRepo             *repository.UserRepository
 }
@@ -36,7 +37,7 @@ func NewSiteMessageHandler() *SiteMessageHandler {
 	return NewSiteMessageHandlerWithDeps(SiteMessageHandlerDeps{
 		SiteMessageRepo:      repository.NewSiteMessageRepository(),
 		PlatformSettingsRepo: repository.NewPlatformSettingsRepository(),
-		EventBus:             GetMessageEventBus(),
+		EventBus:             platformevents.GetMessageEventBus(),
 		TenantRepo:           repository.NewTenantRepository(),
 		UserRepo:             repository.NewUserRepository(),
 	})

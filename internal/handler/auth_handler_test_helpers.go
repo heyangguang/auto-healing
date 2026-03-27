@@ -15,6 +15,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/company/auto-healing/internal/repository"
 	authService "github.com/company/auto-healing/internal/service/auth"
 	"github.com/gin-gonic/gin"
@@ -85,8 +86,8 @@ func newAuthHandlerTestRouter(t *testing.T, db *gorm.DB) (*gin.Engine, *jwt.Serv
 
 func newAuthHandlerTestRouterWithJWTService(t *testing.T, db *gorm.DB, jwtSvc *jwt.Service) *gin.Engine {
 	t.Helper()
-	Cleanup()
-	t.Cleanup(Cleanup)
+	platformlifecycle.Cleanup()
+	t.Cleanup(platformlifecycle.Cleanup)
 
 	origDB := database.DB
 	database.DB = db

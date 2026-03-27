@@ -7,6 +7,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -69,7 +70,7 @@ func (h *ImpersonationHandler) Approve(c *gin.Context) {
 		respondInternalError(c, "IMPERSONATION", "审批失败", err)
 		return
 	}
-	goHandlerTask(func(rootCtx context.Context) {
+	platformlifecycle.Go(func(rootCtx context.Context) {
 		h.notifyRequesterDecision(rootCtx, req, true, middleware.GetUsername(c))
 	})
 	response.Message(c, "已批准")
@@ -89,7 +90,7 @@ func (h *ImpersonationHandler) Reject(c *gin.Context) {
 		respondInternalError(c, "IMPERSONATION", "拒绝失败", err)
 		return
 	}
-	goHandlerTask(func(rootCtx context.Context) {
+	platformlifecycle.Go(func(rootCtx context.Context) {
 		h.notifyRequesterDecision(rootCtx, req, false, middleware.GetUsername(c))
 	})
 	response.Message(c, "已拒绝")

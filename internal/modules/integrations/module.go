@@ -2,6 +2,7 @@ package integrations
 
 import (
 	"github.com/company/auto-healing/internal/handler"
+	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	gitSvc "github.com/company/auto-healing/internal/service/git"
 	"github.com/company/auto-healing/internal/service/playbook"
 	"github.com/company/auto-healing/internal/service/plugin"
@@ -34,7 +35,7 @@ func New() *Module {
 			Service: playbook.NewService(),
 		}),
 	}
-	handler.RegisterCleanup(module.Plugin.Shutdown)
-	handler.RegisterCleanup(module.GitRepo.Shutdown)
+	platformlifecycle.RegisterCleanup(module.Plugin.Shutdown)
+	platformlifecycle.RegisterCleanup(module.GitRepo.Shutdown)
 	return module
 }

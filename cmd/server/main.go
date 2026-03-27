@@ -14,9 +14,9 @@ import (
 	httproutes "github.com/company/auto-healing/internal/app/httpapi"
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/handler"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/scheduler"
 	"github.com/company/auto-healing/internal/service"
@@ -48,7 +48,7 @@ func main() {
 	defer stopSchedulers(schedulers)
 
 	r := newRouter(cfg)
-	defer handler.Cleanup()
+	defer platformlifecycle.Cleanup()
 	server := newHTTPServer(cfg, r)
 	logger.Info("启动服务于 %s", server.Addr)
 	if err := runHTTPServer(signalCtx, server, 10*time.Second, logShutdownSignal); err != nil {

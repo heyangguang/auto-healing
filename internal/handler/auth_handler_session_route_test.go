@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/pkg/jwt"
+	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/google/uuid"
 )
 
@@ -121,7 +122,7 @@ func TestLogoutRouteSupportsLegacyAccessOnly(t *testing.T) {
 		t.Fatalf("legacy access blacklist = (%v, %v), want (true, nil)", isBlacklisted, blacklistErr)
 	}
 
-	Cleanup()
+	platformlifecycle.Cleanup()
 
 	var audit struct {
 		ID     string

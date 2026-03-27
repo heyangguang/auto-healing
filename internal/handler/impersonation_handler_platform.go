@@ -10,6 +10,7 @@ import (
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -69,7 +70,7 @@ func (h *ImpersonationHandler) CreateRequest(c *gin.Context) {
 		return
 	}
 
-	goHandlerTask(func(rootCtx context.Context) {
+	platformlifecycle.Go(func(rootCtx context.Context) {
 		h.notifyApproversNewRequest(rootCtx, impReq)
 	})
 	response.Created(c, impReq)
@@ -164,7 +165,7 @@ func (h *ImpersonationHandler) EnterTenant(c *gin.Context) {
 		respondInternalError(c, "IMPERSONATION", "获取会话详情失败", err)
 		return
 	}
-	goHandlerTask(func(rootCtx context.Context) {
+	platformlifecycle.Go(func(rootCtx context.Context) {
 		h.writeImpersonationAudit(rootCtx, &requesterID, middleware.GetUsername(c), middleware.NormalizeIP(c.ClientIP()), c.Request.UserAgent(), req.TenantID, req.TenantName, "impersonation_enter", id)
 	})
 	response.Success(c, updated)
@@ -196,7 +197,7 @@ func (h *ImpersonationHandler) ExitTenant(c *gin.Context) {
 			respondInternalError(c, "IMPERSONATION", "暂离失败", err)
 			return
 		}
-		goHandlerTask(func(rootCtx context.Context) {
+		platformlifecycle.Go(func(rootCtx context.Context) {
 			h.writeImpersonationAudit(rootCtx, &requesterID, middleware.GetUsername(c), middleware.NormalizeIP(c.ClientIP()), c.Request.UserAgent(), req.TenantID, req.TenantName, "impersonation_exit", id)
 		})
 		response.Message(c, "已暂离租户视角，可在到期前重新进入")
@@ -207,7 +208,7 @@ func (h *ImpersonationHandler) ExitTenant(c *gin.Context) {
 		respondInternalError(c, "IMPERSONATION", "结束会话失败", err)
 		return
 	}
-	goHandlerTask(func(rootCtx context.Context) {
+	platformlifecycle.Go(func(rootCtx context.Context) {
 		h.writeImpersonationAudit(rootCtx, &requesterID, middleware.GetUsername(c), middleware.NormalizeIP(c.ClientIP()), c.Request.UserAgent(), req.TenantID, req.TenantName, "impersonation_exit", id)
 	})
 	response.Message(c, "会话已过期，已退出租户视角")
@@ -227,7 +228,7 @@ func (h *ImpersonationHandler) TerminateSession(c *gin.Context) {
 		respondInternalError(c, "IMPERSONATION", "终止会话失败", err)
 		return
 	}
-	goHandlerTask(func(rootCtx context.Context) {
+	platformlifecycle.Go(func(rootCtx context.Context) {
 		h.writeImpersonationAudit(rootCtx, &requesterID, middleware.GetUsername(c), middleware.NormalizeIP(c.ClientIP()), c.Request.UserAgent(), req.TenantID, req.TenantName, "impersonation_terminate", id)
 	})
 	response.Message(c, "会话已终止")

@@ -3,6 +3,7 @@ package automation
 import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/handler"
+	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/company/auto-healing/internal/repository"
 	executionSvc "github.com/company/auto-healing/internal/service/execution"
 	healingSvc "github.com/company/auto-healing/internal/service/healing"
@@ -39,7 +40,7 @@ func New() *Module {
 			Service: scheduleService,
 		}),
 	}
-	handler.RegisterCleanup(module.Execution.Shutdown)
-	handler.RegisterCleanup(module.Healing.Shutdown)
+	platformlifecycle.RegisterCleanup(module.Execution.Shutdown)
+	platformlifecycle.RegisterCleanup(module.Healing.Shutdown)
 	return module
 }

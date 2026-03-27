@@ -10,6 +10,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformevents "github.com/company/auto-healing/internal/platform/events"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -241,7 +242,7 @@ func (h *SiteMessageHandler) pushInitialUnreadCount(c *gin.Context, flusher http
 	}
 }
 
-func (h *SiteMessageHandler) streamSiteMessageEvents(c *gin.Context, flusher http.Flusher, userID uuid.UUID, ch chan MessageEvent) {
+func (h *SiteMessageHandler) streamSiteMessageEvents(c *gin.Context, flusher http.Flusher, userID uuid.UUID, ch chan platformevents.MessageEvent) {
 	heartbeat := time.NewTicker(30 * time.Second)
 	defer heartbeat.Stop()
 	ctx := c.Request.Context()

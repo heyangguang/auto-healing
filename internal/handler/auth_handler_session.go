@@ -11,6 +11,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/company/auto-healing/internal/repository"
 	authService "github.com/company/auto-healing/internal/service/auth"
 	"github.com/gin-gonic/gin"
@@ -31,7 +32,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	resp, err := h.authSvc.Login(c.Request.Context(), &req, clientIP)
 	if err != nil {
-		goHandlerTask(func(rootCtx context.Context) {
+		platformlifecycle.Go(func(rootCtx context.Context) {
 			h.writeLoginAuditLog(rootCtx, nil, req.Username, clientIP, userAgent, "failed", loginAuditErrorMessage(err), startTime, loginFailureStatusCode(err), false, "")
 		})
 		if isLoginUnauthorizedError(err) {
@@ -43,7 +44,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	userID := resp.User.ID
-	goHandlerTask(func(rootCtx context.Context) {
+	platformlifecycle.Go(func(rootCtx context.Context) {
 		h.writeLoginAuditLog(rootCtx, &userID, resp.User.Username, clientIP, userAgent, "success", "", startTime, http.StatusOK, resp.User.IsPlatformAdmin, resp.CurrentTenantID)
 	})
 	c.JSON(http.StatusOK, resp)
@@ -78,7 +79,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		respondInternalError(c, "AUTH", "登出失败", err)
 		return
 	}
-	goHandlerTask(func(rootCtx context.Context) {
+	platformlifecycle.Go(func(rootCtx context.Context) {
 		h.writeLogoutAuditLog(rootCtx, userIDStr, username, clientIP, userAgent, startTime, isPlatformAdmin, tenantID)
 	})
 	response.Message(c, "登出成功")

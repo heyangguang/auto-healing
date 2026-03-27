@@ -4,6 +4,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/handler"
 	"github.com/company/auto-healing/internal/notification"
+	platformevents "github.com/company/auto-healing/internal/platform/events"
 	"github.com/company/auto-healing/internal/repository"
 )
 
@@ -43,7 +44,7 @@ func New() *Module {
 		SiteMessage: handler.NewSiteMessageHandlerWithDeps(handler.SiteMessageHandlerDeps{
 			SiteMessageRepo:      repository.NewSiteMessageRepository(),
 			PlatformSettingsRepo: repository.NewPlatformSettingsRepository(),
-			EventBus:             handler.GetMessageEventBus(),
+			EventBus:             platformevents.GetMessageEventBus(),
 			TenantRepo:           repository.NewTenantRepository(),
 			UserRepo:             repository.NewUserRepository(),
 		}),
