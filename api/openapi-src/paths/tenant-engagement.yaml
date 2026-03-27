@@ -10,10 +10,8 @@
       in: query
       schema:
         type: string
-        enum:
-        - webhook
-        - dingtalk
-        - email
+        x-dict-type: notification_channel_type
+        x-dict-mode: exact
     responses:
       '200':
         description: 成功
@@ -105,12 +103,8 @@
       in: query
       schema:
         type: string
-        enum:
-        - incident_created
-        - incident_resolved
-        - approval_required
-        - execution_result
-        - custom
+        x-dict-type: notification_event_type
+        x-dict-mode: exact
     - name: name
       in: query
       schema:
@@ -119,18 +113,14 @@
       in: query
       schema:
         type: string
-        enum:
-        - text
-        - markdown
-        - html
+        x-dict-type: notification_format
+        x-dict-mode: exact
     - name: supported_channel
       in: query
       schema:
         type: string
-        enum:
-        - email
-        - dingtalk
-        - webhook
+        x-dict-type: notification_channel_type
+        x-dict-mode: exact
     - name: is_active
       in: query
       schema:
@@ -314,10 +304,8 @@
                 description: 模板变量（当使用 template_id 时）
               format:
                 type: string
-                enum:
-                - text
-                - markdown
-                - html
+                x-dict-type: notification_format
+                x-dict-mode: exact
                 description: 未使用模板时的消息格式，默认 text
     responses:
       '200':
@@ -353,12 +341,8 @@
       in: query
       schema:
         type: string
-        enum:
-        - pending
-        - sent
-        - delivered
-        - failed
-        - bounced
+        x-dict-type: notification_log_status
+        x-dict-mode: exact
     - name: task_name
       in: query
       schema:
@@ -367,6 +351,8 @@
       in: query
       schema:
         type: string
+        x-dict-type: execution_triggered_by
+        x-dict-mode: exact
     - name: subject
       in: query
       schema:
@@ -586,6 +572,8 @@
       in: query
       schema:
         type: string
+        x-dict-type: site_message_category
+        x-dict-mode: exact
     - name: is_read
       in: query
       schema:

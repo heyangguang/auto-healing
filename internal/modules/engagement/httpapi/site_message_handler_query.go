@@ -21,6 +21,9 @@ func (h *SiteMessageHandler) ListMessages(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if !h.validateSiteMessageCategoryQuery(c) {
+		return
+	}
 	page, pageSize := parsePagination(c, 10)
 	tenantID, userCreatedAt, ok := h.currentTenantContext(c, userID)
 	if !ok {
@@ -120,7 +123,12 @@ func (h *SiteMessageHandler) CreateMessage(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误：category, title, content 均为必填")
 		return
 	}
-	if !validSiteMessageCategory(req.Category) {
+	valid, err := h.isValidSiteMessageCategory(c.Request.Context(), req.Category)
+	if err != nil {
+		response.InternalError(c, "校验消息分类失败")
+		return
+	}
+	if !valid {
 		response.BadRequest(c, "无效的消息分类: "+req.Category)
 		return
 	}
@@ -174,18 +182,22 @@ func (h *SiteMessageHandler) createTenantScopedMessages(c *gin.Context, req crea
 
 // GetCategories 获取消息分类枚举列表
 func (h *SiteMessageHandler) GetCategories(c *gin.Context) {
-	response.Success(c, model.AllSiteMessageCategories)
+	items, err := h.siteMessageCategoryItems(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, "获取消息分类失败")
+		return
+	}
+	response.Success(c, items)
 }
 
 // GetSettings 获取站内信设置（代理到 platform_settings）
 func (h *SiteMessageHandler) GetSettings(c *gin.Context) {
-	retentionDays := h.platformSettings.GetIntValue(c.Request.Context(), "site_message.retention_days", 90)
-	setting, _ := h.platformSettings.GetByKey(c.Request.Context(), "site_message.retention_days")
-	updatedAt := ""
-	if setting != nil {
-		updatedAt = setting.UpdatedAt.Format("2006-01-02T15:04:05.000000-07:00")
+	settings, err := h.getSiteMessageSettings(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, "获取站内信设置失败")
+		return
 	}
-	response.Success(c, siteMessageSettingsResponse{RetentionDays: retentionDays, UpdatedAt: updatedAt})
+	response.Success(c, settings)
 }
 
 // UpdateSettings 更新站内信设置（代理到 platform_settings）
@@ -240,6 +252,23 @@ func (h *SiteMessageHandler) pushInitialUnreadCount(c *gin.Context, flusher http
 		fmt.Fprintf(c.Writer, "event: init\ndata: %s\n\n", siteMessageEventData("init", count))
 		flusher.Flush()
 	}
+}
+
+func (h *SiteMessageHandler) validateSiteMessageCategoryQuery(c *gin.Context) bool {
+	category := c.Query("category")
+	if category == "" {
+		return true
+	}
+	valid, err := h.isValidSiteMessageCategory(c.Request.Context(), category)
+	if err != nil {
+		response.InternalError(c, "校验消息分类失败")
+		return false
+	}
+	if !valid {
+		response.BadRequest(c, "无效的消息分类: "+category)
+		return false
+	}
+	return true
 }
 
 func (h *SiteMessageHandler) streamSiteMessageEvents(c *gin.Context, flusher http.Flusher, userID uuid.UUID, ch chan platformevents.MessageEvent) {

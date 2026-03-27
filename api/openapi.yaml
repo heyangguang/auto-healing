@@ -561,9 +561,8 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - active
-          - inactive
+          x-dict-type: user_status
+          x-dict-mode: exact
       responses:
         '200':
           description: 成功
@@ -579,8 +578,7 @@ paths:
                   data:
                     type: array
                     items:
-                      type: object
-                      additionalProperties: true
+                      $ref: '#/components/schemas/UserSimple'
       operationId: getPlatformUsersSimple
   /platform/users/{id}:
     get:
@@ -1251,9 +1249,8 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - active
-          - inactive
+          x-dict-type: user_status
+          x-dict-mode: exact
       responses:
         '200':
           description: 成功
@@ -1348,9 +1345,8 @@ paths:
                   type: string
                 status:
                   type: string
-                  enum:
-                  - active
-                  - inactive
+                  x-dict-type: user_status
+                  x-dict-mode: exact
       responses:
         '200':
           description: 更新成功
@@ -1595,6 +1591,8 @@ paths:
         in: query
         schema:
           type: string
+          x-dict-type: impersonation_status
+          x-dict-mode: exact
       responses:
         '200':
           description: 成功
@@ -1687,6 +1685,8 @@ paths:
         in: query
         schema:
           type: string
+          x-dict-type: user_status
+          x-dict-mode: exact
       responses:
         '200':
           description: 成功
@@ -1700,8 +1700,7 @@ paths:
                     data:
                       type: array
                       items:
-                        type: object
-                        additionalProperties: true
+                        $ref: '#/components/schemas/UserSimple'
       operationId: getTenantUsersSimple
   /tenant/roles/{id}/users:
     get:
@@ -1853,9 +1852,8 @@ paths:
         description: 执行器类型筛选
         schema:
           type: string
-          enum:
-          - local
-          - docker
+          x-dict-type: executor_type
+          x-dict-mode: subset
       - name: status
         in: query
         description: 状态筛选（pending_review = 需审核，ready = 就绪）
@@ -1901,13 +1899,8 @@ paths:
         description: 按最后执行状态筛选
         schema:
           type: string
-          enum:
-          - pending
-          - running
-          - success
-          - failed
-          - cancelled
-          - timeout
+          x-dict-type: run_status
+          x-dict-mode: exact
       responses:
         '200':
           description: 成功
@@ -2121,6 +2114,8 @@ paths:
               properties:
                 triggered_by:
                   type: string
+                  x-dict-type: execution_triggered_by
+                  x-dict-mode: exact
                   description: 触发者
                 secrets_source_id:
                   type: string
@@ -2968,13 +2963,8 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - pending
-          - running
-          - waiting_approval
-          - completed
-          - failed
-          - cancelled
+          x-dict-type: instance_status
+          x-dict-mode: exact
       - name: flow_id
         in: query
         schema:
@@ -3030,9 +3020,8 @@ paths:
         description: 按节点审批结果筛选
         schema:
           type: string
-          enum:
-          - approved
-          - rejected
+          x-dict-type: approval_status
+          x-dict-mode: subset
       - name: created_from
         in: query
         description: 创建时间起始（RFC3339 或 YYYY-MM-DD）
@@ -3537,6 +3526,8 @@ paths:
         in: query
         schema:
           type: string
+          x-dict-type: schedule_type
+          x-dict-mode: exact
       responses:
         '200':
           description: 成功
@@ -3769,10 +3760,8 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - webhook
-          - dingtalk
-          - email
+          x-dict-type: notification_channel_type
+          x-dict-mode: exact
       responses:
         '200':
           description: 成功
@@ -3870,12 +3859,8 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - incident_created
-          - incident_resolved
-          - approval_required
-          - execution_result
-          - custom
+          x-dict-type: notification_event_type
+          x-dict-mode: exact
       - name: name
         in: query
         schema:
@@ -3884,18 +3869,14 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - text
-          - markdown
-          - html
+          x-dict-type: notification_format
+          x-dict-mode: exact
       - name: supported_channel
         in: query
         schema:
           type: string
-          enum:
-          - email
-          - dingtalk
-          - webhook
+          x-dict-type: notification_channel_type
+          x-dict-mode: exact
       - name: is_active
         in: query
         schema:
@@ -4086,10 +4067,8 @@ paths:
                   description: 模板变量（当使用 template_id 时）
                 format:
                   type: string
-                  enum:
-                  - text
-                  - markdown
-                  - html
+                  x-dict-type: notification_format
+                  x-dict-mode: exact
                   description: 未使用模板时的消息格式，默认 text
       responses:
         '200':
@@ -4126,12 +4105,8 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - pending
-          - sent
-          - delivered
-          - failed
-          - bounced
+          x-dict-type: notification_log_status
+          x-dict-mode: exact
       - name: task_name
         in: query
         schema:
@@ -4140,6 +4115,8 @@ paths:
         in: query
         schema:
           type: string
+          x-dict-type: execution_triggered_by
+          x-dict-mode: exact
       - name: subject
         in: query
         schema:
@@ -4367,6 +4344,8 @@ paths:
         in: query
         schema:
           type: string
+          x-dict-type: site_message_category
+          x-dict-mode: exact
       - name: is_read
         in: query
         schema:
@@ -4524,17 +4503,14 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - itsm
-          - cmdb
+          x-dict-type: plugin_type
+          x-dict-mode: exact
       - name: status
         in: query
         schema:
           type: string
-          enum:
-          - active
-          - inactive
-          - error
+          x-dict-type: plugin_status
+          x-dict-mode: exact
       responses:
         '200':
           description: 成功
@@ -4570,9 +4546,8 @@ paths:
                   example: 生产环境 ITSM
                 type:
                   type: string
-                  enum:
-                  - itsm
-                  - cmdb
+                  x-dict-type: plugin_type
+                  x-dict-mode: exact
                   example: itsm
                 description:
                   type: string
@@ -4966,32 +4941,21 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - open
-          - in_progress
-          - resolved
-          - closed
+          x-dict-type: incident_status
+          x-dict-mode: exact
       - name: healing_status
         in: query
         description: 按自愈状态筛选
         schema:
           type: string
-          enum:
-          - pending
-          - processing
-          - healed
-          - failed
-          - skipped
-          - dismissed
+          x-dict-type: healing_status
+          x-dict-mode: exact
       - name: severity
         in: query
         schema:
           type: string
-          enum:
-          - critical
-          - high
-          - medium
-          - low
+          x-dict-type: incident_severity
+          x-dict-mode: subset
       - name: has_plugin
         in: query
         description: 是否有关联插件 (true=有, false=无/已删除)
@@ -5146,13 +5110,8 @@ paths:
                 healing_status:
                   type: string
                   description: 按自愈状态筛选
-                  enum:
-                  - pending
-                  - processing
-                  - healed
-                  - failed
-                  - skipped
-                  - dismissed
+                  x-dict-type: healing_status
+                  x-dict-mode: exact
             examples:
               by_ids:
                 summary: 重置指定工单
@@ -5192,28 +5151,22 @@ paths:
         description: 类型筛选
         schema:
           type: string
-          enum:
-          - server
-          - application
-          - network
-          - database
+          x-dict-type: cmdb_type
+          x-dict-mode: exact
       - name: status
         in: query
         description: 状态筛选
         schema:
           type: string
-          enum:
-          - active
-          - maintenance
+          x-dict-type: cmdb_status
+          x-dict-mode: subset
       - name: environment
         in: query
         description: 环境筛选
         schema:
           type: string
-          enum:
-          - production
-          - staging
-          - development
+          x-dict-type: cmdb_environment
+          x-dict-mode: subset
       - name: source_plugin_name
         in: query
         description: 来源插件名称
@@ -5530,17 +5483,14 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - vault
-          - file
-          - webhook
+          x-dict-type: secrets_source_type
+          x-dict-mode: exact
       - name: status
         in: query
         schema:
           type: string
-          enum:
-          - active
-          - inactive
+          x-dict-type: secrets_source_status
+          x-dict-mode: exact
       - name: is_default
         in: query
         schema:
@@ -5627,6 +5577,8 @@ paths:
                   type: object
                 status:
                   type: string
+                  x-dict-type: secrets_source_status
+                  x-dict-mode: exact
       responses:
         '200':
           description: 更新成功
@@ -5749,11 +5701,8 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - pending
-          - ready
-          - syncing
-          - error
+          x-dict-type: git_repo_status
+          x-dict-mode: exact
       responses:
         '200':
           description: 成功
@@ -5872,11 +5821,8 @@ paths:
                   description: Git 仓库 URL
                 auth_type:
                   type: string
-                  enum:
-                  - none
-                  - token
-                  - password
-                  - ssh_key
+                  x-dict-type: git_auth_type
+                  x-dict-mode: exact
                 auth_config:
                   type: object
                   description: 认证配置
@@ -6007,10 +5953,8 @@ paths:
         description: 按状态筛选
         schema:
           type: string
-          enum:
-          - pending
-          - ready
-          - error
+          x-dict-type: playbook_status
+          x-dict-mode: exact
       responses:
         '200':
           description: 成功
@@ -6047,9 +5991,8 @@ paths:
                   description: 入口文件相对路径，如 site.yml
                 config_mode:
                   type: string
-                  enum:
-                  - auto
-                  - enhanced
+                  x-dict-type: playbook_config_mode
+                  x-dict-mode: exact
                   description: 扫描模式（创建时必须指定，之后不可更改）
                 description:
                   type: string
@@ -6300,14 +6243,20 @@ paths:
         in: query
         schema:
           type: string
+          x-dict-type: cmdb_type
+          x-dict-mode: exact
       - name: status
         in: query
         schema:
           type: string
+          x-dict-type: cmdb_status
+          x-dict-mode: subset
       - name: environment
         in: query
         schema:
           type: string
+          x-dict-type: cmdb_environment
+          x-dict-mode: subset
       - name: source_plugin_name
         in: query
         schema:
@@ -6348,9 +6297,8 @@ paths:
         in: query
         schema:
           type: string
-          enum:
-          - pending
-          - error
+          x-dict-type: git_repo_status
+          x-dict-mode: exact
       responses:
         '200':
           $ref: '#/components/responses/Success'
@@ -6469,6 +6417,8 @@ paths:
         in: query
         schema:
           type: string
+          x-dict-type: audit_action
+          x-dict-mode: exact
       - name: days
         in: query
         schema:
@@ -6593,6 +6543,8 @@ paths:
         in: query
         schema:
           type: string
+          x-dict-type: blacklist_exemption_status
+          x-dict-mode: exact
       - name: task_id
         in: query
         schema:
@@ -6655,6 +6607,8 @@ paths:
                   type: string
                 rule_severity:
                   type: string
+                  x-dict-type: command_blacklist_severity
+                  x-dict-mode: exact
                 rule_pattern:
                   type: string
                 reason:
@@ -6734,6 +6688,8 @@ paths:
         in: query
         schema:
           type: string
+          x-dict-type: command_blacklist_severity
+          x-dict-mode: exact
       - name: is_active
         in: query
         schema:
@@ -6742,6 +6698,8 @@ paths:
         in: query
         schema:
           type: string
+          x-dict-type: command_blacklist_match_type
+          x-dict-mode: exact
       - name: pattern
         in: query
         schema:
@@ -6869,6 +6827,8 @@ paths:
                   type: string
                 match_type:
                   type: string
+                  x-dict-type: command_blacklist_match_type
+                  x-dict-mode: exact
                 files:
                   type: array
                   items:
@@ -7138,6 +7098,10 @@ components:
           type: string
         is_system:
           type: boolean
+        scope:
+          type: string
+          x-dict-type: role_scope
+          x-dict-mode: exact
     UserProfile:
       type: object
       properties:
@@ -7156,6 +7120,8 @@ components:
           type: string
         status:
           type: string
+          x-dict-type: user_status
+          x-dict-mode: exact
         last_login_at:
           type: string
           format: date-time
@@ -7220,15 +7186,30 @@ components:
           type: string
         status:
           type: string
-          enum:
-          - active
-          - inactive
+          x-dict-type: user_status
+          x-dict-mode: exact
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    UserSimple:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+        display_name:
+          type: string
+        status:
+          type: string
+          x-dict-type: user_status
+          x-dict-mode: exact
     Role:
       type: object
       properties:
@@ -7243,6 +7224,10 @@ components:
           type: string
         is_system:
           type: boolean
+        scope:
+          type: string
+          x-dict-type: role_scope
+          x-dict-mode: exact
         created_at:
           type: string
           format: date-time
@@ -7258,6 +7243,8 @@ components:
           type: string
         module:
           type: string
+          x-dict-type: permission_module
+          x-dict-mode: exact
         resource:
           type: string
         action:
@@ -7374,9 +7361,8 @@ components:
           description: 变量值
         executor_type:
           type: string
-          enum:
-          - local
-          - docker
+          x-dict-type: executor_type
+          x-dict-mode: subset
         description:
           type: string
           description: 任务描述
@@ -7448,6 +7434,10 @@ components:
           type: string
           format: uuid
           description: 关联的任务模板 ID
+        schedule_type:
+          type: string
+          x-dict-type: schedule_type
+          x-dict-mode: exact
         schedule_expr:
           type: string
           description: Cron 表达式
@@ -7462,6 +7452,10 @@ components:
         enabled:
           type: boolean
           description: 是否启用
+        status:
+          type: string
+          x-dict-type: schedule_status
+          x-dict-mode: exact
         description:
           type: string
           description: 描述
@@ -7500,13 +7494,8 @@ components:
           format: uuid
         status:
           type: string
-          enum:
-          - pending
-          - running
-          - success
-          - failed
-          - cancelled
-          - timeout
+          x-dict-type: run_status
+          x-dict-mode: exact
         exit_code:
           type: integer
           nullable: true
@@ -7525,6 +7514,8 @@ components:
               type: integer
         triggered_by:
           type: string
+          x-dict-type: execution_triggered_by
+          x-dict-mode: exact
         started_at:
           type: string
           format: date-time
@@ -7549,6 +7540,8 @@ components:
           description: 执行记录ID
         log_level:
           type: string
+          x-dict-type: log_level
+          x-dict-mode: exact
           enum:
           - debug
           - info
@@ -7556,6 +7549,8 @@ components:
           - error
         stage:
           type: string
+          x-dict-type: execution_stage
+          x-dict-mode: exact
           enum:
           - prepare
           - execute
@@ -7925,13 +7920,8 @@ components:
           nullable: true
         status:
           type: string
-          enum:
-          - pending
-          - running
-          - waiting_approval
-          - completed
-          - failed
-          - cancelled
+          x-dict-type: instance_status
+          x-dict-mode: exact
         current_node_id:
           type: string
         error_message:
@@ -7962,11 +7952,8 @@ components:
           type: string
         status:
           type: string
-          enum:
-          - pending
-          - approved
-          - rejected
-          - expired
+          x-dict-type: approval_status
+          x-dict-mode: exact
         timeout_at:
           type: string
           format: date-time
@@ -8000,6 +7987,8 @@ components:
           description: 节点ID (如 execution_1, cmdb_validator_1)
         node_type:
           type: string
+          x-dict-type: node_type
+          x-dict-mode: exact
           enum:
           - start
           - end
@@ -8010,9 +7999,12 @@ components:
           - notification
           - condition
           - set_variable
+          - compute
           description: 节点类型
         level:
           type: string
+          x-dict-type: log_level
+          x-dict-mode: exact
           enum:
           - debug
           - info
@@ -8743,10 +8735,8 @@ components:
           type: string
         type:
           type: string
-          enum:
-          - webhook
-          - dingtalk
-          - email
+          x-dict-type: notification_channel_type
+          x-dict-mode: exact
         description:
           type: string
         retry_config:
@@ -8786,10 +8776,8 @@ components:
           type: string
         type:
           type: string
-          enum:
-          - webhook
-          - dingtalk
-          - email
+          x-dict-type: notification_channel_type
+          x-dict-mode: exact
         description:
           type: string
         config:
@@ -8840,30 +8828,22 @@ components:
           type: string
         event_type:
           type: string
-          enum:
-          - incident_created
-          - incident_resolved
-          - approval_required
-          - execution_result
-          - custom
+          x-dict-type: notification_event_type
+          x-dict-mode: exact
         supported_channels:
           type: array
+          x-dict-type: notification_channel_type
+          x-dict-mode: exact
           items:
             type: string
-            enum:
-            - email
-            - dingtalk
-            - webhook
         subject_template:
           type: string
         body_template:
           type: string
         format:
           type: string
-          enum:
-          - text
-          - markdown
-          - html
+          x-dict-type: notification_format
+          x-dict-mode: exact
         available_variables:
           type: array
           items:
@@ -8889,20 +8869,14 @@ components:
           type: string
         event_type:
           type: string
-          enum:
-          - incident_created
-          - incident_resolved
-          - approval_required
-          - execution_result
-          - custom
+          x-dict-type: notification_event_type
+          x-dict-mode: exact
         supported_channels:
           type: array
+          x-dict-type: notification_channel_type
+          x-dict-mode: exact
           items:
             type: string
-            enum:
-            - email
-            - dingtalk
-            - webhook
         subject_template:
           type: string
         body_template:
@@ -8926,10 +8900,8 @@ components:
             '
         format:
           type: string
-          enum:
-          - text
-          - markdown
-          - html
+          x-dict-type: notification_format
+          x-dict-mode: exact
         is_active:
           type: boolean
     NotificationTemplateUpdate:
@@ -8941,30 +8913,22 @@ components:
           type: string
         event_type:
           type: string
-          enum:
-          - incident_created
-          - incident_resolved
-          - approval_required
-          - execution_result
-          - custom
+          x-dict-type: notification_event_type
+          x-dict-mode: exact
         supported_channels:
           type: array
+          x-dict-type: notification_channel_type
+          x-dict-mode: exact
           items:
             type: string
-            enum:
-            - email
-            - dingtalk
-            - webhook
         subject_template:
           type: string
         body_template:
           type: string
         format:
           type: string
-          enum:
-          - text
-          - markdown
-          - html
+          x-dict-type: notification_format
+          x-dict-mode: exact
         is_active:
           type: boolean
     TemplateVariable:
@@ -9005,6 +8969,8 @@ components:
           format: uuid
         status:
           type: string
+          x-dict-type: notification_log_status
+          x-dict-mode: exact
           enum:
           - pending
           - sent
@@ -9096,14 +9062,8 @@ components:
           nullable: true
         category:
           type: string
-          enum:
-          - system_update
-          - fault_alert
-          - service_notice
-          - product_news
-          - activity
-          - security
-          - announcement
+          x-dict-type: site_message_category
+          x-dict-mode: exact
         title:
           type: string
         content:
@@ -9132,9 +9092,8 @@ components:
           type: string
         type:
           type: string
-          enum:
-          - itsm
-          - cmdb
+          x-dict-type: plugin_type
+          x-dict-mode: exact
           description: 插件类型
         description:
           type: string
@@ -9142,10 +9101,8 @@ components:
           type: string
         status:
           type: string
-          enum:
-          - active
-          - inactive
-          - error
+          x-dict-type: plugin_status
+          x-dict-mode: exact
         config:
           type: object
           description: '连接配置，包含：
@@ -9246,15 +9203,12 @@ components:
           format: uuid
         sync_type:
           type: string
-          enum:
-          - manual
-          - scheduled
+          x-dict-type: plugin_sync_type
+          x-dict-mode: subset
         status:
           type: string
-          enum:
-          - running
-          - success
-          - failed
+          x-dict-type: plugin_sync_status
+          x-dict-mode: exact
         records_fetched:
           type: integer
         records_processed:
@@ -9301,31 +9255,22 @@ components:
           type: string
         severity:
           type: string
-          enum:
-          - critical
-          - high
-          - medium
-          - low
+          x-dict-type: incident_severity
+          x-dict-mode: subset
         priority:
           type: string
         status:
           type: string
-          enum:
-          - open
-          - in_progress
-          - resolved
-          - closed
+          x-dict-type: incident_status
+          x-dict-mode: exact
         category:
           type: string
+          x-dict-type: incident_category
+          x-dict-mode: open
         healing_status:
           type: string
-          enum:
-          - pending
-          - processing
-          - healed
-          - failed
-          - skipped
-          - dismissed
+          x-dict-type: healing_status
+          x-dict-mode: exact
         affected_ci:
           type: string
         affected_service:
@@ -9379,17 +9324,12 @@ components:
           type: string
         type:
           type: string
-          enum:
-          - server
-          - application
-          - network
-          - database
+          x-dict-type: cmdb_type
+          x-dict-mode: exact
         status:
           type: string
-          enum:
-          - active
-          - offline
-          - maintenance
+          x-dict-type: cmdb_status
+          x-dict-mode: exact
         ip_address:
           type: string
         hostname:
@@ -9410,10 +9350,8 @@ components:
           type: string
         environment:
           type: string
-          enum:
-          - production
-          - staging
-          - development
+          x-dict-type: cmdb_environment
+          x-dict-mode: subset
         manufacturer:
           type: string
         model:
@@ -9569,15 +9507,12 @@ components:
           type: string
         type:
           type: string
-          enum:
-          - vault
-          - file
-          - webhook
+          x-dict-type: secrets_source_type
+          x-dict-mode: exact
         auth_type:
           type: string
-          enum:
-          - ssh_key
-          - password
+          x-dict-type: secrets_auth_type
+          x-dict-mode: exact
           description: SSH 认证类型（file 类型只支持 ssh_key）
         config:
           type: object
@@ -9590,9 +9525,8 @@ components:
           description: 优先级（数字越小越优先）
         status:
           type: string
-          enum:
-          - active
-          - inactive
+          x-dict-type: secrets_source_status
+          x-dict-mode: exact
         created_at:
           type: string
           format: date-time
@@ -9608,15 +9542,12 @@ components:
           type: string
         type:
           type: string
-          enum:
-          - vault
-          - file
-          - webhook
+          x-dict-type: secrets_source_type
+          x-dict-mode: exact
         auth_type:
           type: string
-          enum:
-          - ssh_key
-          - password
+          x-dict-type: secrets_auth_type
+          x-dict-mode: exact
           description: SSH 认证类型
         config:
           oneOf:
@@ -9801,11 +9732,8 @@ components:
           type: string
         auth_type:
           type: string
-          enum:
-          - none
-          - token
-          - password
-          - ssh_key
+          x-dict-type: git_auth_type
+          x-dict-mode: exact
         local_path:
           type: string
         last_sync_at:
@@ -9813,11 +9741,8 @@ components:
           format: date-time
         status:
           type: string
-          enum:
-          - pending
-          - ready
-          - syncing
-          - error
+          x-dict-type: git_repo_status
+          x-dict-mode: exact
         error_message:
           type: string
           description: 错误信息（status=error 时）
@@ -9875,10 +9800,8 @@ components:
           format: uuid
         trigger_type:
           type: string
-          enum:
-          - manual
-          - auto
-          - create
+          x-dict-type: git_sync_trigger_type
+          x-dict-mode: subset
           description: 触发类型
         action:
           type: string
@@ -9888,9 +9811,8 @@ components:
           description: 操作类型
         status:
           type: string
-          enum:
-          - success
-          - failed
+          x-dict-type: git_sync_status
+          x-dict-mode: exact
         commit_id:
           type: string
           description: 成功时的 commit ID
@@ -9923,11 +9845,8 @@ components:
           default: main
         auth_type:
           type: string
-          enum:
-          - none
-          - token
-          - password
-          - ssh_key
+          x-dict-type: git_auth_type
+          x-dict-mode: exact
           description: 认证类型
           default: none
         auth_config:
@@ -9958,11 +9877,8 @@ components:
           description: 默认分支
         auth_type:
           type: string
-          enum:
-          - none
-          - token
-          - password
-          - ssh_key
+          x-dict-type: git_auth_type
+          x-dict-mode: exact
           description: 认证类型
         auth_config:
           type: object
@@ -10045,10 +9961,8 @@ components:
           type: string
         status:
           type: string
-          enum:
-          - pending
-          - ready
-          - error
+          x-dict-type: playbook_status
+          x-dict-mode: exact
         variables:
           type: array
           items:
@@ -10074,10 +9988,8 @@ components:
           format: uuid
         trigger_type:
           type: string
-          enum:
-          - manual
-          - auto
-          - sync
+          x-dict-type: playbook_scan_trigger_type
+          x-dict-mode: subset
         files_scanned:
           type: integer
           description: 扫描的文件数
@@ -10122,9 +10034,8 @@ components:
           description: 主入口文件
         config_mode:
           type: string
-          enum:
-          - auto
-          - enhanced
+          x-dict-type: playbook_config_mode
+          x-dict-mode: exact
           description: 配置模式
         variables:
           type: array
@@ -10147,23 +10058,16 @@ components:
           type: string
         match_type:
           type: string
-          enum:
-          - contains
-          - regex
-          - exact
+          x-dict-type: command_blacklist_match_type
+          x-dict-mode: exact
         severity:
           type: string
-          enum:
-          - critical
-          - high
-          - medium
+          x-dict-type: command_blacklist_severity
+          x-dict-mode: exact
         category:
           type: string
-          enum:
-          - filesystem
-          - network
-          - system
-          - database
+          x-dict-type: command_blacklist_category
+          x-dict-mode: exact
         description:
           type: string
         is_active:

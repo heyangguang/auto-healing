@@ -10,9 +10,8 @@
       in: query
       schema:
         type: string
-        enum:
-        - active
-        - inactive
+        x-dict-type: user_status
+        x-dict-mode: exact
     responses:
       '200':
         description: 成功
@@ -104,9 +103,8 @@
                 type: string
               status:
                 type: string
-                enum:
-                - active
-                - inactive
+                x-dict-type: user_status
+                x-dict-mode: exact
     responses:
       '200':
         description: 更新成功
@@ -339,6 +337,8 @@
       in: query
       schema:
         type: string
+        x-dict-type: impersonation_status
+        x-dict-mode: exact
     responses:
       '200':
         description: 成功
@@ -427,6 +427,8 @@
       in: query
       schema:
         type: string
+        x-dict-type: user_status
+        x-dict-mode: exact
     responses:
       '200':
         description: 成功
@@ -440,8 +442,7 @@
                   data:
                     type: array
                     items:
-                      type: object
-                      additionalProperties: true
+                      $ref: '#/components/schemas/UserSimple'
 /tenant/roles/{id}/users:
   get:
     tags:

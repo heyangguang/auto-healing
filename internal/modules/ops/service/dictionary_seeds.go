@@ -11,6 +11,12 @@ func d(dictType, key, label, labelEn, color, tagColor, badge, icon, bg string, s
 	}
 }
 
+func dInactive(dictType, key, label, labelEn, color, tagColor, badge, icon, bg string, sort int) model.Dictionary {
+	item := d(dictType, key, label, labelEn, color, tagColor, badge, icon, bg, sort)
+	item.IsActive = false
+	return item
+}
+
 // AllDictionarySeeds 全量字典 Seed 数据（53 组）
 var AllDictionarySeeds = []model.Dictionary{
 	// ==================== 1. incident_severity ====================
@@ -66,6 +72,7 @@ var AllDictionarySeeds = []model.Dictionary{
 	d("approval_status", "approved", "已通过", "Approved", "#52c41a", "green", "success", "", "", 1),
 	d("approval_status", "rejected", "已拒绝", "Rejected", "#f5222d", "red", "error", "", "", 2),
 	d("approval_status", "expired", "已过期", "Expired", "#8c8c8c", "default", "default", "", "", 3),
+	d("approval_status", "cancelled", "已取消", "Cancelled", "#8c8c8c", "default", "default", "", "", 4),
 
 	// ==================== 8. node_type ====================
 	d("node_type", "start", "开始", "Start", "#52c41a", "green", "", "PlayCircleOutlined", "", 0),
@@ -173,13 +180,16 @@ var AllDictionarySeeds = []model.Dictionary{
 	d("git_auth_type", "ssh_key", "SSH密钥", "SSH Key", "#52c41a", "green", "", "", "", 3),
 
 	// ==================== 27. git_repo_status ====================
-	d("git_repo_status", "syncing", "同步中", "Syncing", "#1890ff", "blue", "processing", "", "", 0),
-	d("git_repo_status", "synced", "已同步", "Synced", "#52c41a", "green", "success", "", "", 1),
-	d("git_repo_status", "error", "错误", "Error", "#f5222d", "red", "error", "", "", 2),
+	d("git_repo_status", "pending", "待同步", "Pending", "#d9d9d9", "default", "default", "", "", 0),
+	d("git_repo_status", "syncing", "同步中", "Syncing", "#1890ff", "blue", "processing", "", "", 1),
+	d("git_repo_status", "ready", "就绪", "Ready", "#52c41a", "green", "success", "", "", 2),
+	d("git_repo_status", "error", "错误", "Error", "#f5222d", "red", "error", "", "", 3),
+	dInactive("git_repo_status", "synced", "已同步", "Synced", "#52c41a", "green", "success", "", "", 4),
 
 	// ==================== 28-30. git_sync_* ====================
 	d("git_sync_trigger_type", "manual", "手动", "Manual", "#fa8c16", "orange", "", "", "", 0),
-	d("git_sync_trigger_type", "scheduled", "定时", "Scheduled", "#1890ff", "blue", "", "", "", 1),
+	d("git_sync_trigger_type", "branch_change", "分支变更", "Branch Change", "#1890ff", "blue", "", "", "", 1),
+	dInactive("git_sync_trigger_type", "scheduled", "定时", "Scheduled", "#8c8c8c", "default", "", "", "", 2),
 	d("git_sync_action", "clone", "克隆", "Clone", "#1890ff", "blue", "", "", "", 0),
 	d("git_sync_action", "pull", "拉取", "Pull", "#52c41a", "green", "", "", "", 1),
 	d("git_sync_status", "success", "成功", "Success", "#52c41a", "green", "success", "", "", 0),
@@ -209,8 +219,9 @@ var AllDictionarySeeds = []model.Dictionary{
 	d("run_status", "running", "执行中", "Running", "#1890ff", "blue", "processing", "", "", 1),
 	d("run_status", "success", "成功", "Success", "#52c41a", "green", "success", "", "", 2),
 	d("run_status", "failed", "失败", "Failed", "#f5222d", "red", "error", "", "", 3),
-	d("run_status", "cancelled", "已取消", "Cancelled", "#8c8c8c", "default", "default", "", "", 4),
-	d("run_status", "timeout", "超时", "Timeout", "#fa541c", "volcano", "error", "", "", 5),
+	d("run_status", "partial", "部分成功", "Partial", "#fa8c16", "orange", "warning", "", "", 4),
+	d("run_status", "cancelled", "已取消", "Cancelled", "#8c8c8c", "default", "default", "", "", 5),
+	d("run_status", "timeout", "超时", "Timeout", "#fa541c", "volcano", "error", "", "", 6),
 
 	// ==================== 36-37. schedule ====================
 	d("schedule_type", "cron", "循环调度", "Cron", "#1890ff", "blue", "", "", "", 0),
@@ -259,8 +270,9 @@ var AllDictionarySeeds = []model.Dictionary{
 
 	// ==================== 45-47. user/tenant/role ====================
 	d("user_status", "active", "正常", "Active", "#52c41a", "green", "success", "", "", 0),
-	d("user_status", "disabled", "已禁用", "Disabled", "#d9d9d9", "default", "default", "", "", 1),
+	d("user_status", "inactive", "未启用", "Inactive", "#d9d9d9", "default", "default", "", "", 1),
 	d("user_status", "locked", "已锁定", "Locked", "#f5222d", "red", "error", "", "", 2),
+	dInactive("user_status", "disabled", "已禁用", "Disabled", "#d9d9d9", "default", "default", "", "", 3),
 	d("tenant_status", "active", "正常", "Active", "#52c41a", "green", "success", "", "", 0),
 	d("tenant_status", "disabled", "已禁用", "Disabled", "#d9d9d9", "default", "default", "", "", 1),
 	d("role_scope", "platform", "平台级", "Platform", "#722ed1", "purple", "", "", "", 0),

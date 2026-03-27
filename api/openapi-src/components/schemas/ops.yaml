@@ -14,23 +14,16 @@ CommandBlacklist:
       type: string
     match_type:
       type: string
-      enum:
-      - contains
-      - regex
-      - exact
+      x-dict-type: command_blacklist_match_type
+      x-dict-mode: exact
     severity:
       type: string
-      enum:
-      - critical
-      - high
-      - medium
+      x-dict-type: command_blacklist_severity
+      x-dict-mode: exact
     category:
       type: string
-      enum:
-      - filesystem
-      - network
-      - system
-      - database
+      x-dict-type: command_blacklist_category
+      x-dict-mode: exact
     description:
       type: string
     is_active:

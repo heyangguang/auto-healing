@@ -45,9 +45,8 @@
       in: query
       schema:
         type: string
-        enum:
-        - active
-        - inactive
+        x-dict-type: user_status
+        x-dict-mode: exact
     responses:
       '200':
         description: 成功
@@ -63,8 +62,7 @@
                 data:
                   type: array
                   items:
-                    type: object
-                    additionalProperties: true
+                    $ref: '#/components/schemas/UserSimple'
 /platform/users/{id}:
   get:
     tags:

@@ -30,6 +30,10 @@ RoleDetail:
       type: string
     is_system:
       type: boolean
+    scope:
+      type: string
+      x-dict-type: role_scope
+      x-dict-mode: exact
 UserProfile:
   type: object
   properties:
@@ -48,6 +52,8 @@ UserProfile:
       type: string
     status:
       type: string
+      x-dict-type: user_status
+      x-dict-mode: exact
     last_login_at:
       type: string
       format: date-time
@@ -112,15 +118,30 @@ User:
       type: string
     status:
       type: string
-      enum:
-      - active
-      - inactive
+      x-dict-type: user_status
+      x-dict-mode: exact
     created_at:
       type: string
       format: date-time
     updated_at:
       type: string
       format: date-time
+UserSimple:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    username:
+      type: string
+    email:
+      type: string
+    display_name:
+      type: string
+    status:
+      type: string
+      x-dict-type: user_status
+      x-dict-mode: exact
 Role:
   type: object
   properties:
@@ -135,6 +156,10 @@ Role:
       type: string
     is_system:
       type: boolean
+    scope:
+      type: string
+      x-dict-type: role_scope
+      x-dict-mode: exact
     created_at:
       type: string
       format: date-time
@@ -150,6 +175,8 @@ Permission:
       type: string
     module:
       type: string
+      x-dict-type: permission_module
+      x-dict-mode: exact
     resource:
       type: string
     action:

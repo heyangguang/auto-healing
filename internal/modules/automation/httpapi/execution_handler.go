@@ -51,11 +51,14 @@ var runSearchSchema = []SearchableField{
 	{Key: "task_name", Label: "任务名称", Type: "text", MatchModes: []string{"fuzzy", "exact"}, DefaultMode: "fuzzy", Placeholder: "输入任务名称"},
 	{Key: "status", Label: "执行状态", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
 		{Label: "运行中", Value: "running"}, {Label: "成功", Value: "success"},
-		{Label: "失败", Value: "failed"}, {Label: "已取消", Value: "cancelled"},
+		{Label: "失败", Value: "failed"}, {Label: "部分成功", Value: "partial"},
+		{Label: "已取消", Value: "cancelled"},
 	}},
 	{Key: "triggered_by", Label: "触发方式", Type: "enum", MatchModes: []string{"exact"}, DefaultMode: "exact", Options: []FilterOption{
-		{Label: "手动", Value: "manual"}, {Label: "定时", Value: "schedule"},
-		{Label: "自愈", Value: "healing"}, {Label: "API", Value: "api"},
+		{Label: "手动", Value: "manual"},
+		{Label: "定时（Cron）", Value: "scheduler:cron"},
+		{Label: "定时（单次）", Value: "scheduler:once"},
+		{Label: "自愈", Value: "healing"},
 	}},
 }
 

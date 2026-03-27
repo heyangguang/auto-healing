@@ -20,9 +20,8 @@ ExecutionTask:
       description: 变量值
     executor_type:
       type: string
-      enum:
-      - local
-      - docker
+      x-dict-type: executor_type
+      x-dict-mode: subset
     description:
       type: string
       description: 任务描述
@@ -94,6 +93,10 @@ ExecutionSchedule:
       type: string
       format: uuid
       description: 关联的任务模板 ID
+    schedule_type:
+      type: string
+      x-dict-type: schedule_type
+      x-dict-mode: exact
     schedule_expr:
       type: string
       description: Cron 表达式
@@ -108,6 +111,10 @@ ExecutionSchedule:
     enabled:
       type: boolean
       description: 是否启用
+    status:
+      type: string
+      x-dict-type: schedule_status
+      x-dict-mode: exact
     description:
       type: string
       description: 描述
@@ -146,13 +153,8 @@ ExecutionRun:
       format: uuid
     status:
       type: string
-      enum:
-      - pending
-      - running
-      - success
-      - failed
-      - cancelled
-      - timeout
+      x-dict-type: run_status
+      x-dict-mode: exact
     exit_code:
       type: integer
       nullable: true
@@ -171,6 +173,8 @@ ExecutionRun:
           type: integer
     triggered_by:
       type: string
+      x-dict-type: execution_triggered_by
+      x-dict-mode: exact
     started_at:
       type: string
       format: date-time
@@ -195,6 +199,8 @@ ExecutionLog:
       description: 执行记录ID
     log_level:
       type: string
+      x-dict-type: log_level
+      x-dict-mode: exact
       enum:
       - debug
       - info
@@ -202,6 +208,8 @@ ExecutionLog:
       - error
     stage:
       type: string
+      x-dict-type: execution_stage
+      x-dict-mode: exact
       enum:
       - prepare
       - execute
@@ -571,13 +579,8 @@ FlowInstance:
       nullable: true
     status:
       type: string
-      enum:
-      - pending
-      - running
-      - waiting_approval
-      - completed
-      - failed
-      - cancelled
+      x-dict-type: instance_status
+      x-dict-mode: exact
     current_node_id:
       type: string
     error_message:
@@ -608,11 +611,8 @@ ApprovalTask:
       type: string
     status:
       type: string
-      enum:
-      - pending
-      - approved
-      - rejected
-      - expired
+      x-dict-type: approval_status
+      x-dict-mode: exact
     timeout_at:
       type: string
       format: date-time
@@ -646,6 +646,8 @@ FlowExecutionLog:
       description: 节点ID (如 execution_1, cmdb_validator_1)
     node_type:
       type: string
+      x-dict-type: node_type
+      x-dict-mode: exact
       enum:
       - start
       - end
@@ -656,9 +658,12 @@ FlowExecutionLog:
       - notification
       - condition
       - set_variable
+      - compute
       description: 节点类型
     level:
       type: string
+      x-dict-type: log_level
+      x-dict-mode: exact
       enum:
       - debug
       - info

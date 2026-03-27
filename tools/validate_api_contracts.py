@@ -10,6 +10,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 OPENAPI_PATH = ROOT / "api/openapi.yaml"
 OPENAPI_BUILD_SCRIPT = ROOT / "tools/build_openapi.py"
+DICTIONARY_CONTRACT_SCRIPT = ROOT / "tools/validate_dictionary_contracts.py"
 API_README_PATH = ROOT / "docs/api/README.md"
 AUTH_DOC_PATH = ROOT / "docs/api/auth.md"
 INCIDENTS_DOC_PATH = ROOT / "docs/api/incidents.md"
@@ -53,6 +54,20 @@ def ensure_openapi_bundle_fresh(errors: List[str]) -> None:
         return
     output = (result.stdout + result.stderr).strip()
     errors.append(output or "openapi bundle freshness check failed")
+
+
+def ensure_dictionary_contracts(errors: List[str]) -> None:
+    result = subprocess.run(
+        [sys.executable, str(DICTIONARY_CONTRACT_SCRIPT)],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+    )
+    if result.returncode == 0:
+        return
+    output = (result.stdout + result.stderr).strip()
+    errors.append(output or "dictionary contracts check failed")
 
 
 def require(errors: List[str], condition: bool, message: str) -> None:
@@ -274,10 +289,7 @@ def validate_openapi(content: str, document: Optional[Dict[str, Any]], errors: L
         ),
         "openapi 的工单统计缺少 dismissed 计数",
     )
-    require(errors, get_parameter_enum(get_operation(document, "/tenant/incidents", "get"), "healing_status") == INCIDENT_HEALING_ENUM.split(", "), "openapi 的工单列表缺少完整 healing_status 枚举")
-    require(errors, get_request_property(get_operation(document, "/tenant/incidents/batch-reset-scan", "post"), "healing_status").get("enum", []) == INCIDENT_HEALING_ENUM.split(", "), "openapi 的批量重置缺少完整 healing_status 枚举")
-    require(errors, get_schema_property(document, "Incident", "healing_status").get("enum", []) == INCIDENT_HEALING_ENUM.split(", "), "openapi 的 Incident schema 缺少 dismissed")
-    require(errors, get_parameter_enum(get_operation(document, "/tenant/healing/instances", "get"), "status") == FLOW_INSTANCE_ENUM.split(", "), "openapi 的流程实例列表状态枚举不完整")
+    require(errors, "healing_status" in get_schema(document, "Incident").get("properties", {}), "openapi 的 Incident schema 缺少 healing_status 字段")
     require(
         errors,
         has_regex(
@@ -335,7 +347,6 @@ def validate_openapi(content: str, document: Optional[Dict[str, Any]], errors: L
         has_regex(content, r"/auth/refresh:.*?allOf:.*?LoginPayload"),
         "openapi 的 auth refresh 响应仍未对齐统一 success.data 包装",
     )
-    require(errors, get_parameter_enum(get_operation(document, "/tenant/templates", "get"), "event_type") == NOTIFICATION_EVENT_TYPES.split(", "), "openapi 的通知模板 event_type 枚举仍未对齐真实字典值")
     require(
         errors,
         has_regex(content, r"/templates:\s+get:.*?name: name.*?name: supported_channel.*?name: is_active.*?name: sort_by.*?name: sort_order"),
@@ -344,9 +355,9 @@ def validate_openapi(content: str, document: Optional[Dict[str, Any]], errors: L
     template_schema = get_schema(document, "NotificationTemplate")
     template_create_schema = get_schema(document, "NotificationTemplateCreate")
     template_update_schema = get_schema(document, "NotificationTemplateUpdate")
-    require(errors, get_schema_property(document, "NotificationTemplate", "event_type").get("enum", []) == NOTIFICATION_EVENT_TYPES.split(", ") and "supported_channels" in template_schema.get("properties", {}), "openapi 的 NotificationTemplate schema 未对齐 event_type/supported_channels")
-    require(errors, template_create_schema.get("required") == ["name", "body_template"] and get_schema_property(document, "NotificationTemplateCreate", "event_type").get("enum", []) == NOTIFICATION_EVENT_TYPES.split(", ") and "supported_channels" in template_create_schema.get("properties", {}), "openapi 的 NotificationTemplateCreate schema 未对齐真实请求字段")
-    require(errors, get_schema_property(document, "NotificationTemplateUpdate", "event_type").get("enum", []) == NOTIFICATION_EVENT_TYPES.split(", ") and "supported_channels" in template_update_schema.get("properties", {}), "openapi 的 NotificationTemplateUpdate schema 未对齐真实请求字段")
+    require(errors, "event_type" in template_schema.get("properties", {}) and "supported_channels" in template_schema.get("properties", {}), "openapi 的 NotificationTemplate schema 未对齐 event_type/supported_channels")
+    require(errors, template_create_schema.get("required") == ["name", "body_template"] and "event_type" in template_create_schema.get("properties", {}) and "supported_channels" in template_create_schema.get("properties", {}), "openapi 的 NotificationTemplateCreate schema 未对齐真实请求字段")
+    require(errors, "event_type" in template_update_schema.get("properties", {}) and "supported_channels" in template_update_schema.get("properties", {}), "openapi 的 NotificationTemplateUpdate schema 未对齐真实请求字段")
     require(
         errors,
         has_regex(content, r"/notifications/send:\s+post:.*?notification_ids:.*?logs:"),
@@ -357,9 +368,8 @@ def validate_openapi(content: str, document: Optional[Dict[str, Any]], errors: L
         has_regex(content, r"/notifications:\s+get:.*?name: subject.*?name: execution_run_id.*?name: created_after.*?name: created_before"),
         "openapi 的通知日志列表筛选参数仍未对齐真实 handler",
     )
-    require(errors, get_parameter_enum(get_operation(document, "/tenant/notifications", "get"), "status") == ["pending", "sent", "delivered", "failed", "bounced"], "openapi 的通知日志状态枚举仍未对齐真实字典值")
     notification_schema = get_schema(document, "Notification")
-    require(errors, "execution_run_id" in notification_schema.get("properties", {}) and get_schema_property(document, "Notification", "status").get("enum", []) == ["pending", "sent", "delivered", "failed", "bounced"], "openapi 的 Notification schema 未对齐 execution_run_id 或状态枚举")
+    require(errors, "execution_run_id" in notification_schema.get("properties", {}) and "status" in notification_schema.get("properties", {}), "openapi 的 Notification schema 未对齐 execution_run_id 或状态字段")
     require(errors, "/notifications/{id}/retry:" not in content, "openapi 仍声明了不存在的 /notifications/{id}/retry")
     require(errors, "/notifications/stats:" in content, "openapi 缺少 /notifications/stats")
     require(errors, "/incidents/{id}/close:" in content, "openapi 缺少 /incidents/{id}/close")
@@ -573,6 +583,7 @@ def validate_common_docs(errors: List[str]) -> None:
 def main() -> int:
     errors: List[str] = []
     ensure_openapi_bundle_fresh(errors)
+    ensure_dictionary_contracts(errors)
     openapi_content = read_text(OPENAPI_PATH)
     openapi_document = load_openapi_document(openapi_content, errors)
     validate_openapi(openapi_content, openapi_document, errors)

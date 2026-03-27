@@ -83,6 +83,8 @@
       in: query
       schema:
         type: string
+        x-dict-type: audit_action
+        x-dict-mode: exact
     - name: days
       in: query
       schema:
@@ -202,6 +204,8 @@
       in: query
       schema:
         type: string
+        x-dict-type: blacklist_exemption_status
+        x-dict-mode: exact
     - name: task_id
       in: query
       schema:
@@ -263,6 +267,8 @@
                 type: string
               rule_severity:
                 type: string
+                x-dict-type: command_blacklist_severity
+                x-dict-mode: exact
               rule_pattern:
                 type: string
               reason:
@@ -339,6 +345,8 @@
       in: query
       schema:
         type: string
+        x-dict-type: command_blacklist_severity
+        x-dict-mode: exact
     - name: is_active
       in: query
       schema:
@@ -347,6 +355,8 @@
       in: query
       schema:
         type: string
+        x-dict-type: command_blacklist_match_type
+        x-dict-mode: exact
     - name: pattern
       in: query
       schema:
@@ -470,6 +480,8 @@
                 type: string
               match_type:
                 type: string
+                x-dict-type: command_blacklist_match_type
+                x-dict-mode: exact
               files:
                 type: array
                 items:

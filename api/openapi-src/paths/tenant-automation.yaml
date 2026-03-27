@@ -27,9 +27,8 @@
       description: 执行器类型筛选
       schema:
         type: string
-        enum:
-        - local
-        - docker
+        x-dict-type: executor_type
+        x-dict-mode: subset
     - name: status
       in: query
       description: 状态筛选（pending_review = 需审核，ready = 就绪）
@@ -75,13 +74,8 @@
       description: 按最后执行状态筛选
       schema:
         type: string
-        enum:
-        - pending
-        - running
-        - success
-        - failed
-        - cancelled
-        - timeout
+        x-dict-type: run_status
+        x-dict-mode: exact
     responses:
       '200':
         description: 成功
@@ -288,6 +282,8 @@
             properties:
               triggered_by:
                 type: string
+                x-dict-type: execution_triggered_by
+                x-dict-mode: exact
                 description: 触发者
               secrets_source_id:
                 type: string
@@ -1102,13 +1098,8 @@
       in: query
       schema:
         type: string
-        enum:
-        - pending
-        - running
-        - waiting_approval
-        - completed
-        - failed
-        - cancelled
+        x-dict-type: instance_status
+        x-dict-mode: exact
     - name: flow_id
       in: query
       schema:
@@ -1164,9 +1155,8 @@
       description: 按节点审批结果筛选
       schema:
         type: string
-        enum:
-        - approved
-        - rejected
+        x-dict-type: approval_status
+        x-dict-mode: subset
     - name: created_from
       in: query
       description: 创建时间起始（RFC3339 或 YYYY-MM-DD）
@@ -1657,6 +1647,8 @@
       in: query
       schema:
         type: string
+        x-dict-type: schedule_type
+        x-dict-mode: exact
     responses:
       '200':
         description: 成功

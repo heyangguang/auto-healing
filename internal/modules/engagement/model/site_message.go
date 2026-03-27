@@ -23,17 +23,6 @@ type SiteMessageCategoryInfo struct {
 	Label string `json:"label"`
 }
 
-// AllSiteMessageCategories 所有分类枚举
-var AllSiteMessageCategories = []SiteMessageCategoryInfo{
-	{Value: SiteMessageCategorySystemUpdate, Label: "系统更新"},
-	{Value: SiteMessageCategoryFaultAlert, Label: "故障通知"},
-	{Value: SiteMessageCategoryServiceNotice, Label: "服务消息"},
-	{Value: SiteMessageCategoryProductNews, Label: "产品消息"},
-	{Value: SiteMessageCategoryActivity, Label: "活动通知"},
-	{Value: SiteMessageCategorySecurity, Label: "安全公告"},
-	{Value: SiteMessageCategoryAnnouncement, Label: "系统公告"},
-}
-
 // SiteMessage 站内信消息主表
 type SiteMessage struct {
 	ID             uuid.UUID  `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`

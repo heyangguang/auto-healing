@@ -1,25 +1,31 @@
 package httpapi
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/company/auto-healing/internal/middleware"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/modules/engagement/model"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
 	platformevents "github.com/company/auto-healing/internal/platform/events"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // SiteMessageHandler 站内信处理器
 type SiteMessageHandler struct {
 	repo             *engagementrepo.SiteMessageRepository
+	dictionaryRepo   *opsrepo.DictionaryRepository
 	platformSettings *settingsrepo.PlatformSettingsRepository
 	eventBus         *platformevents.MessageEventBus
 	tenantRepo       *accessrepo.TenantRepository
@@ -28,6 +34,7 @@ type SiteMessageHandler struct {
 
 type SiteMessageHandlerDeps struct {
 	SiteMessageRepo      *engagementrepo.SiteMessageRepository
+	DictionaryRepo       *opsrepo.DictionaryRepository
 	PlatformSettingsRepo *settingsrepo.PlatformSettingsRepository
 	EventBus             *platformevents.MessageEventBus
 	TenantRepo           *accessrepo.TenantRepository
@@ -35,12 +42,31 @@ type SiteMessageHandlerDeps struct {
 }
 
 func NewSiteMessageHandlerWithDeps(deps SiteMessageHandlerDeps) *SiteMessageHandler {
+	requireSiteMessageHandlerDeps(deps)
 	return &SiteMessageHandler{
 		repo:             deps.SiteMessageRepo,
+		dictionaryRepo:   deps.DictionaryRepo,
 		platformSettings: deps.PlatformSettingsRepo,
 		eventBus:         deps.EventBus,
 		tenantRepo:       deps.TenantRepo,
 		userRepo:         deps.UserRepo,
+	}
+}
+
+func requireSiteMessageHandlerDeps(deps SiteMessageHandlerDeps) {
+	switch {
+	case deps.SiteMessageRepo == nil:
+		panic("site message handler requires site message repository")
+	case deps.DictionaryRepo == nil:
+		panic("site message handler requires dictionary repository")
+	case deps.PlatformSettingsRepo == nil:
+		panic("site message handler requires platform settings repository")
+	case deps.EventBus == nil:
+		panic("site message handler requires message event bus")
+	case deps.TenantRepo == nil:
+		panic("site message handler requires tenant repository")
+	case deps.UserRepo == nil:
+		panic("site message handler requires user repository")
 	}
 }
 
@@ -90,13 +116,53 @@ func (h *SiteMessageHandler) currentTenantContext(c *gin.Context, userID uuid.UU
 	return tenantID, h.getUserCreatedAt(c, userID), true
 }
 
-func validSiteMessageCategory(category string) bool {
-	for _, item := range model.AllSiteMessageCategories {
+func (h *SiteMessageHandler) isValidSiteMessageCategory(ctx context.Context, category string) (bool, error) {
+	items, err := h.siteMessageCategoryItems(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, item := range items {
 		if item.Value == category {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
+}
+
+func (h *SiteMessageHandler) siteMessageCategoryItems(ctx context.Context) ([]model.SiteMessageCategoryInfo, error) {
+	items, err := h.dictionaryRepo.ListByTypes(ctx, []string{"site_message_category"}, true)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]model.SiteMessageCategoryInfo, 0, len(items))
+	for _, item := range items {
+		result = append(result, model.SiteMessageCategoryInfo{
+			Value: item.DictKey,
+			Label: item.Label,
+		})
+	}
+	return result, nil
+}
+
+func (h *SiteMessageHandler) getSiteMessageSettings(ctx context.Context) (siteMessageSettingsResponse, error) {
+	setting, err := h.platformSettings.GetByKey(ctx, "site_message.retention_days")
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return siteMessageSettingsResponse{RetentionDays: 90}, nil
+		}
+		return siteMessageSettingsResponse{}, err
+	}
+	retentionDays, err := strconv.Atoi(setting.Value)
+	if err != nil {
+		return siteMessageSettingsResponse{}, err
+	}
+	if retentionDays < 1 {
+		return siteMessageSettingsResponse{}, fmt.Errorf("invalid site_message.retention_days: %d", retentionDays)
+	}
+	return siteMessageSettingsResponse{
+		RetentionDays: retentionDays,
+		UpdatedAt:     setting.UpdatedAt.Format("2006-01-02T15:04:05.000000-07:00"),
+	}, nil
 }
 
 func parseUUIDList(values []string) ([]uuid.UUID, error) {

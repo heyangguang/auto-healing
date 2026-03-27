@@ -10,17 +10,14 @@
       in: query
       schema:
         type: string
-        enum:
-        - itsm
-        - cmdb
+        x-dict-type: plugin_type
+        x-dict-mode: exact
     - name: status
       in: query
       schema:
         type: string
-        enum:
-        - active
-        - inactive
-        - error
+        x-dict-type: plugin_status
+        x-dict-mode: exact
     responses:
       '200':
         description: 成功
@@ -55,9 +52,8 @@
                 example: 生产环境 ITSM
               type:
                 type: string
-                enum:
-                - itsm
-                - cmdb
+                x-dict-type: plugin_type
+                x-dict-mode: exact
                 example: itsm
               description:
                 type: string
@@ -438,32 +434,21 @@
       in: query
       schema:
         type: string
-        enum:
-        - open
-        - in_progress
-        - resolved
-        - closed
+        x-dict-type: incident_status
+        x-dict-mode: exact
     - name: healing_status
       in: query
       description: 按自愈状态筛选
       schema:
         type: string
-        enum:
-        - pending
-        - processing
-        - healed
-        - failed
-        - skipped
-        - dismissed
+        x-dict-type: healing_status
+        x-dict-mode: exact
     - name: severity
       in: query
       schema:
         type: string
-        enum:
-        - critical
-        - high
-        - medium
-        - low
+        x-dict-type: incident_severity
+        x-dict-mode: subset
     - name: has_plugin
       in: query
       description: 是否有关联插件 (true=有, false=无/已删除)
@@ -612,13 +597,8 @@
               healing_status:
                 type: string
                 description: 按自愈状态筛选
-                enum:
-                - pending
-                - processing
-                - healed
-                - failed
-                - skipped
-                - dismissed
+                x-dict-type: healing_status
+                x-dict-mode: exact
           examples:
             by_ids:
               summary: 重置指定工单
@@ -657,28 +637,22 @@
       description: 类型筛选
       schema:
         type: string
-        enum:
-        - server
-        - application
-        - network
-        - database
+        x-dict-type: cmdb_type
+        x-dict-mode: exact
     - name: status
       in: query
       description: 状态筛选
       schema:
         type: string
-        enum:
-        - active
-        - maintenance
+        x-dict-type: cmdb_status
+        x-dict-mode: subset
     - name: environment
       in: query
       description: 环境筛选
       schema:
         type: string
-        enum:
-        - production
-        - staging
-        - development
+        x-dict-type: cmdb_environment
+        x-dict-mode: subset
     - name: source_plugin_name
       in: query
       description: 来源插件名称
@@ -985,17 +959,14 @@
       in: query
       schema:
         type: string
-        enum:
-        - vault
-        - file
-        - webhook
+        x-dict-type: secrets_source_type
+        x-dict-mode: exact
     - name: status
       in: query
       schema:
         type: string
-        enum:
-        - active
-        - inactive
+        x-dict-type: secrets_source_status
+        x-dict-mode: exact
     - name: is_default
       in: query
       schema:
@@ -1078,6 +1049,8 @@
                 type: object
               status:
                 type: string
+                x-dict-type: secrets_source_status
+                x-dict-mode: exact
     responses:
       '200':
         description: 更新成功
@@ -1194,11 +1167,8 @@
       in: query
       schema:
         type: string
-        enum:
-        - pending
-        - ready
-        - syncing
-        - error
+        x-dict-type: git_repo_status
+        x-dict-mode: exact
     responses:
       '200':
         description: 成功
@@ -1311,11 +1281,8 @@
                 description: Git 仓库 URL
               auth_type:
                 type: string
-                enum:
-                - none
-                - token
-                - password
-                - ssh_key
+                x-dict-type: git_auth_type
+                x-dict-mode: exact
               auth_config:
                 type: object
                 description: 认证配置
@@ -1441,10 +1408,8 @@
       description: 按状态筛选
       schema:
         type: string
-        enum:
-        - pending
-        - ready
-        - error
+        x-dict-type: playbook_status
+        x-dict-mode: exact
     responses:
       '200':
         description: 成功
@@ -1480,9 +1445,8 @@
                 description: 入口文件相对路径，如 site.yml
               config_mode:
                 type: string
-                enum:
-                - auto
-                - enhanced
+                x-dict-type: playbook_config_mode
+                x-dict-mode: exact
                 description: 扫描模式（创建时必须指定，之后不可更改）
               description:
                 type: string
@@ -1721,14 +1685,20 @@
       in: query
       schema:
         type: string
+        x-dict-type: cmdb_type
+        x-dict-mode: exact
     - name: status
       in: query
       schema:
         type: string
+        x-dict-type: cmdb_status
+        x-dict-mode: subset
     - name: environment
       in: query
       schema:
         type: string
+        x-dict-type: cmdb_environment
+        x-dict-mode: subset
     - name: source_plugin_name
       in: query
       schema:
@@ -1768,9 +1738,8 @@
       in: query
       schema:
         type: string
-        enum:
-        - pending
-        - error
+        x-dict-type: git_repo_status
+        x-dict-mode: exact
     responses:
       '200':
         $ref: '#/components/responses/Success'

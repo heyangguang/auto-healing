@@ -9,10 +9,8 @@ NotificationChannel:
       type: string
     type:
       type: string
-      enum:
-      - webhook
-      - dingtalk
-      - email
+      x-dict-type: notification_channel_type
+      x-dict-mode: exact
     description:
       type: string
     retry_config:
@@ -52,10 +50,8 @@ NotificationChannelCreate:
       type: string
     type:
       type: string
-      enum:
-      - webhook
-      - dingtalk
-      - email
+      x-dict-type: notification_channel_type
+      x-dict-mode: exact
     description:
       type: string
     config:
@@ -106,30 +102,22 @@ NotificationTemplate:
       type: string
     event_type:
       type: string
-      enum:
-      - incident_created
-      - incident_resolved
-      - approval_required
-      - execution_result
-      - custom
+      x-dict-type: notification_event_type
+      x-dict-mode: exact
     supported_channels:
       type: array
+      x-dict-type: notification_channel_type
+      x-dict-mode: exact
       items:
         type: string
-        enum:
-        - email
-        - dingtalk
-        - webhook
     subject_template:
       type: string
     body_template:
       type: string
     format:
       type: string
-      enum:
-      - text
-      - markdown
-      - html
+      x-dict-type: notification_format
+      x-dict-mode: exact
     available_variables:
       type: array
       items:
@@ -155,20 +143,14 @@ NotificationTemplateCreate:
       type: string
     event_type:
       type: string
-      enum:
-      - incident_created
-      - incident_resolved
-      - approval_required
-      - execution_result
-      - custom
+      x-dict-type: notification_event_type
+      x-dict-mode: exact
     supported_channels:
       type: array
+      x-dict-type: notification_channel_type
+      x-dict-mode: exact
       items:
         type: string
-        enum:
-        - email
-        - dingtalk
-        - webhook
     subject_template:
       type: string
     body_template:
@@ -192,10 +174,8 @@ NotificationTemplateCreate:
         '
     format:
       type: string
-      enum:
-      - text
-      - markdown
-      - html
+      x-dict-type: notification_format
+      x-dict-mode: exact
     is_active:
       type: boolean
 NotificationTemplateUpdate:
@@ -207,30 +187,22 @@ NotificationTemplateUpdate:
       type: string
     event_type:
       type: string
-      enum:
-      - incident_created
-      - incident_resolved
-      - approval_required
-      - execution_result
-      - custom
+      x-dict-type: notification_event_type
+      x-dict-mode: exact
     supported_channels:
       type: array
+      x-dict-type: notification_channel_type
+      x-dict-mode: exact
       items:
         type: string
-        enum:
-        - email
-        - dingtalk
-        - webhook
     subject_template:
       type: string
     body_template:
       type: string
     format:
       type: string
-      enum:
-      - text
-      - markdown
-      - html
+      x-dict-type: notification_format
+      x-dict-mode: exact
     is_active:
       type: boolean
 TemplateVariable:
@@ -271,6 +243,8 @@ Notification:
       format: uuid
     status:
       type: string
+      x-dict-type: notification_log_status
+      x-dict-mode: exact
       enum:
       - pending
       - sent
@@ -362,14 +336,8 @@ SiteMessage:
       nullable: true
     category:
       type: string
-      enum:
-      - system_update
-      - fault_alert
-      - service_notice
-      - product_news
-      - activity
-      - security
-      - announcement
+      x-dict-type: site_message_category
+      x-dict-mode: exact
     title:
       type: string
     content:

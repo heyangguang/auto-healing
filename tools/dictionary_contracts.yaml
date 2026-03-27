@@ -1,0 +1,577 @@
+dict_types:
+  user_status:
+    go_sources:
+      - literals: [active, inactive, locked]
+    openapi_targets:
+      - kind: schema_property
+        schema: User
+        property_path: status
+        mode: exact
+      - kind: schema_property
+        schema: UserProfile
+        property_path: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/users
+        method: get
+        name: status
+        mode: exact
+      - kind: parameter
+        path: /platform/users/simple
+        method: get
+        name: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/users/simple
+        method: get
+        name: status
+        mode: exact
+  role_scope:
+    go_sources:
+      - literals: [platform, tenant]
+    openapi_targets:
+      - kind: schema_property
+        schema: Role
+        property_path: scope
+        mode: exact
+      - kind: schema_property
+        schema: RoleDetail
+        property_path: scope
+        mode: exact
+  permission_module:
+    go_sources:
+      - literals: [user, role, plugin, execution, notification, healing, workflow, system, dashboard, site-message, platform, tenant]
+    openapi_targets:
+      - kind: schema_property
+        schema: Permission
+        property_path: module
+        mode: exact
+  invitation_status:
+    go_sources:
+      - file: internal/modules/access/model/invitation.go
+        const_prefix: InvitationStatus
+  impersonation_status:
+    go_sources:
+      - file: internal/modules/access/model/impersonation.go
+        const_prefix: ImpersonationStatus
+    openapi_targets:
+      - kind: parameter
+        path: /tenant/impersonation/history
+        method: get
+        name: status
+        mode: exact
+  executor_type:
+    go_sources:
+      - file: internal/modules/automation/engine/interface.go
+        identifiers: [ExecutorTypeLocal, ExecutorTypeDocker]
+        mode: subset
+    openapi_targets:
+      - kind: schema_property
+        schema: ExecutionTask
+        property_path: executor_type
+        mode: subset
+      - kind: parameter
+        path: /tenant/execution-tasks
+        method: get
+        name: executor_type
+        mode: subset
+  run_status:
+    go_sources:
+      - literals: [pending, running, success, failed, partial, cancelled, timeout]
+    openapi_targets:
+      - kind: schema_property
+        schema: ExecutionRun
+        property_path: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/execution-tasks
+        method: get
+        name: last_run_status
+        mode: exact
+  execution_triggered_by:
+    go_sources:
+      - literals: [manual, scheduler:cron, scheduler:once, healing]
+    openapi_targets:
+      - kind: schema_property
+        schema: ExecutionRun
+        property_path: triggered_by
+        mode: exact
+      - kind: parameter
+        path: /tenant/notifications
+        method: get
+        name: triggered_by
+        mode: exact
+      - kind: request_body_property
+        path: /tenant/execution-tasks/{id}/execute
+        method: post
+        property_path: triggered_by
+        mode: exact
+  schedule_type:
+    go_sources:
+      - file: internal/modules/automation/model/execution_schedule.go
+        const_prefix: ScheduleType
+    openapi_targets:
+      - kind: schema_property
+        schema: ExecutionSchedule
+        property_path: schedule_type
+        mode: exact
+      - kind: parameter
+        path: /tenant/execution-schedules/timeline
+        method: get
+        name: schedule_type
+        mode: exact
+  schedule_status:
+    go_sources:
+      - file: internal/modules/automation/model/execution_schedule.go
+        const_prefix: ScheduleStatus
+    openapi_targets:
+      - kind: schema_property
+        schema: ExecutionSchedule
+        property_path: status
+        mode: exact
+  instance_status:
+    go_sources:
+      - file: internal/modules/automation/model/healing.go
+        const_prefix: FlowInstanceStatus
+    openapi_targets:
+      - kind: schema_property
+        schema: FlowInstance
+        property_path: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/healing/instances
+        method: get
+        name: status
+        mode: exact
+  approval_status:
+    go_sources:
+      - file: internal/modules/automation/model/healing.go
+        const_prefix: ApprovalTaskStatus
+    openapi_targets:
+      - kind: schema_property
+        schema: ApprovalTask
+        property_path: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/healing/instances
+        method: get
+        name: approval_status
+        mode: subset
+  plugin_type:
+    openapi_targets:
+      - kind: schema_property
+        schema: Plugin
+        property_path: type
+        mode: exact
+      - kind: parameter
+        path: /tenant/plugins
+        method: get
+        name: type
+        mode: exact
+  plugin_status:
+    openapi_targets:
+      - kind: schema_property
+        schema: Plugin
+        property_path: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/plugins
+        method: get
+        name: status
+        mode: exact
+  plugin_sync_type:
+    go_sources:
+      - literals: [manual, scheduled]
+        mode: subset
+    openapi_targets:
+      - kind: schema_property
+        schema: PluginSyncLog
+        property_path: sync_type
+        mode: subset
+  plugin_sync_status:
+    go_sources:
+      - literals: [running, success, failed]
+    openapi_targets:
+      - kind: schema_property
+        schema: PluginSyncLog
+        property_path: status
+        mode: exact
+  incident_severity:
+    openapi_targets:
+      - kind: schema_property
+        schema: Incident
+        property_path: severity
+        mode: subset
+      - kind: parameter
+        path: /tenant/incidents
+        method: get
+        name: severity
+        mode: subset
+  incident_status:
+    openapi_targets:
+      - kind: schema_property
+        schema: Incident
+        property_path: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/incidents
+        method: get
+        name: status
+        mode: exact
+  incident_category:
+    openapi_targets:
+      - kind: schema_property
+        schema: Incident
+        property_path: category
+        mode: open
+  healing_status:
+    openapi_targets:
+      - kind: schema_property
+        schema: Incident
+        property_path: healing_status
+        mode: exact
+      - kind: parameter
+        path: /tenant/incidents
+        method: get
+        name: healing_status
+        mode: exact
+      - kind: request_body_property
+        path: /tenant/incidents/batch-reset-scan
+        method: post
+        property_path: healing_status
+        mode: exact
+  cmdb_type:
+    openapi_targets:
+      - kind: schema_property
+        schema: CMDBItem
+        property_path: type
+        mode: exact
+      - kind: parameter
+        path: /tenant/cmdb
+        method: get
+        name: type
+        mode: exact
+  cmdb_status:
+    openapi_targets:
+      - kind: schema_property
+        schema: CMDBItem
+        property_path: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/cmdb
+        method: get
+        name: status
+        mode: subset
+  cmdb_environment:
+    openapi_targets:
+      - kind: schema_property
+        schema: CMDBItem
+        property_path: environment
+        mode: subset
+      - kind: parameter
+        path: /tenant/cmdb
+        method: get
+        name: environment
+        mode: subset
+  notification_channel_type:
+    openapi_targets:
+      - kind: schema_property
+        schema: NotificationChannel
+        property_path: type
+        mode: exact
+      - kind: schema_property
+        schema: NotificationChannelCreate
+        property_path: type
+        mode: exact
+      - kind: parameter
+        path: /tenant/channels
+        method: get
+        name: type
+        mode: exact
+  notification_event_type:
+    openapi_targets:
+      - kind: schema_property
+        schema: NotificationTemplate
+        property_path: event_type
+        mode: exact
+      - kind: schema_property
+        schema: NotificationTemplateCreate
+        property_path: event_type
+        mode: exact
+      - kind: parameter
+        path: /tenant/templates
+        method: get
+        name: event_type
+        mode: exact
+  notification_format:
+    openapi_targets:
+      - kind: schema_property
+        schema: NotificationTemplate
+        property_path: format
+        mode: exact
+      - kind: schema_property
+        schema: NotificationTemplateCreate
+        property_path: format
+        mode: exact
+      - kind: parameter
+        path: /tenant/templates
+        method: get
+        name: format
+        mode: exact
+  notification_log_status:
+    openapi_targets:
+      - kind: schema_property
+        schema: Notification
+        property_path: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/notifications
+        method: get
+        name: status
+        mode: exact
+  log_level:
+    go_sources:
+      - literals: [debug, info, warn, error]
+    openapi_targets:
+      - kind: schema_property
+        schema: ExecutionLog
+        property_path: log_level
+        mode: exact
+      - kind: schema_property
+        schema: FlowExecutionLog
+        property_path: level
+        mode: exact
+  execution_stage:
+    go_sources:
+      - literals: [prepare, execute, cleanup]
+    openapi_targets:
+      - kind: schema_property
+        schema: ExecutionLog
+        property_path: stage
+        mode: exact
+  node_type:
+    go_sources:
+      - literals: [start, end, host_extractor, cmdb_validator, approval, execution, notification, condition, set_variable, compute]
+    openapi_targets:
+      - kind: schema_property
+        schema: FlowExecutionLog
+        property_path: node_type
+        mode: exact
+  site_message_category:
+    openapi_targets:
+      - kind: schema_property
+        schema: SiteMessage
+        property_path: category
+        mode: exact
+      - kind: parameter
+        path: /tenant/site-messages
+        method: get
+        name: category
+        mode: exact
+  secrets_source_type:
+    openapi_targets:
+      - kind: schema_property
+        schema: SecretsSource
+        property_path: type
+        mode: exact
+      - kind: schema_property
+        schema: CreateSecretsSourceRequest
+        property_path: type
+        mode: exact
+      - kind: parameter
+        path: /tenant/secrets-sources
+        method: get
+        name: type
+        mode: exact
+  secrets_auth_type:
+    openapi_targets:
+      - kind: schema_property
+        schema: SecretsSource
+        property_path: auth_type
+        mode: exact
+      - kind: schema_property
+        schema: CreateSecretsSourceRequest
+        property_path: auth_type
+        mode: exact
+  secrets_source_status:
+    go_sources:
+      - literals: [active, inactive]
+    openapi_targets:
+      - kind: schema_property
+        schema: SecretsSource
+        property_path: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/secrets-sources
+        method: get
+        name: status
+        mode: exact
+      - kind: request_body_property
+        path: /tenant/secrets-sources/{id}
+        method: put
+        property_path: status
+        mode: exact
+  git_auth_type:
+    openapi_targets:
+      - kind: schema_property
+        schema: GitRepository
+        property_path: auth_type
+        mode: exact
+      - kind: schema_property
+        schema: CreateGitRepoRequest
+        property_path: auth_type
+        mode: exact
+      - kind: schema_property
+        schema: UpdateGitRepoRequest
+        property_path: auth_type
+        mode: exact
+      - kind: request_body_property
+        path: /tenant/git-repos/validate
+        method: post
+        property_path: auth_type
+        mode: exact
+  git_repo_status:
+    openapi_targets:
+      - kind: schema_property
+        schema: GitRepository
+        property_path: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/git-repos
+        method: get
+        name: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/git-repos/{id}/reset-status
+        method: post
+        name: status
+        mode: exact
+  git_sync_trigger_type:
+    go_sources:
+      - literals: [manual, branch_change]
+        mode: subset
+    openapi_targets:
+      - kind: schema_property
+        schema: GitSyncLog
+        property_path: trigger_type
+        mode: subset
+  git_sync_status:
+    go_sources:
+      - literals: [success, failed]
+    openapi_targets:
+      - kind: schema_property
+        schema: GitSyncLog
+        property_path: status
+        mode: exact
+  playbook_status:
+    openapi_targets:
+      - kind: schema_property
+        schema: Playbook
+        property_path: status
+        mode: exact
+      - kind: parameter
+        path: /tenant/playbooks
+        method: get
+        name: status
+        mode: exact
+  playbook_scan_trigger_type:
+    openapi_targets:
+      - kind: schema_property
+        schema: PlaybookScanLog
+        property_path: trigger_type
+        mode: subset
+  playbook_config_mode:
+    openapi_targets:
+      - kind: schema_property
+        schema: ActivateRequest
+        property_path: config_mode
+        mode: exact
+      - kind: request_body_property
+        path: /tenant/playbooks
+        method: post
+        property_path: config_mode
+        mode: exact
+  audit_action:
+    go_sources:
+      - literals: [create, update, delete, read, login, logout, execute, sync, test, activate, deactivate, approve, reject, export, scan, assign_role, reset_password, enable, disable, trigger, dismiss, cancel, retry, dry_run, reset_status, send, offline, patch, assign_workspace, maintenance, resume, close, batch_reset_scan, confirm_review, ready, impersonation_enter, impersonation_exit, impersonation_terminate, batch_create, update_variables]
+    openapi_targets:
+      - kind: parameter
+        path: /tenant/audit-logs/action-grouping
+        method: get
+        name: action
+        mode: exact
+  command_blacklist_match_type:
+    go_sources:
+      - literals: [contains, regex, exact]
+    openapi_targets:
+      - kind: schema_property
+        schema: CommandBlacklist
+        property_path: match_type
+        mode: exact
+      - kind: parameter
+        path: /tenant/command-blacklist
+        method: get
+        name: match_type
+        mode: exact
+      - kind: request_body_property
+        path: /tenant/command-blacklist/simulate
+        method: post
+        property_path: match_type
+        mode: exact
+  command_blacklist_severity:
+    go_sources:
+      - literals: [critical, high, medium]
+    openapi_targets:
+      - kind: schema_property
+        schema: CommandBlacklist
+        property_path: severity
+        mode: exact
+      - kind: parameter
+        path: /tenant/command-blacklist
+        method: get
+        name: severity
+        mode: exact
+      - kind: request_body_property
+        path: /tenant/blacklist-exemptions
+        method: post
+        property_path: rule_severity
+        mode: exact
+  command_blacklist_category:
+    go_sources:
+      - literals: [filesystem, network, system, database]
+    openapi_targets:
+      - kind: schema_property
+        schema: CommandBlacklist
+        property_path: category
+        mode: exact
+  blacklist_exemption_status:
+    go_sources:
+      - literals: [pending, approved, rejected, expired]
+    openapi_targets:
+      - kind: parameter
+        path: /tenant/blacklist-exemptions
+        method: get
+        name: status
+        mode: exact
+
+non_dictionary_fields:
+  - kind: schema_property
+    schema: SearchableField
+    property_path: type
+    reason: UI 搜索控件元类型，不是业务字典
+  - kind: schema_property
+    schema: TemplateVariable
+    property_path: category
+    reason: 模板引擎内部分类，不是业务字典
+  - kind: schema_property
+    schema: GitSyncLog
+    property_path: action
+    reason: 同步内部动作，不作为业务字典
+  - kind: schema_property
+    schema: VaultAuth
+    property_path: type
+    reason: provider 协议认证类型，不作为业务字典
+  - kind: schema_property
+    schema: WebhookAuth
+    property_path: type
+    reason: provider 协议认证类型，不作为业务字典

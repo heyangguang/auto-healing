@@ -5,6 +5,7 @@ import (
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	engagementhttp "github.com/company/auto-healing/internal/modules/engagement/httpapi"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	platformevents "github.com/company/auto-healing/internal/platform/events"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
@@ -33,6 +34,7 @@ type ModuleDeps struct {
 	ActivityRepo         *engagementrepo.UserActivityRepository
 	SearchRepo           *engagementrepo.SearchRepository
 	SiteMessageRepo      *engagementrepo.SiteMessageRepository
+	DictionaryRepo       *opsrepo.DictionaryRepository
 	PlatformSettingsRepo *settingsrepo.PlatformSettingsRepository
 	EventBus             *platformevents.MessageEventBus
 	TenantRepo           *accessrepo.TenantRepository
@@ -62,6 +64,7 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 		ActivityRepo:         activityRepo,
 		SearchRepo:           engagementrepo.NewSearchRepositoryWithDB(db),
 		SiteMessageRepo:      engagementrepo.NewSiteMessageRepositoryWithDB(db),
+		DictionaryRepo:       opsrepo.NewDictionaryRepositoryWithDB(db),
 		PlatformSettingsRepo: settingsRepo,
 		EventBus:             platformevents.NewMessageEventBus(),
 		TenantRepo:           accessrepo.NewTenantRepositoryWithDB(db),
@@ -91,6 +94,7 @@ func NewWithDeps(deps ModuleDeps) *Module {
 		}),
 		SiteMessage: engagementhttp.NewSiteMessageHandlerWithDeps(engagementhttp.SiteMessageHandlerDeps{
 			SiteMessageRepo:      deps.SiteMessageRepo,
+			DictionaryRepo:       deps.DictionaryRepo,
 			PlatformSettingsRepo: deps.PlatformSettingsRepo,
 			EventBus:             deps.EventBus,
 			TenantRepo:           deps.TenantRepo,

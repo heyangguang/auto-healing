@@ -8,9 +8,8 @@ Plugin:
       type: string
     type:
       type: string
-      enum:
-      - itsm
-      - cmdb
+      x-dict-type: plugin_type
+      x-dict-mode: exact
       description: 插件类型
     description:
       type: string
@@ -18,10 +17,8 @@ Plugin:
       type: string
     status:
       type: string
-      enum:
-      - active
-      - inactive
-      - error
+      x-dict-type: plugin_status
+      x-dict-mode: exact
     config:
       type: object
       description: '连接配置，包含：
@@ -122,15 +119,12 @@ PluginSyncLog:
       format: uuid
     sync_type:
       type: string
-      enum:
-      - manual
-      - scheduled
+      x-dict-type: plugin_sync_type
+      x-dict-mode: subset
     status:
       type: string
-      enum:
-      - running
-      - success
-      - failed
+      x-dict-type: plugin_sync_status
+      x-dict-mode: exact
     records_fetched:
       type: integer
     records_processed:
@@ -177,31 +171,22 @@ Incident:
       type: string
     severity:
       type: string
-      enum:
-      - critical
-      - high
-      - medium
-      - low
+      x-dict-type: incident_severity
+      x-dict-mode: subset
     priority:
       type: string
     status:
       type: string
-      enum:
-      - open
-      - in_progress
-      - resolved
-      - closed
+      x-dict-type: incident_status
+      x-dict-mode: exact
     category:
       type: string
+      x-dict-type: incident_category
+      x-dict-mode: open
     healing_status:
       type: string
-      enum:
-      - pending
-      - processing
-      - healed
-      - failed
-      - skipped
-      - dismissed
+      x-dict-type: healing_status
+      x-dict-mode: exact
     affected_ci:
       type: string
     affected_service:
@@ -255,17 +240,12 @@ CMDBItem:
       type: string
     type:
       type: string
-      enum:
-      - server
-      - application
-      - network
-      - database
+      x-dict-type: cmdb_type
+      x-dict-mode: exact
     status:
       type: string
-      enum:
-      - active
-      - offline
-      - maintenance
+      x-dict-type: cmdb_status
+      x-dict-mode: exact
     ip_address:
       type: string
     hostname:
@@ -286,10 +266,8 @@ CMDBItem:
       type: string
     environment:
       type: string
-      enum:
-      - production
-      - staging
-      - development
+      x-dict-type: cmdb_environment
+      x-dict-mode: subset
     manufacturer:
       type: string
     model:
@@ -445,15 +423,12 @@ SecretsSource:
       type: string
     type:
       type: string
-      enum:
-      - vault
-      - file
-      - webhook
+      x-dict-type: secrets_source_type
+      x-dict-mode: exact
     auth_type:
       type: string
-      enum:
-      - ssh_key
-      - password
+      x-dict-type: secrets_auth_type
+      x-dict-mode: exact
       description: SSH 认证类型（file 类型只支持 ssh_key）
     config:
       type: object
@@ -466,9 +441,8 @@ SecretsSource:
       description: 优先级（数字越小越优先）
     status:
       type: string
-      enum:
-      - active
-      - inactive
+      x-dict-type: secrets_source_status
+      x-dict-mode: exact
     created_at:
       type: string
       format: date-time
@@ -484,15 +458,12 @@ CreateSecretsSourceRequest:
       type: string
     type:
       type: string
-      enum:
-      - vault
-      - file
-      - webhook
+      x-dict-type: secrets_source_type
+      x-dict-mode: exact
     auth_type:
       type: string
-      enum:
-      - ssh_key
-      - password
+      x-dict-type: secrets_auth_type
+      x-dict-mode: exact
       description: SSH 认证类型
     config:
       oneOf:
@@ -677,11 +648,8 @@ GitRepository:
       type: string
     auth_type:
       type: string
-      enum:
-      - none
-      - token
-      - password
-      - ssh_key
+      x-dict-type: git_auth_type
+      x-dict-mode: exact
     local_path:
       type: string
     last_sync_at:
@@ -689,11 +657,8 @@ GitRepository:
       format: date-time
     status:
       type: string
-      enum:
-      - pending
-      - ready
-      - syncing
-      - error
+      x-dict-type: git_repo_status
+      x-dict-mode: exact
     error_message:
       type: string
       description: 错误信息（status=error 时）
@@ -751,10 +716,8 @@ GitSyncLog:
       format: uuid
     trigger_type:
       type: string
-      enum:
-      - manual
-      - auto
-      - create
+      x-dict-type: git_sync_trigger_type
+      x-dict-mode: subset
       description: 触发类型
     action:
       type: string
@@ -764,9 +727,8 @@ GitSyncLog:
       description: 操作类型
     status:
       type: string
-      enum:
-      - success
-      - failed
+      x-dict-type: git_sync_status
+      x-dict-mode: exact
     commit_id:
       type: string
       description: 成功时的 commit ID
@@ -799,11 +761,8 @@ CreateGitRepoRequest:
       default: main
     auth_type:
       type: string
-      enum:
-      - none
-      - token
-      - password
-      - ssh_key
+      x-dict-type: git_auth_type
+      x-dict-mode: exact
       description: 认证类型
       default: none
     auth_config:
@@ -834,11 +793,8 @@ UpdateGitRepoRequest:
       description: 默认分支
     auth_type:
       type: string
-      enum:
-      - none
-      - token
-      - password
-      - ssh_key
+      x-dict-type: git_auth_type
+      x-dict-mode: exact
       description: 认证类型
     auth_config:
       type: object
@@ -921,10 +877,8 @@ Playbook:
       type: string
     status:
       type: string
-      enum:
-      - pending
-      - ready
-      - error
+      x-dict-type: playbook_status
+      x-dict-mode: exact
     variables:
       type: array
       items:
@@ -950,10 +904,8 @@ PlaybookScanLog:
       format: uuid
     trigger_type:
       type: string
-      enum:
-      - manual
-      - auto
-      - sync
+      x-dict-type: playbook_scan_trigger_type
+      x-dict-mode: subset
     files_scanned:
       type: integer
       description: 扫描的文件数
@@ -998,9 +950,8 @@ ActivateRequest:
       description: 主入口文件
     config_mode:
       type: string
-      enum:
-      - auto
-      - enhanced
+      x-dict-type: playbook_config_mode
+      x-dict-mode: exact
       description: 配置模式
     variables:
       type: array
