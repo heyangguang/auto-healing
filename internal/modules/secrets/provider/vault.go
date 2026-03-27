@@ -9,24 +9,24 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 )
 
 // VaultProvider HashiCorp Vault 密钥提供者
 type VaultProvider struct {
-	config   model.VaultConfig
+	config   secretsmodel.VaultConfig
 	authType string // 从 SecretsSource.AuthType 获取
 	name     string
 	client   *http.Client
 }
 
 // NewVaultProvider 创建 Vault 密钥提供者
-func NewVaultProvider(source *model.SecretsSource) (*VaultProvider, error) {
+func NewVaultProvider(source *secretsmodel.SecretsSource) (*VaultProvider, error) {
 	if err := validateSecretAuthType(source.AuthType); err != nil {
 		return nil, err
 	}
 
-	var config model.VaultConfig
+	var config secretsmodel.VaultConfig
 	configBytes, _ := json.Marshal(source.Config)
 	if err := json.Unmarshal(configBytes, &config); err != nil {
 		return nil, newConfigError(fmt.Sprintf("解析 Vault 配置失败: %v", err))
@@ -130,7 +130,7 @@ func (p *VaultProvider) loginWithAppRole(ctx context.Context) (string, error) {
 }
 
 // GetSecret 获取密钥
-func (p *VaultProvider) GetSecret(ctx context.Context, query model.SecretQuery) (*model.Secret, error) {
+func (p *VaultProvider) GetSecret(ctx context.Context, query secretsmodel.SecretQuery) (*secretsmodel.Secret, error) {
 	token, err := p.getToken(ctx)
 	if err != nil {
 		return nil, err
@@ -153,7 +153,7 @@ func (p *VaultProvider) GetSecret(ctx context.Context, query model.SecretQuery) 
 	})
 }
 
-func (p *VaultProvider) newSecretRequest(ctx context.Context, query model.SecretQuery, token string) (*http.Request, error) {
+func (p *VaultProvider) newSecretRequest(ctx context.Context, query secretsmodel.SecretQuery, token string) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", p.secretURL(query), nil)
 	if err != nil {
 		return nil, newConfigError(fmt.Sprintf("Vault 地址无效: %v", err))
@@ -165,7 +165,7 @@ func (p *VaultProvider) newSecretRequest(ctx context.Context, query model.Secret
 	return req, nil
 }
 
-func (p *VaultProvider) secretURL(query model.SecretQuery) string {
+func (p *VaultProvider) secretURL(query secretsmodel.SecretQuery) string {
 	path := p.config.SecretPath
 	if len(path) > 0 && path[len(path)-1] == '/' {
 		path = path[:len(path)-1]

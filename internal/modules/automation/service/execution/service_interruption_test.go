@@ -9,9 +9,10 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
+	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
-	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -109,8 +110,8 @@ func TestPrepareAuthenticatedInventoryFinalizesRunWhenCredentialBuildFails(t *te
 
 	task := &model.ExecutionTask{ExecutorType: "local"}
 	providers := []sourceProvider{{
-		source:   &model.SecretsSource{Name: "provider-a", AuthType: "ssh_key"},
-		provider: fakeSecretsProvider{secret: &model.Secret{AuthType: "ssh_key", Username: "root", PrivateKey: "bad-key"}},
+		source:   &secretsmodel.SecretsSource{Name: "provider-a", AuthType: "ssh_key"},
+		provider: fakeSecretsProvider{secret: &secretsmodel.Secret{AuthType: "ssh_key", Username: "root", PrivateKey: "bad-key"}},
 	}}
 
 	if _, err := svc.prepareAuthenticatedInventory(ctx, runID, task, filepath.Join(t.TempDir(), "missing"), "10.0.0.1", providers); err == nil {
@@ -137,7 +138,7 @@ func TestResolveHostCredentialReturnsBackendErrors(t *testing.T) {
 	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "running")
 
 	_, err := svc.resolveHostCredential(ctx, runID, &model.ExecutionTask{}, t.TempDir(), "10.0.0.2", []sourceProvider{{
-		source:   &model.SecretsSource{Name: "provider-a", AuthType: "ssh_key"},
+		source:   &secretsmodel.SecretsSource{Name: "provider-a", AuthType: "ssh_key"},
 		provider: fakeSecretsProvider{err: errors.New("backend down")},
 	}})
 	if err == nil {
@@ -161,8 +162,8 @@ func TestResolveHostCredentialContinuesOnSecretNotFound(t *testing.T) {
 	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "running")
 
 	credential, err := svc.resolveHostCredential(ctx, runID, &model.ExecutionTask{}, t.TempDir(), "10.0.0.3", []sourceProvider{{
-		source:   &model.SecretsSource{Name: "provider-a", AuthType: "ssh_key"},
-			provider: fakeSecretsProvider{err: secretsapi.ErrSecretNotFound},
+		source:   &secretsmodel.SecretsSource{Name: "provider-a", AuthType: "ssh_key"},
+		provider: fakeSecretsProvider{err: secretsapi.ErrSecretNotFound},
 	}})
 	if err != nil {
 		t.Fatalf("resolveHostCredential() error = %v", err)
@@ -173,11 +174,11 @@ func TestResolveHostCredentialContinuesOnSecretNotFound(t *testing.T) {
 }
 
 type fakeSecretsProvider struct {
-	secret *model.Secret
+	secret *secretsmodel.Secret
 	err    error
 }
 
-func (f fakeSecretsProvider) GetSecret(context.Context, model.SecretQuery) (*model.Secret, error) {
+func (f fakeSecretsProvider) GetSecret(context.Context, secretsmodel.SecretQuery) (*secretsmodel.Secret, error) {
 	if f.err != nil {
 		return nil, f.err
 	}

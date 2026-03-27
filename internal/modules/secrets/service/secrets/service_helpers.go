@@ -3,10 +3,10 @@ package secrets
 import (
 	"encoding/json"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 )
 
-func jsonEqual(a, b model.JSON) bool {
+func jsonEqual(a, b modeltypes.JSON) bool {
 	left, err := json.Marshal(a)
 	if err != nil {
 		return false

@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -17,13 +18,13 @@ func TestSecretsSourceRepositoryCreateOverridesTenantID(t *testing.T) {
 
 	repo := NewSecretsSourceRepositoryWithDB(db)
 	ctxTenant := uuid.New()
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		ID:       uuid.New(),
 		TenantID: uuidPtr(uuid.New()),
 		Name:     "source-a",
 		Type:     "file",
 		AuthType: "ssh_key",
-		Config:   model.JSON{"key_path": "/etc/auto-healing/secrets/id_a"},
+		Config:   modeltypes.JSON{"key_path": "/etc/auto-healing/secrets/id_a"},
 		Status:   "active",
 	}
 
@@ -178,13 +179,13 @@ func TestSecretsSourceRepositoryUpdatePreservesTestFields(t *testing.T) {
 		sourceID.String(), tenantID.String(), "source-a", "webhook", "password", `{"url":"http://example.com","method":"GET","query_key":"hostname"}`,
 		false, 1, "active", now, true, now, now)
 
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		ID:        sourceID,
 		TenantID:  uuidPtr(tenantID),
 		Name:      "source-a",
 		Type:      "webhook",
 		AuthType:  "password",
-		Config:    model.JSON{"url": "http://example.com", "method": "POST", "query_key": "hostname"},
+		Config:    modeltypes.JSON{"url": "http://example.com", "method": "POST", "query_key": "hostname"},
 		IsDefault: true,
 		Priority:  2,
 		Status:    "inactive",

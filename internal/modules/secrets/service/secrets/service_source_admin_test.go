@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -18,7 +19,7 @@ import (
 )
 
 func TestApplySourceAdminChangesRejectsNegativePriority(t *testing.T) {
-	source := &model.SecretsSource{}
+	source := &secretsmodel.SecretsSource{}
 	priority := -1
 
 	_, err := applySourceAdminChanges(source, nil, &priority, "")
@@ -31,7 +32,7 @@ func TestApplySourceAdminChangesRejectsNegativePriority(t *testing.T) {
 }
 
 func TestApplySourceAdminChangesRejectsInvalidStatus(t *testing.T) {
-	source := &model.SecretsSource{}
+	source := &secretsmodel.SecretsSource{}
 
 	_, err := applySourceAdminChanges(source, nil, nil, "enabled")
 	if err == nil {
@@ -43,7 +44,7 @@ func TestApplySourceAdminChangesRejectsInvalidStatus(t *testing.T) {
 }
 
 func TestApplySourceAdminChangesReturnsRequestedDefaultAndClearsStoredDefault(t *testing.T) {
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		IsDefault: false,
 		Priority:  1,
 		Status:    "inactive",
@@ -70,7 +71,7 @@ func TestApplySourceAdminChangesReturnsRequestedDefaultAndClearsStoredDefault(t 
 }
 
 func TestApplySourceAdminChangesLeavesDefaultUnchangedWhenUnset(t *testing.T) {
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		IsDefault: true,
 		Priority:  2,
 		Status:    "active",
@@ -89,7 +90,7 @@ func TestApplySourceAdminChangesLeavesDefaultUnchangedWhenUnset(t *testing.T) {
 }
 
 func TestApplySourceAdminChangesRejectsInactiveDefault(t *testing.T) {
-	source := &model.SecretsSource{Status: "active"}
+	source := &secretsmodel.SecretsSource{Status: "active"}
 	inactive := "inactive"
 	setDefault := true
 
@@ -127,11 +128,11 @@ func TestCreateSourceRequestedDefaultBecomesDefault(t *testing.T) {
 	svc := NewService()
 	tenantID := uuid.New()
 	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
-	source, err := svc.CreateSource(ctx, &model.SecretsSource{
+	source, err := svc.CreateSource(ctx, &secretsmodel.SecretsSource{
 		Name:      "default-source",
 		Type:      "webhook",
 		AuthType:  "password",
-		Config:    model.JSON{"url": "http://example.com", "method": "GET", "query_key": "hostname"},
+		Config:    modeltypes.JSON{"url": "http://example.com", "method": "GET", "query_key": "hostname"},
 		IsDefault: true,
 		Status:    "active",
 	})
@@ -246,7 +247,7 @@ func TestUpdateSourceRejectsReferencedConfigChange(t *testing.T) {
 
 	svc := NewService()
 	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
-	_, err := svc.UpdateSource(ctx, sourceID, model.JSON{
+	_, err := svc.UpdateSource(ctx, sourceID, modeltypes.JSON{
 		"url":       "http://changed.example.com",
 		"method":    "GET",
 		"query_key": "hostname",

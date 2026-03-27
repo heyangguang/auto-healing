@@ -5,19 +5,20 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
-	secretsrepo "github.com/company/auto-healing/internal/modules/secrets/repository"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
+	secretsrepo "github.com/company/auto-healing/internal/modules/secrets/repository"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-func (s *Service) CreateSource(ctx context.Context, source *model.SecretsSource) (*model.SecretsSource, error) {
+func (s *Service) CreateSource(ctx context.Context, source *secretsmodel.SecretsSource) (*secretsmodel.SecretsSource, error) {
 	if _, err := secretsapi.NewProvider(source); err != nil {
 		return nil, fmt.Errorf("配置验证失败: %w", err)
 	}
 	requestedDefault := source.IsDefault
-	var finalSource *model.SecretsSource
+	var finalSource *secretsmodel.SecretsSource
 	if requestedDefault {
 		source.IsDefault = false
 	}
@@ -45,7 +46,7 @@ func (s *Service) CreateSource(ctx context.Context, source *model.SecretsSource)
 	return finalSource, nil
 }
 
-func (s *Service) GetSource(ctx context.Context, id uuid.UUID) (*model.SecretsSource, error) {
+func (s *Service) GetSource(ctx context.Context, id uuid.UUID) (*secretsmodel.SecretsSource, error) {
 	source, err := s.repo.GetByID(ctx, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("%w: %s", ErrSecretsSourceNotFound, id)
@@ -53,8 +54,8 @@ func (s *Service) GetSource(ctx context.Context, id uuid.UUID) (*model.SecretsSo
 	return source, err
 }
 
-func (s *Service) UpdateSource(ctx context.Context, id uuid.UUID, config model.JSON, isDefault *bool, priority *int, status string) (*model.SecretsSource, error) {
-	var finalSource *model.SecretsSource
+func (s *Service) UpdateSource(ctx context.Context, id uuid.UUID, config modeltypes.JSON, isDefault *bool, priority *int, status string) (*secretsmodel.SecretsSource, error) {
+	var finalSource *secretsmodel.SecretsSource
 	if err := s.repo.Transaction(ctx, func(repoTx *secretsrepo.SecretsSourceRepository) error {
 		source, err := repoTx.GetByIDForUpdate(ctx, id)
 		if err != nil {
@@ -106,7 +107,7 @@ func (s *Service) UpdateSource(ctx context.Context, id uuid.UUID, config model.J
 	return finalSource, nil
 }
 
-func applySourceAdminChanges(source *model.SecretsSource, isDefault *bool, priority *int, status string) (bool, error) {
+func applySourceAdminChanges(source *secretsmodel.SecretsSource, isDefault *bool, priority *int, status string) (bool, error) {
 	requestedDefault := false
 	if isDefault != nil {
 		requestedDefault = *isDefault
@@ -161,7 +162,7 @@ func (s *Service) DeleteSource(ctx context.Context, id uuid.UUID) error {
 	})
 }
 
-func (s *Service) ListSources(ctx context.Context, sourceType, status string, isDefault *bool) ([]model.SecretsSource, error) {
+func (s *Service) ListSources(ctx context.Context, sourceType, status string, isDefault *bool) ([]secretsmodel.SecretsSource, error) {
 	return s.repo.List(ctx, sourceType, status, isDefault)
 }
 

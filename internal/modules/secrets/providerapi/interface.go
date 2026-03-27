@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	"github.com/company/auto-healing/internal/modules/secrets/provider"
 )
 
@@ -22,7 +22,7 @@ var (
 // Provider 密钥提供者接口
 type Provider interface {
 	// GetSecret 获取密钥
-	GetSecret(ctx context.Context, query model.SecretQuery) (*model.Secret, error)
+	GetSecret(ctx context.Context, query secretsmodel.SecretQuery) (*secretsmodel.Secret, error)
 
 	// TestConnection 测试连接
 	TestConnection(ctx context.Context) error
@@ -32,7 +32,7 @@ type Provider interface {
 }
 
 // NewProvider 创建密钥提供者（工厂模式）
-func NewProvider(source *model.SecretsSource) (Provider, error) {
+func NewProvider(source *secretsmodel.SecretsSource) (Provider, error) {
 	switch source.Type {
 	case "file":
 		return provider.NewFileProvider(source)

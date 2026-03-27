@@ -3,7 +3,7 @@ package provider
 import (
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 )
 
 type secretFieldExtractor func(string) string
@@ -17,8 +17,8 @@ func validateSecretAuthType(authType string) error {
 	}
 }
 
-func buildMappedSecret(authType string, mapping model.FieldMapping, extractor secretFieldExtractor) (*model.Secret, error) {
-	secret := &model.Secret{
+func buildMappedSecret(authType string, mapping secretsmodel.FieldMapping, extractor secretFieldExtractor) (*secretsmodel.Secret, error) {
+	secret := &secretsmodel.Secret{
 		AuthType: authType,
 		Username: extractMappedField(extractor, mapping.Username, "username", "root"),
 	}

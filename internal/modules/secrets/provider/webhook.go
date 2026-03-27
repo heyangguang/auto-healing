@@ -10,24 +10,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 )
 
 // WebhookProvider Webhook 密钥提供者
 type WebhookProvider struct {
-	config   model.WebhookConfig
+	config   secretsmodel.WebhookConfig
 	authType string // 从 SecretsSource.AuthType 获取
 	name     string
 	client   *http.Client
 }
 
 // NewWebhookProvider 创建 Webhook 密钥提供者
-func NewWebhookProvider(source *model.SecretsSource) (*WebhookProvider, error) {
+func NewWebhookProvider(source *secretsmodel.SecretsSource) (*WebhookProvider, error) {
 	if err := validateSecretAuthType(source.AuthType); err != nil {
 		return nil, err
 	}
 
-	var config model.WebhookConfig
+	var config secretsmodel.WebhookConfig
 	configBytes, _ := json.Marshal(source.Config)
 	if err := json.Unmarshal(configBytes, &config); err != nil {
 		return nil, newConfigError(fmt.Sprintf("解析 Webhook 配置失败: %v", err))
@@ -101,7 +101,7 @@ func (p *WebhookProvider) applyAuth(req *http.Request) {
 }
 
 // GetSecret 获取密钥
-func (p *WebhookProvider) GetSecret(ctx context.Context, query model.SecretQuery) (*model.Secret, error) {
+func (p *WebhookProvider) GetSecret(ctx context.Context, query secretsmodel.SecretQuery) (*secretsmodel.Secret, error) {
 	req, err := p.newSecretRequest(ctx, query)
 	if err != nil {
 		return nil, err
@@ -121,7 +121,7 @@ func (p *WebhookProvider) GetSecret(ctx context.Context, query model.SecretQuery
 	})
 }
 
-func (p *WebhookProvider) newSecretRequest(ctx context.Context, query model.SecretQuery) (*http.Request, error) {
+func (p *WebhookProvider) newSecretRequest(ctx context.Context, query secretsmodel.SecretQuery) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, p.config.Method, p.secretURL(query), nil)
 	if err != nil {
 		return nil, newConfigError(fmt.Sprintf("Webhook URL 无效: %v", err))
@@ -131,7 +131,7 @@ func (p *WebhookProvider) newSecretRequest(ctx context.Context, query model.Secr
 	return req, nil
 }
 
-func (p *WebhookProvider) secretURL(query model.SecretQuery) string {
+func (p *WebhookProvider) secretURL(query secretsmodel.SecretQuery) string {
 	url := strings.TrimSuffix(p.config.URL, "/")
 	switch p.config.QueryKey {
 	case "ip":

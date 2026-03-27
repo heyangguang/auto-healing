@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
@@ -76,7 +76,7 @@ func TestQuerySecretUsesDefaultSource(t *testing.T) {
 		config, true, 1, "active", now, now)
 
 	svc := NewService()
-	secret, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), tenantID), model.SecretQuery{Hostname: "host-a"})
+	secret, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), tenantID), secretsmodel.SecretQuery{Hostname: "host-a"})
 	if err != nil {
 		t.Fatalf("QuerySecret() error = %v", err)
 	}
@@ -104,7 +104,7 @@ func TestQuerySecretReturnsProviderError(t *testing.T) {
 		config, true, 1, "active", now, now)
 
 	svc := NewService()
-	_, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), tenantID), model.SecretQuery{Hostname: "host-a"})
+	_, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), tenantID), secretsmodel.SecretQuery{Hostname: "host-a"})
 	if !errors.Is(err, ErrSecretsProviderRequestFailed) {
 		t.Fatalf("QuerySecret() error = %v, want %v", err, ErrSecretsProviderRequestFailed)
 	}
@@ -116,7 +116,7 @@ func TestQuerySecretRequiresHostnameOrIPAddress(t *testing.T) {
 	installSecretsServiceDB(t, db)
 
 	svc := NewService()
-	_, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), uuid.New()), model.SecretQuery{})
+	_, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), uuid.New()), secretsmodel.SecretQuery{})
 	if !errors.Is(err, ErrSecretsQueryTargetRequired) {
 		t.Fatalf("QuerySecret() error = %v, want %v", err, ErrSecretsQueryTargetRequired)
 	}

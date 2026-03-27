@@ -11,15 +11,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 )
 
 func TestNewFileProviderRejectsNonSSHAuthType(t *testing.T) {
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		Name:     "file-source",
 		Type:     "file",
 		AuthType: "password",
-		Config: model.JSON{
+		Config: modeltypes.JSON{
 			"key_path": "/etc/auto-healing/secrets/id_rsa",
 		},
 	}
@@ -49,11 +50,11 @@ func TestFileProviderRejectsSymlinkEscape(t *testing.T) {
 		t.Fatalf("Symlink() error = %v", err)
 	}
 
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		Name:     "file-source",
 		Type:     "file",
 		AuthType: "ssh_key",
-		Config: model.JSON{
+		Config: modeltypes.JSON{
 			"key_path": symlinkPath,
 		},
 	}
@@ -72,11 +73,11 @@ func TestFileProviderRejectsDirectoryPathOnCreate(t *testing.T) {
 		allowedPathPrefixes = originalPrefixes
 	})
 
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		Name:     "file-source",
 		Type:     "file",
 		AuthType: "ssh_key",
-		Config: model.JSON{
+		Config: modeltypes.JSON{
 			"key_path": allowedDir,
 		},
 	}
@@ -102,11 +103,11 @@ func TestWebhookProviderTestConnectionFallsBackToConfiguredMethod(t *testing.T) 
 	}))
 	defer server.Close()
 
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		Name:     "webhook-source",
 		Type:     "webhook",
 		AuthType: "password",
-		Config: model.JSON{
+		Config: modeltypes.JSON{
 			"url":       server.URL,
 			"method":    http.MethodGet,
 			"query_key": "hostname",
@@ -144,11 +145,11 @@ func TestVaultProviderTestConnectionIncludesNamespaceHeader(t *testing.T) {
 	}))
 	defer server.Close()
 
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		Name:     "vault-source",
 		Type:     "vault",
 		AuthType: "password",
-		Config: model.JSON{
+		Config: modeltypes.JSON{
 			"address":     server.URL,
 			"secret_path": "kv/data/demo",
 			"namespace":   "team-a",
@@ -182,11 +183,11 @@ func TestVaultProviderTestConnectionAcceptsHealthyStandbyStatuses(t *testing.T) 
 			}))
 			defer server.Close()
 
-			source := &model.SecretsSource{
+			source := &secretsmodel.SecretsSource{
 				Name:     "vault-source",
 				Type:     "vault",
 				AuthType: "password",
-				Config: model.JSON{
+				Config: modeltypes.JSON{
 					"address":     server.URL,
 					"secret_path": "kv/data/demo",
 					"query_key":   "hostname",
@@ -234,11 +235,11 @@ func TestVaultProviderAppRoleLoginIncludesNamespaceHeader(t *testing.T) {
 	}))
 	defer server.Close()
 
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		Name:     "vault-source",
 		Type:     "vault",
 		AuthType: "password",
-		Config: model.JSON{
+		Config: modeltypes.JSON{
 			"address":     server.URL,
 			"secret_path": "kv/data/demo",
 			"namespace":   "team-a",
@@ -261,11 +262,11 @@ func TestVaultProviderAppRoleLoginIncludesNamespaceHeader(t *testing.T) {
 }
 
 func TestNewVaultProviderRejectsInvalidQueryKey(t *testing.T) {
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		Name:     "vault-source",
 		Type:     "vault",
 		AuthType: "password",
-		Config: model.JSON{
+		Config: modeltypes.JSON{
 			"address":     "https://vault.example.com",
 			"secret_path": "kv/data/demo",
 			"query_key":   "mac",
@@ -283,11 +284,11 @@ func TestNewVaultProviderRejectsInvalidQueryKey(t *testing.T) {
 }
 
 func TestNewWebhookProviderRejectsMalformedURL(t *testing.T) {
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		Name:     "webhook-source",
 		Type:     "webhook",
 		AuthType: "password",
-		Config: model.JSON{
+		Config: modeltypes.JSON{
 			"url":       "://bad-url",
 			"method":    http.MethodGet,
 			"query_key": "hostname",
@@ -301,11 +302,11 @@ func TestNewWebhookProviderRejectsMalformedURL(t *testing.T) {
 }
 
 func TestNewVaultProviderRejectsMalformedAddress(t *testing.T) {
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		Name:     "vault-source",
 		Type:     "vault",
 		AuthType: "password",
-		Config: model.JSON{
+		Config: modeltypes.JSON{
 			"address":     "://bad-url",
 			"secret_path": "kv/data/demo",
 			"query_key":   "hostname",
@@ -329,11 +330,11 @@ func TestWebhookProviderGetSecretTreatsMissingResponsePathAsInvalidResponse(t *t
 	}))
 	defer server.Close()
 
-	source := &model.SecretsSource{
+	source := &secretsmodel.SecretsSource{
 		Name:     "webhook-source",
 		Type:     "webhook",
 		AuthType: "password",
-		Config: model.JSON{
+		Config: modeltypes.JSON{
 			"url":                server.URL,
 			"method":             http.MethodGet,
 			"query_key":          "hostname",
@@ -345,14 +346,14 @@ func TestWebhookProviderGetSecretTreatsMissingResponsePathAsInvalidResponse(t *t
 	if err != nil {
 		t.Fatalf("NewWebhookProvider() error = %v", err)
 	}
-	_, err = provider.GetSecret(context.Background(), model.SecretQuery{Hostname: "host-a"})
+	_, err = provider.GetSecret(context.Background(), secretsmodel.SecretQuery{Hostname: "host-a"})
 	if !errors.Is(err, ErrProviderInvalidResponse) {
 		t.Fatalf("expected ErrProviderInvalidResponse, got %v", err)
 	}
 }
 
 func TestBuildMappedSecretTreatsMissingCredentialAsInvalidResponse(t *testing.T) {
-	_, err := buildMappedSecret("password", model.FieldMapping{}, func(string) string {
+	_, err := buildMappedSecret("password", secretsmodel.FieldMapping{}, func(string) string {
 		return ""
 	})
 	if !errors.Is(err, ErrProviderInvalidResponse) {

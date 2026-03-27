@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
 	secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 	"github.com/company/auto-healing/internal/pkg/response"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	"github.com/gin-gonic/gin"
 )
 
@@ -149,8 +149,8 @@ func writeSecretsError(c *gin.Context, status int, message string) {
 }
 
 // maskConfig 隐藏敏感配置
-func maskConfig(config model.JSON) model.JSON {
-	masked := make(model.JSON, len(config))
+func maskConfig(config modeltypes.JSON) modeltypes.JSON {
+	masked := make(modeltypes.JSON, len(config))
 	for key, value := range config {
 		masked[key] = maskConfigValue(key, value)
 	}
@@ -163,7 +163,7 @@ func maskConfigValue(key string, value interface{}) interface{} {
 	}
 
 	switch typed := value.(type) {
-	case model.JSON:
+	case modeltypes.JSON:
 		return maskConfig(typed)
 	case map[string]interface{}:
 		masked := make(map[string]interface{}, len(typed))

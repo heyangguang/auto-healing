@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/middleware"
-	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,7 +15,7 @@ func (h *SecretsHandler) QuerySecret(c *gin.Context) {
 		return
 	}
 
-	var query model.SecretQuery
+	var query secretsmodel.SecretQuery
 	if err := c.ShouldBindJSON(&query); err != nil {
 		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return

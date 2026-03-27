@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 )
 
 // 允许的路径前缀（安全白名单）- 只允许专用目录
@@ -26,12 +26,12 @@ var forbiddenFiles = []string{
 
 // FileProvider 文件密钥提供者（只支持 ssh_key）
 type FileProvider struct {
-	config model.FileConfig
+	config secretsmodel.FileConfig
 	name   string
 }
 
 // NewFileProvider 创建文件密钥提供者
-func NewFileProvider(source *model.SecretsSource) (*FileProvider, error) {
+func NewFileProvider(source *secretsmodel.SecretsSource) (*FileProvider, error) {
 	if err := validateSecretAuthType(source.AuthType); err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func NewFileProvider(source *model.SecretsSource) (*FileProvider, error) {
 		return nil, newConfigError("file 密钥源只支持 ssh_key 认证")
 	}
 
-	var config model.FileConfig
+	var config secretsmodel.FileConfig
 	configBytes, _ := json.Marshal(source.Config)
 	if err := json.Unmarshal(configBytes, &config); err != nil {
 		return nil, newConfigError(fmt.Sprintf("解析文件配置失败: %v", err))
@@ -85,7 +85,7 @@ func NewFileProvider(source *model.SecretsSource) (*FileProvider, error) {
 }
 
 // GetSecret 获取密钥（file 类型只返回 ssh_key）
-func (p *FileProvider) GetSecret(ctx context.Context, query model.SecretQuery) (*model.Secret, error) {
+func (p *FileProvider) GetSecret(ctx context.Context, query secretsmodel.SecretQuery) (*secretsmodel.Secret, error) {
 	resolvedPath, err := p.resolveKeyPath()
 	if err != nil {
 		return nil, err
@@ -105,7 +105,7 @@ func (p *FileProvider) GetSecret(ctx context.Context, query model.SecretQuery) (
 		return nil, newConnectionError("读取密钥文件失败", err)
 	}
 
-	return &model.Secret{
+	return &secretsmodel.Secret{
 		AuthType:   "ssh_key",
 		Username:   p.config.Username,
 		PrivateKey: string(content),

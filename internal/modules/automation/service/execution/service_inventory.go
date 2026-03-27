@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
 	"github.com/google/uuid"
 )
 
 type sourceProvider struct {
-	source   *model.SecretsSource
+	source   *secretsmodel.SecretsSource
 	provider secretsapi.Provider
 }
 
@@ -96,7 +97,7 @@ func (s *Service) resolveHostCredential(ctx context.Context, runID uuid.UUID, ta
 		query := s.buildSecretQuery(ctx, host, sp.source.AuthType)
 		secret, err := sp.provider.GetSecret(ctx, query)
 		if err != nil {
-		if err == secretsapi.ErrSecretNotFound {
+			if err == secretsapi.ErrSecretNotFound {
 				continue
 			}
 			return ansible.HostCredential{}, fmt.Errorf("查询主机 %s 的密钥源 %s 失败: %w", host, sp.source.Name, err)
@@ -114,7 +115,7 @@ func (s *Service) resolveHostCredential(ctx context.Context, runID uuid.UUID, ta
 	return ansible.HostCredential{Host: host}, nil
 }
 
-func (s *Service) buildSecretQuery(ctx context.Context, host, authType string) model.SecretQuery {
+func (s *Service) buildSecretQuery(ctx context.Context, host, authType string) secretsmodel.SecretQuery {
 	ipAddress := host
 	hostname := host
 
@@ -126,14 +127,14 @@ func (s *Service) buildSecretQuery(ctx context.Context, host, authType string) m
 		}
 	}
 
-	return model.SecretQuery{
+	return secretsmodel.SecretQuery{
 		Hostname:  hostname,
 		IPAddress: ipAddress,
 		AuthType:  authType,
 	}
 }
 
-func (s *Service) buildCredentialFromSecret(task *model.ExecutionTask, workDir, host string, secret *model.Secret) (ansible.HostCredential, error) {
+func (s *Service) buildCredentialFromSecret(task *model.ExecutionTask, workDir, host string, secret *secretsmodel.Secret) (ansible.HostCredential, error) {
 	credential := ansible.HostCredential{
 		Host:     host,
 		AuthType: secret.AuthType,

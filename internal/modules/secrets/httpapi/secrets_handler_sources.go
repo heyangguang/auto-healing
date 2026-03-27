@@ -3,7 +3,7 @@ package httpapi
 import (
 	"strconv"
 
-	"github.com/company/auto-healing/internal/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -59,7 +59,7 @@ func (h *SecretsHandler) GetSource(c *gin.Context) {
 	response.Success(c, source)
 }
 
-func (h *SecretsHandler) loadSourceByID(c *gin.Context) (*model.SecretsSource, bool) {
+func (h *SecretsHandler) loadSourceByID(c *gin.Context) (*secretsmodel.SecretsSource, bool) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		response.BadRequest(c, "无效的ID")

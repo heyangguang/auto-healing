@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/pkg/logger"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
+	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-func (s *Service) TestQuery(ctx context.Context, id uuid.UUID, hostname, ipAddress string) (*model.Secret, error) {
+func (s *Service) TestQuery(ctx context.Context, id uuid.UUID, hostname, ipAddress string) (*secretsmodel.Secret, error) {
 	if err := validateSecretQueryTarget(hostname, ipAddress); err != nil {
 		return nil, err
 	}
@@ -25,7 +25,7 @@ func (s *Service) TestQuery(ctx context.Context, id uuid.UUID, hostname, ipAddre
 	if err != nil {
 		return nil, fmt.Errorf("创建提供者失败: %w", err)
 	}
-	secret, err := provider.GetSecret(ctx, model.SecretQuery{Hostname: hostname, IPAddress: ipAddress, AuthType: source.AuthType})
+	secret, err := provider.GetSecret(ctx, secretsmodel.SecretQuery{Hostname: hostname, IPAddress: ipAddress, AuthType: source.AuthType})
 	if err != nil {
 		return nil, fmt.Errorf("获取凭据失败: %w", err)
 	}
@@ -33,7 +33,7 @@ func (s *Service) TestQuery(ctx context.Context, id uuid.UUID, hostname, ipAddre
 	return secret, nil
 }
 
-func (s *Service) QuerySecret(ctx context.Context, query model.SecretQuery) (*model.Secret, error) {
+func (s *Service) QuerySecret(ctx context.Context, query secretsmodel.SecretQuery) (*secretsmodel.Secret, error) {
 	if err := validateSecretQueryTarget(query.Hostname, query.IPAddress); err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (s *Service) QuerySecret(ctx context.Context, query model.SecretQuery) (*mo
 	return secret, nil
 }
 
-func (s *Service) resolveSecretsSource(ctx context.Context, sourceID string) (*model.SecretsSource, error) {
+func (s *Service) resolveSecretsSource(ctx context.Context, sourceID string) (*secretsmodel.SecretsSource, error) {
 	if sourceID == "" {
 		source, err := s.repo.GetDefault(ctx)
 		if err != nil {
