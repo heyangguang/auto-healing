@@ -21,6 +21,7 @@ import (
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	"github.com/company/auto-healing/internal/pkg/response"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/gin-gonic/gin"
@@ -192,7 +193,7 @@ func newRouterWithDB(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	r.Use(middleware.Logger())
 	r.Use(middleware.CORS())
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		response.Success(c, gin.H{"status": "ok"})
 	})
 	httproutes.SetupRoutesWithDB(r, cfg, db)
 	middleware.ValidateAuditResourceTypes(r)

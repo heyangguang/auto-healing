@@ -1905,14 +1905,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ExecutionTask'
-                  total:
-                    type: integer
+                allOf:
+                - $ref: '#/components/schemas/PaginatedResponse'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/ExecutionTask'
       operationId: getTenantExecutionTasks
     post:
       tags:
@@ -2232,14 +2232,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ExecutionSchedule'
-                  total:
-                    type: integer
+                allOf:
+                - $ref: '#/components/schemas/PaginatedResponse'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/ExecutionSchedule'
       operationId: getTenantExecutionSchedules
     post:
       tags:
@@ -5263,18 +5263,23 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  total:
-                    type: integer
-                  success:
-                    type: integer
-                  failed:
-                    type: integer
-                  results:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ConnectionTestResult'
+                allOf:
+                - $ref: '#/components/schemas/Success'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      properties:
+                        total:
+                          type: integer
+                        success:
+                          type: integer
+                        failed:
+                          type: integer
+                        results:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/ConnectionTestResult'
       operationId: postTenantCmdbBatchTestConnection
   /tenant/cmdb/{id}/test-connection:
     post:
@@ -5751,12 +5756,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/GitRepository'
+                allOf:
+                - $ref: '#/components/schemas/PaginatedResponse'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/GitRepository'
       operationId: getTenantGitRepos
     post:
       tags:

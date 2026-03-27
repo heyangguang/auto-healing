@@ -731,18 +731,23 @@
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                total:
-                  type: integer
-                success:
-                  type: integer
-                failed:
-                  type: integer
-                results:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/ConnectionTestResult'
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      success:
+                        type: integer
+                      failed:
+                        type: integer
+                      results:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ConnectionTestResult'
 /tenant/cmdb/{id}/test-connection:
   post:
     tags:
@@ -1200,12 +1205,14 @@
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                data:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/GitRepository'
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GitRepository'
   post:
     tags:
     - Git仓库

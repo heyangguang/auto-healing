@@ -212,6 +212,17 @@ def collect_bad_refs(document: Dict[str, Any]) -> List[str]:
     return bad
 
 
+def response_schema(document: Dict[str, Any], path: str, method: str, status: str) -> Dict[str, Any]:
+    return (
+        get_operation(document, path, method)
+        .get("responses", {})
+        .get(status, {})
+        .get("content", {})
+        .get("application/json", {})
+        .get("schema", {})
+    )
+
+
 def validate_openapi(content: str, document: Optional[Dict[str, Any]], errors: List[str]) -> None:
     if document is None:
         return
@@ -242,6 +253,14 @@ def validate_openapi(content: str, document: Optional[Dict[str, Any]], errors: L
         require(errors, server_url == "/api/v1", "openapi server url 必须为 /api/v1")
     execution_tasks_post = get_operation(document, "/tenant/execution-tasks", "post")
     require(errors, "responses" in execution_tasks_post, "openapi 的 POST /tenant/execution-tasks 缺少 responses")
+    execution_tasks_list = response_schema(document, "/tenant/execution-tasks", "get", "200")
+    require(errors, execution_tasks_list.get("allOf", [{}])[0].get("$ref") == "#/components/schemas/PaginatedResponse", "openapi 的执行任务列表响应未对齐统一分页壳")
+    execution_schedules_list = response_schema(document, "/tenant/execution-schedules", "get", "200")
+    require(errors, execution_schedules_list.get("allOf", [{}])[0].get("$ref") == "#/components/schemas/PaginatedResponse", "openapi 的调度列表响应未对齐统一分页壳")
+    git_repos_list = response_schema(document, "/tenant/git-repos", "get", "200")
+    require(errors, git_repos_list.get("allOf", [{}])[0].get("$ref") == "#/components/schemas/PaginatedResponse", "openapi 的 Git 仓库列表响应未对齐统一分页壳")
+    cmdb_batch_test = response_schema(document, "/tenant/cmdb/batch-test-connection", "post", "200")
+    require(errors, cmdb_batch_test.get("allOf", [{}])[0].get("$ref") == "#/components/schemas/Success", "openapi 的 CMDB 批量连接测试响应未对齐统一 success.data 壳")
     require(errors, "/incidents/{id}/dismiss:" in content, "openapi 缺少 /incidents/{id}/dismiss")
     require(errors, "/incidents/{id}/trigger:" in content, "openapi 缺少 /incidents/{id}/trigger")
     require(errors, "/healing/instances/stats:" in content, "openapi 缺少 /healing/instances/stats")
