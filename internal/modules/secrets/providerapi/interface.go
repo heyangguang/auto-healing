@@ -1,11 +1,11 @@
-package secrets
+package providerapi
 
 import (
 	"context"
 	"errors"
 
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/secrets/provider"
+	"github.com/company/auto-healing/internal/modules/secrets/provider"
 )
 
 var (

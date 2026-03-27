@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	gitclient "github.com/company/auto-healing/internal/git"
+	gitclient "github.com/company/auto-healing/internal/modules/integrations/gitclient"
 	"github.com/company/auto-healing/internal/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	playbookSvc "github.com/company/auto-healing/internal/modules/integrations/service/playbook"

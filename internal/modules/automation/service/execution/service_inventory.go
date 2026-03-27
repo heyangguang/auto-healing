@@ -7,13 +7,13 @@ import (
 
 	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/secrets"
+	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
 	"github.com/google/uuid"
 )
 
 type sourceProvider struct {
 	source   *model.SecretsSource
-	provider secrets.Provider
+	provider secretsapi.Provider
 }
 
 func (s *Service) prepareRunInventory(ctx context.Context, runID uuid.UUID, task *model.ExecutionTask, workDir string, params *executeParams) (string, error) {
@@ -43,7 +43,7 @@ func (s *Service) loadSecretProviders(ctx context.Context, runID uuid.UUID, sour
 			continue
 		}
 
-		provider, err := secrets.NewProvider(source)
+		provider, err := secretsapi.NewProvider(source)
 		if err != nil {
 			s.appendLog(ctx, runID, "warn", "prepare", fmt.Sprintf("创建密钥提供者失败: %v", err), nil)
 			continue
@@ -96,7 +96,7 @@ func (s *Service) resolveHostCredential(ctx context.Context, runID uuid.UUID, ta
 		query := s.buildSecretQuery(ctx, host, sp.source.AuthType)
 		secret, err := sp.provider.GetSecret(ctx, query)
 		if err != nil {
-			if err == secrets.ErrSecretNotFound {
+		if err == secretsapi.ErrSecretNotFound {
 				continue
 			}
 			return ansible.HostCredential{}, fmt.Errorf("查询主机 %s 的密钥源 %s 失败: %w", host, sp.source.Name, err)

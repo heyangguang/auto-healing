@@ -7,13 +7,13 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	secretsrepo "github.com/company/auto-healing/internal/modules/secrets/repository"
-	"github.com/company/auto-healing/internal/secrets"
+	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 func (s *Service) CreateSource(ctx context.Context, source *model.SecretsSource) (*model.SecretsSource, error) {
-	if _, err := secrets.NewProvider(source); err != nil {
+	if _, err := secretsapi.NewProvider(source); err != nil {
 		return nil, fmt.Errorf("配置验证失败: %w", err)
 	}
 	requestedDefault := source.IsDefault
@@ -71,7 +71,7 @@ func (s *Service) UpdateSource(ctx context.Context, id uuid.UUID, config model.J
 		if err != nil {
 			return err
 		}
-		if _, err := secrets.NewProvider(source); err != nil {
+		if _, err := secretsapi.NewProvider(source); err != nil {
 			return fmt.Errorf("配置验证失败: %w", err)
 		}
 		if configChanged {
@@ -170,7 +170,7 @@ func (s *Service) TestConnection(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	provider, err := secrets.NewProvider(source)
+	provider, err := secretsapi.NewProvider(source)
 	if err != nil {
 		return s.persistTestConnectionResult(ctx, id, false, err)
 	}
@@ -200,7 +200,7 @@ func (s *Service) Enable(ctx context.Context, id uuid.UUID) error {
 		if source.Status == "active" {
 			return fmt.Errorf("%w: %s", ErrSecretsSourceAlreadyActive, source.Name)
 		}
-		provider, err := secrets.NewProvider(source)
+		provider, err := secretsapi.NewProvider(source)
 		if err != nil {
 			return fmt.Errorf("配置错误: %w", err)
 		}

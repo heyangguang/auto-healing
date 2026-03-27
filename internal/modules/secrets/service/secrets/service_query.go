@@ -8,7 +8,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/secrets"
+	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -21,7 +21,7 @@ func (s *Service) TestQuery(ctx context.Context, id uuid.UUID, hostname, ipAddre
 	if err != nil {
 		return nil, err
 	}
-	provider, err := secrets.NewProvider(source)
+	provider, err := secretsapi.NewProvider(source)
 	if err != nil {
 		return nil, fmt.Errorf("创建提供者失败: %w", err)
 	}
@@ -41,7 +41,7 @@ func (s *Service) QuerySecret(ctx context.Context, query model.SecretQuery) (*mo
 	if err != nil {
 		return nil, err
 	}
-	provider, err := secrets.NewProvider(source)
+	provider, err := secretsapi.NewProvider(source)
 	if err != nil {
 		return nil, err
 	}

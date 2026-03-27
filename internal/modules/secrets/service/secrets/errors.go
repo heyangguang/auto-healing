@@ -3,7 +3,7 @@ package secrets
 import (
 	"errors"
 
-	secretsapi "github.com/company/auto-healing/internal/secrets"
+	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
 )
 
 var (

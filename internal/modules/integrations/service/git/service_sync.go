@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	gitclient "github.com/company/auto-healing/internal/git"
+	gitclient "github.com/company/auto-healing/internal/modules/integrations/gitclient"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"

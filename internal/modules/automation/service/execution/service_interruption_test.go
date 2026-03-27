@@ -11,7 +11,7 @@ import (
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
-	"github.com/company/auto-healing/internal/secrets"
+	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -162,7 +162,7 @@ func TestResolveHostCredentialContinuesOnSecretNotFound(t *testing.T) {
 
 	credential, err := svc.resolveHostCredential(ctx, runID, &model.ExecutionTask{}, t.TempDir(), "10.0.0.3", []sourceProvider{{
 		source:   &model.SecretsSource{Name: "provider-a", AuthType: "ssh_key"},
-		provider: fakeSecretsProvider{err: secrets.ErrSecretNotFound},
+			provider: fakeSecretsProvider{err: secretsapi.ErrSecretNotFound},
 	}})
 	if err != nil {
 		t.Fatalf("resolveHostCredential() error = %v", err)

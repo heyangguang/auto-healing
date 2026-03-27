@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/company/auto-healing/internal/git"
+	"github.com/company/auto-healing/internal/modules/integrations/gitclient"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/gin-gonic/gin"
 )
