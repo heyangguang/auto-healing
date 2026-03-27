@@ -13,11 +13,12 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
-	"github.com/company/auto-healing/internal/repository"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -101,9 +102,9 @@ func newAuthHandlerTestRouterWithJWTService(t *testing.T, db *gorm.DB, jwtSvc *j
 	authHandler := &AuthHandler{
 		authSvc:           authService.NewService(jwtSvc),
 		jwtSvc:            jwtSvc,
-		auditRepo:         repository.NewAuditLogRepository(db),
-		platformAuditRepo: repository.NewPlatformAuditLogRepository(),
-		userRepo:          repository.NewUserRepository(),
+		auditRepo:         auditrepo.NewAuditLogRepository(db),
+		platformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
+		userRepo:          accessrepo.NewUserRepository(),
 	}
 
 	api := router.Group("/api/v1")

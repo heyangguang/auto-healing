@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/crypto"
 	authjwt "github.com/company/auto-healing/internal/pkg/jwt"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -38,10 +38,10 @@ func TestLoginReturnsTokenPairAndResetsLoginState(t *testing.T) {
 		Issuer:          "login-success-test",
 	}, authServiceTestBlacklistStore{})
 	svc := &Service{
-		userRepo:   repository.NewUserRepositoryWithDB(db),
-		roleRepo:   repository.NewRoleRepositoryWithDB(db),
-		permRepo:   repository.NewPermissionRepository(),
-		tenantRepo: repository.NewTenantRepositoryWithDB(db),
+		userRepo:   accessrepo.NewUserRepositoryWithDB(db),
+		roleRepo:   accessrepo.NewRoleRepositoryWithDB(db),
+		permRepo:   accessrepo.NewPermissionRepository(),
+		tenantRepo: accessrepo.NewTenantRepositoryWithDB(db),
 		jwtSvc:     jwtSvc,
 		db:         db,
 	}

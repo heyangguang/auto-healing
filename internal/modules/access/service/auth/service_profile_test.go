@@ -6,7 +6,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/google/uuid"
 )
 
@@ -57,14 +57,14 @@ func TestGetCurrentUserReturnsErrorWhenPermissionQueryFails(t *testing.T) {
 		PasswordHash: "hashed",
 		Status:       "active",
 	}
-	if err := repository.NewUserRepositoryWithDB(db).Create(context.Background(), user); err != nil {
+	if err := accessrepo.NewUserRepositoryWithDB(db).Create(context.Background(), user); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	svc := &Service{
-		userRepo:   repository.NewUserRepositoryWithDB(db),
-		roleRepo:   repository.NewRoleRepositoryWithDB(db),
-		permRepo:   repository.NewPermissionRepository(),
-		tenantRepo: repository.NewTenantRepositoryWithDB(db),
+		userRepo:   accessrepo.NewUserRepositoryWithDB(db),
+		roleRepo:   accessrepo.NewRoleRepositoryWithDB(db),
+		permRepo:   accessrepo.NewPermissionRepository(),
+		tenantRepo: accessrepo.NewTenantRepositoryWithDB(db),
 	}
 
 	if _, err := svc.GetCurrentUser(context.Background(), user.ID); err == nil {

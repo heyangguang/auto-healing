@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -48,9 +48,9 @@ func TestRegisterTxRollsBackWhenAttachTenantFails(t *testing.T) {
 		);
 	`)
 	svc := &Service{
-		userRepo:   repository.NewUserRepositoryWithDB(db),
-		roleRepo:   repository.NewRoleRepositoryWithDB(db),
-		tenantRepo: repository.NewTenantRepositoryWithDB(db),
+		userRepo:   accessrepo.NewUserRepositoryWithDB(db),
+		roleRepo:   accessrepo.NewRoleRepositoryWithDB(db),
+		tenantRepo: accessrepo.NewTenantRepositoryWithDB(db),
 		db:         db,
 	}
 	user := &model.User{

@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/crypto"
 	authjwt "github.com/company/auto-healing/internal/pkg/jwt"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -31,7 +31,7 @@ func TestLoginReturnsPersistenceErrorWhenFailedLoginUpdateFails(t *testing.T) {
 		INSERT INTO users (id, username, email, password_hash, status, created_at, updated_at, is_platform_admin)
 		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
 	`, uuid.NewString(), "login-user", "login@example.com", passwordHash, "active", false)
-	svc := &Service{userRepo: repository.NewUserRepositoryWithDB(db), db: db}
+	svc := &Service{userRepo: accessrepo.NewUserRepositoryWithDB(db), db: db}
 
 	_, err = svc.Login(context.Background(), &LoginRequest{Username: "login-user", Password: "wrong-password"}, "127.0.0.1")
 	if err == nil {
@@ -57,9 +57,9 @@ func TestLoginReturnsPersistenceErrorWhenSuccessfulLoginUpdateFails(t *testing.T
 		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
 	`, uuid.NewString(), "login-user", "login@example.com", passwordHash, "active", false)
 	svc := &Service{
-		userRepo:   repository.NewUserRepositoryWithDB(db),
-		permRepo:   repository.NewPermissionRepository(),
-		tenantRepo: repository.NewTenantRepositoryWithDB(db),
+		userRepo:   accessrepo.NewUserRepositoryWithDB(db),
+		permRepo:   accessrepo.NewPermissionRepository(),
+		tenantRepo: accessrepo.NewTenantRepositoryWithDB(db),
 		jwtSvc: authjwt.NewService(authjwt.Config{
 			Secret:          "login-test",
 			AccessTokenTTL:  time.Hour,
@@ -95,7 +95,7 @@ func TestLoginExpiredLockDoesNotStampSuccessfulLoginBeforePasswordCheck(t *testi
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
 	`, userID.String(), "locked-user", "locked@example.com", passwordHash, "locked", expiredLockAt, lastLoginAt, 3, false)
 
-	svc := &Service{userRepo: repository.NewUserRepositoryWithDB(db), db: db}
+	svc := &Service{userRepo: accessrepo.NewUserRepositoryWithDB(db), db: db}
 
 	if _, err := svc.Login(context.Background(), &LoginRequest{
 		Username: "locked-user",
@@ -146,10 +146,10 @@ func TestLoginDoesNotStampSuccessfulLoginBeforeAccessResolution(t *testing.T) {
 	mustExecAuthTest(t, db, `DROP TABLE permissions;`)
 
 	svc := &Service{
-		userRepo:   repository.NewUserRepositoryWithDB(db),
-		roleRepo:   repository.NewRoleRepositoryWithDB(db),
-		permRepo:   repository.NewPermissionRepository(),
-		tenantRepo: repository.NewTenantRepositoryWithDB(db),
+		userRepo:   accessrepo.NewUserRepositoryWithDB(db),
+		roleRepo:   accessrepo.NewRoleRepositoryWithDB(db),
+		permRepo:   accessrepo.NewPermissionRepository(),
+		tenantRepo: accessrepo.NewTenantRepositoryWithDB(db),
 		db:         db,
 	}
 
