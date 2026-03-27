@@ -13,7 +13,7 @@ import (
 	executionSvc "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	healingSvc "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -108,7 +108,7 @@ func newTenantAuthorizedRouter(tenantID uuid.UUID, permissions ...string) *gin.E
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set(middleware.PermissionsKey, permissions)
-		ctx := repository.WithTenantID(c.Request.Context(), tenantID)
+		ctx := platformrepo.WithTenantID(c.Request.Context(), tenantID)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	})

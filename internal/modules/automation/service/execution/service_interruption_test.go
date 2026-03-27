@@ -10,7 +10,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/company/auto-healing/internal/secrets"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -24,9 +24,9 @@ func TestMarkPendingRunInterruptedFinalizesPendingRun(t *testing.T) {
 	t.Cleanup(func() { database.DB = origDB })
 
 	svc := &Service{repo: automationrepo.NewExecutionRepository()}
-	ctx := repository.WithTenantID(context.Background(), uuid.New())
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()
-	insertExecutionRun(t, db, runID, repository.TenantIDFromContext(ctx), "pending")
+	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "pending")
 
 	svc.markPendingRunInterrupted(runID, ctx)
 
@@ -41,12 +41,12 @@ func TestMarkPendingRunInterruptedPreservesTenantAfterCancellation(t *testing.T)
 	t.Cleanup(func() { database.DB = origDB })
 
 	svc := &Service{repo: automationrepo.NewExecutionRepository()}
-	ctx := repository.WithTenantID(context.Background(), uuid.New())
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
 
 	runID := uuid.New()
-	insertExecutionRun(t, db, runID, repository.TenantIDFromContext(ctx), "pending")
+	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "pending")
 
 	svc.markPendingRunInterrupted(runID, ctx)
 
@@ -60,9 +60,9 @@ func TestInterruptRunningRunFinalizesRunningRun(t *testing.T) {
 	t.Cleanup(func() { database.DB = origDB })
 
 	svc := &Service{repo: automationrepo.NewExecutionRepository()}
-	ctx := repository.WithTenantID(context.Background(), uuid.New())
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()
-	insertExecutionRun(t, db, runID, repository.TenantIDFromContext(ctx), "running")
+	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "running")
 
 	svc.interruptRunningRun(runID, ctx)
 
@@ -77,12 +77,12 @@ func TestPrepareBasicInventoryPersistsErrorLogAfterContextCancellation(t *testin
 	t.Cleanup(func() { database.DB = origDB })
 
 	svc := &Service{repo: automationrepo.NewExecutionRepository()}
-	ctx := repository.WithTenantID(context.Background(), uuid.New())
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
 
 	runID := uuid.New()
-	insertExecutionRun(t, db, runID, repository.TenantIDFromContext(ctx), "running")
+	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "running")
 
 	if _, err := svc.prepareBasicInventory(ctx, runID, filepath.Join(t.TempDir(), "missing"), "127.0.0.1"); err == nil {
 		t.Fatal("prepareBasicInventory() should fail for missing workdir")
@@ -103,9 +103,9 @@ func TestPrepareAuthenticatedInventoryFinalizesRunWhenCredentialBuildFails(t *te
 		repo:     automationrepo.NewExecutionRepository(),
 		cmdbRepo: cmdbrepo.NewCMDBItemRepository(),
 	}
-	ctx := repository.WithTenantID(context.Background(), uuid.New())
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()
-	insertExecutionRun(t, db, runID, repository.TenantIDFromContext(ctx), "running")
+	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "running")
 
 	task := &model.ExecutionTask{ExecutorType: "local"}
 	providers := []sourceProvider{{
@@ -132,9 +132,9 @@ func TestResolveHostCredentialReturnsBackendErrors(t *testing.T) {
 		repo:     automationrepo.NewExecutionRepository(),
 		cmdbRepo: cmdbrepo.NewCMDBItemRepository(),
 	}
-	ctx := repository.WithTenantID(context.Background(), uuid.New())
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()
-	insertExecutionRun(t, db, runID, repository.TenantIDFromContext(ctx), "running")
+	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "running")
 
 	_, err := svc.resolveHostCredential(ctx, runID, &model.ExecutionTask{}, t.TempDir(), "10.0.0.2", []sourceProvider{{
 		source:   &model.SecretsSource{Name: "provider-a", AuthType: "ssh_key"},
@@ -156,9 +156,9 @@ func TestResolveHostCredentialContinuesOnSecretNotFound(t *testing.T) {
 		repo:     automationrepo.NewExecutionRepository(),
 		cmdbRepo: cmdbrepo.NewCMDBItemRepository(),
 	}
-	ctx := repository.WithTenantID(context.Background(), uuid.New())
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()
-	insertExecutionRun(t, db, runID, repository.TenantIDFromContext(ctx), "running")
+	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "running")
 
 	credential, err := svc.resolveHostCredential(ctx, runID, &model.ExecutionTask{}, t.TempDir(), "10.0.0.3", []sourceProvider{{
 		source:   &model.SecretsSource{Name: "provider-a", AuthType: "ssh_key"},

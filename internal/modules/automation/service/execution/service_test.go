@@ -10,7 +10,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -95,7 +95,7 @@ func TestAppendLogErrPersistsSequentialLogs(t *testing.T) {
 
 	svc := &Service{repo: automationrepo.NewExecutionRepository()}
 	runID := uuid.New()
-	ctx := repository.WithTenantID(context.Background(), uuid.New())
+	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 
 	if err := svc.appendLogErr(ctx, runID, "info", "prepare", "first", nil); err != nil {
 		t.Fatalf("appendLogErr(first) error = %v", err)

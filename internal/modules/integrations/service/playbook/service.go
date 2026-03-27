@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
-	sharedrepo "github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
 
@@ -16,7 +16,7 @@ import (
 type Service struct {
 	repo          *integrationrepo.PlaybookRepository
 	gitRepo       *integrationrepo.GitRepositoryRepository
-	executionRepo *sharedrepo.ExecutionRepository
+	executionRepo *automationrepo.ExecutionRepository
 }
 
 // NewService 创建 Playbook 服务
@@ -24,7 +24,7 @@ func NewService() *Service {
 	return &Service{
 		repo:          integrationrepo.NewPlaybookRepository(),
 		gitRepo:       integrationrepo.NewGitRepositoryRepository(),
-		executionRepo: sharedrepo.NewExecutionRepository(),
+		executionRepo: automationrepo.NewExecutionRepository(),
 	}
 }
 

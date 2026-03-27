@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	healing "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -126,7 +127,7 @@ func (h *HealingHandler) RetryInstance(c *gin.Context) {
 		}()
 		ctx := rootCtx
 		if instance.TenantID != nil {
-			ctx = repository.WithTenantID(ctx, *instance.TenantID)
+			ctx = platformrepo.WithTenantID(ctx, *instance.TenantID)
 		}
 		if err := h.executor.RetryFromNode(ctx, instance, req.FromNodeID); err != nil {
 			logger.Exec("RETRY").Error("重试失败: %v", err)
@@ -169,8 +170,8 @@ func (h *HealingHandler) InstanceEvents(c *gin.Context) {
 	streamInstanceEvents(c.Request.Context(), sseWriter, eventCh)
 }
 
-func buildFlowInstanceListOptions(c *gin.Context, page, pageSize int) repository.FlowInstanceListOptions {
-	opts := repository.FlowInstanceListOptions{
+func buildFlowInstanceListOptions(c *gin.Context, page, pageSize int) automationrepo.FlowInstanceListOptions {
+	opts := automationrepo.FlowInstanceListOptions{
 		Page:           page,
 		PageSize:       pageSize,
 		Status:         c.Query("status"),
@@ -198,13 +199,13 @@ func buildFlowInstanceListOptions(c *gin.Context, page, pageSize int) repository
 	return opts
 }
 
-func applyFlowInstanceUUIDOptions(opts *repository.FlowInstanceListOptions, c *gin.Context) {
+func applyFlowInstanceUUIDOptions(opts *automationrepo.FlowInstanceListOptions, c *gin.Context) {
 	opts.FlowID = parseOptionalUUID(c.Query("flow_id"))
 	opts.RuleID = parseOptionalUUID(c.Query("rule_id"))
 	opts.IncidentID = parseOptionalUUID(c.Query("incident_id"))
 }
 
-func applyFlowInstanceBoolOptions(opts *repository.FlowInstanceListOptions, c *gin.Context) {
+func applyFlowInstanceBoolOptions(opts *automationrepo.FlowInstanceListOptions, c *gin.Context) {
 	if str := c.Query("has_error"); str != "" {
 		val := str == "true" || str == "1"
 		opts.HasError = &val

@@ -5,10 +5,10 @@ import (
 	"errors"
 
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
-	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -144,7 +144,7 @@ func (h *HealingHandler) resumeApprovedFlow(rootCtx context.Context, task *model
 	}()
 	resumeCtx := rootCtx
 	if task.TenantID != nil {
-		resumeCtx = repository.WithTenantID(resumeCtx, *task.TenantID)
+		resumeCtx = platformrepo.WithTenantID(resumeCtx, *task.TenantID)
 	}
 	if err := h.executor.ResumeAfterApproval(resumeCtx, task.FlowInstanceID, true); err != nil {
 		logger.Exec("APPROVAL").Error("审批通过后恢复流程失败: %v", err)
@@ -195,7 +195,7 @@ func (h *HealingHandler) RejectTask(c *gin.Context) {
 		}()
 		resumeCtx := rootCtx
 		if task.TenantID != nil {
-			resumeCtx = repository.WithTenantID(resumeCtx, *task.TenantID)
+			resumeCtx = platformrepo.WithTenantID(resumeCtx, *task.TenantID)
 		}
 		if err := h.executor.ResumeAfterApproval(resumeCtx, task.FlowInstanceID, false); err != nil {
 			logger.Exec("APPROVAL").Error("审批拒绝后恢复流程失败: %v", err)

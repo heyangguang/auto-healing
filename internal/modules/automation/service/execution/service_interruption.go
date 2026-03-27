@@ -5,7 +5,7 @@ import (
 
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -43,11 +43,11 @@ func (s *Service) appendDetachedLog(ctx context.Context, runID uuid.UUID, level,
 
 func detachedExecutionContext(ctx context.Context) context.Context {
 	detached := context.WithoutCancel(ctx)
-	tenantID, ok := repository.TenantIDFromContextOK(ctx)
+	tenantID, ok := platformrepo.TenantIDFromContextOK(ctx)
 	if !ok {
 		return detached
 	}
-	return repository.WithTenantID(detached, tenantID)
+	return platformrepo.WithTenantID(detached, tenantID)
 }
 
 func (s *Service) finalizeRunFailure(ctx context.Context, runID uuid.UUID, message string, stats model.JSON) {
