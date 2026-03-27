@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/query"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -33,12 +33,12 @@ func NewIncidentService() *IncidentService {
 }
 
 // GetIncident 获取工单
-func (s *IncidentService) GetIncident(ctx context.Context, id uuid.UUID) (*model.Incident, error) {
+func (s *IncidentService) GetIncident(ctx context.Context, id uuid.UUID) (*platformmodel.Incident, error) {
 	return s.incidentRepo.GetByID(ctx, id)
 }
 
 // ListIncidents 获取工单列表（支持查询已删除插件的工单）
-func (s *IncidentService) ListIncidents(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity string, sourcePluginName, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, externalID query.StringFilter, scopes ...func(*gorm.DB) *gorm.DB) ([]model.Incident, int64, error) {
+func (s *IncidentService) ListIncidents(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, status, healingStatus, severity string, sourcePluginName, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, externalID query.StringFilter, scopes ...func(*gorm.DB) *gorm.DB) ([]platformmodel.Incident, int64, error) {
 	return s.incidentRepo.List(ctx, page, pageSize, pluginID, status, healingStatus, severity, sourcePluginName, search, hasPlugin, sortBy, sortOrder, externalID, scopes...)
 }
 
@@ -76,7 +76,7 @@ func (s *IncidentService) CloseIncident(ctx context.Context, id uuid.UUID, resol
 	}, nil
 }
 
-func (s *IncidentService) writeBackIncidentClose(ctx context.Context, id uuid.UUID, incident *model.Incident, resolution, workNotes, closeCode, closeStatus string) (bool, error) {
+func (s *IncidentService) writeBackIncidentClose(ctx context.Context, id uuid.UUID, incident *platformmodel.Incident, resolution, workNotes, closeCode, closeStatus string) (bool, error) {
 	if incident.PluginID == nil {
 		return false, nil
 	}

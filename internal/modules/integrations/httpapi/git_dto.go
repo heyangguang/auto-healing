@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 )
 
 // ==================== Git 仓库 DTO ====================

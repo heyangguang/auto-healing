@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/modules/integrations/service/playbook"
 	"github.com/gin-gonic/gin"

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 )
 
 func TestBuildRequestURLURLencodesParams(t *testing.T) {

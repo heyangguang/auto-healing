@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 )
 
 func TestNormalizeEnhancedVariablesDefaultsTypeAndSkipsEmptyName(t *testing.T) {

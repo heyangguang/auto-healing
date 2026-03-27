@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 	schedulerx "github.com/company/auto-healing/internal/platform/schedulerx"
 	"github.com/google/uuid"
 )

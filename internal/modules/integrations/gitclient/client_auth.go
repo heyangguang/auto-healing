@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 )
 
 // getAuthenticatedURL 获取带认证的 URL，同时设置 c.extraEnv

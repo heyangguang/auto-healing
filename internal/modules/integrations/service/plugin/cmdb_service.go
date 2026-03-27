@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/query"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
@@ -29,12 +29,12 @@ func NewCMDBService() *CMDBService {
 }
 
 // GetCMDBItem 获取配置项
-func (s *CMDBService) GetCMDBItem(ctx context.Context, id uuid.UUID) (*model.CMDBItem, error) {
+func (s *CMDBService) GetCMDBItem(ctx context.Context, id uuid.UUID) (*platformmodel.CMDBItem, error) {
 	return s.cmdbRepo.GetByID(ctx, id)
 }
 
 // ListCMDBItems 获取配置项列表
-func (s *CMDBService) ListCMDBItems(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, scopes ...func(*gorm.DB) *gorm.DB) ([]model.CMDBItem, int64, error) {
+func (s *CMDBService) ListCMDBItems(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, scopes ...func(*gorm.DB) *gorm.DB) ([]platformmodel.CMDBItem, int64, error) {
 	return s.cmdbRepo.List(ctx, page, pageSize, pluginID, itemType, status, environment, sourcePluginName, search, hasPlugin, sortBy, sortOrder, scopes...)
 }
 
@@ -62,7 +62,7 @@ func (s *CMDBService) EnterMaintenance(ctx context.Context, id uuid.UUID, reason
 	}
 
 	// 记录日志
-	log := &model.CMDBMaintenanceLog{
+	log := &platformmodel.CMDBMaintenanceLog{
 		CMDBItemID:     id,
 		CMDBItemName:   item.Name,
 		Action:         "enter",
@@ -83,7 +83,7 @@ func (s *CMDBService) ExitMaintenance(ctx context.Context, id uuid.UUID, exitTyp
 
 	// 记录日志
 	now := time.Now()
-	log := &model.CMDBMaintenanceLog{
+	log := &platformmodel.CMDBMaintenanceLog{
 		CMDBItemID:   id,
 		CMDBItemName: item.Name,
 		Action:       "exit",
@@ -95,7 +95,7 @@ func (s *CMDBService) ExitMaintenance(ctx context.Context, id uuid.UUID, exitTyp
 }
 
 // GetMaintenanceLogs 获取维护日志
-func (s *CMDBService) GetMaintenanceLogs(ctx context.Context, id uuid.UUID, page, pageSize int) ([]model.CMDBMaintenanceLog, int64, error) {
+func (s *CMDBService) GetMaintenanceLogs(ctx context.Context, id uuid.UUID, page, pageSize int) ([]platformmodel.CMDBMaintenanceLog, int64, error) {
 	return s.cmdbRepo.ListMaintenanceLogs(ctx, id, page, pageSize)
 }
 

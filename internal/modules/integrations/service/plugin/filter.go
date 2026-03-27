@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 )
 
 // FilterCondition 过滤条件（支持嵌套）

@@ -3,7 +3,7 @@ package plugin
 import (
 	"testing"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 )
 
 func TestToStringHandlesNumericValues(t *testing.T) {

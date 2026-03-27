@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 	"github.com/company/auto-healing/internal/pkg/query"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -67,7 +68,7 @@ func (r *PluginRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	// 使用事务确保数据一致性
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 1. 工单保留，设置 source_plugin_name 并解除关联
-		if err := tx.Model(&model.Incident{}).Where("plugin_id = ?", id).Updates(map[string]interface{}{
+		if err := tx.Model(&platformmodel.Incident{}).Where("plugin_id = ?", id).Updates(map[string]interface{}{
 			"source_plugin_name": plugin.Name + " (已删除)",
 			"plugin_id":          nil,
 		}).Error; err != nil {
@@ -75,7 +76,7 @@ func (r *PluginRepository) Delete(ctx context.Context, id uuid.UUID) error {
 		}
 
 		// 2. 解除 CMDB 配置项与插件的关联（保留数据）
-		if err := tx.Model(&model.CMDBItem{}).Where("plugin_id = ?", id).Updates(map[string]interface{}{
+		if err := tx.Model(&platformmodel.CMDBItem{}).Where("plugin_id = ?", id).Updates(map[string]interface{}{
 			"source_plugin_name": plugin.Name + " (已删除)",
 			"plugin_id":          nil,
 		}).Error; err != nil {

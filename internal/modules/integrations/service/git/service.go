@@ -9,7 +9,7 @@ import (
 	"time"
 
 	gitclient "github.com/company/auto-healing/internal/modules/integrations/gitclient"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	playbookSvc "github.com/company/auto-healing/internal/modules/integrations/service/playbook"
 	"github.com/google/uuid"

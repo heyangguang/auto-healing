@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 )
 
 // HTTPClient HTTP 客户端，用于与外部系统通信

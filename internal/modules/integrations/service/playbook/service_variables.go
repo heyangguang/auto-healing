@@ -1,6 +1,6 @@
 package playbook
 
-import "github.com/company/auto-healing/internal/model"
+import "github.com/company/auto-healing/internal/modules/integrations/model"
 
 func (s *Service) mergeVariables(userVars, scannedVars model.JSONArray) model.JSONArray {
 	userVarMap := indexVariablesByName(userVars)

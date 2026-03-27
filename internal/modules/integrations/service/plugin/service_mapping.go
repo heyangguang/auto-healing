@@ -3,7 +3,7 @@ package plugin
 import (
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 )
 
 // RawIncident 原始工单数据

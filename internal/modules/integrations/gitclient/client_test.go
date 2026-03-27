@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 )
 
 func TestBuildGitSSHCommandUsesKnownHostsWhenConfigured(t *testing.T) {

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
 	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	"github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
@@ -95,7 +95,7 @@ func (h *CMDBHandler) testSingleCMDBConnection(c *gin.Context, idStr, secretsSou
 	return h.testSSHConnection(c.Request.Context(), idStr, item.IPAddress, cmdbConnectionHostname(item), secretsSourceID)
 }
 
-func cmdbConnectionHostname(item *model.CMDBItem) string {
+func cmdbConnectionHostname(item *platformmodel.CMDBItem) string {
 	if item.Hostname != "" {
 		return item.Hostname
 	}

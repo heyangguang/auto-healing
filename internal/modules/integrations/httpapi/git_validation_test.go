@@ -3,7 +3,7 @@ package httpapi
 import (
 	"testing"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 )
 
 func TestValidateGitCreateRequestRejectsInvalidSyncInterval(t *testing.T) {

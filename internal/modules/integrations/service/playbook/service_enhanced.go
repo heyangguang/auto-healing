@@ -5,7 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/company/auto-healing/internal/model"
+	automationmodel "github.com/company/auto-healing/internal/modules/automation/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
@@ -114,7 +115,7 @@ func buildVariableTypeMap(variables model.JSONArray) map[string]string {
 	return result
 }
 
-func (s *Service) syncTaskReviewStatus(ctx context.Context, task model.ExecutionTask, newVarMap map[string]string) {
+func (s *Service) syncTaskReviewStatus(ctx context.Context, task automationmodel.ExecutionTask, newVarMap map[string]string) {
 	changedVars := s.detectChangedVariables(task.PlaybookVariablesSnapshot, newVarMap)
 	logger.Sync_("PLAYBOOK").Info("任务 %s: 快照变量数=%d, Playbook变量数=%d, 检测到变更=%d",
 		task.Name, len(task.PlaybookVariablesSnapshot), len(newVarMap), len(changedVars))

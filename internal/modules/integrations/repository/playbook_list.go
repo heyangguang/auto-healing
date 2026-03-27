@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/integrations/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"gorm.io/gorm"
 )
