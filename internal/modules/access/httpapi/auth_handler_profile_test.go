@@ -10,6 +10,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/gin-gonic/gin"
@@ -169,7 +170,13 @@ func TestChangePasswordReturnsInternalErrorOnRepositoryFailure(t *testing.T) {
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middleware.UserIDKey, uuid.NewString())
 
-	handler := &AuthHandler{authSvc: authService.NewService(nil)}
+	handler := &AuthHandler{authSvc: authService.NewServiceWithDeps(authService.ServiceDeps{
+		UserRepo:       accessrepo.NewUserRepositoryWithDB(db),
+		RoleRepo:       accessrepo.NewRoleRepositoryWithDB(db),
+		PermissionRepo: accessrepo.NewPermissionRepositoryWithDB(db),
+		TenantRepo:     accessrepo.NewTenantRepositoryWithDB(db),
+		DB:             db,
+	})}
 	handler.ChangePassword(c)
 
 	if recorder.Code != http.StatusInternalServerError {
@@ -190,7 +197,13 @@ func TestUpdateProfileReturnsInternalErrorOnRepositoryFailure(t *testing.T) {
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middleware.UserIDKey, uuid.NewString())
 
-	handler := &AuthHandler{authSvc: authService.NewService(nil)}
+	handler := &AuthHandler{authSvc: authService.NewServiceWithDeps(authService.ServiceDeps{
+		UserRepo:       accessrepo.NewUserRepositoryWithDB(db),
+		RoleRepo:       accessrepo.NewRoleRepositoryWithDB(db),
+		PermissionRepo: accessrepo.NewPermissionRepositoryWithDB(db),
+		TenantRepo:     accessrepo.NewTenantRepositoryWithDB(db),
+		DB:             db,
+	})}
 	handler.UpdateProfile(c)
 
 	if recorder.Code != http.StatusInternalServerError {

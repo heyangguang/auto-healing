@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/company/auto-healing/internal/middleware"
-	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
 )
@@ -31,7 +30,12 @@ func (h *DashboardHandler) GetOverview(c *gin.Context) {
 		respondInternalError(c, "DASHBOARD", "failed to get dashboard overview", err)
 		return
 	}
-	response.Success(c, result)
+	typed, err := newDashboardOverviewResponse(result)
+	if err != nil {
+		respondInternalError(c, "DASHBOARD", "failed to serialize dashboard overview", err)
+		return
+	}
+	response.Success(c, typed)
 }
 
 func (h *DashboardHandler) loadDashboardSections(ctx context.Context, sections []string, permissions []string) (map[string]interface{}, error) {
@@ -89,28 +93,7 @@ func (h *DashboardHandler) GetConfig(c *gin.Context) {
 		return
 	}
 
-	result := map[string]interface{}{"config": map[string]interface{}{}}
-	if config != nil {
-		result["config"] = config.Config
-	}
-	result["system_workspaces"] = buildSystemWorkspaceList(roleWorkspaces)
-	response.Success(c, result)
-}
-
-func buildSystemWorkspaceList(workspaces []model.SystemWorkspace) []map[string]interface{} {
-	items := make([]map[string]interface{}, 0, len(workspaces))
-	for _, workspace := range workspaces {
-		items = append(items, map[string]interface{}{
-			"id":          workspace.ID,
-			"name":        workspace.Name,
-			"description": workspace.Description,
-			"config":      workspace.Config,
-			"is_system":   true,
-			"is_readonly": true,
-			"is_default":  workspace.IsDefault,
-		})
-	}
-	return items
+	response.Success(c, newDashboardConfigResponse(config, roleWorkspaces))
 }
 
 // SaveConfig 保存用户 Dashboard 配置

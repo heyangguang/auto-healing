@@ -67,7 +67,7 @@ func TestRestartFailedInstanceSyncsIncidentStatusToProcessing(t *testing.T) {
 	mustExecHealing(t, db, `INSERT INTO flow_instances (id, tenant_id, status) VALUES (?, ?, ?)`, instanceID.String(), tenantID.String(), model.FlowInstanceStatusFailed)
 	mustExecHealing(t, db, `INSERT INTO incidents (id, tenant_id, healing_status) VALUES (?, ?, ?)`, incidentID.String(), tenantID.String(), "failed")
 
-	executor := &FlowExecutor{instanceRepo: automationrepo.NewFlowInstanceRepository()}
+	executor := &FlowExecutor{instanceRepo: automationrepo.NewFlowInstanceRepositoryWithDB(db)}
 	instance := &model.FlowInstance{
 		ID:         instanceID,
 		IncidentID: &incidentID,

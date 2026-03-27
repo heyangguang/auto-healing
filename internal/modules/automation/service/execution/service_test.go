@@ -93,7 +93,7 @@ func TestAppendLogErrPersistsSequentialLogs(t *testing.T) {
 	database.DB = db
 	defer func() { database.DB = origDB }()
 
-	svc := &Service{repo: automationrepo.NewExecutionRepository()}
+	svc := &Service{repo: automationrepo.NewExecutionRepositoryWithDB(db)}
 	runID := uuid.New()
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 

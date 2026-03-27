@@ -24,9 +24,9 @@ func (h *NotificationHandler) SendNotification(c *gin.Context) {
 		writeNotificationSendError(c, err, logs)
 		return
 	}
-	response.Success(c, gin.H{
-		"notification_ids": notificationLogIDs(logs),
-		"logs":             logs,
+	response.Success(c, notificationSendResponse{
+		NotificationIDs: notificationLogIDs(logs),
+		Logs:            logs,
 	})
 }
 

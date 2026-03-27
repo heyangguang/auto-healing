@@ -51,7 +51,7 @@ func TestIncidentGetByIDReturnsNotFoundSentinel(t *testing.T) {
 	t.Cleanup(func() { database.DB = originalDB })
 
 	ctx := WithTenantID(context.Background(), uuid.New())
-	_, err := NewIncidentRepository().GetByID(ctx, uuid.New())
+	_, err := NewIncidentRepositoryWithDB(db).GetByID(ctx, uuid.New())
 	if !errors.Is(err, ErrIncidentNotFound) {
 		t.Fatalf("GetByID() error = %v, want %v", err, ErrIncidentNotFound)
 	}

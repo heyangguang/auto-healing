@@ -24,7 +24,7 @@ func TestMarkPendingRunInterruptedFinalizesPendingRun(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = origDB })
 
-	svc := &Service{repo: automationrepo.NewExecutionRepository()}
+	svc := &Service{repo: automationrepo.NewExecutionRepositoryWithDB(db)}
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()
 	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "pending")
@@ -41,7 +41,7 @@ func TestMarkPendingRunInterruptedPreservesTenantAfterCancellation(t *testing.T)
 	database.DB = db
 	t.Cleanup(func() { database.DB = origDB })
 
-	svc := &Service{repo: automationrepo.NewExecutionRepository()}
+	svc := &Service{repo: automationrepo.NewExecutionRepositoryWithDB(db)}
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
@@ -60,7 +60,7 @@ func TestInterruptRunningRunFinalizesRunningRun(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = origDB })
 
-	svc := &Service{repo: automationrepo.NewExecutionRepository()}
+	svc := &Service{repo: automationrepo.NewExecutionRepositoryWithDB(db)}
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()
 	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "running")
@@ -77,7 +77,7 @@ func TestPrepareBasicInventoryPersistsErrorLogAfterContextCancellation(t *testin
 	database.DB = db
 	t.Cleanup(func() { database.DB = origDB })
 
-	svc := &Service{repo: automationrepo.NewExecutionRepository()}
+	svc := &Service{repo: automationrepo.NewExecutionRepositoryWithDB(db)}
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
@@ -101,8 +101,8 @@ func TestPrepareAuthenticatedInventoryFinalizesRunWhenCredentialBuildFails(t *te
 	t.Cleanup(func() { database.DB = origDB })
 
 	svc := &Service{
-		repo:     automationrepo.NewExecutionRepository(),
-		cmdbRepo: cmdbrepo.NewCMDBItemRepository(),
+		repo:     automationrepo.NewExecutionRepositoryWithDB(db),
+		cmdbRepo: cmdbrepo.NewCMDBItemRepositoryWithDB(db),
 	}
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()
@@ -130,8 +130,8 @@ func TestResolveHostCredentialReturnsBackendErrors(t *testing.T) {
 	t.Cleanup(func() { database.DB = origDB })
 
 	svc := &Service{
-		repo:     automationrepo.NewExecutionRepository(),
-		cmdbRepo: cmdbrepo.NewCMDBItemRepository(),
+		repo:     automationrepo.NewExecutionRepositoryWithDB(db),
+		cmdbRepo: cmdbrepo.NewCMDBItemRepositoryWithDB(db),
 	}
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()
@@ -154,8 +154,8 @@ func TestResolveHostCredentialContinuesOnSecretNotFound(t *testing.T) {
 	t.Cleanup(func() { database.DB = origDB })
 
 	svc := &Service{
-		repo:     automationrepo.NewExecutionRepository(),
-		cmdbRepo: cmdbrepo.NewCMDBItemRepository(),
+		repo:     automationrepo.NewExecutionRepositoryWithDB(db),
+		cmdbRepo: cmdbrepo.NewCMDBItemRepositoryWithDB(db),
 	}
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	runID := uuid.New()

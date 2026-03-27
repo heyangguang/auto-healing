@@ -14,6 +14,16 @@ const (
 	ErrorCodeRoleRequired              = "ROLE_REQUIRED"
 )
 
+type PermissionDeniedDetails struct {
+	RequiredPermission  string   `json:"required_permission,omitempty"`
+	RequiredPermissions []string `json:"required_permissions,omitempty"`
+	Match               string   `json:"match,omitempty"`
+}
+
+type RoleRequiredDetails struct {
+	RequiredRole string `json:"required_role"`
+}
+
 func AbortPermissionsContextMissing(c *gin.Context) {
 	response.ErrorWithMetadata(
 		c,
@@ -27,15 +37,24 @@ func AbortPermissionsContextMissing(c *gin.Context) {
 }
 
 func AbortPermissionDenied(c *gin.Context, required any, match string) {
-	details := gin.H{}
+	details := PermissionDeniedDetails{Match: match}
 	switch v := required.(type) {
 	case string:
-		details["required_permission"] = v
+		details.RequiredPermission = v
 	case []string:
-		details["required_permissions"] = v
+		details.RequiredPermissions = v
 	}
-	if match != "" {
-		details["match"] = match
+	if !hasPermissionDeniedDetails(details) {
+		response.ErrorWithMetadata(
+			c,
+			http.StatusForbidden,
+			response.CodeForbidden,
+			"Permission denied",
+			ErrorCodePermissionRequired,
+			nil,
+		)
+		c.Abort()
+		return
 	}
 	response.ErrorWithMetadata(
 		c,
@@ -46,6 +65,10 @@ func AbortPermissionDenied(c *gin.Context, required any, match string) {
 		details,
 	)
 	c.Abort()
+}
+
+func hasPermissionDeniedDetails(details PermissionDeniedDetails) bool {
+	return details.RequiredPermission != "" || len(details.RequiredPermissions) > 0 || details.Match != ""
 }
 
 func AbortRolesContextMissing(c *gin.Context) {
@@ -67,7 +90,7 @@ func AbortRoleRequired(c *gin.Context, requiredRole string) {
 		response.CodeForbidden,
 		"Role required",
 		ErrorCodeRoleRequired,
-		gin.H{"required_role": requiredRole},
+		RoleRequiredDetails{RequiredRole: requiredRole},
 	)
 	c.Abort()
 }

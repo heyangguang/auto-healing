@@ -30,13 +30,13 @@ func (h *TenantHandler) ValidateInvitation(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	response.Success(c, gin.H{
-		"id":          inv.ID,
-		"email":       inv.Email,
-		"tenant_name": inv.Tenant.Name,
-		"tenant_code": inv.Tenant.Code,
-		"role_name":   inv.Role.DisplayName,
-		"expires_at":  inv.ExpiresAt,
+	response.Success(c, invitationValidationResponse{
+		ID:         inv.ID,
+		Email:      inv.Email,
+		TenantName: inv.Tenant.Name,
+		TenantCode: inv.Tenant.Code,
+		RoleName:   inv.Role.DisplayName,
+		ExpiresAt:  inv.ExpiresAt,
 	})
 }
 
@@ -67,9 +67,9 @@ func (h *TenantHandler) RegisterByInvitation(c *gin.Context) {
 		respondInternalError(c, "TENANT", "完成邀请注册失败", err)
 		return
 	}
-	response.Created(c, gin.H{
-		"user":    user,
-		"message": "注册成功，请登录",
+	response.Created(c, invitationRegisterResponse{
+		User:    user,
+		Message: "注册成功，请登录",
 	})
 }
 

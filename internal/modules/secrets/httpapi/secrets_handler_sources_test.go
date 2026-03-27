@@ -37,7 +37,7 @@ func TestCreateSourceReturnsConflictOnDuplicateName(t *testing.T) {
 	req = req.WithContext(platformrepo.WithTenantID(req.Context(), tenantID))
 	c.Request = req
 
-	h := &SecretsHandler{svc: secretsSvc.NewService()}
+	h := &SecretsHandler{svc: secretsSvc.NewServiceWithDB(db)}
 	h.CreateSource(c)
 
 	if w.Code != http.StatusConflict {
@@ -59,7 +59,7 @@ func TestGetSourceReturnsNotFound(t *testing.T) {
 	c.Request = req
 	c.Params = gin.Params{{Key: "id", Value: uuid.NewString()}}
 
-	h := &SecretsHandler{svc: secretsSvc.NewService()}
+	h := &SecretsHandler{svc: secretsSvc.NewServiceWithDB(db)}
 	h.GetSource(c)
 
 	if w.Code != http.StatusNotFound {
@@ -93,7 +93,7 @@ func TestEnableReturnsBadGatewayWhenProviderUnavailable(t *testing.T) {
 	c.Request = req
 	c.Params = gin.Params{{Key: "id", Value: sourceID.String()}}
 
-	h := &SecretsHandler{svc: secretsSvc.NewService()}
+	h := &SecretsHandler{svc: secretsSvc.NewServiceWithDB(db)}
 	h.Enable(c)
 
 	if w.Code != http.StatusBadGateway {

@@ -26,7 +26,7 @@ func TestRequiredAuthTenantContextRejectsStaleDefaultTenant(t *testing.T) {
 	userID := uuid.New()
 	insertTenant(t, db, tenantID, "Tenant A", "tenant-a")
 	insertUser(t, db, userID, "tenant-user", false)
-	tenantRepo := accessrepo.NewTenantRepository()
+	tenantRepo := accessrepo.NewTenantRepositoryWithDB(db)
 
 	router := gin.New()
 	router.GET("/me", func(c *gin.Context) {
@@ -58,7 +58,7 @@ func TestOptionalAuthTenantContextAllowsMissingTenantInjection(t *testing.T) {
 	userID := uuid.New()
 	insertTenant(t, db, tenantID, "Tenant A", "tenant-a")
 	insertUser(t, db, userID, "tenant-user", false)
-	tenantRepo := accessrepo.NewTenantRepository()
+	tenantRepo := accessrepo.NewTenantRepositoryWithDB(db)
 
 	router := gin.New()
 	router.POST("/logout", func(c *gin.Context) {

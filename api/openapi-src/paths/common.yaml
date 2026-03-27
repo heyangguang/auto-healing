@@ -107,7 +107,16 @@
     summary: 获取工作台概览
     responses:
       '200':
-        $ref: '#/components/responses/Success'
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/WorkbenchOverview'
 /common/workbench/activities:
   get:
     tags:

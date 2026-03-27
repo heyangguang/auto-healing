@@ -146,55 +146,43 @@ func (h *CommandBlacklistHandler) ToggleActive(c *gin.Context) {
 // GetSearchSchema 搜索 Schema
 // GET /api/v1/command-blacklist/search-schema
 func (h *CommandBlacklistHandler) GetSearchSchema(c *gin.Context) {
-	schema := map[string]interface{}{
-		"fields": []map[string]interface{}{
+	response.Success(c, commandBlacklistSearchSchemaResponse{
+		Fields: []commandBlacklistSearchField{
+			{Key: "name", Label: "规则名称", Type: "string", SupportExact: true},
+			{Key: "pattern", Label: "匹配模式", Type: "string", SupportExact: true},
 			{
-				"key":           "name",
-				"label":         "规则名称",
-				"type":          "string",
-				"support_exact": true,
-			},
-			{
-				"key":           "pattern",
-				"label":         "匹配模式",
-				"type":          "string",
-				"support_exact": true,
-			},
-			{
-				"key":   "category",
-				"label": "分类",
-				"type":  "enum",
-				"options": []map[string]string{
-					{"value": "filesystem", "label": "文件系统"},
-					{"value": "network", "label": "网络"},
-					{"value": "system", "label": "系统"},
-					{"value": "database", "label": "数据库"},
+				Key:   "category",
+				Label: "分类",
+				Type:  "enum",
+				Options: []commandBlacklistSearchOption{
+					{Value: "filesystem", Label: "文件系统"},
+					{Value: "network", Label: "网络"},
+					{Value: "system", Label: "系统"},
+					{Value: "database", Label: "数据库"},
 				},
 			},
 			{
-				"key":   "severity",
-				"label": "严重级别",
-				"type":  "enum",
-				"options": []map[string]string{
-					{"value": "critical", "label": "严重"},
-					{"value": "high", "label": "高危"},
-					{"value": "medium", "label": "中危"},
+				Key:   "severity",
+				Label: "严重级别",
+				Type:  "enum",
+				Options: []commandBlacklistSearchOption{
+					{Value: "critical", Label: "严重"},
+					{Value: "high", Label: "高危"},
+					{Value: "medium", Label: "中危"},
 				},
 			},
 			{
-				"key":   "is_active",
-				"label": "状态",
-				"type":  "enum",
-				"options": []map[string]string{
-					{"value": "true", "label": "启用"},
-					{"value": "false", "label": "禁用"},
+				Key:   "is_active",
+				Label: "状态",
+				Type:  "enum",
+				Options: []commandBlacklistSearchOption{
+					{Value: "true", Label: "启用"},
+					{Value: "false", Label: "禁用"},
 				},
 			},
 		},
-		"generated_at": time.Now().Format(time.RFC3339),
-	}
-
-	response.Success(c, schema)
+		GeneratedAt: time.Now().Format(time.RFC3339),
+	})
 }
 
 // BatchToggle 批量启用/禁用
@@ -225,9 +213,7 @@ func (h *CommandBlacklistHandler) BatchToggle(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, gin.H{
-		"count": count,
-	})
+	response.Success(c, commandBlacklistBatchToggleResponse{Count: count})
 }
 
 // Simulate 仿真测试
@@ -262,11 +248,11 @@ func (h *CommandBlacklistHandler) Simulate(c *gin.Context) {
 		}
 	}
 
-	response.Success(c, gin.H{
-		"results":       results,
-		"total_lines":   len(results),
-		"match_count":   matchCount,
-		"matched_files": matchedFiles,
+	response.Success(c, commandBlacklistSimulateResponse{
+		Results:      results,
+		TotalLines:   len(results),
+		MatchCount:   matchCount,
+		MatchedFiles: matchedFiles,
 	})
 }
 

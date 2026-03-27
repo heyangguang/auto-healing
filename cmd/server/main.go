@@ -193,7 +193,7 @@ func newRouterWithDB(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	r.Use(middleware.Logger())
 	r.Use(middleware.CORS())
 	r.GET("/health", func(c *gin.Context) {
-		response.Success(c, gin.H{"status": "ok"})
+		response.Success(c, healthStatusResponse{Status: "ok"})
 	})
 	httproutes.SetupRoutesWithDB(r, cfg, db)
 	middleware.ValidateAuditResourceTypes(r)

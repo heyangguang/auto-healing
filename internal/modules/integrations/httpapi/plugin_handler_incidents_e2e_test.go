@@ -56,7 +56,7 @@ func TestIncidentCloseEndToEnd(t *testing.T) {
 		Healing:    "pending",
 	})
 
-	handler := newPluginIncidentHandlerTestHandler(t)
+	handler := newPluginIncidentHandlerTestHandler(t, db)
 	router := newPluginIncidentHandlerRouter(tenantID, []string{incidentSyncPermission})
 	router.POST("/incidents/:id/close", middleware.RequirePermission(incidentSyncPermission), handler.CloseIncident)
 
@@ -82,7 +82,7 @@ func TestIncidentCloseEndToEnd(t *testing.T) {
 	}
 
 	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
-	incident, err := incidentrepo.NewIncidentRepository().GetByID(ctx, incidentID)
+	incident, err := incidentrepo.NewIncidentRepositoryWithDB(db).GetByID(ctx, incidentID)
 	if err != nil {
 		t.Fatalf("reload incident: %v", err)
 	}

@@ -1,0 +1,90 @@
+HealingSchemaProperty:
+  type: object
+  properties:
+    type:
+      type: string
+    description:
+      type: string
+HealingSchemaObject:
+  type: object
+  properties:
+    type:
+      type: string
+    description:
+      type: string
+    properties:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/HealingSchemaProperty'
+HealingNodeConfigField:
+  type: object
+  properties:
+    type:
+      type: string
+    required:
+      type: boolean
+    default:
+      type: string
+    description:
+      type: string
+HealingNodePortOption:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    condition:
+      type: string
+HealingNodePorts:
+  type: object
+  properties:
+    in:
+      type: integer
+    out:
+      type: integer
+    out_ports:
+      type: array
+      items:
+        $ref: '#/components/schemas/HealingNodePortOption'
+HealingNodeIO:
+  type: object
+  properties:
+    key:
+      type: string
+    type:
+      type: string
+    description:
+      type: string
+HealingNodeDefinition:
+  type: object
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    config:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/HealingNodeConfigField'
+    ports:
+      $ref: '#/components/schemas/HealingNodePorts'
+    inputs:
+      type: array
+      items:
+        $ref: '#/components/schemas/HealingNodeIO'
+    outputs:
+      type: array
+      items:
+        $ref: '#/components/schemas/HealingNodeIO'
+HealingNodeSchema:
+  type: object
+  properties:
+    initial_context:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/HealingSchemaObject'
+    nodes:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/HealingNodeDefinition'

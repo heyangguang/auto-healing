@@ -128,7 +128,7 @@
                 message:
                   type: string
                 data:
-                  $ref: '#/components/schemas/UserInfo'
+                  $ref: '#/components/schemas/UserProfile'
   put:
     tags:
     - 认证
@@ -160,7 +160,7 @@
                 message:
                   type: string
                 data:
-                  $ref: '#/components/schemas/UserInfo'
+                  $ref: '#/components/schemas/UserProfile'
 /auth/profile/login-history:
   get:
     tags:

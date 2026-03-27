@@ -18,6 +18,58 @@ UserInfo:
       type: array
       items:
         type: string
+RoleDetail:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    display_name:
+      type: string
+    is_system:
+      type: boolean
+UserProfile:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    username:
+      type: string
+    email:
+      type: string
+    display_name:
+      type: string
+    phone:
+      type: string
+    avatar_url:
+      type: string
+    status:
+      type: string
+    last_login_at:
+      type: string
+      format: date-time
+      nullable: true
+    last_login_ip:
+      type: string
+    password_changed_at:
+      type: string
+      format: date-time
+    created_at:
+      type: string
+      format: date-time
+    roles:
+      type: array
+      items:
+        $ref: '#/components/schemas/RoleDetail'
+    permissions:
+      type: array
+      items:
+        type: string
+    is_platform_admin:
+      type: boolean
 LoginPayload:
   type: object
   properties:

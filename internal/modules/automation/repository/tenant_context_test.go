@@ -31,7 +31,7 @@ func TestExecutionRepositoryCreateTaskRequiresTenantContext(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = originalDB })
 
-	repo := NewExecutionRepository()
+	repo := NewExecutionRepositoryWithDB(db)
 	task := &model.ExecutionTask{
 		ID:           uuid.New(),
 		Name:         "task",
@@ -76,7 +76,7 @@ func TestScheduleRepositoryCreateRequiresTenantContext(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = originalDB })
 
-	repo := NewScheduleRepository()
+	repo := NewScheduleRepositoryWithDB(db)
 	schedule := &model.ExecutionSchedule{
 		ID:           uuid.New(),
 		Name:         "daily",

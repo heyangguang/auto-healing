@@ -198,7 +198,7 @@ paths:
                   message:
                     type: string
                   data:
-                    $ref: '#/components/schemas/UserInfo'
+                    $ref: '#/components/schemas/UserProfile'
       operationId: getAuthProfile
     put:
       tags:
@@ -231,7 +231,7 @@ paths:
                   message:
                     type: string
                   data:
-                    $ref: '#/components/schemas/UserInfo'
+                    $ref: '#/components/schemas/UserProfile'
       operationId: putAuthProfile
   /auth/profile/login-history:
     get:
@@ -413,7 +413,16 @@ paths:
       summary: 获取工作台概览
       responses:
         '200':
-          $ref: '#/components/responses/Success'
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/Success'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/WorkbenchOverview'
       operationId: getCommonWorkbenchOverview
   /common/workbench/activities:
     get:
@@ -3598,10 +3607,7 @@ paths:
                 - type: object
                   properties:
                     data:
-                      type: array
-                      items:
-                        type: object
-                        additionalProperties: true
+                      $ref: '#/components/schemas/HealingNodeSchema'
       operationId: getTenantHealingFlowsNodeSchema
   /tenant/healing/flows/search-schema:
     get:
@@ -4255,8 +4261,7 @@ paths:
                 - type: object
                   properties:
                     data:
-                      type: object
-                      additionalProperties: true
+                      $ref: '#/components/schemas/DashboardOverview'
       operationId: getTenantDashboardOverview
   /tenant/dashboard/config:
     get:
@@ -4274,8 +4279,7 @@ paths:
                 - type: object
                   properties:
                     data:
-                      type: object
-                      additionalProperties: true
+                      $ref: '#/components/schemas/DashboardConfigPayload'
       operationId: getTenantDashboardConfig
     put:
       tags:
@@ -6712,8 +6716,7 @@ paths:
                     data:
                       type: array
                       items:
-                        type: object
-                        additionalProperties: true
+                        $ref: '#/components/schemas/SearchableField'
       operationId: getTenantBlacklistExemptionsSearchSchema
   /tenant/command-blacklist:
     get:
@@ -7123,6 +7126,58 @@ components:
           type: array
           items:
             type: string
+    RoleDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        display_name:
+          type: string
+        is_system:
+          type: boolean
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+        display_name:
+          type: string
+        phone:
+          type: string
+        avatar_url:
+          type: string
+        status:
+          type: string
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_login_ip:
+          type: string
+        password_changed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleDetail'
+        permissions:
+          type: array
+          items:
+            type: string
+        is_platform_admin:
+          type: boolean
     LoginPayload:
       type: object
       properties:
@@ -7207,6 +7262,96 @@ components:
           type: string
         action:
           type: string
+    HealingSchemaProperty:
+      type: object
+      properties:
+        type:
+          type: string
+        description:
+          type: string
+    HealingSchemaObject:
+      type: object
+      properties:
+        type:
+          type: string
+        description:
+          type: string
+        properties:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/HealingSchemaProperty'
+    HealingNodeConfigField:
+      type: object
+      properties:
+        type:
+          type: string
+        required:
+          type: boolean
+        default:
+          type: string
+        description:
+          type: string
+    HealingNodePortOption:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        condition:
+          type: string
+    HealingNodePorts:
+      type: object
+      properties:
+        in:
+          type: integer
+        out:
+          type: integer
+        out_ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealingNodePortOption'
+    HealingNodeIO:
+      type: object
+      properties:
+        key:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+    HealingNodeDefinition:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        config:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/HealingNodeConfigField'
+        ports:
+          $ref: '#/components/schemas/HealingNodePorts'
+        inputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealingNodeIO'
+        outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealingNodeIO'
+    HealingNodeSchema:
+      type: object
+      properties:
+        initial_context:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/HealingSchemaObject'
+        nodes:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/HealingNodeDefinition'
     ExecutionTask:
       type: object
       description: 任务模板
@@ -7887,6 +8032,706 @@ components:
         created_at:
           type: string
           format: date-time
+    StatusCount:
+      type: object
+      properties:
+        status:
+          type: string
+        count:
+          type: integer
+    TrendPoint:
+      type: object
+      properties:
+        date:
+          type: string
+        count:
+          type: integer
+    RankItem:
+      type: object
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+    RecentItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    MaintenanceItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        cmdb_item_name:
+          type: string
+        action:
+          type: string
+        reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    AssetItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+        ip_address:
+          type: string
+        environment:
+          type: string
+    InstanceItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        flow_name:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    ApprovalItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        flow_instance_id:
+          type: string
+          format: uuid
+        node_id:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    TriggerItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        severity:
+          type: string
+        affected_ci:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    RunItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        task_name:
+          type: string
+        status:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    SyncItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        plugin_name:
+          type: string
+        status:
+          type: string
+        sync_type:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+    PluginItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        last_sync_at:
+          type: string
+          format: date-time
+          nullable: true
+    GitRepoItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        url:
+          type: string
+        status:
+          type: string
+        branch:
+          type: string
+        last_sync_at:
+          type: string
+          format: date-time
+          nullable: true
+    GitSyncItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        repo_name:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    ScanItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        playbook_name:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    NotifLogItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        subject:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    LoginItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        display_name:
+          type: string
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_login_ip:
+          type: string
+    ResourceCount:
+      type: object
+      properties:
+        total:
+          type: integer
+        enabled:
+          type: integer
+          nullable: true
+        offline:
+          type: integer
+          nullable: true
+        needs_review:
+          type: integer
+          nullable: true
+        channels:
+          type: integer
+          nullable: true
+        types:
+          type: string
+          nullable: true
+        admins:
+          type: integer
+          nullable: true
+    ResourceOverview:
+      type: object
+      properties:
+        flows:
+          $ref: '#/components/schemas/ResourceCount'
+        rules:
+          $ref: '#/components/schemas/ResourceCount'
+        hosts:
+          $ref: '#/components/schemas/ResourceCount'
+        playbooks:
+          $ref: '#/components/schemas/ResourceCount'
+        schedules:
+          $ref: '#/components/schemas/ResourceCount'
+        notification_templates:
+          $ref: '#/components/schemas/ResourceCount'
+        secrets:
+          $ref: '#/components/schemas/ResourceCount'
+        users:
+          $ref: '#/components/schemas/ResourceCount'
+    SystemHealth:
+      type: object
+      properties:
+        status:
+          type: string
+        version:
+          type: string
+        uptime_seconds:
+          type: integer
+        environment:
+          type: string
+        api_latency_ms:
+          type: number
+          format: float
+        db_latency_ms:
+          type: number
+          format: float
+    HealingStats:
+      type: object
+      properties:
+        today_success:
+          type: integer
+        today_failed:
+          type: integer
+    WorkbenchIncidentStats:
+      type: object
+      properties:
+        pending_count:
+          type: integer
+        last_7_days_total:
+          type: integer
+    HostStats:
+      type: object
+      properties:
+        online_count:
+          type: integer
+        offline_count:
+          type: integer
+    IncidentSection:
+      type: object
+      properties:
+        total:
+          type: integer
+        today:
+          type: integer
+        this_week:
+          type: integer
+        unscanned:
+          type: integer
+        healing_rate:
+          type: number
+          format: float
+        by_healing_status:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_severity:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_category:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_status:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_source:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        trend_7d:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrendPoint'
+        trend_30d:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrendPoint'
+        recent_incidents:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecentItem'
+        critical_incidents:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecentItem'
+    CMDBSection:
+      type: object
+      properties:
+        total:
+          type: integer
+        active:
+          type: integer
+        maintenance:
+          type: integer
+        offline:
+          type: integer
+        active_rate:
+          type: number
+          format: float
+        by_status:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_environment:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_type:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_os:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_department:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_manufacturer:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        recent_maintenance:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaintenanceItem'
+        offline_assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetItem'
+    HealingSection:
+      type: object
+      properties:
+        flows_total:
+          type: integer
+        flows_active:
+          type: integer
+        rules_total:
+          type: integer
+        rules_active:
+          type: integer
+        instances_total:
+          type: integer
+        instances_running:
+          type: integer
+        pending_approvals:
+          type: integer
+        pending_triggers:
+          type: integer
+        instances_by_status:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        instance_trend_7d:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrendPoint'
+        approvals_by_status:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        rules_by_trigger_mode:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        flow_top10:
+          type: array
+          items:
+            $ref: '#/components/schemas/RankItem'
+        recent_instances:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstanceItem'
+        pending_approval_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalItem'
+        pending_trigger_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggerItem'
+    ExecutionSection:
+      type: object
+      properties:
+        tasks_total:
+          type: integer
+        runs_total:
+          type: integer
+        success_rate:
+          type: number
+          format: float
+        running:
+          type: integer
+        avg_duration_sec:
+          type: number
+          format: float
+        schedules_total:
+          type: integer
+        schedules_enabled:
+          type: integer
+        runs_by_status:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        trend_7d:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrendPoint'
+        trend_30d:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrendPoint'
+        schedules_by_type:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        task_top10:
+          type: array
+          items:
+            $ref: '#/components/schemas/RankItem'
+        recent_runs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RunItem'
+        failed_runs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RunItem'
+    PluginSection:
+      type: object
+      properties:
+        total:
+          type: integer
+        active:
+          type: integer
+        inactive:
+          type: integer
+        error:
+          type: integer
+        sync_success_rate:
+          type: number
+          format: float
+        by_status:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_type:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        sync_trend_7d:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrendPoint'
+        recent_syncs:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncItem'
+        error_plugins:
+          type: array
+          items:
+            $ref: '#/components/schemas/PluginItem'
+        plugin_overview:
+          type: array
+          items:
+            $ref: '#/components/schemas/PluginItem'
+    NotificationSection:
+      type: object
+      properties:
+        channels_total:
+          type: integer
+        templates_total:
+          type: integer
+        logs_total:
+          type: integer
+        delivery_rate:
+          type: number
+          format: float
+        by_channel_type:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_log_status:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        trend_7d:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrendPoint'
+        recent_logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotifLogItem'
+        failed_logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotifLogItem'
+    GitSection:
+      type: object
+      properties:
+        repos_total:
+          type: integer
+        sync_success_rate:
+          type: number
+          format: float
+        repos:
+          type: array
+          items:
+            $ref: '#/components/schemas/GitRepoItem'
+        recent_syncs:
+          type: array
+          items:
+            $ref: '#/components/schemas/GitSyncItem'
+    PlaybookSection:
+      type: object
+      properties:
+        total:
+          type: integer
+        ready:
+          type: integer
+        by_status:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        recent_scans:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScanItem'
+    SecretsSection:
+      type: object
+      properties:
+        total:
+          type: integer
+        active:
+          type: integer
+        by_type:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+        by_auth_type:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusCount'
+    UsersSection:
+      type: object
+      properties:
+        total:
+          type: integer
+        active:
+          type: integer
+        roles_total:
+          type: integer
+        recent_logins:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoginItem'
+    WorkbenchOverview:
+      type: object
+      properties:
+        system_health:
+          $ref: '#/components/schemas/SystemHealth'
+        resource_overview:
+          $ref: '#/components/schemas/ResourceOverview'
+        healing_stats:
+          $ref: '#/components/schemas/HealingStats'
+        incident_stats:
+          $ref: '#/components/schemas/WorkbenchIncidentStats'
+        host_stats:
+          $ref: '#/components/schemas/HostStats'
+    DashboardOverview:
+      type: object
+      properties:
+        incidents:
+          $ref: '#/components/schemas/IncidentSection'
+        cmdb:
+          $ref: '#/components/schemas/CMDBSection'
+        healing:
+          $ref: '#/components/schemas/HealingSection'
+        execution:
+          $ref: '#/components/schemas/ExecutionSection'
+        plugins:
+          $ref: '#/components/schemas/PluginSection'
+        notifications:
+          $ref: '#/components/schemas/NotificationSection'
+        git:
+          $ref: '#/components/schemas/GitSection'
+        playbooks:
+          $ref: '#/components/schemas/PlaybookSection'
+        secrets:
+          $ref: '#/components/schemas/SecretsSection'
+        users:
+          $ref: '#/components/schemas/UsersSection'
+    DashboardSystemWorkspace:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+        is_system:
+          type: boolean
+        is_readonly:
+          type: boolean
+        is_default:
+          type: boolean
+    DashboardConfigPayload:
+      type: object
+      properties:
+        config:
+          type: object
+          additionalProperties: true
+        system_workspaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardSystemWorkspace'
     NotificationChannel:
       type: object
       description: 通知渠道
@@ -9364,7 +10209,8 @@ components:
         page_size:
           type: integer
     PaginationResponse:
-      $ref: '#/components/schemas/PaginatedResponse'
+      allOf:
+      - $ref: '#/components/schemas/PaginatedResponse'
     MessageResponse:
       allOf:
       - $ref: '#/components/schemas/Success'

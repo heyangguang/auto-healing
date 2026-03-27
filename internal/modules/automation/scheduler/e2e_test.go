@@ -13,7 +13,7 @@ import (
 )
 
 func TestExecutionSchedulerEndToEndCronRunCompletesAndReleasesInFlight(t *testing.T) {
-	scheduler := NewExecutionScheduler()
+	scheduler := newExecutionSchedulerForTest()
 	scheduler.lifecycle = platformsched.NewLifecycle()
 	defer scheduler.lifecycle.Stop()
 

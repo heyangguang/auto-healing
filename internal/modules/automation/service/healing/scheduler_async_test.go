@@ -23,8 +23,8 @@ func TestSchedulerStopWaitsForTrackedFlowWorker(t *testing.T) {
 	t.Cleanup(func() { database.DB = origDB })
 
 	scheduler := NewScheduler()
-	scheduler.instanceRepo = automationrepo.NewFlowInstanceRepository()
-	scheduler.incidentRepo = incidentrepo.NewIncidentRepository()
+	scheduler.instanceRepo = automationrepo.NewFlowInstanceRepositoryWithDB(db)
+	scheduler.incidentRepo = incidentrepo.NewIncidentRepositoryWithDB(db)
 	scheduler.interval = time.Hour
 	tenantID := uuid.MustParse("46464646-4646-4646-4646-464646464646")
 	instanceID := uuid.MustParse("47474747-4747-4747-4747-474747474747")

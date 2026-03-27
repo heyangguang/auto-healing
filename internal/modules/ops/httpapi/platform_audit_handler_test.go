@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"gorm.io/gorm"
+
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/gin-gonic/gin"
 )
@@ -13,7 +15,7 @@ func TestListPlatformAuditLogsRejectsInvalidUserID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.GET("/platform/audit", NewPlatformAuditHandlerWithDeps(PlatformAuditHandlerDeps{
-		Repo: auditrepo.NewPlatformAuditLogRepository(),
+		Repo: auditrepo.NewPlatformAuditLogRepositoryWithDB(&gorm.DB{}),
 	}).ListPlatformAuditLogs)
 
 	req := httptest.NewRequest(http.MethodGet, "/platform/audit?user_id=bad", nil)
@@ -29,7 +31,7 @@ func TestListPlatformAuditLogsRejectsInvalidCreatedBefore(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.GET("/platform/audit", NewPlatformAuditHandlerWithDeps(PlatformAuditHandlerDeps{
-		Repo: auditrepo.NewPlatformAuditLogRepository(),
+		Repo: auditrepo.NewPlatformAuditLogRepositoryWithDB(&gorm.DB{}),
 	}).ListPlatformAuditLogs)
 
 	req := httptest.NewRequest(http.MethodGet, "/platform/audit?created_before=bad-time", nil)

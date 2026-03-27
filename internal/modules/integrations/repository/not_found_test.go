@@ -29,7 +29,7 @@ func TestGitRepositoryGetByIDReturnsNotFoundSentinel(t *testing.T) {
 	t.Cleanup(func() { database.DB = originalDB })
 
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
-	_, err := NewGitRepositoryRepository().GetByID(ctx, uuid.New())
+	_, err := NewGitRepositoryRepositoryWithDB(db).GetByID(ctx, uuid.New())
 	if !errors.Is(err, ErrGitRepositoryNotFound) {
 		t.Fatalf("GetByID() error = %v, want %v", err, ErrGitRepositoryNotFound)
 	}
@@ -50,7 +50,7 @@ func TestPlaybookGetByIDReturnsNotFoundSentinel(t *testing.T) {
 	t.Cleanup(func() { database.DB = originalDB })
 
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
-	_, err := NewPlaybookRepository().GetByID(ctx, uuid.New())
+	_, err := NewPlaybookRepositoryWithDB(db).GetByID(ctx, uuid.New())
 	if !errors.Is(err, ErrPlaybookNotFound) {
 		t.Fatalf("GetByID() error = %v, want %v", err, ErrPlaybookNotFound)
 	}

@@ -322,8 +322,7 @@
                   data:
                     type: array
                     items:
-                      type: object
-                      additionalProperties: true
+                      $ref: '#/components/schemas/SearchableField'
 /tenant/command-blacklist:
   get:
     tags:

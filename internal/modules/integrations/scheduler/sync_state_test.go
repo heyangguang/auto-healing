@@ -11,7 +11,7 @@ import (
 )
 
 func TestGitSchedulerHandleSyncSuccessSkipsSuccessLogOnPersistError(t *testing.T) {
-	scheduler := NewGitScheduler()
+	scheduler := newGitSchedulerForTest()
 	scheduler.updateSyncState = func(context.Context, interface{}, map[string]interface{}) error {
 		return errors.New("persist failed")
 	}
@@ -24,7 +24,7 @@ func TestGitSchedulerHandleSyncSuccessSkipsSuccessLogOnPersistError(t *testing.T
 }
 
 func TestPluginSchedulerHandleSyncResultSkipsSuccessLogOnPersistError(t *testing.T) {
-	scheduler := NewPluginScheduler()
+	scheduler := newPluginSchedulerForTest()
 	scheduler.updateSyncState = func(context.Context, interface{}, map[string]interface{}) error {
 		return errors.New("persist failed")
 	}

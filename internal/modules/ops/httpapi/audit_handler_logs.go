@@ -20,32 +20,9 @@ func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 		return
 	}
 
-	result := make([]gin.H, len(logs))
+	result := make([]auditLogResponse, len(logs))
 	for i, log := range logs {
-		riskLevel, riskReason := auditRiskFields(log.Action, log.ResourceType)
-		result[i] = gin.H{
-			"id":              log.ID,
-			"user_id":         log.UserID,
-			"username":        log.Username,
-			"ip_address":      log.IPAddress,
-			"user_agent":      log.UserAgent,
-			"category":        log.Category,
-			"action":          log.Action,
-			"resource_type":   log.ResourceType,
-			"resource_id":     log.ResourceID,
-			"resource_name":   log.ResourceName,
-			"request_method":  log.RequestMethod,
-			"request_path":    log.RequestPath,
-			"request_body":    sanitizeAuditPayload(log.RequestBody),
-			"response_status": log.ResponseStatus,
-			"changes":         sanitizeAuditPayload(log.Changes),
-			"status":          log.Status,
-			"error_message":   log.ErrorMessage,
-			"risk_level":      riskLevel,
-			"risk_reason":     riskReason,
-			"created_at":      log.CreatedAt,
-			"user":            log.User,
-		}
+		result[i] = newAuditLogResponse(log)
 	}
 	response.List(c, result, total, page, pageSize)
 }
@@ -66,29 +43,7 @@ func (h *AuditHandler) GetAuditLog(c *gin.Context) {
 		response.NotFound(c, "审计日志不存在")
 		return
 	}
-	riskLevel, riskReason := auditRiskFields(log.Action, log.ResourceType)
-	response.Success(c, gin.H{
-		"id":              log.ID,
-		"user_id":         log.UserID,
-		"username":        log.Username,
-		"ip_address":      log.IPAddress,
-		"user_agent":      log.UserAgent,
-		"action":          log.Action,
-		"resource_type":   log.ResourceType,
-		"resource_id":     log.ResourceID,
-		"resource_name":   log.ResourceName,
-		"request_method":  log.RequestMethod,
-		"request_path":    log.RequestPath,
-		"request_body":    sanitizeAuditPayload(log.RequestBody),
-		"response_status": log.ResponseStatus,
-		"changes":         sanitizeAuditPayload(log.Changes),
-		"status":          log.Status,
-		"error_message":   log.ErrorMessage,
-		"risk_level":      riskLevel,
-		"risk_reason":     riskReason,
-		"created_at":      log.CreatedAt,
-		"user":            log.User,
-	})
+	response.Success(c, newAuditLogResponse(*log))
 }
 
 // GetHighRiskLogs 获取高危操作日志
@@ -100,21 +55,9 @@ func (h *AuditHandler) GetHighRiskLogs(c *gin.Context) {
 		return
 	}
 
-	result := make([]gin.H, len(logs))
+	result := make([]highRiskAuditLogResponse, len(logs))
 	for i, log := range logs {
-		_, riskReason := auditRiskFields(log.Action, log.ResourceType)
-		result[i] = gin.H{
-			"id":            log.ID,
-			"username":      log.Username,
-			"action":        log.Action,
-			"resource_type": log.ResourceType,
-			"resource_name": log.ResourceName,
-			"status":        log.Status,
-			"ip_address":    log.IPAddress,
-			"risk_reason":   riskReason,
-			"created_at":    log.CreatedAt,
-			"user":          log.User,
-		}
+		result[i] = newHighRiskAuditLogResponse(log)
 	}
 	response.List(c, result, total, page, pageSize)
 }

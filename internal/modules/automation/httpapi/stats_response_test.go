@@ -37,7 +37,7 @@ func TestExecutionStatsEndpointsReturnTopLevelData(t *testing.T) {
 	taskB := uuid.New()
 	insertExecutionStatsFixtures(t, db, tenantID, playbookID, taskA, taskB)
 
-	handler := &ExecutionHandler{service: executionSvc.NewService()}
+	handler := &ExecutionHandler{service: executionSvc.NewServiceWithDB(db)}
 	t.Cleanup(handler.Shutdown)
 
 	router := newExecutionStatsRouter(tenantID, handler)

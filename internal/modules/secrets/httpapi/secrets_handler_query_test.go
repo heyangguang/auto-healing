@@ -44,7 +44,7 @@ func TestQuerySecretReturnsBadGatewayOnProviderFailure(t *testing.T) {
 	c.Request = req
 	c.Set(middleware.PermissionsKey, []string{"secrets:query"})
 
-	h := &SecretsHandler{svc: secretsSvc.NewService()}
+	h := &SecretsHandler{svc: secretsSvc.NewServiceWithDB(db)}
 	h.QuerySecret(c)
 
 	if w.Code != http.StatusBadGateway {
@@ -79,7 +79,7 @@ func TestTestQueryMasksProviderFailureInResult(t *testing.T) {
 	c.Request = req
 	c.Params = gin.Params{{Key: "id", Value: sourceID.String()}}
 
-	h := &SecretsHandler{svc: secretsSvc.NewService()}
+	h := &SecretsHandler{svc: secretsSvc.NewServiceWithDB(db)}
 	h.TestQuery(c)
 
 	if w.Code != http.StatusOK {
@@ -117,7 +117,7 @@ func TestQuerySecretRejectsMissingHostnameAndIPAddress(t *testing.T) {
 	c.Request = req
 	c.Set(middleware.PermissionsKey, []string{"secrets:query"})
 
-	h := &SecretsHandler{svc: secretsSvc.NewService()}
+	h := &SecretsHandler{}
 	h.QuerySecret(c)
 
 	if w.Code != http.StatusBadRequest {

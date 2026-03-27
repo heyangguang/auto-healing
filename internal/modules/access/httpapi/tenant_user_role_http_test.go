@@ -165,21 +165,21 @@ func newTenantUserRoleHTTPTestRouter(t *testing.T, db *gorm.DB) *gin.Engine {
 		RefreshTokenTTL: 24 * time.Hour,
 		Issuer:          "tenant-user-role-test",
 	}, testBlacklistStore{})
-	authSvc := authService.NewService(jwtSvc)
+	authSvc := authService.NewServiceWithDeps(authService.ServiceDeps{JWTService: jwtSvc, DB: db})
 	tenantHandler := NewTenantHandlerWithDeps(TenantHandlerDeps{
-		TenantRepo:     accessrepo.NewTenantRepository(),
-		RoleRepo:       accessrepo.NewRoleRepository(),
-		UserRepo:       accessrepo.NewUserRepository(),
+		TenantRepo:     accessrepo.NewTenantRepositoryWithDB(db),
+		RoleRepo:       accessrepo.NewRoleRepositoryWithDB(db),
+		UserRepo:       accessrepo.NewUserRepositoryWithDB(db),
 		AuthService:    authSvc,
-		InvitationRepo: accessrepo.NewInvitationRepository(),
-		SettingsRepo:   settingsrepo.NewPlatformSettingsRepository(),
+		InvitationRepo: accessrepo.NewInvitationRepositoryWithDB(db),
+		SettingsRepo:   settingsrepo.NewPlatformSettingsRepositoryWithDB(db),
 		EmailService:   &stubInvitationEmailService{},
 	})
 	tenantUserHandler := NewTenantUserHandlerWithDeps(TenantUserHandlerDeps{
 		AuthService: authSvc,
-		TenantRepo:  accessrepo.NewTenantRepository(),
-		UserRepo:    accessrepo.NewUserRepository(),
-		RoleRepo:    accessrepo.NewRoleRepository(),
+		TenantRepo:  accessrepo.NewTenantRepositoryWithDB(db),
+		UserRepo:    accessrepo.NewUserRepositoryWithDB(db),
+		RoleRepo:    accessrepo.NewRoleRepositoryWithDB(db),
 	})
 
 	api := router.Group("/api/v1")

@@ -31,7 +31,8 @@ PaginatedResponse:
     page_size:
       type: integer
 PaginationResponse:
-  $ref: '#/components/schemas/PaginatedResponse'
+  allOf:
+  - $ref: '#/components/schemas/PaginatedResponse'
 MessageResponse:
   allOf:
   - $ref: '#/components/schemas/Success'

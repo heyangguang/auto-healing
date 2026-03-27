@@ -150,7 +150,7 @@ func TestJWTAuthRejectsRefreshTokenOnProtectedRoutes(t *testing.T) {
 	}
 
 	router := gin.New()
-	router.GET("/secure", JWTAuth(jwtSvc), func(c *gin.Context) {
+	router.GET("/secure", JWTAuthWithDeps(jwtSvc, NewRuntimeDepsWithDB(db)), func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
 
@@ -190,7 +190,7 @@ func TestJWTAuthReturnsInternalErrorWhenBlacklistLookupFails(t *testing.T) {
 	}
 
 	router := gin.New()
-	router.GET("/secure", JWTAuth(jwtSvc), func(c *gin.Context) {
+	router.GET("/secure", JWTAuthWithDeps(jwtSvc, NewRuntimeDepsWithDB(db)), func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
 

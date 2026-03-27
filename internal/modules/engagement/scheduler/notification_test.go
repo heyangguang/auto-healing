@@ -4,11 +4,15 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 )
 
 func TestNotificationRetrySchedulerStopWaitsForRetryRun(t *testing.T) {
-	scheduler := NewNotificationRetryScheduler()
-	scheduler.interval = time.Hour
+	scheduler := NewNotificationRetrySchedulerWithDeps(NotificationRetrySchedulerDeps{
+		NotificationService: &notification.Service{},
+		Interval:            time.Hour,
+	})
 
 	started := make(chan struct{})
 	stopped := make(chan struct{})

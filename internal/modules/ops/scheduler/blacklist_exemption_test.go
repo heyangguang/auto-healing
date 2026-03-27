@@ -4,11 +4,15 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 )
 
 func TestBlacklistExemptionSchedulerStopWaitsForExpireRun(t *testing.T) {
-	scheduler := NewBlacklistExemptionScheduler()
-	scheduler.interval = time.Hour
+	scheduler := NewBlacklistExemptionSchedulerWithDeps(BlacklistExemptionSchedulerDeps{
+		Service:  &opsservice.BlacklistExemptionService{},
+		Interval: time.Hour,
+	})
 
 	started := make(chan struct{})
 	stopped := make(chan struct{})

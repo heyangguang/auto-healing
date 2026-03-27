@@ -96,37 +96,12 @@ func parseOptionalRFC3339Time(value, key string) (*time.Time, error) {
 	return &parsed, nil
 }
 
-func formatPlatformAuditLogs(logs []platformmodel.PlatformAuditLog) []gin.H {
-	result := make([]gin.H, len(logs))
+func formatPlatformAuditLogs(logs []platformmodel.PlatformAuditLog) []platformAuditLogResponse {
+	result := make([]platformAuditLogResponse, len(logs))
 	for i, log := range logs {
-		result[i] = formatPlatformAuditLog(log)
+		result[i] = newPlatformAuditLogResponse(log)
 	}
 	return result
-}
-
-func formatPlatformAuditLog(log platformmodel.PlatformAuditLog) gin.H {
-	return gin.H{
-		"id":              log.ID,
-		"user_id":         log.UserID,
-		"username":        log.Username,
-		"ip_address":      log.IPAddress,
-		"user_agent":      log.UserAgent,
-		"category":        log.Category,
-		"action":          log.Action,
-		"resource_type":   log.ResourceType,
-		"resource_id":     log.ResourceID,
-		"resource_name":   log.ResourceName,
-		"request_method":  log.RequestMethod,
-		"request_path":    log.RequestPath,
-		"request_body":    sanitizeAuditPayload(log.RequestBody),
-		"response_status": log.ResponseStatus,
-		"changes":         sanitizeAuditPayload(log.Changes),
-		"status":          log.Status,
-		"error_message":   log.ErrorMessage,
-		"risk_level":      auditrepo.GetRiskLevel(log.Action, log.ResourceType),
-		"risk_reason":     auditrepo.GetRiskReason(log.Action, log.ResourceType),
-		"created_at":      log.CreatedAt,
-	}
 }
 
 // GetPlatformAuditLog 获取平台审计日志详情
@@ -148,31 +123,7 @@ func (h *PlatformAuditHandler) GetPlatformAuditLog(c *gin.Context) {
 		return
 	}
 
-	riskLevel := auditrepo.GetRiskLevel(log.Action, log.ResourceType)
-	riskReason := auditrepo.GetRiskReason(log.Action, log.ResourceType)
-
-	response.Success(c, gin.H{
-		"id":              log.ID,
-		"user_id":         log.UserID,
-		"username":        log.Username,
-		"ip_address":      log.IPAddress,
-		"user_agent":      log.UserAgent,
-		"category":        log.Category,
-		"action":          log.Action,
-		"resource_type":   log.ResourceType,
-		"resource_id":     log.ResourceID,
-		"resource_name":   log.ResourceName,
-		"request_method":  log.RequestMethod,
-		"request_path":    log.RequestPath,
-		"request_body":    sanitizeAuditPayload(log.RequestBody),
-		"response_status": log.ResponseStatus,
-		"changes":         sanitizeAuditPayload(log.Changes),
-		"status":          log.Status,
-		"error_message":   log.ErrorMessage,
-		"risk_level":      riskLevel,
-		"risk_reason":     riskReason,
-		"created_at":      log.CreatedAt,
-	})
+	response.Success(c, newPlatformAuditLogResponse(*log))
 }
 
 // GetPlatformAuditStats 获取平台审计统计
@@ -226,20 +177,9 @@ func (h *PlatformAuditHandler) GetPlatformHighRiskLogs(c *gin.Context) {
 		return
 	}
 
-	result := make([]gin.H, len(logs))
+	result := make([]platformHighRiskAuditLogResponse, len(logs))
 	for i, log := range logs {
-		result[i] = gin.H{
-			"id":            log.ID,
-			"username":      log.Username,
-			"category":      log.Category,
-			"action":        log.Action,
-			"resource_type": log.ResourceType,
-			"resource_name": log.ResourceName,
-			"status":        log.Status,
-			"ip_address":    log.IPAddress,
-			"risk_reason":   auditrepo.GetRiskReason(log.Action, log.ResourceType),
-			"created_at":    log.CreatedAt,
-		}
+		result[i] = newPlatformHighRiskAuditLogResponse(log)
 	}
 
 	response.List(c, result, total, page, pageSize)

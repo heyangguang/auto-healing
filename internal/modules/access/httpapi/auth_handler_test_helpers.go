@@ -100,10 +100,10 @@ func newAuthHandlerTestRouterWithJWTService(t *testing.T, db *gorm.DB, jwtSvc *j
 	gin.SetMode(gin.TestMode)
 	logger.Init(&config.LogConfig{})
 	router := gin.New()
-	userRepo := accessrepo.NewUserRepository()
-	roleRepo := accessrepo.NewRoleRepository()
-	tenantRepo := accessrepo.NewTenantRepository()
-	permissionRepo := accessrepo.NewPermissionRepository()
+	userRepo := accessrepo.NewUserRepositoryWithDB(db)
+	roleRepo := accessrepo.NewRoleRepositoryWithDB(db)
+	tenantRepo := accessrepo.NewTenantRepositoryWithDB(db)
+	permissionRepo := accessrepo.NewPermissionRepositoryWithDB(db)
 	authHandler := &AuthHandler{
 		authSvc: authService.NewServiceWithDeps(authService.ServiceDeps{
 			UserRepo:       userRepo,
@@ -115,7 +115,7 @@ func newAuthHandlerTestRouterWithJWTService(t *testing.T, db *gorm.DB, jwtSvc *j
 		}),
 		jwtSvc:            jwtSvc,
 		auditRepo:         auditrepo.NewAuditLogRepository(db),
-		platformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
+		platformAuditRepo: auditrepo.NewPlatformAuditLogRepositoryWithDB(db),
 		userRepo:          userRepo,
 		tenantRepo:        tenantRepo,
 		permissionRepo:    permissionRepo,
@@ -125,8 +125,8 @@ func newAuthHandlerTestRouterWithJWTService(t *testing.T, db *gorm.DB, jwtSvc *j
 		RoleRepo:       roleRepo,
 		UserRepo:       userRepo,
 		AuthService:    authHandler.authSvc,
-		InvitationRepo: accessrepo.NewInvitationRepository(),
-		SettingsRepo:   settingsrepo.NewPlatformSettingsRepository(),
+		InvitationRepo: accessrepo.NewInvitationRepositoryWithDB(db),
+		SettingsRepo:   settingsrepo.NewPlatformSettingsRepositoryWithDB(db),
 		EmailService:   &stubInvitationEmailService{},
 	})
 
@@ -142,25 +142,26 @@ func registerAuthTestRoutes(api *gin.RouterGroup, authHandler *AuthHandler, tena
 	auth.GET("/invitation/:token", tenantHandler.ValidateInvitation)
 	auth.POST("/register", tenantHandler.RegisterByInvitation)
 
+	deps := middleware.NewRuntimeDepsWithDB(database.DB)
 	authProtected := auth.Group("")
-	authProtected.Use(middleware.JWTAuth(authHandler.GetJWTService()))
+	authProtected.Use(middleware.JWTAuthWithDeps(authHandler.GetJWTService(), deps))
 	authProtected.GET("/me",
-		middleware.ImpersonationMiddleware(),
+		middleware.ImpersonationMiddlewareWithDeps(deps),
 		RequireAuthTenantContext(tenantHandler.repo),
 		authHandler.GetCurrentUser,
 	)
 	authProtected.GET("/profile", authHandler.GetProfile)
 	authProtected.GET("/profile/login-history", authHandler.GetLoginHistory)
 	authProtected.GET("/profile/activities",
-		middleware.ImpersonationMiddleware(),
+		middleware.ImpersonationMiddlewareWithDeps(deps),
 		RequireAuthTenantContext(tenantHandler.repo),
 		authHandler.GetProfileActivities,
 	)
 
 	authAudited := authProtected.Group("")
-	authAudited.Use(middleware.ImpersonationMiddleware())
+	authAudited.Use(middleware.ImpersonationMiddlewareWithDeps(deps))
 	authAudited.Use(OptionalAuthTenantContext(tenantHandler.repo))
-	authAudited.Use(middleware.AuditMiddleware())
+	authAudited.Use(middleware.AuditMiddlewareWithDeps(deps))
 	authAudited.PUT("/profile", authHandler.UpdateProfile)
 	authAudited.PUT("/password", authHandler.ChangePassword)
 	authAudited.POST("/logout", authHandler.Logout)

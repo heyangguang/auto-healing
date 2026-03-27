@@ -10,7 +10,7 @@ import (
 )
 
 func TestExecutionSchedulerAfterScheduleTriggeredReturnsStateUpdateError(t *testing.T) {
-	scheduler := NewExecutionScheduler()
+	scheduler := newExecutionSchedulerForTest()
 	scheduler.updateScheduleLastRun = func(context.Context, uuid.UUID) error { return nil }
 	scheduler.updateScheduleNextRun = func(context.Context, uuid.UUID, string) error {
 		return errors.New("next run failed")

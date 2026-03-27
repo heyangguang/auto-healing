@@ -47,7 +47,7 @@ func TestMarkInstanceWaitingApprovalUsesExistingWaitingState(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = origDB })
 
-	executor := &FlowExecutor{instanceRepo: automationrepo.NewFlowInstanceRepository()}
+	executor := &FlowExecutor{instanceRepo: automationrepo.NewFlowInstanceRepositoryWithDB(db)}
 
 	instance := &model.FlowInstance{ID: instanceID, NodeStates: model.JSON{}}
 	task := &model.ApprovalTask{ID: uuid.MustParse("56565656-5656-5656-5656-565656565656")}

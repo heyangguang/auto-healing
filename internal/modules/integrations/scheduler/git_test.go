@@ -11,7 +11,7 @@ import (
 )
 
 func TestGitSchedulerStopWaitsForSyncWorker(t *testing.T) {
-	scheduler := NewGitScheduler()
+	scheduler := newGitSchedulerForTest()
 	scheduler.interval = time.Hour
 
 	workerStarted := make(chan struct{})
@@ -46,7 +46,7 @@ func TestGitSchedulerStopWaitsForSyncWorker(t *testing.T) {
 }
 
 func TestGitSchedulerDispatchAfterStopDoesNotRunWorker(t *testing.T) {
-	scheduler := NewGitScheduler()
+	scheduler := newGitSchedulerForTest()
 	scheduler.lifecycle = schedulerx.NewLifecycle()
 	scheduler.running = true
 
@@ -67,7 +67,7 @@ func TestGitSchedulerDispatchAfterStopDoesNotRunWorker(t *testing.T) {
 }
 
 func TestGitSchedulerDoesNotDispatchSameRepoTwiceWhileInFlight(t *testing.T) {
-	scheduler := NewGitScheduler()
+	scheduler := newGitSchedulerForTest()
 	scheduler.lifecycle = schedulerx.NewLifecycle()
 	defer scheduler.lifecycle.Stop()
 
@@ -98,7 +98,7 @@ func TestGitSchedulerDoesNotDispatchSameRepoTwiceWhileInFlight(t *testing.T) {
 }
 
 func TestGitSchedulerSyncUsesCompletionTimeForNextSyncAt(t *testing.T) {
-	scheduler := NewGitScheduler()
+	scheduler := newGitSchedulerForTest()
 	repoID := uuid.New()
 	base := time.Date(2026, 3, 26, 10, 0, 0, 0, time.UTC)
 	repo := model.GitRepository{

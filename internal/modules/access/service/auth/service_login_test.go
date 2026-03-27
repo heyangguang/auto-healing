@@ -58,7 +58,7 @@ func TestLoginReturnsPersistenceErrorWhenSuccessfulLoginUpdateFails(t *testing.T
 	`, uuid.NewString(), "login-user", "login@example.com", passwordHash, "active", false)
 	svc := &Service{
 		userRepo:   accessrepo.NewUserRepositoryWithDB(db),
-		permRepo:   accessrepo.NewPermissionRepository(),
+		permRepo:   accessrepo.NewPermissionRepositoryWithDB(db),
 		tenantRepo: accessrepo.NewTenantRepositoryWithDB(db),
 		jwtSvc: authjwt.NewService(authjwt.Config{
 			Secret:          "login-test",
@@ -148,7 +148,7 @@ func TestLoginDoesNotStampSuccessfulLoginBeforeAccessResolution(t *testing.T) {
 	svc := &Service{
 		userRepo:   accessrepo.NewUserRepositoryWithDB(db),
 		roleRepo:   accessrepo.NewRoleRepositoryWithDB(db),
-		permRepo:   accessrepo.NewPermissionRepository(),
+		permRepo:   accessrepo.NewPermissionRepositoryWithDB(db),
 		tenantRepo: accessrepo.NewTenantRepositoryWithDB(db),
 		db:         db,
 	}

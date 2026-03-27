@@ -42,9 +42,9 @@ func (h *PreferenceHandler) GetPreferences(c *gin.Context) {
 	pref, err := h.prefRepo.GetByUserID(c.Request.Context(), userID)
 	if err != nil {
 		if errors.Is(err, engagementrepo.ErrPreferenceNotFound) {
-			response.Success(c, map[string]interface{}{
-				"user_id":     userID,
-				"preferences": json.RawMessage("{}"),
+			response.Success(c, preferenceResponse{
+				UserID:      userID,
+				Preferences: json.RawMessage("{}"),
 			})
 			return
 		}

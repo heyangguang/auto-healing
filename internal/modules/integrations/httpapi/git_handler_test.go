@@ -9,6 +9,9 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/modules/integrations/gitclient"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
+	gitSvc "github.com/company/auto-healing/internal/modules/integrations/service/git"
+	playbookSvc "github.com/company/auto-healing/internal/modules/integrations/service/playbook"
 	"github.com/gin-gonic/gin"
 )
 
@@ -28,7 +31,14 @@ func TestValidateRepoReturnsStructuredKnownHostsError(t *testing.T) {
 	router.Use(func(c *gin.Context) {
 		c.Set(middleware.PermissionsKey, []string{"repository:validate"})
 	})
-	router.POST("/git/validate", NewGitRepoHandler().ValidateRepo)
+	handler := NewGitRepoHandlerWithDeps(GitRepoHandlerDeps{Service: gitSvc.NewServiceWithDeps(gitSvc.ServiceDeps{
+		Repo:         &integrationrepo.GitRepositoryRepository{},
+		PlaybookRepo: &integrationrepo.PlaybookRepository{},
+		PlaybookSvc:  func() *playbookSvc.Service { return &playbookSvc.Service{} },
+		ReposDir:     t.TempDir(),
+	})})
+	t.Cleanup(handler.Shutdown)
+	router.POST("/git/validate", handler.ValidateRepo)
 
 	body := `{"url":"git@github.com:example/repo.git","auth_type":"ssh_key","auth_config":{"private_key":"-----BEGIN OPENSSH PRIVATE KEY-----\\nfake\\n-----END OPENSSH PRIVATE KEY-----"}}`
 	req := httptest.NewRequest(http.MethodPost, "/git/validate", strings.NewReader(body))
@@ -63,7 +73,14 @@ func TestValidateRepoRequiresRepositoryValidatePermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	router.POST("/git/validate", NewGitRepoHandler().ValidateRepo)
+	handler := NewGitRepoHandlerWithDeps(GitRepoHandlerDeps{Service: gitSvc.NewServiceWithDeps(gitSvc.ServiceDeps{
+		Repo:         &integrationrepo.GitRepositoryRepository{},
+		PlaybookRepo: &integrationrepo.PlaybookRepository{},
+		PlaybookSvc:  func() *playbookSvc.Service { return &playbookSvc.Service{} },
+		ReposDir:     t.TempDir(),
+	})})
+	t.Cleanup(handler.Shutdown)
+	router.POST("/git/validate", handler.ValidateRepo)
 
 	req := httptest.NewRequest(http.MethodPost, "/git/validate", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -93,7 +110,14 @@ func TestCreateRepoRequiresRepositoryValidatePermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	router.POST("/git", NewGitRepoHandler().CreateRepo)
+	handler := NewGitRepoHandlerWithDeps(GitRepoHandlerDeps{Service: gitSvc.NewServiceWithDeps(gitSvc.ServiceDeps{
+		Repo:         &integrationrepo.GitRepositoryRepository{},
+		PlaybookRepo: &integrationrepo.PlaybookRepository{},
+		PlaybookSvc:  func() *playbookSvc.Service { return &playbookSvc.Service{} },
+		ReposDir:     t.TempDir(),
+	})})
+	t.Cleanup(handler.Shutdown)
+	router.POST("/git", handler.CreateRepo)
 
 	req := httptest.NewRequest(http.MethodPost, "/git", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")

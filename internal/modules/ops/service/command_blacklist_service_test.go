@@ -22,7 +22,9 @@ func TestCommandBlacklistServiceCreateForcesTenantRule(t *testing.T) {
 	database.DB = db
 	t.Cleanup(func() { database.DB = origDB })
 
-	svc := NewCommandBlacklistService()
+	svc := NewCommandBlacklistServiceWithDeps(CommandBlacklistServiceDeps{
+		Repo: opsrepo.NewCommandBlacklistRepositoryWithDB(db),
+	})
 	rule := &model.CommandBlacklist{
 		Name:     "tenant rule",
 		Pattern:  "rm -rf /",
@@ -67,7 +69,7 @@ func TestApplyCommandBlacklistUpdatePreservesOmittedOptionalFields(t *testing.T)
 }
 
 func TestSimulateFilesUsesPerFileLineNumbers(t *testing.T) {
-	results, err := (&CommandBlacklistService{repo: opsrepo.NewCommandBlacklistRepository()}).Simulate(&SimulateRequest{
+	results, err := (&CommandBlacklistService{repo: opsrepo.NewCommandBlacklistRepositoryWithDB(&gorm.DB{})}).Simulate(&SimulateRequest{
 		Pattern:   "rm",
 		MatchType: "contains",
 		Files: []SimulateFileReq{

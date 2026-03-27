@@ -38,7 +38,7 @@ func TestPlatformSettingsUpdateReturnsInternalOnLookupError(t *testing.T) {
 
 	router := gin.New()
 	router.PUT("/settings/:key", NewPlatformSettingsHandlerWithDeps(PlatformSettingsHandlerDeps{
-		Repo: settingsrepo.NewPlatformSettingsRepository(),
+		Repo: settingsrepo.NewPlatformSettingsRepositoryWithDB(db),
 	}).UpdateSetting)
 
 	req := httptest.NewRequest(http.MethodPut, "/settings/email.password", bytes.NewBufferString(`{"value":"secret"}`))

@@ -25,7 +25,7 @@ func TestScheduleGetByIDReturnsNotFoundSentinel(t *testing.T) {
 	t.Cleanup(func() { database.DB = originalDB })
 
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
-	_, err := NewScheduleRepository().GetByID(ctx, uuid.New())
+	_, err := NewScheduleRepositoryWithDB(db).GetByID(ctx, uuid.New())
 	if !errors.Is(err, ErrScheduleNotFound) {
 		t.Fatalf("GetByID() error = %v, want %v", err, ErrScheduleNotFound)
 	}

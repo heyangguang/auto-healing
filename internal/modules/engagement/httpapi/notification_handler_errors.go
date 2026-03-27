@@ -51,9 +51,9 @@ func writeNotificationSendError(c *gin.Context, err error, logs []*model.Notific
 			response.CodeInternal,
 			"通知发送失败",
 			"",
-			gin.H{
-				"notification_ids": notificationLogIDs(logs),
-				"logs":             logs,
+			notificationSendFailureDetails{
+				NotificationIDs: notificationLogIDs(logs),
+				Logs:            logs,
 			},
 		)
 	default:

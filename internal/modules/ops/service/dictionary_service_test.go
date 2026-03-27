@@ -7,6 +7,7 @@ import (
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/ops/model"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -48,7 +49,9 @@ func TestDictionaryServiceLoadCacheReturnsErrorAndBlocksFallback(t *testing.T) {
 	t.Cleanup(func() { database.DB = origDB })
 	logger.Init(&config.LogConfig{})
 
-	svc := NewDictionaryService()
+	svc := NewDictionaryServiceWithDeps(DictionaryServiceDeps{
+		Repo: opsrepo.NewDictionaryRepositoryWithDB(db),
+	})
 	err := svc.LoadCache(context.Background())
 	if err == nil {
 		t.Fatal("LoadCache() error = nil, want missing table error")

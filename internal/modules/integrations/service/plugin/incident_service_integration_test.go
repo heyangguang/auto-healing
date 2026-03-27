@@ -98,7 +98,7 @@ func TestCloseIncidentIntegrationUpdatesSourceAndLocalState(t *testing.T) {
 	insertIncidentServicePlugin(t, db, tenantID, pluginID, server.URL)
 	insertIncidentServiceIncident(t, db, incidentID, tenantID, pluginID)
 
-	svc := NewIncidentService()
+	svc := NewIncidentServiceWithDB(db)
 	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	resp, err := svc.CloseIncident(ctx, incidentID, "done", "integration", "auto", "closed")
 	if err != nil {
@@ -113,7 +113,7 @@ func TestCloseIncidentIntegrationUpdatesSourceAndLocalState(t *testing.T) {
 		t.Fatalf("path = %v, want /integration-close/INC-9000", req["path"])
 	}
 
-	incident, err := incidentrepo.NewIncidentRepository().GetByID(ctx, incidentID)
+	incident, err := incidentrepo.NewIncidentRepositoryWithDB(db).GetByID(ctx, incidentID)
 	if err != nil {
 		t.Fatalf("reload incident: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestCloseIncidentIntegrationKeepsLocalStateWhenPluginLookupFails(t *testing
 	insertIncidentServiceIncident(t, db, incidentID, tenantID, pluginID)
 	mustExecIncidentServiceSQL(t, db, `DROP TABLE plugins;`)
 
-	svc := NewIncidentService()
+	svc := NewIncidentServiceWithDB(db)
 	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	if _, err := svc.CloseIncident(ctx, incidentID, "done", "integration", "auto", "closed"); err == nil {
 		t.Fatal("CloseIncident() expected plugin lookup error")

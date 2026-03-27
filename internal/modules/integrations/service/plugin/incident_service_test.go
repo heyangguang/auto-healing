@@ -34,7 +34,7 @@ func TestWriteBackIncidentCloseIgnoresMissingPlugin(t *testing.T) {
 	t.Cleanup(func() { database.DB = originalDB })
 
 	pluginID := uuid.New()
-	svc := NewIncidentService()
+	svc := NewIncidentServiceWithDB(db)
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	incident := &platformmodel.Incident{PluginID: &pluginID}
 
@@ -55,7 +55,7 @@ func TestWriteBackIncidentCloseReturnsPluginLookupError(t *testing.T) {
 	t.Cleanup(func() { database.DB = originalDB })
 
 	pluginID := uuid.New()
-	svc := NewIncidentService()
+	svc := NewIncidentServiceWithDB(db)
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	incident := &platformmodel.Incident{PluginID: &pluginID}
 

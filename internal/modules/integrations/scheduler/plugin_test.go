@@ -11,7 +11,7 @@ import (
 )
 
 func TestPluginSchedulerStopWaitsForSyncWorker(t *testing.T) {
-	scheduler := NewPluginScheduler()
+	scheduler := newPluginSchedulerForTest()
 	scheduler.interval = time.Hour
 
 	workerStarted := make(chan struct{})
@@ -47,7 +47,7 @@ func TestPluginSchedulerStopWaitsForSyncWorker(t *testing.T) {
 }
 
 func TestPluginSchedulerDispatchAfterStopDoesNotRunWorker(t *testing.T) {
-	scheduler := NewPluginScheduler()
+	scheduler := newPluginSchedulerForTest()
 	scheduler.lifecycle = schedulerx.NewLifecycle()
 	scheduler.running = true
 
@@ -68,7 +68,7 @@ func TestPluginSchedulerDispatchAfterStopDoesNotRunWorker(t *testing.T) {
 }
 
 func TestPluginSchedulerDoesNotDispatchSamePluginTwiceWhileInFlight(t *testing.T) {
-	scheduler := NewPluginScheduler()
+	scheduler := newPluginSchedulerForTest()
 	scheduler.lifecycle = schedulerx.NewLifecycle()
 	defer scheduler.lifecycle.Stop()
 
@@ -99,7 +99,7 @@ func TestPluginSchedulerDoesNotDispatchSamePluginTwiceWhileInFlight(t *testing.T
 }
 
 func TestPluginSchedulerSyncUsesCompletionTimeForNextSyncAt(t *testing.T) {
-	scheduler := NewPluginScheduler()
+	scheduler := newPluginSchedulerForTest()
 	pluginID := uuid.New()
 	base := time.Date(2026, 3, 26, 10, 0, 0, 0, time.UTC)
 	plugin := model.Plugin{

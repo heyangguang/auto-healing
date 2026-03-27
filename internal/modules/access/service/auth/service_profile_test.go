@@ -63,7 +63,7 @@ func TestGetCurrentUserReturnsErrorWhenPermissionQueryFails(t *testing.T) {
 	svc := &Service{
 		userRepo:   accessrepo.NewUserRepositoryWithDB(db),
 		roleRepo:   accessrepo.NewRoleRepositoryWithDB(db),
-		permRepo:   accessrepo.NewPermissionRepository(),
+		permRepo:   accessrepo.NewPermissionRepositoryWithDB(db),
 		tenantRepo: accessrepo.NewTenantRepositoryWithDB(db),
 	}
 

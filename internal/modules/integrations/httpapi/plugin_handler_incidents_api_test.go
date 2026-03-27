@@ -12,6 +12,7 @@ import (
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
+	pluginservice "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
@@ -94,7 +95,7 @@ func TestIncidentAPIGetReturnsNotFound(t *testing.T) {
 	createPluginIncidentSchema(t, db)
 	bindPluginIncidentHandlerTestDB(t, db)
 
-	handler := newPluginIncidentHandlerTestHandler(t)
+	handler := newPluginIncidentHandlerTestHandler(t, db)
 	router := newPluginIncidentHandlerRouter(uuid.New(), []string{incidentListPermission})
 	router.GET("/incidents/:id", middleware.RequirePermission(incidentListPermission), handler.GetIncident)
 
@@ -106,7 +107,7 @@ func TestIncidentAPIGetReturnsInternalErrorOnRepositoryFailure(t *testing.T) {
 	db := newPluginIncidentHandlerTestDB(t)
 	bindPluginIncidentHandlerTestDB(t, db)
 
-	handler := newPluginIncidentHandlerTestHandler(t)
+	handler := newPluginIncidentHandlerTestHandler(t, db)
 	router := newPluginIncidentHandlerRouter(uuid.New(), []string{incidentListPermission})
 	router.GET("/incidents/:id", middleware.RequirePermission(incidentListPermission), handler.GetIncident)
 
@@ -119,7 +120,7 @@ func TestIncidentAPICloseReturnsNotFound(t *testing.T) {
 	createPluginIncidentSchema(t, db)
 	bindPluginIncidentHandlerTestDB(t, db)
 
-	handler := newPluginIncidentHandlerTestHandler(t)
+	handler := newPluginIncidentHandlerTestHandler(t, db)
 	router := newPluginIncidentHandlerRouter(uuid.New(), []string{incidentSyncPermission})
 	router.POST("/incidents/:id/close", middleware.RequirePermission(incidentSyncPermission), handler.CloseIncident)
 
@@ -132,7 +133,7 @@ func TestIncidentAPIResetScanReturnsNotFound(t *testing.T) {
 	createPluginIncidentSchema(t, db)
 	bindPluginIncidentHandlerTestDB(t, db)
 
-	handler := newPluginIncidentHandlerTestHandler(t)
+	handler := newPluginIncidentHandlerTestHandler(t, db)
 	router := newPluginIncidentHandlerRouter(uuid.New(), []string{incidentSyncPermission})
 	router.POST("/incidents/:id/reset-scan", middleware.RequirePermission(incidentSyncPermission), handler.ResetIncidentScan)
 
@@ -168,11 +169,14 @@ func createPluginIncidentSchema(t *testing.T, db *gorm.DB) {
 	}
 }
 
-func newPluginIncidentHandlerTestHandler(t *testing.T) *PluginHandler {
+func newPluginIncidentHandlerTestHandler(t *testing.T, db *gorm.DB) *PluginHandler {
 	t.Helper()
 
 	gin.SetMode(gin.TestMode)
-	handler := NewPluginHandler()
+	handler := NewPluginHandlerWithDeps(PluginHandlerDeps{
+		PluginService:   pluginservice.NewServiceWithDB(db),
+		IncidentService: pluginservice.NewIncidentServiceWithDB(db),
+	})
 	t.Cleanup(handler.Shutdown)
 	return handler
 }

@@ -70,9 +70,9 @@ func (h *TenantHandler) GetTenantStats(c *gin.Context) {
 		stats = append(stats, item)
 	}
 
-	response.Success(c, gin.H{
-		"tenants": stats,
-		"summary": summary,
+	response.Success(c, tenantStatsOverviewResponse{
+		Tenants: stats,
+		Summary: summary,
 	})
 }
 
@@ -213,10 +213,10 @@ func (h *TenantHandler) GetTenantTrends(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, gin.H{
-		"dates":           opDates,
-		"operations":      opCounts,
-		"audit_logs":      auditCounts,
-		"task_executions": taskCounts,
+	response.Success(c, tenantTrendResponse{
+		Dates:          opDates,
+		Operations:     opCounts,
+		AuditLogs:      auditCounts,
+		TaskExecutions: taskCounts,
 	})
 }

@@ -79,7 +79,12 @@ func (h *CMDBHandler) BatchTestConnection(c *gin.Context) {
 			successCount++
 		}
 	}
-	response.Success(c, gin.H{"total": len(results), "success": successCount, "failed": len(results) - successCount, "results": results})
+	response.Success(c, batchConnectionTestResponse{
+		Total:   len(results),
+		Success: successCount,
+		Failed:  len(results) - successCount,
+		Results: results,
+	})
 }
 
 func (h *CMDBHandler) testSingleCMDBConnection(c *gin.Context, idStr, secretsSourceID string) ConnectionTestResult {

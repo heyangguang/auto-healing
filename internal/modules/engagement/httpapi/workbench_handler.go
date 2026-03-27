@@ -55,7 +55,12 @@ func (h *WorkbenchHandler) GetOverview(c *gin.Context) {
 		response.InternalError(c, "获取工作台概览失败: "+lastErr.Error())
 		return
 	}
-	response.Success(c, result)
+	typed, err := newWorkbenchOverviewResponse(result)
+	if err != nil {
+		response.InternalError(c, "获取工作台概览失败: "+err.Error())
+		return
+	}
+	response.Success(c, typed)
 }
 
 func (h *WorkbenchHandler) loadWorkbenchOverviewSections(ctx context.Context, permissions []string) (map[string]interface{}, error) {

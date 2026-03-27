@@ -36,7 +36,7 @@ func TestResumeAfterApprovalFailsInstanceWhenCurrentNodeIsNotApproval(t *testing
 	database.DB = db
 	t.Cleanup(func() { database.DB = origDB })
 
-	executor := &FlowExecutor{instanceRepo: automationrepo.NewFlowInstanceRepository()}
+	executor := &FlowExecutor{instanceRepo: automationrepo.NewFlowInstanceRepositoryWithDB(db)}
 	tenantID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	instanceID := uuid.MustParse("99999999-9999-9999-9999-999999999999")
 	flowID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")

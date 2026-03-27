@@ -18,7 +18,7 @@ func TestResolveSecretsSourceNoDefault(t *testing.T) {
 	createSecretsSourceServiceTable(t, db)
 	installSecretsServiceDB(t, db)
 
-	svc := NewService()
+	svc := NewServiceWithDB(db)
 	_, err := svc.resolveSecretsSource(platformrepo.WithTenantID(context.Background(), uuid.New()), "")
 	if !errors.Is(err, ErrDefaultSecretsSourceUnavailable) {
 		t.Fatalf("resolveSecretsSource() error = %v, want %v", err, ErrDefaultSecretsSourceUnavailable)
@@ -30,7 +30,7 @@ func TestResolveSecretsSourceRejectsInvalidID(t *testing.T) {
 	createSecretsSourceServiceTable(t, db)
 	installSecretsServiceDB(t, db)
 
-	svc := NewService()
+	svc := NewServiceWithDB(db)
 	_, err := svc.resolveSecretsSource(platformrepo.WithTenantID(context.Background(), uuid.New()), "bad-id")
 	if !errors.Is(err, ErrSecretsSourceInvalidID) {
 		t.Fatalf("resolveSecretsSource() error = %v, want %v", err, ErrSecretsSourceInvalidID)
@@ -49,7 +49,7 @@ func TestResolveSecretsSourceRejectsInactiveSource(t *testing.T) {
 		sourceID.String(), tenantID.String(), "inactive-source", "webhook", "password",
 		`{"url":"http://example.com","method":"GET","query_key":"hostname"}`, false, 1, "inactive", now, now)
 
-	svc := NewService()
+	svc := NewServiceWithDB(db)
 	_, err := svc.resolveSecretsSource(platformrepo.WithTenantID(context.Background(), tenantID), sourceID.String())
 	if !errors.Is(err, ErrSecretsSourceInactive) {
 		t.Fatalf("resolveSecretsSource() error = %v, want %v", err, ErrSecretsSourceInactive)
@@ -75,7 +75,7 @@ func TestQuerySecretUsesDefaultSource(t *testing.T) {
 		sourceID.String(), tenantID.String(), "default-source", "webhook", "password",
 		config, true, 1, "active", now, now)
 
-	svc := NewService()
+	svc := NewServiceWithDB(db)
 	secret, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), tenantID), secretsmodel.SecretQuery{Hostname: "host-a"})
 	if err != nil {
 		t.Fatalf("QuerySecret() error = %v", err)
@@ -103,7 +103,7 @@ func TestQuerySecretReturnsProviderError(t *testing.T) {
 		sourceID.String(), tenantID.String(), "default-source", "webhook", "password",
 		config, true, 1, "active", now, now)
 
-	svc := NewService()
+	svc := NewServiceWithDB(db)
 	_, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), tenantID), secretsmodel.SecretQuery{Hostname: "host-a"})
 	if !errors.Is(err, ErrSecretsProviderRequestFailed) {
 		t.Fatalf("QuerySecret() error = %v, want %v", err, ErrSecretsProviderRequestFailed)
@@ -115,7 +115,7 @@ func TestQuerySecretRequiresHostnameOrIPAddress(t *testing.T) {
 	createSecretsSourceServiceTable(t, db)
 	installSecretsServiceDB(t, db)
 
-	svc := NewService()
+	svc := NewServiceWithDB(db)
 	_, err := svc.QuerySecret(platformrepo.WithTenantID(context.Background(), uuid.New()), secretsmodel.SecretQuery{})
 	if !errors.Is(err, ErrSecretsQueryTargetRequired) {
 		t.Fatalf("QuerySecret() error = %v, want %v", err, ErrSecretsQueryTargetRequired)

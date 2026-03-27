@@ -168,19 +168,19 @@ func (h *BlacklistExemptionHandler) GetPending(c *gin.Context) {
 
 // GetSearchSchema 搜索字段定义
 func (h *BlacklistExemptionHandler) GetSearchSchema(c *gin.Context) {
-	response.Success(c, []map[string]interface{}{
-		{"key": "task_name", "label": "任务模板", "type": "text"},
-		{"key": "rule_name", "label": "规则名称", "type": "text"},
-		{"key": "requester_name", "label": "申请人", "type": "text"},
+	response.Success(c, []blacklistExemptionSearchField{
+		{Key: "task_name", Label: "任务模板", Type: "text"},
+		{Key: "rule_name", Label: "规则名称", Type: "text"},
+		{Key: "requester_name", Label: "申请人", Type: "text"},
 		{
-			"key":   "status",
-			"label": "状态",
-			"type":  "enum",
-			"options": []map[string]string{
-				{"label": "待审批", "value": "pending"},
-				{"label": "已批准", "value": "approved"},
-				{"label": "已拒绝", "value": "rejected"},
-				{"label": "已过期", "value": "expired"},
+			Key:   "status",
+			Label: "状态",
+			Type:  "enum",
+			Options: []blacklistExemptionSearchOption{
+				{Label: "待审批", Value: "pending"},
+				{Label: "已批准", Value: "approved"},
+				{Label: "已拒绝", Value: "rejected"},
+				{Label: "已过期", Value: "expired"},
 			},
 		},
 	})

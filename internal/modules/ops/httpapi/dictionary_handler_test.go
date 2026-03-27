@@ -161,7 +161,7 @@ func newDictionaryHandlerTestRouterWithDB(t *testing.T, db *gorm.DB) *gin.Engine
 
 	h := NewDictionaryHandlerWithDeps(DictionaryHandlerDeps{
 		Service: opsservice.NewDictionaryServiceWithDeps(opsservice.DictionaryServiceDeps{
-			Repo: opsrepo.NewDictionaryRepository(),
+			Repo: opsrepo.NewDictionaryRepositoryWithDB(db),
 		}),
 	})
 	router := gin.New()

@@ -10,6 +10,7 @@ import (
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func TestCommandBlacklistListRejectsInvalidBoolQuery(t *testing.T) {
@@ -33,7 +34,7 @@ func TestCommandBlacklistGetTreatsMissingTenantContextAsInternalError(t *testing
 	router := gin.New()
 	router.GET("/rules/:id", NewCommandBlacklistHandlerWithDeps(CommandBlacklistHandlerDeps{
 		Service: opsservice.NewCommandBlacklistServiceWithDeps(opsservice.CommandBlacklistServiceDeps{
-			Repo: opsrepo.NewCommandBlacklistRepository(),
+			Repo: opsrepo.NewCommandBlacklistRepositoryWithDB(&gorm.DB{}),
 		}),
 	}).Get)
 

@@ -485,8 +485,7 @@
               - type: object
                 properties:
                   data:
-                    type: object
-                    additionalProperties: true
+                    $ref: '#/components/schemas/DashboardOverview'
 /tenant/dashboard/config:
   get:
     tags:
@@ -503,8 +502,7 @@
               - type: object
                 properties:
                   data:
-                    type: object
-                    additionalProperties: true
+                    $ref: '#/components/schemas/DashboardConfigPayload'
   put:
     tags:
     - Dashboard
