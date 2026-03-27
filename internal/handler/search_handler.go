@@ -14,10 +14,20 @@ type SearchHandler struct {
 	repo *repository.SearchRepository
 }
 
+type SearchHandlerDeps struct {
+	Repo *repository.SearchRepository
+}
+
 // NewSearchHandler 创建全局搜索处理器
 func NewSearchHandler() *SearchHandler {
+	return NewSearchHandlerWithDeps(SearchHandlerDeps{
+		Repo: repository.NewSearchRepository(),
+	})
+}
+
+func NewSearchHandlerWithDeps(deps SearchHandlerDeps) *SearchHandler {
 	return &SearchHandler{
-		repo: repository.NewSearchRepository(),
+		repo: deps.Repo,
 	}
 }
 

@@ -14,10 +14,20 @@ type UserActivityHandler struct {
 	repo *repository.UserActivityRepository
 }
 
+type UserActivityHandlerDeps struct {
+	Repo *repository.UserActivityRepository
+}
+
 // NewUserActivityHandler 创建用户活动处理器
 func NewUserActivityHandler() *UserActivityHandler {
+	return NewUserActivityHandlerWithDeps(UserActivityHandlerDeps{
+		Repo: repository.NewUserActivityRepository(),
+	})
+}
+
+func NewUserActivityHandlerWithDeps(deps UserActivityHandlerDeps) *UserActivityHandler {
 	return &UserActivityHandler{
-		repo: repository.NewUserActivityRepository(),
+		repo: deps.Repo,
 	}
 }
 

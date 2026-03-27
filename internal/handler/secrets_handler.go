@@ -7,10 +7,20 @@ type SecretsHandler struct {
 	svc *secretsSvc.Service
 }
 
+type SecretsHandlerDeps struct {
+	Service *secretsSvc.Service
+}
+
 // NewSecretsHandler 创建密钥处理器
 func NewSecretsHandler() *SecretsHandler {
+	return NewSecretsHandlerWithDeps(SecretsHandlerDeps{
+		Service: secretsSvc.NewService(),
+	})
+}
+
+func NewSecretsHandlerWithDeps(deps SecretsHandlerDeps) *SecretsHandler {
 	return &SecretsHandler{
-		svc: secretsSvc.NewService(),
+		svc: deps.Service,
 	}
 }
 

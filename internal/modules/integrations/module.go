@@ -1,6 +1,11 @@
 package integrations
 
-import "github.com/company/auto-healing/internal/handler"
+import (
+	"github.com/company/auto-healing/internal/handler"
+	gitSvc "github.com/company/auto-healing/internal/service/git"
+	"github.com/company/auto-healing/internal/service/playbook"
+	"github.com/company/auto-healing/internal/service/plugin"
+)
 
 // Module 聚合 integrations 域处理器构造。
 type Module struct {
@@ -12,11 +17,22 @@ type Module struct {
 
 // New 创建 integrations 域模块。
 func New() *Module {
+	pluginService := plugin.NewService()
+	gitService := gitSvc.NewService()
 	module := &Module{
-		Plugin:   handler.NewPluginHandler(),
-		CMDB:     handler.NewCMDBHandler(),
-		GitRepo:  handler.NewGitRepoHandler(),
-		Playbook: handler.NewPlaybookHandler(),
+		Plugin: handler.NewPluginHandlerWithDeps(handler.PluginHandlerDeps{
+			PluginService:   pluginService,
+			IncidentService: plugin.NewIncidentService(),
+		}),
+		CMDB: handler.NewCMDBHandlerWithDeps(handler.CMDBHandlerDeps{
+			Service: plugin.NewCMDBService(),
+		}),
+		GitRepo: handler.NewGitRepoHandlerWithDeps(handler.GitRepoHandlerDeps{
+			Service: gitService,
+		}),
+		Playbook: handler.NewPlaybookHandlerWithDeps(handler.PlaybookHandlerDeps{
+			Service: playbook.NewService(),
+		}),
 	}
 	handler.RegisterCleanup(module.Plugin.Shutdown)
 	handler.RegisterCleanup(module.GitRepo.Shutdown)

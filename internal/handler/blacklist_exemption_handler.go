@@ -20,11 +20,25 @@ type BlacklistExemptionHandler struct {
 	blacklistRepo *repository.CommandBlacklistRepository
 }
 
+type BlacklistExemptionHandlerDeps struct {
+	Service       *service.BlacklistExemptionService
+	TaskRepo      *repository.ExecutionRepository
+	BlacklistRepo *repository.CommandBlacklistRepository
+}
+
 func NewBlacklistExemptionHandler() *BlacklistExemptionHandler {
+	return NewBlacklistExemptionHandlerWithDeps(BlacklistExemptionHandlerDeps{
+		Service:       service.NewBlacklistExemptionService(),
+		TaskRepo:      repository.NewExecutionRepository(),
+		BlacklistRepo: repository.NewCommandBlacklistRepository(),
+	})
+}
+
+func NewBlacklistExemptionHandlerWithDeps(deps BlacklistExemptionHandlerDeps) *BlacklistExemptionHandler {
 	return &BlacklistExemptionHandler{
-		svc:           service.NewBlacklistExemptionService(),
-		taskRepo:      repository.NewExecutionRepository(),
-		blacklistRepo: repository.NewCommandBlacklistRepository(),
+		svc:           deps.Service,
+		taskRepo:      deps.TaskRepo,
+		blacklistRepo: deps.BlacklistRepo,
 	}
 }
 

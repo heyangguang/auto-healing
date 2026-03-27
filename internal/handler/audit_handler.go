@@ -19,9 +19,19 @@ type AuditHandler struct {
 	repo *repository.AuditLogRepository
 }
 
+type AuditHandlerDeps struct {
+	Repo *repository.AuditLogRepository
+}
+
 // NewAuditHandler 创建审计日志处理器
 func NewAuditHandler() *AuditHandler {
-	return &AuditHandler{repo: repository.NewAuditLogRepository(database.DB)}
+	return NewAuditHandlerWithDeps(AuditHandlerDeps{
+		Repo: repository.NewAuditLogRepository(database.DB),
+	})
+}
+
+func NewAuditHandlerWithDeps(deps AuditHandlerDeps) *AuditHandler {
+	return &AuditHandler{repo: deps.Repo}
 }
 
 func buildAuditListOptions(c *gin.Context, page, pageSize int) (*repository.AuditLogListOptions, error) {

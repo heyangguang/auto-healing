@@ -1,6 +1,15 @@
 package ops
 
-import "github.com/company/auto-healing/internal/handler"
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/company/auto-healing/internal/database"
+	"github.com/company/auto-healing/internal/handler"
+	"github.com/company/auto-healing/internal/repository"
+	"github.com/company/auto-healing/internal/service"
+)
 
 // Module 聚合 ops 域处理器构造。
 type Module struct {
@@ -14,12 +23,33 @@ type Module struct {
 
 // New 创建 ops 域模块。
 func New() *Module {
+	dictSvc := service.NewDictionaryService()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := dictSvc.LoadCache(ctx); err != nil {
+		panic(fmt.Errorf("初始化字典缓存失败: %w", err))
+	}
+
 	return &Module{
-		Audit:              handler.NewAuditHandler(),
-		PlatformAudit:      handler.NewPlatformAuditHandler(),
-		PlatformSettings:   handler.NewPlatformSettingsHandler(),
-		Dictionary:         handler.NewDictionaryHandler(),
-		CommandBlacklist:   handler.NewCommandBlacklistHandler(),
-		BlacklistExemption: handler.NewBlacklistExemptionHandler(),
+		Audit: handler.NewAuditHandlerWithDeps(handler.AuditHandlerDeps{
+			Repo: repository.NewAuditLogRepository(database.DB),
+		}),
+		PlatformAudit: handler.NewPlatformAuditHandlerWithDeps(handler.PlatformAuditHandlerDeps{
+			Repo: repository.NewPlatformAuditLogRepository(),
+		}),
+		PlatformSettings: handler.NewPlatformSettingsHandlerWithDeps(handler.PlatformSettingsHandlerDeps{
+			Repo: repository.NewPlatformSettingsRepository(),
+		}),
+		Dictionary: handler.NewDictionaryHandlerWithDeps(handler.DictionaryHandlerDeps{
+			Service: dictSvc,
+		}),
+		CommandBlacklist: handler.NewCommandBlacklistHandlerWithDeps(handler.CommandBlacklistHandlerDeps{
+			Service: service.NewCommandBlacklistService(),
+		}),
+		BlacklistExemption: handler.NewBlacklistExemptionHandlerWithDeps(handler.BlacklistExemptionHandlerDeps{
+			Service:       service.NewBlacklistExemptionService(),
+			TaskRepo:      repository.NewExecutionRepository(),
+			BlacklistRepo: repository.NewCommandBlacklistRepository(),
+		}),
 	}
 }

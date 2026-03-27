@@ -15,9 +15,19 @@ type ExecutionHandler struct {
 	service *execution.Service
 }
 
+type ExecutionHandlerDeps struct {
+	Service *execution.Service
+}
+
 // NewExecutionHandler 创建 ExecutionHandler
 func NewExecutionHandler() *ExecutionHandler {
-	return &ExecutionHandler{service: execution.NewService()}
+	return NewExecutionHandlerWithDeps(ExecutionHandlerDeps{
+		Service: execution.NewService(),
+	})
+}
+
+func NewExecutionHandlerWithDeps(deps ExecutionHandlerDeps) *ExecutionHandler {
+	return &ExecutionHandler{service: deps.Service}
 }
 
 func (h *ExecutionHandler) Shutdown() {

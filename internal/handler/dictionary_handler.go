@@ -21,6 +21,10 @@ type DictionaryHandler struct {
 	svc *service.DictionaryService
 }
 
+type DictionaryHandlerDeps struct {
+	Service *service.DictionaryService
+}
+
 type updateDictionaryRequest struct {
 	Label     *string     `json:"label"`
 	LabelEn   *string     `json:"label_en"`
@@ -42,7 +46,13 @@ func NewDictionaryHandler() *DictionaryHandler {
 	if err := svc.LoadCache(ctx); err != nil {
 		panic(fmt.Errorf("初始化字典缓存失败: %w", err))
 	}
-	return &DictionaryHandler{svc: svc}
+	return NewDictionaryHandlerWithDeps(DictionaryHandlerDeps{
+		Service: svc,
+	})
+}
+
+func NewDictionaryHandlerWithDeps(deps DictionaryHandlerDeps) *DictionaryHandler {
+	return &DictionaryHandler{svc: deps.Service}
 }
 
 // ListDictionaries 批量查询字典

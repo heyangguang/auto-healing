@@ -12,12 +12,24 @@ type NotificationHandler struct {
 	notifRepo *repository.NotificationRepository
 }
 
+type NotificationHandlerDeps struct {
+	Service          *notification.Service
+	NotificationRepo *repository.NotificationRepository
+}
+
 // NewNotificationHandler 创建通知处理器
 func NewNotificationHandler() *NotificationHandler {
 	db := database.DB
+	return NewNotificationHandlerWithDeps(NotificationHandlerDeps{
+		Service:          notification.NewConfiguredService(db),
+		NotificationRepo: repository.NewNotificationRepository(db),
+	})
+}
+
+func NewNotificationHandlerWithDeps(deps NotificationHandlerDeps) *NotificationHandler {
 	return &NotificationHandler{
-		svc:       notification.NewConfiguredService(db),
-		notifRepo: repository.NewNotificationRepository(db),
+		svc:       deps.Service,
+		notifRepo: deps.NotificationRepo,
 	}
 }
 

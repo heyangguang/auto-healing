@@ -15,10 +15,20 @@ type ScheduleHandler struct {
 	service *schedule.Service
 }
 
+type ScheduleHandlerDeps struct {
+	Service *schedule.Service
+}
+
 // NewScheduleHandler 创建 ScheduleHandler
 func NewScheduleHandler() *ScheduleHandler {
+	return NewScheduleHandlerWithDeps(ScheduleHandlerDeps{
+		Service: schedule.NewService(),
+	})
+}
+
+func NewScheduleHandlerWithDeps(deps ScheduleHandlerDeps) *ScheduleHandler {
 	return &ScheduleHandler{
-		service: schedule.NewService(),
+		service: deps.Service,
 	}
 }
 

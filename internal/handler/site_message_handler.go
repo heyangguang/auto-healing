@@ -23,14 +23,32 @@ type SiteMessageHandler struct {
 	userRepo         *repository.UserRepository
 }
 
+type SiteMessageHandlerDeps struct {
+	SiteMessageRepo      *repository.SiteMessageRepository
+	PlatformSettingsRepo *repository.PlatformSettingsRepository
+	EventBus             *MessageEventBus
+	TenantRepo           *repository.TenantRepository
+	UserRepo             *repository.UserRepository
+}
+
 // NewSiteMessageHandler 创建站内信处理器
 func NewSiteMessageHandler() *SiteMessageHandler {
+	return NewSiteMessageHandlerWithDeps(SiteMessageHandlerDeps{
+		SiteMessageRepo:      repository.NewSiteMessageRepository(),
+		PlatformSettingsRepo: repository.NewPlatformSettingsRepository(),
+		EventBus:             GetMessageEventBus(),
+		TenantRepo:           repository.NewTenantRepository(),
+		UserRepo:             repository.NewUserRepository(),
+	})
+}
+
+func NewSiteMessageHandlerWithDeps(deps SiteMessageHandlerDeps) *SiteMessageHandler {
 	return &SiteMessageHandler{
-		repo:             repository.NewSiteMessageRepository(),
-		platformSettings: repository.NewPlatformSettingsRepository(),
-		eventBus:         GetMessageEventBus(),
-		tenantRepo:       repository.NewTenantRepository(),
-		userRepo:         repository.NewUserRepository(),
+		repo:             deps.SiteMessageRepo,
+		platformSettings: deps.PlatformSettingsRepo,
+		eventBus:         deps.EventBus,
+		tenantRepo:       deps.TenantRepo,
+		userRepo:         deps.UserRepo,
 	}
 }
 

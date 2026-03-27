@@ -11,10 +11,20 @@ type CMDBHandler struct {
 	cmdbSvc *plugin.CMDBService
 }
 
+type CMDBHandlerDeps struct {
+	Service *plugin.CMDBService
+}
+
 // NewCMDBHandler 创建 CMDB 处理器
 func NewCMDBHandler() *CMDBHandler {
+	return NewCMDBHandlerWithDeps(CMDBHandlerDeps{
+		Service: plugin.NewCMDBService(),
+	})
+}
+
+func NewCMDBHandlerWithDeps(deps CMDBHandlerDeps) *CMDBHandler {
 	return &CMDBHandler{
-		cmdbSvc: plugin.NewCMDBService(),
+		cmdbSvc: deps.Service,
 	}
 }
 

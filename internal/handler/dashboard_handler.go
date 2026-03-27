@@ -20,12 +20,26 @@ type DashboardHandler struct {
 	roleRepo *repository.RoleRepository
 }
 
+type DashboardHandlerDeps struct {
+	DashboardRepo *repository.DashboardRepository
+	WorkspaceRepo *repository.WorkspaceRepository
+	RoleRepo      *repository.RoleRepository
+}
+
 // NewDashboardHandler 创建 Dashboard 处理器
 func NewDashboardHandler() *DashboardHandler {
+	return NewDashboardHandlerWithDeps(DashboardHandlerDeps{
+		DashboardRepo: repository.NewDashboardRepository(),
+		WorkspaceRepo: repository.NewWorkspaceRepository(),
+		RoleRepo:      repository.NewRoleRepository(),
+	})
+}
+
+func NewDashboardHandlerWithDeps(deps DashboardHandlerDeps) *DashboardHandler {
 	return &DashboardHandler{
-		repo:     repository.NewDashboardRepository(),
-		wsRepo:   repository.NewWorkspaceRepository(),
-		roleRepo: repository.NewRoleRepository(),
+		repo:     deps.DashboardRepo,
+		wsRepo:   deps.WorkspaceRepo,
+		roleRepo: deps.RoleRepo,
 	}
 }
 

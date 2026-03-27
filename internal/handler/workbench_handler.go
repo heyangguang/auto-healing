@@ -23,6 +23,12 @@ type WorkbenchHandler struct {
 	userRepo     *repository.UserRepository
 }
 
+type WorkbenchHandlerDeps struct {
+	WorkbenchRepo *repository.WorkbenchRepository
+	ActivityRepo  *repository.UserActivityRepository
+	UserRepo      *repository.UserRepository
+}
+
 type workbenchSection struct {
 	key string
 	fn  func() (interface{}, error)
@@ -30,10 +36,18 @@ type workbenchSection struct {
 
 // NewWorkbenchHandler 创建工作台处理器
 func NewWorkbenchHandler() *WorkbenchHandler {
+	return NewWorkbenchHandlerWithDeps(WorkbenchHandlerDeps{
+		WorkbenchRepo: repository.NewWorkbenchRepository(database.DB),
+		ActivityRepo:  repository.NewUserActivityRepository(),
+		UserRepo:      repository.NewUserRepository(),
+	})
+}
+
+func NewWorkbenchHandlerWithDeps(deps WorkbenchHandlerDeps) *WorkbenchHandler {
 	return &WorkbenchHandler{
-		repo:         repository.NewWorkbenchRepository(database.DB),
-		activityRepo: repository.NewUserActivityRepository(),
-		userRepo:     repository.NewUserRepository(),
+		repo:         deps.WorkbenchRepo,
+		activityRepo: deps.ActivityRepo,
+		userRepo:     deps.UserRepo,
 	}
 }
 

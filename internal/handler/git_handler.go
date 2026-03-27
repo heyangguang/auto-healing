@@ -11,10 +11,20 @@ type GitRepoHandler struct {
 	svc *gitSvc.Service
 }
 
+type GitRepoHandlerDeps struct {
+	Service *gitSvc.Service
+}
+
 // NewGitRepoHandler 创建 Git 仓库处理器
 func NewGitRepoHandler() *GitRepoHandler {
+	return NewGitRepoHandlerWithDeps(GitRepoHandlerDeps{
+		Service: gitSvc.NewService(),
+	})
+}
+
+func NewGitRepoHandlerWithDeps(deps GitRepoHandlerDeps) *GitRepoHandler {
 	return &GitRepoHandler{
-		svc: gitSvc.NewService(),
+		svc: deps.Service,
 	}
 }
 

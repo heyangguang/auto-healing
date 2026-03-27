@@ -16,10 +16,20 @@ type CommandBlacklistHandler struct {
 	svc *service.CommandBlacklistService
 }
 
+type CommandBlacklistHandlerDeps struct {
+	Service *service.CommandBlacklistService
+}
+
 // NewCommandBlacklistHandler 创建处理器
 func NewCommandBlacklistHandler() *CommandBlacklistHandler {
+	return NewCommandBlacklistHandlerWithDeps(CommandBlacklistHandlerDeps{
+		Service: service.NewCommandBlacklistService(),
+	})
+}
+
+func NewCommandBlacklistHandlerWithDeps(deps CommandBlacklistHandlerDeps) *CommandBlacklistHandler {
 	return &CommandBlacklistHandler{
-		svc: service.NewCommandBlacklistService(),
+		svc: deps.Service,
 	}
 }
 

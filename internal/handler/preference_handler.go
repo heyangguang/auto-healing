@@ -16,10 +16,20 @@ type PreferenceHandler struct {
 	prefRepo *repository.UserPreferenceRepository
 }
 
+type PreferenceHandlerDeps struct {
+	PreferenceRepo *repository.UserPreferenceRepository
+}
+
 // NewPreferenceHandler 创建用户偏好处理器
 func NewPreferenceHandler() *PreferenceHandler {
+	return NewPreferenceHandlerWithDeps(PreferenceHandlerDeps{
+		PreferenceRepo: repository.NewUserPreferenceRepository(),
+	})
+}
+
+func NewPreferenceHandlerWithDeps(deps PreferenceHandlerDeps) *PreferenceHandler {
 	return &PreferenceHandler{
-		prefRepo: repository.NewUserPreferenceRepository(),
+		prefRepo: deps.PreferenceRepo,
 	}
 }
 

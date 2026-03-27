@@ -20,18 +20,42 @@ type HealingHandler struct {
 	scheduler    *healing.Scheduler
 }
 
+type HealingHandlerDeps struct {
+	FlowRepo         *repository.HealingFlowRepository
+	RuleRepo         *repository.HealingRuleRepository
+	InstanceRepo     *repository.FlowInstanceRepository
+	ApprovalRepo     *repository.ApprovalTaskRepository
+	IncidentRepo     *repository.IncidentRepository
+	NotificationRepo *repository.NotificationRepository
+	Executor         *healing.FlowExecutor
+	Scheduler        *healing.Scheduler
+}
+
 // NewHealingHandler 创建自愈引擎处理器
 func NewHealingHandler() *HealingHandler {
 	scheduler := healing.DefaultScheduler()
+	return NewHealingHandlerWithDeps(HealingHandlerDeps{
+		FlowRepo:         repository.NewHealingFlowRepository(),
+		RuleRepo:         repository.NewHealingRuleRepository(),
+		InstanceRepo:     repository.NewFlowInstanceRepository(),
+		ApprovalRepo:     repository.NewApprovalTaskRepository(),
+		IncidentRepo:     repository.NewIncidentRepository(),
+		NotificationRepo: repository.NewNotificationRepository(database.DB),
+		Executor:         scheduler.Executor(),
+		Scheduler:        scheduler,
+	})
+}
+
+func NewHealingHandlerWithDeps(deps HealingHandlerDeps) *HealingHandler {
 	return &HealingHandler{
-		flowRepo:     repository.NewHealingFlowRepository(),
-		ruleRepo:     repository.NewHealingRuleRepository(),
-		instanceRepo: repository.NewFlowInstanceRepository(),
-		approvalRepo: repository.NewApprovalTaskRepository(),
-		incidentRepo: repository.NewIncidentRepository(),
-		notifRepo:    repository.NewNotificationRepository(database.DB),
-		executor:     scheduler.Executor(),
-		scheduler:    scheduler,
+		flowRepo:     deps.FlowRepo,
+		ruleRepo:     deps.RuleRepo,
+		instanceRepo: deps.InstanceRepo,
+		approvalRepo: deps.ApprovalRepo,
+		incidentRepo: deps.IncidentRepo,
+		notifRepo:    deps.NotificationRepo,
+		executor:     deps.Executor,
+		scheduler:    deps.Scheduler,
 	}
 }
 

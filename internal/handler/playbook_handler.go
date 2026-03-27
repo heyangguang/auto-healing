@@ -16,10 +16,20 @@ type PlaybookHandler struct {
 	svc *playbook.Service
 }
 
+type PlaybookHandlerDeps struct {
+	Service *playbook.Service
+}
+
 // NewPlaybookHandler 创建 Playbook 处理器
 func NewPlaybookHandler() *PlaybookHandler {
+	return NewPlaybookHandlerWithDeps(PlaybookHandlerDeps{
+		Service: playbook.NewService(),
+	})
+}
+
+func NewPlaybookHandlerWithDeps(deps PlaybookHandlerDeps) *PlaybookHandler {
 	return &PlaybookHandler{
-		svc: playbook.NewService(),
+		svc: deps.Service,
 	}
 }
 

@@ -31,11 +31,23 @@ type PluginHandler struct {
 	incidentSvc *plugin.IncidentService
 }
 
+type PluginHandlerDeps struct {
+	PluginService   *plugin.Service
+	IncidentService *plugin.IncidentService
+}
+
 // NewPluginHandler 创建插件处理器
 func NewPluginHandler() *PluginHandler {
+	return NewPluginHandlerWithDeps(PluginHandlerDeps{
+		PluginService:   plugin.NewService(),
+		IncidentService: plugin.NewIncidentService(),
+	})
+}
+
+func NewPluginHandlerWithDeps(deps PluginHandlerDeps) *PluginHandler {
 	return &PluginHandler{
-		pluginSvc:   plugin.NewService(),
-		incidentSvc: plugin.NewIncidentService(),
+		pluginSvc:   deps.PluginService,
+		incidentSvc: deps.IncidentService,
 	}
 }
 
