@@ -2,8 +2,8 @@ package handler
 
 import (
 	"github.com/company/auto-healing/internal/model"
+	healing "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	"github.com/company/auto-healing/internal/pkg/response"
-	healing "github.com/company/auto-healing/internal/service/healing"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

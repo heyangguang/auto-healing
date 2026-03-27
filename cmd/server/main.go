@@ -15,12 +15,12 @@ import (
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
+	"github.com/company/auto-healing/internal/modules/automation/service/healing"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/scheduler"
 	"github.com/company/auto-healing/internal/service"
-	"github.com/company/auto-healing/internal/service/healing"
 	"github.com/gin-gonic/gin"
 )
 

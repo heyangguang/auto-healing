@@ -243,4 +243,3 @@ func splitPermissionCode(code string) [3]string {
 	}
 	return parts
 }
-

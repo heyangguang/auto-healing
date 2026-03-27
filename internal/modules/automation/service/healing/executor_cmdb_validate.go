@@ -121,13 +121,13 @@ func (e *FlowExecutor) storeCMDBValidationResult(ctx context.Context, instance *
 	}
 	if existing, ok := instance.NodeStates[nodeID].(map[string]interface{}); ok {
 		existing["validated_hosts"] = validatedHosts
-			existing["invalid_hosts"] = invalidHosts
-			existing["validation_summary"] = summary
-			instance.NodeStates[nodeID] = existing
-			if err := e.persistNodeStates(ctx, instance, "持久化 CMDB 节点状态"); err != nil {
-				return err
-			}
+		existing["invalid_hosts"] = invalidHosts
+		existing["validation_summary"] = summary
+		instance.NodeStates[nodeID] = existing
+		if err := e.persistNodeStates(ctx, instance, "持久化 CMDB 节点状态"); err != nil {
+			return err
 		}
+	}
 	return nil
 }
 

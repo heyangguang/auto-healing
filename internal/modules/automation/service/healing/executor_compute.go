@@ -109,11 +109,11 @@ func (e *FlowExecutor) storeComputeNodeState(ctx context.Context, instance *mode
 	}
 	if existing, ok := instance.NodeStates[nodeID].(map[string]interface{}); ok {
 		existing["computed_results"] = results
-			if len(errors) > 0 {
-				existing["errors"] = errors
-			}
-			instance.NodeStates[nodeID] = existing
-			return e.persistNodeStates(ctx, instance, "持久化计算节点状态")
+		if len(errors) > 0 {
+			existing["errors"] = errors
 		}
+		instance.NodeStates[nodeID] = existing
+		return e.persistNodeStates(ctx, instance, "持久化计算节点状态")
+	}
 	return nil
 }

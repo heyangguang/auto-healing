@@ -3,11 +3,11 @@ package automation
 import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/handler"
+	executionSvc "github.com/company/auto-healing/internal/modules/automation/service/execution"
+	healingSvc "github.com/company/auto-healing/internal/modules/automation/service/healing"
+	scheduleSvc "github.com/company/auto-healing/internal/modules/automation/service/schedule"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/company/auto-healing/internal/repository"
-	executionSvc "github.com/company/auto-healing/internal/service/execution"
-	healingSvc "github.com/company/auto-healing/internal/service/healing"
-	scheduleSvc "github.com/company/auto-healing/internal/service/schedule"
 )
 
 // Module 聚合 automation 域处理器构造。

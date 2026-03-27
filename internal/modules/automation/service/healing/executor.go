@@ -7,9 +7,9 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/service/execution"
 	notificationSvc "github.com/company/auto-healing/internal/notification"
 	"github.com/company/auto-healing/internal/repository"
-	"github.com/company/auto-healing/internal/service/execution"
 )
 
 // FlowExecutor 流程执行器

@@ -9,10 +9,10 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	executionService "github.com/company/auto-healing/internal/modules/automation/service/execution"
+	scheduleService "github.com/company/auto-healing/internal/modules/automation/service/schedule"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/repository"
-	executionService "github.com/company/auto-healing/internal/service/execution"
-	scheduleService "github.com/company/auto-healing/internal/service/schedule"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

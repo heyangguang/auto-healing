@@ -194,7 +194,7 @@ func (e *NodeExecutors) newNotificationService() *notification.Service {
 
 func (e *NodeExecutors) buildNotificationSendRequest(instance *model.FlowInstance, config map[string]interface{}) notification.SendNotificationRequest {
 	sendReq := notification.SendNotificationRequest{
-		Variables: e.buildNotificationVariables(instance, config),
+		Variables:  e.buildNotificationVariables(instance, config),
 		ChannelIDs: parseNotificationChannelIDs(config),
 		TemplateID: parseNotificationTemplateID(config),
 	}

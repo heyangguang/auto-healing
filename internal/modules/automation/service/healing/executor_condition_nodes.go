@@ -52,14 +52,14 @@ func (e *FlowExecutor) executeCondition(ctx context.Context, instance *model.Flo
 	}
 	if existing, ok := instance.NodeStates[node.ID].(map[string]interface{}); ok {
 		existing["activated_branch"] = matchedTarget
-			if matchedExpression != "" {
-				existing["matched_expression"] = matchedExpression
-			}
-			instance.NodeStates[node.ID] = existing
-			if err := e.persistNodeStates(ctx, instance, "持久化条件节点分支状态"); err != nil {
-				return err
-			}
+		if matchedExpression != "" {
+			existing["matched_expression"] = matchedExpression
 		}
+		instance.NodeStates[node.ID] = existing
+		if err := e.persistNodeStates(ctx, instance, "持久化条件节点分支状态"); err != nil {
+			return err
+		}
+	}
 
 	logger.Exec("NODE").Info("条件节点跳转到: %s", matchedTarget)
 	return e.executeNode(ctx, instance, nodes, edges, nextNode)
@@ -138,9 +138,9 @@ func (e *FlowExecutor) executeSetVariable(ctx context.Context, instance *model.F
 		logger.Exec("NODE").Debug("设置变量: %s = %v", varName, finalValue)
 	}
 
-		if err := e.instanceRepo.Update(ctx, instance); err != nil {
-			return err
-		}
+	if err := e.instanceRepo.Update(ctx, instance); err != nil {
+		return err
+	}
 
 	e.logNode(ctx, instance.ID, node.ID, node.Type, model.LogLevelInfo, "变量设置完成", map[string]interface{}{
 		"variables": setVars,

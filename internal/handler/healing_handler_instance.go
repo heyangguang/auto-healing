@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	healing "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
-	healing "github.com/company/auto-healing/internal/service/healing"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

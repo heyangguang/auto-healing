@@ -3,9 +3,9 @@ package handler
 import (
 	"time"
 
+	"github.com/company/auto-healing/internal/modules/automation/service/execution"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
-	"github.com/company/auto-healing/internal/service/execution"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

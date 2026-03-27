@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/service/schedule"
 	"github.com/company/auto-healing/internal/repository"
-	"github.com/company/auto-healing/internal/service/schedule"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
