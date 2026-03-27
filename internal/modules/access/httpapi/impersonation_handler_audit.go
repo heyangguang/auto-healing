@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	accessmodel "github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 )
@@ -81,7 +82,7 @@ func buildTenantImpersonationAudit(userID *uuid.UUID, username, ipAddress, userA
 }
 
 // notifyApproversNewRequest 异步向租户审批人发送站内消息
-func (h *ImpersonationHandler) notifyApproversNewRequest(ctx context.Context, impReq *model.ImpersonationRequest) {
+func (h *ImpersonationHandler) notifyApproversNewRequest(ctx context.Context, impReq *accessmodel.ImpersonationRequest) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.API("IMPERSONATION").Error("notifyApproversNewRequest panic: %v", r)
@@ -103,7 +104,7 @@ func (h *ImpersonationHandler) notifyApproversNewRequest(ctx context.Context, im
 }
 
 // notifyRequesterDecision 异步向申请人发送站内消息
-func (h *ImpersonationHandler) notifyRequesterDecision(ctx context.Context, impReq *model.ImpersonationRequest, approved bool, approverName string) {
+func (h *ImpersonationHandler) notifyRequesterDecision(ctx context.Context, impReq *accessmodel.ImpersonationRequest, approved bool, approverName string) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.API("IMPERSONATION").Error("notifyRequesterDecision panic: %v", r)
@@ -125,7 +126,7 @@ func (h *ImpersonationHandler) notifyRequesterDecision(ctx context.Context, impR
 	}
 }
 
-func impersonationDecisionMessage(impReq *model.ImpersonationRequest, approved bool, approverName string) (string, string) {
+func impersonationDecisionMessage(impReq *accessmodel.ImpersonationRequest, approved bool, approverName string) (string, string) {
 	if approved {
 		return "临时提权申请已批准", "您申请访问租户「" + impReq.TenantName + "」的提权请求已由 " + approverName + " 批准，请在 " + formatMinutes(impReq.DurationMinutes) + " 内完成操作。"
 	}

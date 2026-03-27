@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/company/auto-healing/internal/middleware"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

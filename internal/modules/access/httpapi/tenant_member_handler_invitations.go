@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/middleware"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	engagementservice "github.com/company/auto-healing/internal/modules/engagement/service"
 	"github.com/company/auto-healing/internal/pkg/response"

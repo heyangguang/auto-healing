@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/crypto"
 	"github.com/google/uuid"
