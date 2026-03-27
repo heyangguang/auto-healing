@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	engagementmodel "github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -23,7 +23,7 @@ func SeedSiteMessages() error {
 	return nil
 }
 
-func syncSiteMessages(ctx context.Context, messages []model.SiteMessage) (int, int, error) {
+func syncSiteMessages(ctx context.Context, messages []engagementmodel.SiteMessage) (int, int, error) {
 	inserted := 0
 	skipped := 0
 
@@ -48,8 +48,8 @@ func syncSiteMessages(ctx context.Context, messages []model.SiteMessage) (int, i
 	return inserted, skipped, err
 }
 
-func seedSiteMessageExists(tx *gorm.DB, message model.SiteMessage) (bool, error) {
-	var existing model.SiteMessage
+func seedSiteMessageExists(tx *gorm.DB, message engagementmodel.SiteMessage) (bool, error) {
+	var existing engagementmodel.SiteMessage
 	err := tx.
 		Where("tenant_id IS NULL").
 		Where("target_tenant_id IS NULL").
@@ -61,7 +61,7 @@ func seedSiteMessageExists(tx *gorm.DB, message model.SiteMessage) (bool, error)
 	return err == nil, err
 }
 
-func prepareSeedSiteMessage(message *model.SiteMessage) {
+func prepareSeedSiteMessage(message *engagementmodel.SiteMessage) {
 	if message.ID == uuid.Nil {
 		message.ID = uuid.New()
 	}

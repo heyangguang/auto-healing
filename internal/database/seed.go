@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
+	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -62,11 +62,11 @@ func syncPermissions(tx *gorm.DB) (map[string]uuid.UUID, error) {
 }
 
 func upsertPermission(tx *gorm.DB, seed PermissionSeed) error {
-	var permission model.Permission
+	var permission accessmodel.Permission
 	err := tx.Where("code = ?", seed.Code).First(&permission).Error
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):
-		return tx.Create(&model.Permission{
+		return tx.Create(&accessmodel.Permission{
 			Code:        seed.Code,
 			Name:        seed.Name,
 			Description: seed.Description,
@@ -77,7 +77,7 @@ func upsertPermission(tx *gorm.DB, seed PermissionSeed) error {
 	case err != nil:
 		return err
 	default:
-		return tx.Model(&model.Permission{}).
+		return tx.Model(&accessmodel.Permission{}).
 			Where("code = ?", seed.Code).
 			Updates(permissionFields(seed)).Error
 	}
@@ -94,7 +94,7 @@ func permissionFields(seed PermissionSeed) map[string]interface{} {
 }
 
 func loadPermissionIDs(tx *gorm.DB) (map[string]uuid.UUID, error) {
-	var allPerms []model.Permission
+	var allPerms []accessmodel.Permission
 	if err := tx.Find(&allPerms).Error; err != nil {
 		return nil, err
 	}
@@ -121,8 +121,8 @@ func syncSystemRoles(tx *gorm.DB, permCodeToID map[string]uuid.UUID) error {
 	return nil
 }
 
-func upsertSystemRole(tx *gorm.DB, roleSeed RoleSeed) (*model.Role, error) {
-	var role model.Role
+func upsertSystemRole(tx *gorm.DB, roleSeed RoleSeed) (*accessmodel.Role, error) {
+	var role accessmodel.Role
 	result := tx.Where("name = ?", roleSeed.Name).First(&role)
 	scope := roleSeed.Scope
 	if scope == "" {
@@ -131,7 +131,7 @@ func upsertSystemRole(tx *gorm.DB, roleSeed RoleSeed) (*model.Role, error) {
 
 	switch result.Error {
 	case gorm.ErrRecordNotFound:
-		role = model.Role{
+		role = accessmodel.Role{
 			Name:        roleSeed.Name,
 			DisplayName: roleSeed.DisplayName,
 			Description: roleSeed.Description,
@@ -157,7 +157,7 @@ func upsertSystemRole(tx *gorm.DB, roleSeed RoleSeed) (*model.Role, error) {
 }
 
 func syncRolePermissions(tx *gorm.DB, roleID uuid.UUID, permissionCodes []string, permCodeToID map[string]uuid.UUID) error {
-	var existingRolePerms []model.RolePermission
+	var existingRolePerms []accessmodel.RolePermission
 	if err := tx.Where("role_id = ?", roleID).Find(&existingRolePerms).Error; err != nil {
 		return err
 	}
@@ -176,7 +176,7 @@ func syncRolePermissions(tx *gorm.DB, roleID uuid.UUID, permissionCodes []string
 		if existingPermIDs[permID] {
 			continue
 		}
-		rolePermission := model.RolePermission{
+		rolePermission := accessmodel.RolePermission{
 			RoleID:       roleID,
 			PermissionID: permID,
 		}

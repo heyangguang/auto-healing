@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	engagementmodel "github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -17,7 +17,7 @@ func TestSeedSiteMessagesFillsMissingRecords(t *testing.T) {
 	createSiteMessagesTable(t, db)
 
 	messages := buildSeedSiteMessages(time.Now().AddDate(0, 0, 90))
-	existing := model.SiteMessage{
+	existing := engagementmodel.SiteMessage{
 		ID:       uuid.New(),
 		Category: messages[0].Category,
 		Title:    messages[0].Title,
@@ -32,7 +32,7 @@ func TestSeedSiteMessagesFillsMissingRecords(t *testing.T) {
 	}
 
 	var count int64
-	if err := db.Model(&model.SiteMessage{}).Count(&count).Error; err != nil {
+	if err := db.Model(&engagementmodel.SiteMessage{}).Count(&count).Error; err != nil {
 		t.Fatalf("Count() error = %v", err)
 	}
 	if got, want := int(count), len(messages); got != want {
@@ -40,7 +40,7 @@ func TestSeedSiteMessagesFillsMissingRecords(t *testing.T) {
 	}
 
 	var firstTitleCount int64
-	if err := db.Model(&model.SiteMessage{}).Where("category = ? AND title = ?", messages[0].Category, messages[0].Title).Count(&firstTitleCount).Error; err != nil {
+	if err := db.Model(&engagementmodel.SiteMessage{}).Where("category = ? AND title = ?", messages[0].Category, messages[0].Title).Count(&firstTitleCount).Error; err != nil {
 		t.Fatalf("Count(first title) error = %v", err)
 	}
 	if firstTitleCount != 1 {

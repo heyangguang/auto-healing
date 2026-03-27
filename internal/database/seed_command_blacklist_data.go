@@ -1,8 +1,8 @@
 package database
 
-import "github.com/company/auto-healing/internal/model"
+import opsmodel "github.com/company/auto-healing/internal/modules/ops/model"
 
-var commandBlacklistSeeds = []model.CommandBlacklist{
+var commandBlacklistSeeds = []opsmodel.CommandBlacklist{
 	{Name: "删除根目录", Pattern: "rm -rf /", MatchType: "contains", Severity: "critical", Category: "filesystem", Description: "递归强制删除根目录，会导致系统完全不可用", IsActive: false, IsSystem: true},
 	{Name: "删除全盘文件", Pattern: "rm -rf /*", MatchType: "contains", Severity: "critical", Category: "filesystem", Description: "递归删除根目录下所有文件", IsActive: false, IsSystem: true},
 	{Name: "格式化磁盘", Pattern: "mkfs", MatchType: "contains", Severity: "critical", Category: "filesystem", Description: "格式化磁盘分区，会导致数据丢失", IsActive: false, IsSystem: true},

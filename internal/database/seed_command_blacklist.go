@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	opsmodel "github.com/company/auto-healing/internal/modules/ops/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -28,7 +28,7 @@ func SeedCommandBlacklist() error {
 	return nil
 }
 
-func syncCommandBlacklistSeeds(ctx context.Context, now time.Time, seeds []model.CommandBlacklist) (int, error) {
+func syncCommandBlacklistSeeds(ctx context.Context, now time.Time, seeds []opsmodel.CommandBlacklist) (int, error) {
 	inserted := 0
 	err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, seed := range seeds {
@@ -45,9 +45,9 @@ func syncCommandBlacklistSeeds(ctx context.Context, now time.Time, seeds []model
 	return inserted, err
 }
 
-func seedCommandBlacklistEntry(ctx context.Context, tx *gorm.DB, now time.Time, seed model.CommandBlacklist) (bool, error) {
+func seedCommandBlacklistEntry(ctx context.Context, tx *gorm.DB, now time.Time, seed opsmodel.CommandBlacklist) (bool, error) {
 	var count int64
-	if err := tx.WithContext(ctx).Model(&model.CommandBlacklist{}).
+	if err := tx.WithContext(ctx).Model(&opsmodel.CommandBlacklist{}).
 		Where("name = ? AND pattern = ?", seed.Name, seed.Pattern).
 		Count(&count).Error; err != nil {
 		return false, err

@@ -7,8 +7,14 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/config"
-	"github.com/company/auto-healing/internal/model"
+	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
+	automodel "github.com/company/auto-healing/internal/modules/automation/model"
+	engagementmodel "github.com/company/auto-healing/internal/modules/engagement/model"
+	integrationsmodel "github.com/company/auto-healing/internal/modules/integrations/model"
+	opsmodel "github.com/company/auto-healing/internal/modules/ops/model"
+	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -89,21 +95,21 @@ func AutoMigrate() error {
 
 func autoMigrateModels() []interface{} {
 	return []interface{}{
-		&model.User{}, &model.Role{}, &model.Permission{}, &model.UserPlatformRole{}, &model.RolePermission{}, &model.TokenBlacklist{}, &model.RefreshToken{},
-		&model.Plugin{}, &model.PluginSyncLog{}, &model.Incident{},
-		&model.Workflow{}, &model.WorkflowNode{}, &model.WorkflowEdge{}, &model.WorkflowInstance{}, &model.NodeExecution{},
-		&model.GitRepository{}, &model.GitSyncLog{}, &model.Playbook{}, &model.PlaybookScanLog{}, &model.ExecutionTask{}, &model.ExecutionRun{}, &model.ExecutionSchedule{},
-		&model.NotificationChannel{}, &model.NotificationTemplate{}, &model.NotificationLog{},
-		&model.AuditLog{}, &model.PlatformAuditLog{}, &model.ExecutionLog{}, &model.WorkflowLog{},
-		&model.DashboardConfig{}, &model.SystemWorkspace{}, &model.RoleWorkspace{},
-		&model.UserPreference{}, &model.UserFavorite{}, &model.UserRecent{},
-		&model.HealingFlow{}, &model.HealingRule{}, &model.FlowInstance{}, &model.ApprovalTask{}, &model.FlowExecutionLog{},
-		&model.SiteMessage{}, &model.SiteMessageRead{}, &model.PlatformSetting{},
-		&model.Tenant{}, &model.UserTenantRole{}, &model.Dictionary{}, &model.TenantInvitation{},
-		&model.CommandBlacklist{}, &model.BlacklistExemption{}, &model.TenantBlacklistOverride{},
-		&model.CMDBItem{}, &model.CMDBMaintenanceLog{},
-		&model.ImpersonationRequest{}, &model.ImpersonationApprover{},
-		&model.SecretsSource{},
+		&accessmodel.User{}, &accessmodel.Role{}, &accessmodel.Permission{}, &accessmodel.UserPlatformRole{}, &accessmodel.RolePermission{}, &accessmodel.TokenBlacklist{}, &accessmodel.RefreshToken{},
+		&integrationsmodel.Plugin{}, &integrationsmodel.PluginSyncLog{}, &platformmodel.Incident{},
+		&automodel.Workflow{}, &automodel.WorkflowNode{}, &automodel.WorkflowEdge{}, &automodel.WorkflowInstance{}, &automodel.NodeExecution{},
+		&integrationsmodel.GitRepository{}, &integrationsmodel.GitSyncLog{}, &integrationsmodel.Playbook{}, &integrationsmodel.PlaybookScanLog{}, &automodel.ExecutionTask{}, &automodel.ExecutionRun{}, &automodel.ExecutionSchedule{},
+		&engagementmodel.NotificationChannel{}, &engagementmodel.NotificationTemplate{}, &engagementmodel.NotificationLog{},
+		&platformmodel.AuditLog{}, &platformmodel.PlatformAuditLog{}, &automodel.ExecutionLog{}, &automodel.WorkflowLog{},
+		&engagementmodel.DashboardConfig{}, &engagementmodel.SystemWorkspace{}, &engagementmodel.RoleWorkspace{},
+		&engagementmodel.UserPreference{}, &engagementmodel.UserFavorite{}, &engagementmodel.UserRecent{},
+		&automodel.HealingFlow{}, &automodel.HealingRule{}, &automodel.FlowInstance{}, &automodel.ApprovalTask{}, &automodel.FlowExecutionLog{},
+		&engagementmodel.SiteMessage{}, &engagementmodel.SiteMessageRead{}, &opsmodel.PlatformSetting{},
+		&accessmodel.Tenant{}, &accessmodel.UserTenantRole{}, &opsmodel.Dictionary{}, &accessmodel.TenantInvitation{},
+		&opsmodel.CommandBlacklist{}, &opsmodel.BlacklistExemption{}, &opsmodel.TenantBlacklistOverride{},
+		&platformmodel.CMDBItem{}, &platformmodel.CMDBMaintenanceLog{},
+		&accessmodel.ImpersonationRequest{}, &accessmodel.ImpersonationApprover{},
+		&secretsmodel.SecretsSource{},
 	}
 }
 
