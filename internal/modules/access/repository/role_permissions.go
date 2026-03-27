@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/modules/access/model"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -42,14 +43,14 @@ func (r *RoleRepository) AssignPermissions(ctx context.Context, roleID uuid.UUID
 }
 
 func (r *RoleRepository) loadRoleForPermissionMutation(ctx context.Context, roleID uuid.UUID) (*model.Role, error) {
-	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+	if tenantID, ok := platformrepo.TenantIDFromContextOK(ctx); ok {
 		return r.GetTenantRoleByID(ctx, tenantID, roleID)
 	}
 	return r.GetByID(ctx, roleID)
 }
 
 func (r *RoleRepository) validatePermissionAssignment(ctx context.Context, permissionIDs []uuid.UUID) error {
-	if _, ok := TenantIDFromContextOK(ctx); !ok {
+	if _, ok := platformrepo.TenantIDFromContextOK(ctx); !ok {
 		return nil
 	}
 	return NewPermissionRepositoryWithDB(r.db).ValidateTenantPermissionIDs(ctx, permissionIDs)

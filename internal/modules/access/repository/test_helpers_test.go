@@ -1,9 +1,12 @@
 package repository
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
+	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -33,4 +36,8 @@ func mustExec(t *testing.T, db *gorm.DB, sql string, args ...any) {
 	if err := db.Exec(sql, args...).Error; err != nil {
 		t.Fatalf("exec %q: %v", sql, err)
 	}
+}
+
+func WithTenantID(ctx context.Context, tenantID uuid.UUID) context.Context {
+	return platformrepo.WithTenantID(ctx, tenantID)
 }

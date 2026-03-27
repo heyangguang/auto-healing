@@ -6,6 +6,7 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/access/model"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -50,7 +51,7 @@ func NewRoleRepositoryWithDB(db *gorm.DB) *RoleRepository {
 // Create 创建角色
 func (r *RoleRepository) Create(ctx context.Context, role *model.Role) error {
 	if role.Scope == "tenant" {
-		if err := FillTenantID(ctx, &role.TenantID); err != nil {
+		if err := platformrepo.FillTenantID(ctx, &role.TenantID); err != nil {
 			return err
 		}
 	}
@@ -79,7 +80,7 @@ func (r *RoleRepository) getRole(ctx context.Context, predicate string, value an
 // Update 更新角色
 func (r *RoleRepository) Update(ctx context.Context, role *model.Role) error {
 	if role.Scope == "tenant" || role.TenantID != nil {
-		return UpdateTenantScopedModel(r.db, ctx, role.ID, role)
+		return platformrepo.UpdateTenantScopedModel(r.db, ctx, role.ID, role)
 	}
 	return r.db.WithContext(ctx).Save(role).Error
 }
@@ -97,7 +98,7 @@ func (r *RoleRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 func (r *RoleRepository) loadRoleForDelete(ctx context.Context, id uuid.UUID) (*model.Role, error) {
-	if tenantID, ok := TenantIDFromContextOK(ctx); ok {
+	if tenantID, ok := platformrepo.TenantIDFromContextOK(ctx); ok {
 		return r.GetTenantRoleByID(ctx, tenantID, id)
 	}
 	var role model.Role

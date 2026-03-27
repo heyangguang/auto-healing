@@ -5,6 +5,7 @@ import (
 
 	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -53,7 +54,7 @@ func ensureActiveTenant(c *gin.Context, tenantID uuid.UUID) bool {
 
 func injectTenantContext(c *gin.Context, tenantID uuid.UUID) {
 	c.Set(TenantIDKey, tenantID.String())
-	ctx := accessrepo.WithTenantID(c.Request.Context(), tenantID)
+	ctx := platformrepo.WithTenantID(c.Request.Context(), tenantID)
 	c.Request = c.Request.WithContext(ctx)
 }
 

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/platform/modeltypes"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -36,7 +36,7 @@ func prepareAuditRequest(c *gin.Context, db *gorm.DB) (*auditRequestState, bool)
 		return nil, false
 	}
 	tenantID := uuid.Nil
-	if resolvedTenantID, ok := accessrepo.TenantIDFromContextOK(c.Request.Context()); ok {
+	if resolvedTenantID, ok := platformrepo.TenantIDFromContextOK(c.Request.Context()); ok {
 		tenantID = resolvedTenantID
 	}
 	state := &auditRequestState{

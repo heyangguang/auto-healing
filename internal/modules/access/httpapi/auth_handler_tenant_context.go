@@ -5,7 +5,7 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/modules/access/model"
-	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -18,7 +18,7 @@ var (
 )
 
 func currentTenantOrNil(c *gin.Context) uuid.UUID {
-	if tenantID, ok := accessrepo.TenantIDFromContextOK(c.Request.Context()); ok {
+	if tenantID, ok := platformrepo.TenantIDFromContextOK(c.Request.Context()); ok {
 		return tenantID
 	}
 	if tenantID, ok := headerTenantOrNil(c); ok {
@@ -33,7 +33,7 @@ func currentTenantOrNil(c *gin.Context) uuid.UUID {
 func (h *AuthHandler) authTenantIDOrError(c *gin.Context) (uuid.UUID, error) {
 	tenantID := currentTenantOrNil(c)
 	if tenantID == uuid.Nil {
-		return uuid.Nil, accessrepo.ErrTenantContextRequired
+		return uuid.Nil, platformrepo.ErrTenantContextRequired
 	}
 	if err := h.ensureAuthTenantAccessible(c, tenantID); err != nil {
 		return uuid.Nil, err

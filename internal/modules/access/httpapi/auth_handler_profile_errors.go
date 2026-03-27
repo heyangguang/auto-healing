@@ -6,6 +6,7 @@ import (
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 )
 
@@ -30,7 +31,7 @@ func respondUpdateProfileError(c *gin.Context, err error) {
 
 func respondProfileAuditQueryError(c *gin.Context, publicMsg string, err error) {
 	switch {
-	case errors.Is(err, accessrepo.ErrTenantContextRequired):
+	case errors.Is(err, platformrepo.ErrTenantContextRequired):
 		response.Forbidden(c, "租户上下文缺失或无效")
 	case errors.Is(err, errAuthTenantNotFound):
 		response.Forbidden(c, errAuthTenantNotFound.Error())
