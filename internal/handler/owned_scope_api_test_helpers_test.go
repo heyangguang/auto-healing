@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/company/auto-healing/internal/middleware"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	respPkg "github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -40,7 +40,7 @@ func newOwnedScopeTestRouter(ctx ownedScopeTestContext) *gin.Engine {
 			if err != nil {
 				panic(err)
 			}
-			c.Request = c.Request.WithContext(repository.WithTenantID(c.Request.Context(), tenantUUID))
+			c.Request = c.Request.WithContext(accessrepo.WithTenantID(c.Request.Context(), tenantUUID))
 		}
 		c.Next()
 	})

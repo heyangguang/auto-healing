@@ -3,12 +3,13 @@ package httpapi
 import (
 	"context"
 	"errors"
+
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -63,7 +64,7 @@ func (h *ImpersonationHandler) Approve(c *gin.Context) {
 		return
 	}
 	if err := h.repo.UpdateStatus(c.Request.Context(), req.ID, model.ImpersonationStatusApproved, &userID); err != nil {
-		if errors.Is(err, repository.ErrImpersonationRequestNotPending) {
+		if errors.Is(err, accessrepo.ErrImpersonationRequestNotPending) {
 			response.Conflict(c, "该申请已被其他审批人处理")
 			return
 		}
@@ -83,7 +84,7 @@ func (h *ImpersonationHandler) Reject(c *gin.Context) {
 		return
 	}
 	if err := h.repo.UpdateStatus(c.Request.Context(), req.ID, model.ImpersonationStatusRejected, &userID); err != nil {
-		if errors.Is(err, repository.ErrImpersonationRequestNotPending) {
+		if errors.Is(err, accessrepo.ErrImpersonationRequestNotPending) {
 			response.Conflict(c, "该申请已被其他审批人处理")
 			return
 		}

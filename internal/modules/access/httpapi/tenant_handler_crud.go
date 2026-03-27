@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -55,7 +55,7 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 		return
 	}
 	existing, err := h.repo.GetByCode(c.Request.Context(), req.Code)
-	if err != nil && !errors.Is(err, repository.ErrTenantNotFound) {
+	if err != nil && !errors.Is(err, accessrepo.ErrTenantNotFound) {
 		respondInternalError(c, "TENANT", "检查租户编码失败", err)
 		return
 	}
@@ -156,7 +156,7 @@ func applyTenantUpdate(tenant *model.Tenant, req *updateTenantRequest) error {
 }
 
 func respondTenantLookupError(c *gin.Context, err error) {
-	if errors.Is(err, repository.ErrTenantNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
+	if errors.Is(err, accessrepo.ErrTenantNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
 		response.NotFound(c, "租户不存在")
 		return
 	}

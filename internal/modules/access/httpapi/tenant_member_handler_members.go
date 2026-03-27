@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -27,7 +27,7 @@ func (h *TenantHandler) AddMember(c *gin.Context) {
 	_ = role
 
 	existingMember, err := h.repo.GetMember(c.Request.Context(), userID, tenantID)
-	if err != nil && !errors.Is(err, repository.ErrUserNotFound) {
+	if err != nil && !errors.Is(err, accessrepo.ErrUserNotFound) {
 		respondInternalError(c, "TENANT", "查询成员关系失败", err)
 		return
 	}

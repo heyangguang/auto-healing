@@ -6,9 +6,9 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -303,7 +303,7 @@ func (h *UserHandler) validateAssignedPlatformRoles(c *gin.Context, userID uuid.
 }
 
 func (h *UserHandler) isProtectedPlatformAdmin(c *gin.Context, userID uuid.UUID) (bool, error) {
-	platformAdmins, _, err := h.userRepo.List(c.Request.Context(), &repository.UserListParams{
+	platformAdmins, _, err := h.userRepo.List(c.Request.Context(), &accessrepo.UserListParams{
 		Page:         1,
 		PageSize:     2,
 		PlatformOnly: true,
@@ -324,7 +324,7 @@ func (h *UserHandler) isProtectedPlatformAdmin(c *gin.Context, userID uuid.UUID)
 
 // isLastPlatformAdmin 判断指定用户是否是最后一个平台管理员
 func (h *UserHandler) isLastPlatformAdmin(c *gin.Context, userID uuid.UUID) (bool, error) {
-	platformAdmins, _, err := h.userRepo.List(c.Request.Context(), &repository.UserListParams{
+	platformAdmins, _, err := h.userRepo.List(c.Request.Context(), &accessrepo.UserListParams{
 		Page:         1,
 		PageSize:     2,
 		PlatformOnly: true,

@@ -5,7 +5,8 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	accesshttp "github.com/company/auto-healing/internal/modules/access/httpapi"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
-	"github.com/company/auto-healing/internal/repository"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 )
 
 // Module 聚合 access 域的处理器构造。
@@ -57,9 +58,9 @@ func New(cfg *config.Config) *Module {
 		Impersonation: accesshttp.NewImpersonationHandlerWithDeps(accesshttp.ImpersonationHandlerDeps{
 			ImpersonationRepo: accessrepo.NewImpersonationRepository(),
 			TenantRepo:        tenantRepo,
-			AuditRepo:         repository.NewAuditLogRepository(database.DB),
-			PlatformAuditRepo: repository.NewPlatformAuditLogRepository(),
-			SiteMessageRepo:   repository.NewSiteMessageRepository(),
+			AuditRepo:         auditrepo.NewAuditLogRepository(database.DB),
+			PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepository(),
+			SiteMessageRepo:   engagementrepo.NewSiteMessageRepository(),
 		}),
 	}
 }
