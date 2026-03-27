@@ -2,11 +2,11 @@ EXPECTED_MODULE_HEADER='module_id,label,module_kind,module_note,worktree_suffix,
 PARALLEL_REVIEW_PYTHON_BIN=''
 
 repo_root() {
-	git rev-parse --show-toplevel
+	git -C "$PARALLEL_REVIEW_SCRIPT_DIR" rev-parse --show-toplevel
 }
 
 current_branch() {
-	git branch --show-current
+	git -C "$(repo_root)" branch --show-current
 }
 
 resolve_path() {
