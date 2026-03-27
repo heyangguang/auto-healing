@@ -2,6 +2,17 @@ package handler
 
 import "github.com/company/auto-healing/internal/config"
 
+// HandlerOverrides 用于按域注入已构造的处理器，避免大一统构造器重复 new。
+type HandlerOverrides struct {
+	Auth          *AuthHandler
+	User          *UserHandler
+	TenantUser    *TenantUserHandler
+	Role          *RoleHandler
+	Permission    *PermissionHandler
+	Tenant        *TenantHandler
+	Impersonation *ImpersonationHandler
+}
+
 // Handlers 所有处理器集合。
 type Handlers struct {
 	Auth               *AuthHandler
@@ -36,13 +47,45 @@ type Handlers struct {
 
 // NewHandlers 创建所有处理器。
 func NewHandlers(cfg *config.Config) *Handlers {
-	authHandler := NewAuthHandler(cfg)
+	return NewHandlersWithOverrides(cfg, HandlerOverrides{})
+}
+
+// NewHandlersWithOverrides 创建处理器集合，并允许已模块化的域注入自己的构造结果。
+func NewHandlersWithOverrides(cfg *config.Config, overrides HandlerOverrides) *Handlers {
+	authHandler := overrides.Auth
+	if authHandler == nil {
+		authHandler = NewAuthHandler(cfg)
+	}
+	userHandler := overrides.User
+	if userHandler == nil {
+		userHandler = NewUserHandler(authHandler.authSvc)
+	}
+	tenantUserHandler := overrides.TenantUser
+	if tenantUserHandler == nil {
+		tenantUserHandler = NewTenantUserHandler(authHandler.authSvc)
+	}
+	roleHandler := overrides.Role
+	if roleHandler == nil {
+		roleHandler = NewRoleHandler()
+	}
+	permissionHandler := overrides.Permission
+	if permissionHandler == nil {
+		permissionHandler = NewPermissionHandler()
+	}
+	tenantHandler := overrides.Tenant
+	if tenantHandler == nil {
+		tenantHandler = NewTenantHandler(authHandler.authSvc)
+	}
+	impersonationHandler := overrides.Impersonation
+	if impersonationHandler == nil {
+		impersonationHandler = NewImpersonationHandler()
+	}
 	handlers := &Handlers{
 		Auth:               authHandler,
-		User:               NewUserHandler(authHandler.authSvc),
-		TenantUser:         NewTenantUserHandler(authHandler.authSvc),
-		Role:               NewRoleHandler(),
-		Permission:         NewPermissionHandler(),
+		User:               userHandler,
+		TenantUser:         tenantUserHandler,
+		Role:               roleHandler,
+		Permission:         permissionHandler,
 		Plugin:             NewPluginHandler(),
 		CMDB:               NewCMDBHandler(),
 		Secrets:            NewSecretsHandler(),
@@ -60,10 +103,10 @@ func NewHandlers(cfg *config.Config) *Handlers {
 		Search:             NewSearchHandler(),
 		SiteMessage:        NewSiteMessageHandler(),
 		PlatformSettings:   NewPlatformSettingsHandler(),
-		Tenant:             NewTenantHandler(authHandler.authSvc),
+		Tenant:             tenantHandler,
 		Workbench:          NewWorkbenchHandler(),
 		Dictionary:         NewDictionaryHandler(),
-		Impersonation:      NewImpersonationHandler(),
+		Impersonation:      impersonationHandler,
 		CommandBlacklist:   NewCommandBlacklistHandler(),
 		BlacklistExemption: NewBlacklistExemptionHandler(),
 	}
