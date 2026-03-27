@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/ops/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 )
 

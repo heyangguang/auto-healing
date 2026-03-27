@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/company/auto-healing/internal/middleware"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/ops/model"
 	"github.com/company/auto-healing/internal/pkg/response"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/gin-gonic/gin"

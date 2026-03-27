@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/ops/model"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"

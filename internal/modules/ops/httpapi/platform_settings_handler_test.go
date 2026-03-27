@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/ops/model"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

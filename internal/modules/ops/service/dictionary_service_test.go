@@ -6,7 +6,7 @@ import (
 
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/ops/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

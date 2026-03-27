@@ -1,6 +1,6 @@
 package service
 
-import "github.com/company/auto-healing/internal/model"
+import "github.com/company/auto-healing/internal/modules/ops/model"
 
 // d 辅助函数：创建字典条目
 func d(dictType, key, label, labelEn, color, tagColor, badge, icon, bg string, sort int) model.Dictionary {

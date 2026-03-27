@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/ops/model"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/google/uuid"
 )

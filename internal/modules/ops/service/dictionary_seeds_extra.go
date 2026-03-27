@@ -1,6 +1,6 @@
 package service
 
-import "github.com/company/auto-healing/internal/model"
+import "github.com/company/auto-healing/internal/modules/ops/model"
 
 // auditActionSeeds 审计操作类型 Seed（约35种）
 func auditActionSeeds() []model.Dictionary {

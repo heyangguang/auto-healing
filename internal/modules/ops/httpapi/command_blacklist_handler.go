@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/ops/model"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
