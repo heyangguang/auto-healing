@@ -168,21 +168,19 @@ func (h *BlacklistExemptionHandler) GetPending(c *gin.Context) {
 
 // GetSearchSchema 搜索字段定义
 func (h *BlacklistExemptionHandler) GetSearchSchema(c *gin.Context) {
-	response.Success(c, gin.H{
-		"fields": []map[string]interface{}{
-			{"key": "task_name", "label": "任务模板", "type": "text"},
-			{"key": "rule_name", "label": "规则名称", "type": "text"},
-			{"key": "requester_name", "label": "申请人", "type": "text"},
-			{
-				"key":   "status",
-				"label": "状态",
-				"type":  "enum",
-				"options": []map[string]string{
-					{"label": "待审批", "value": "pending"},
-					{"label": "已批准", "value": "approved"},
-					{"label": "已拒绝", "value": "rejected"},
-					{"label": "已过期", "value": "expired"},
-				},
+	response.Success(c, []map[string]interface{}{
+		{"key": "task_name", "label": "任务模板", "type": "text"},
+		{"key": "rule_name", "label": "规则名称", "type": "text"},
+		{"key": "requester_name", "label": "申请人", "type": "text"},
+		{
+			"key":   "status",
+			"label": "状态",
+			"type":  "enum",
+			"options": []map[string]string{
+				{"label": "待审批", "value": "pending"},
+				{"label": "已批准", "value": "approved"},
+				{"label": "已拒绝", "value": "rejected"},
+				{"label": "已过期", "value": "expired"},
 			},
 		},
 	})

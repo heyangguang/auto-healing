@@ -197,10 +197,7 @@ func (h *PlatformAuditHandler) GetPlatformAuditTrend(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, gin.H{
-		"items": items,
-		"days":  days,
-	})
+	response.Success(c, items)
 }
 
 // GetPlatformUserRanking 获取平台用户操作排行
@@ -215,11 +212,7 @@ func (h *PlatformAuditHandler) GetPlatformUserRanking(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, gin.H{
-		"rankings": rankings,
-		"limit":    limit,
-		"days":     days,
-	})
+	response.Success(c, rankings)
 }
 
 // GetPlatformHighRiskLogs 获取平台高危操作日志

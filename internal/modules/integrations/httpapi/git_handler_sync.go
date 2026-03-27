@@ -92,7 +92,7 @@ func (h *GitRepoHandler) GetFiles(c *gin.Context) {
 			respondResourceError(c, "GIT", "获取文件内容失败", "仓库不存在", integrationrepo.ErrGitRepositoryNotFound, resourceErrorModeBadRequest, err)
 			return
 		}
-		response.Success(c, map[string]any{"path": path, "content": content})
+		response.Success(c, GitFileContentResponse{Path: path, Content: content})
 		return
 	}
 
@@ -101,5 +101,5 @@ func (h *GitRepoHandler) GetFiles(c *gin.Context) {
 		respondResourceError(c, "GIT", "获取文件树失败", "仓库不存在", integrationrepo.ErrGitRepositoryNotFound, resourceErrorModeBadRequest, err)
 		return
 	}
-	response.Success(c, map[string]any{"files": files})
+	response.Success(c, files)
 }

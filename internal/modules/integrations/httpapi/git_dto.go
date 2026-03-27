@@ -94,6 +94,12 @@ type ValidateRepoRequest struct {
 	AuthType   string     `json:"auth_type"`
 	AuthConfig model.JSON `json:"auth_config"`
 }
+
+type GitFileContentResponse struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
 type ActivateRepoRequest struct {
 	MainPlaybook string             `json:"main_playbook"`
 	ConfigMode   string             `json:"config_mode"`

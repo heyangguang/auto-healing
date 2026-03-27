@@ -258,7 +258,19 @@
     summary: 获取平台审计趋势
     responses:
       '200':
-        $ref: '#/components/responses/Success'
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
 /platform/audit-logs/user-ranking:
   get:
     tags:
@@ -266,7 +278,19 @@
     summary: 获取平台审计用户排行
     responses:
       '200':
-        $ref: '#/components/responses/Success'
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
 /platform/audit-logs/high-risk:
   get:
     tags:

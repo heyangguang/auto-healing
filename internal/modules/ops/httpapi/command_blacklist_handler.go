@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/company/auto-healing/internal/modules/ops/model"
@@ -227,8 +226,7 @@ func (h *CommandBlacklistHandler) BatchToggle(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"message": fmt.Sprintf("已%s %d 条规则", map[bool]string{true: "启用", false: "禁用"}[*input.IsActive], count),
-		"count":   count,
+		"count": count,
 	})
 }
 
@@ -265,12 +263,10 @@ func (h *CommandBlacklistHandler) Simulate(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"data": gin.H{
-			"results":       results,
-			"total_lines":   len(results),
-			"match_count":   matchCount,
-			"matched_files": matchedFiles,
-		},
+		"results":       results,
+		"total_lines":   len(results),
+		"match_count":   matchCount,
+		"matched_files": matchedFiles,
 	})
 }
 

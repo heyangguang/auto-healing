@@ -320,8 +320,10 @@
               - type: object
                 properties:
                   data:
-                    type: object
-                    additionalProperties: true
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
 /tenant/command-blacklist:
   get:
     tags:
@@ -487,10 +489,21 @@
               - type: object
                 properties:
                   data:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                      total_lines:
+                        type: integer
+                      match_count:
+                        type: integer
+                      matched_files:
+                        type: object
+                        additionalProperties:
+                          type: integer
 /tenant/audit-logs/{id}:
   get:
     tags:

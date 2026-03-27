@@ -410,7 +410,18 @@ paths:
       summary: 获取工作台日历
       responses:
         '200':
-          $ref: '#/components/responses/Success'
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/Success'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        type: string
   /common/workbench/announcements:
     get:
       tags:
@@ -1046,7 +1057,19 @@ paths:
       summary: 获取平台审计趋势
       responses:
         '200':
-          $ref: '#/components/responses/Success'
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/Success'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        type: object
+                        additionalProperties: true
   /platform/audit-logs/user-ranking:
     get:
       tags:
@@ -1054,7 +1077,19 @@ paths:
       summary: 获取平台审计用户排行
       responses:
         '200':
-          $ref: '#/components/responses/Success'
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/Success'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        type: object
+                        additionalProperties: true
   /platform/audit-logs/high-risk:
     get:
       tags:
@@ -6362,8 +6397,10 @@ paths:
                 - type: object
                   properties:
                     data:
-                      type: object
-                      additionalProperties: true
+                      type: array
+                      items:
+                        type: object
+                        additionalProperties: true
   /tenant/command-blacklist:
     get:
       tags:
@@ -6529,10 +6566,21 @@ paths:
                 - type: object
                   properties:
                     data:
-                      type: array
-                      items:
-                        type: object
-                        additionalProperties: true
+                      type: object
+                      properties:
+                        results:
+                          type: array
+                          items:
+                            type: object
+                            additionalProperties: true
+                        total_lines:
+                          type: integer
+                        match_count:
+                          type: integer
+                        matched_files:
+                          type: object
+                          additionalProperties:
+                            type: integer
   /tenant/audit-logs/{id}:
     get:
       tags:

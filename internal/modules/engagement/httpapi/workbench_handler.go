@@ -151,9 +151,7 @@ func (h *WorkbenchHandler) GetScheduleCalendar(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, map[string]interface{}{
-		"dates": dates,
-	})
+	response.Success(c, dates)
 }
 
 // GetAnnouncements 获取系统公告
