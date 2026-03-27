@@ -7,7 +7,6 @@ import (
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"sync"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -17,14 +16,7 @@ type SearchRepository struct {
 	db *gorm.DB
 }
 
-// NewSearchRepository 创建全局搜索仓库
-func NewSearchRepository() *SearchRepository {
-	return NewSearchRepositoryWithDB(database.DB)
-}
-
-func NewSearchRepositoryWithDB(db *gorm.DB) *SearchRepository {
-	return &SearchRepository{db: db}
-}
+func NewSearchRepositoryWithDB(db *gorm.DB) *SearchRepository { return &SearchRepository{db: db} }
 
 // SearchResultItem 搜索结果项
 type SearchResultItem struct {

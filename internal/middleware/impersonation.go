@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -86,17 +85,6 @@ func loadImpersonationPermissionsFromRoleRepo(ctx context.Context, roleRepo *acc
 		codes[i] = p.Code
 	}
 	return codes, nil
-}
-
-// ImpersonationMiddleware 验证 Impersonation 会话
-// 当检测到请求携带 X-Impersonation=true 时：
-// 1. 从 X-Impersonation-Request-ID 获取申请单 ID
-// 2. 验证申请单 status=active 且未过期
-// 3. 验证 requester_id 与当前用户匹配
-// 4. 在 gin.Context 中设置 impersonation 标记
-// 5. 用 impersonation_accessor 角色权限覆盖 JWT 中的 * 通配符
-func ImpersonationMiddleware() gin.HandlerFunc {
-	return ImpersonationMiddlewareWithDeps(NewRuntimeDepsWithDB(database.DB))
 }
 
 func ImpersonationMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {

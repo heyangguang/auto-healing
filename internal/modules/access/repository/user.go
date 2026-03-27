@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/access/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
@@ -21,11 +20,6 @@ var (
 // UserRepository 用户数据仓库
 type UserRepository struct {
 	db *gorm.DB
-}
-
-// NewUserRepository 创建用户仓库
-func NewUserRepository() *UserRepository {
-	return &UserRepository{db: database.DB}
 }
 
 func NewUserRepositoryWithDB(db *gorm.DB) *UserRepository {

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/google/uuid"
@@ -37,11 +36,6 @@ type ServiceDeps struct {
 	TenantRepo     *accessrepo.TenantRepository
 	JWTService     *jwt.Service
 	DB             *gorm.DB
-}
-
-// NewService 创建认证服务
-func NewService(jwtSvc *jwt.Service) *Service {
-	return NewServiceWithDB(database.DB, jwtSvc)
 }
 
 func NewServiceWithDB(db *gorm.DB, jwtSvc *jwt.Service) *Service {

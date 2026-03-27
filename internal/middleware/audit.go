@@ -1,14 +1,6 @@
 package middleware
 
-import (
-	"github.com/company/auto-healing/internal/database"
-	"github.com/gin-gonic/gin"
-)
-
-// AuditMiddleware 审计中间件 — 自动记录写操作的审计日志
-func AuditMiddleware() gin.HandlerFunc {
-	return AuditMiddlewareWithDeps(NewRuntimeDepsWithDB(database.DB))
-}
+import "github.com/gin-gonic/gin"
 
 func AuditMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
 	db := deps.requireDB()

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/access/model"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
@@ -37,11 +36,6 @@ type RoleUserInfo struct {
 	DisplayName string    `json:"display_name"`
 	Email       string    `json:"email"`
 	Status      string    `json:"status"`
-}
-
-// NewRoleRepository 创建角色仓库
-func NewRoleRepository() *RoleRepository {
-	return &RoleRepository{db: database.DB}
 }
 
 func NewRoleRepositoryWithDB(db *gorm.DB) *RoleRepository {

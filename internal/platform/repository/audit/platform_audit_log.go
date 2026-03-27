@@ -3,7 +3,6 @@ package audit
 import (
 	"context"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/pkg/query"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
@@ -12,10 +11,6 @@ import (
 
 type PlatformAuditLogRepository struct {
 	db *gorm.DB
-}
-
-func NewPlatformAuditLogRepository() *PlatformAuditLogRepository {
-	return NewPlatformAuditLogRepositoryWithDB(database.DB)
 }
 
 func NewPlatformAuditLogRepositoryWithDB(db *gorm.DB) *PlatformAuditLogRepository {

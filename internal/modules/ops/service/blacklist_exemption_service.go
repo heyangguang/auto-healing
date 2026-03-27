@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/ops/model"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/google/uuid"
@@ -19,10 +18,6 @@ type BlacklistExemptionService struct {
 
 type BlacklistExemptionServiceDeps struct {
 	Repo *opsrepo.BlacklistExemptionRepository
-}
-
-func NewBlacklistExemptionService() *BlacklistExemptionService {
-	return NewBlacklistExemptionServiceWithDB(database.DB)
 }
 
 func NewBlacklistExemptionServiceWithDB(db *gorm.DB) *BlacklistExemptionService {

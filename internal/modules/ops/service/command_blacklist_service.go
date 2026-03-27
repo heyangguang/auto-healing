@@ -1,7 +1,6 @@
 package service
 
 import (
-	"github.com/company/auto-healing/internal/database"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"gorm.io/gorm"
 )
@@ -13,11 +12,6 @@ type CommandBlacklistService struct {
 
 type CommandBlacklistServiceDeps struct {
 	Repo *opsrepo.CommandBlacklistRepository
-}
-
-// NewCommandBlacklistService 创建服务
-func NewCommandBlacklistService() *CommandBlacklistService {
-	return NewCommandBlacklistServiceWithDB(database.DB)
 }
 
 func NewCommandBlacklistServiceWithDB(db *gorm.DB) *CommandBlacklistService {

@@ -8,7 +8,6 @@ import (
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -23,11 +22,6 @@ var (
 // UserPreferenceRepository 用户偏好数据仓库
 type UserPreferenceRepository struct {
 	db *gorm.DB
-}
-
-// NewUserPreferenceRepository 创建用户偏好仓库
-func NewUserPreferenceRepository() *UserPreferenceRepository {
-	return NewUserPreferenceRepositoryWithDB(database.DB)
 }
 
 func NewUserPreferenceRepositoryWithDB(db *gorm.DB) *UserPreferenceRepository {

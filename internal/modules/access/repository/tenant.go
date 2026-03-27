@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/access/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
@@ -19,11 +18,6 @@ var ErrTenantNotFound = errors.New("租户不存在")
 // TenantRepository 租户数据仓库
 type TenantRepository struct {
 	db *gorm.DB
-}
-
-// NewTenantRepository 创建租户仓库
-func NewTenantRepository() *TenantRepository {
-	return &TenantRepository{db: database.DB}
 }
 
 func NewTenantRepositoryWithDB(db *gorm.DB) *TenantRepository {

@@ -1,7 +1,6 @@
 package engagement
 
 import (
-	"github.com/company/auto-healing/internal/database"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	engagementhttp "github.com/company/auto-healing/internal/modules/engagement/httpapi"
@@ -38,11 +37,6 @@ type ModuleDeps struct {
 	EventBus             *platformevents.MessageEventBus
 	TenantRepo           *accessrepo.TenantRepository
 	UserRepo             *accessrepo.UserRepository
-}
-
-// New 创建 engagement 域模块。
-func New() *Module {
-	return NewWithDB(database.DB)
 }
 
 func NewWithDB(db *gorm.DB) *Module {

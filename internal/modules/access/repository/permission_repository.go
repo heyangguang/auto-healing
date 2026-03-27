@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/access/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -24,11 +23,6 @@ type PermissionFilter struct {
 	Module string
 	Name   string
 	Code   string
-}
-
-// NewPermissionRepository 创建权限仓库
-func NewPermissionRepository() *PermissionRepository {
-	return &PermissionRepository{db: database.DB}
 }
 
 func NewPermissionRepositoryWithDB(db *gorm.DB) *PermissionRepository {

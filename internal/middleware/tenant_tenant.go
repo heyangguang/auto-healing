@@ -1,17 +1,11 @@
 package middleware
 
 import (
-	"github.com/company/auto-healing/internal/database"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 const ErrorCodeTenantMembershipLookupFailed = "TENANT_MEMBERSHIP_LOOKUP_FAILED"
-
-// TenantMiddleware 租户上下文中间件
-func TenantMiddleware() gin.HandlerFunc {
-	return TenantMiddlewareWithDeps(NewRuntimeDepsWithDB(database.DB))
-}
 
 func TenantMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
 	tenantRepo := deps.requireTenantRepo()

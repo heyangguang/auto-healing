@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/ops/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -13,11 +12,6 @@ import (
 // DictionaryRepository 字典值仓储
 type DictionaryRepository struct {
 	db *gorm.DB
-}
-
-// NewDictionaryRepository 创建仓储
-func NewDictionaryRepository() *DictionaryRepository {
-	return NewDictionaryRepositoryWithDB(database.DB)
 }
 
 func NewDictionaryRepositoryWithDB(db *gorm.DB) *DictionaryRepository {

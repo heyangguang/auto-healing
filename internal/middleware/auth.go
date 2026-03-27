@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/company/auto-healing/internal/database"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -31,11 +30,6 @@ const (
 	ErrorCodeAccountLookup        = "ACCOUNT_LOOKUP_FAILED"
 	ErrorCodeTokenBlacklistLookup = "TOKEN_BLACKLIST_LOOKUP_FAILED"
 )
-
-// JWTAuth JWT认证中间件
-func JWTAuth(jwtService *jwt.Service) gin.HandlerFunc {
-	return JWTAuthWithDeps(jwtService, NewRuntimeDepsWithDB(database.DB))
-}
 
 func JWTAuthWithDeps(jwtService *jwt.Service, deps RuntimeDeps) gin.HandlerFunc {
 	userRepo := deps.requireUserRepo()

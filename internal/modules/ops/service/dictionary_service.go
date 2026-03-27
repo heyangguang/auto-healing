@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/ops/model"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -24,11 +23,6 @@ type DictionaryService struct {
 
 type DictionaryServiceDeps struct {
 	Repo *opsrepo.DictionaryRepository
-}
-
-// NewDictionaryService 创建服务
-func NewDictionaryService() *DictionaryService {
-	return NewDictionaryServiceWithDB(database.DB)
 }
 
 func NewDictionaryServiceWithDB(db *gorm.DB) *DictionaryService {

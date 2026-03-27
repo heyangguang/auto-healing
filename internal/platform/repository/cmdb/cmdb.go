@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/pkg/query"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
@@ -19,11 +18,6 @@ var (
 // CMDBItemRepository CMDB 配置项仓库
 type CMDBItemRepository struct {
 	db *gorm.DB
-}
-
-// NewCMDBItemRepository 创建 CMDB 仓库
-func NewCMDBItemRepository() *CMDBItemRepository {
-	return NewCMDBItemRepositoryWithDB(database.DB)
 }
 
 func NewCMDBItemRepositoryWithDB(db *gorm.DB) *CMDBItemRepository {

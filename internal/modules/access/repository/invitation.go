@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/access/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -15,11 +14,6 @@ import (
 // InvitationRepository 邀请仓库
 type InvitationRepository struct {
 	db *gorm.DB
-}
-
-// NewInvitationRepository 创建邀请仓库
-func NewInvitationRepository() *InvitationRepository {
-	return NewInvitationRepositoryWithDB(database.DB)
 }
 
 func NewInvitationRepositoryWithDB(db *gorm.DB) *InvitationRepository {

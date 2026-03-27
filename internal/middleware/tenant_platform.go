@@ -3,17 +3,11 @@ package middleware
 import (
 	"fmt"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 const ErrorCodePlatformPermissionReloadFailed = "PLATFORM_PERMISSION_RELOAD_FAILED"
-
-// RequirePlatformAdmin 要求平台用户权限
-func RequirePlatformAdmin() gin.HandlerFunc {
-	return RequirePlatformAdminWithDeps(NewRuntimeDepsWithDB(database.DB))
-}
 
 func RequirePlatformAdminWithDeps(deps RuntimeDeps) gin.HandlerFunc {
 	permissionRepo := deps.requirePermissionRepo()

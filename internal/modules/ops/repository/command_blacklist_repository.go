@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/ops/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -21,11 +20,6 @@ type CommandBlacklistRepository struct {
 	cache     map[string][]model.CommandBlacklist
 	cacheTime map[string]time.Time
 	cacheTTL  time.Duration
-}
-
-// NewCommandBlacklistRepository 创建仓库
-func NewCommandBlacklistRepository() *CommandBlacklistRepository {
-	return NewCommandBlacklistRepositoryWithDB(database.DB)
 }
 
 func NewCommandBlacklistRepositoryWithDB(db *gorm.DB) *CommandBlacklistRepository {

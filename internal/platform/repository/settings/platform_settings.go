@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/ops/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -19,11 +18,6 @@ import (
 // PlatformSettingsRepository 平台级设置仓库
 type PlatformSettingsRepository struct {
 	db *gorm.DB
-}
-
-// NewPlatformSettingsRepository 创建平台设置仓库
-func NewPlatformSettingsRepository() *PlatformSettingsRepository {
-	return NewPlatformSettingsRepositoryWithDB(database.DB)
 }
 
 func NewPlatformSettingsRepositoryWithDB(db *gorm.DB) *PlatformSettingsRepository {

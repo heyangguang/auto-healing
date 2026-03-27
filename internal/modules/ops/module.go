@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	opshttp "github.com/company/auto-healing/internal/modules/ops/httpapi"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
@@ -34,11 +33,6 @@ type ModuleDeps struct {
 	PlatformSettingsRepo  *settingsrepo.PlatformSettingsRepository
 	CommandBlacklistRepo  *opsrepo.CommandBlacklistRepository
 	ExecutionRepo         *automationrepo.ExecutionRepository
-}
-
-// New 创建 ops 域模块。
-func New() *Module {
-	return NewWithDB(database.DB)
 }
 
 func NewWithDB(db *gorm.DB) *Module {

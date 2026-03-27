@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -19,11 +18,6 @@ const maxRecentItems = 10
 // UserActivityRepository 用户活动数据仓库（收藏 + 最近访问）
 type UserActivityRepository struct {
 	db *gorm.DB
-}
-
-// NewUserActivityRepository 创建用户活动仓库
-func NewUserActivityRepository() *UserActivityRepository {
-	return NewUserActivityRepositoryWithDB(database.DB)
 }
 
 func NewUserActivityRepositoryWithDB(db *gorm.DB) *UserActivityRepository {

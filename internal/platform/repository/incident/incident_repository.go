@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/pkg/query"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
@@ -19,11 +18,6 @@ type IncidentRepository struct {
 }
 
 var ErrIncidentNotFound = errors.New("工单不存在")
-
-// NewIncidentRepository 创建工单仓库
-func NewIncidentRepository() *IncidentRepository {
-	return NewIncidentRepositoryWithDB(database.DB)
-}
 
 func NewIncidentRepositoryWithDB(db *gorm.DB) *IncidentRepository {
 	return &IncidentRepository{db: db}

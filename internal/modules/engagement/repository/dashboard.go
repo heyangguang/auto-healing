@@ -5,7 +5,6 @@ import (
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -15,11 +14,6 @@ import (
 // DashboardRepository Dashboard 仓库
 type DashboardRepository struct {
 	db *gorm.DB
-}
-
-// NewDashboardRepository 创建 Dashboard 仓库
-func NewDashboardRepository() *DashboardRepository {
-	return NewDashboardRepositoryWithDB(database.DB)
 }
 
 func NewDashboardRepositoryWithDB(db *gorm.DB) *DashboardRepository {

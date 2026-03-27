@@ -3,15 +3,9 @@ package middleware
 import (
 	"fmt"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
-
-// CommonTenantMiddleware 公共路由的租户上下文解析。
-func CommonTenantMiddleware() gin.HandlerFunc {
-	return CommonTenantMiddlewareWithDeps(NewRuntimeDepsWithDB(database.DB))
-}
 
 func CommonTenantMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
 	tenantRepo := deps.requireTenantRepo()

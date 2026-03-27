@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	schedulerx "github.com/company/auto-healing/internal/platform/schedulerx"
@@ -26,11 +25,6 @@ type NotificationRetryScheduler struct {
 type NotificationRetrySchedulerDeps struct {
 	NotificationService *notification.Service
 	Interval            time.Duration
-}
-
-// NewNotificationRetryScheduler 创建通知重试调度器
-func NewNotificationRetryScheduler() *NotificationRetryScheduler {
-	return NewNotificationRetrySchedulerWithDB(database.DB)
 }
 
 func NewNotificationRetrySchedulerWithDB(db *gorm.DB) *NotificationRetryScheduler {

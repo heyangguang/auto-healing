@@ -2,7 +2,6 @@ package access
 
 import (
 	"github.com/company/auto-healing/internal/config"
-	"github.com/company/auto-healing/internal/database"
 	accesshttp "github.com/company/auto-healing/internal/modules/access/httpapi"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authservice "github.com/company/auto-healing/internal/modules/access/service/auth"
@@ -39,11 +38,6 @@ type ModuleDeps struct {
 	EmailService      *engagementservice.PlatformEmailService
 	AuditRepo         *auditrepo.AuditLogRepository
 	PlatformAuditRepo *auditrepo.PlatformAuditLogRepository
-}
-
-// New 创建 access 域模块。
-func New(cfg *config.Config) *Module {
-	return NewWithDB(cfg, database.DB)
 }
 
 func NewWithDB(cfg *config.Config, db *gorm.DB) *Module {

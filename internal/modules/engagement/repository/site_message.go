@@ -5,7 +5,6 @@ import (
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/engagement/model"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	"github.com/google/uuid"
@@ -21,11 +20,6 @@ type SiteMessageRepository struct {
 type SiteMessageRepositoryDeps struct {
 	DB               *gorm.DB
 	PlatformSettings *settingsrepo.PlatformSettingsRepository
-}
-
-// NewSiteMessageRepository 创建站内信仓库
-func NewSiteMessageRepository() *SiteMessageRepository {
-	return NewSiteMessageRepositoryWithDB(database.DB)
 }
 
 func NewSiteMessageRepositoryWithDB(db *gorm.DB) *SiteMessageRepository {

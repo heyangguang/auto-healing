@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/access/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -15,11 +14,6 @@ import (
 // ImpersonationRepository Impersonation 数据仓库
 type ImpersonationRepository struct {
 	db *gorm.DB
-}
-
-// NewImpersonationRepository 创建 Impersonation 仓库
-func NewImpersonationRepository() *ImpersonationRepository {
-	return NewImpersonationRepositoryWithDB(database.DB)
 }
 
 func NewImpersonationRepositoryWithDB(db *gorm.DB) *ImpersonationRepository {

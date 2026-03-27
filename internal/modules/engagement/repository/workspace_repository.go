@@ -5,7 +5,6 @@ import (
 	"fmt"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -14,11 +13,6 @@ import (
 // WorkspaceRepository 系统工作区仓库
 type WorkspaceRepository struct {
 	db *gorm.DB
-}
-
-// NewWorkspaceRepository 创建工作区仓库
-func NewWorkspaceRepository() *WorkspaceRepository {
-	return NewWorkspaceRepositoryWithDB(database.DB)
 }
 
 func NewWorkspaceRepositoryWithDB(db *gorm.DB) *WorkspaceRepository {

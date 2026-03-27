@@ -28,23 +28,6 @@ type BlacklistExemptionSchedulerDeps struct {
 	ExpireFunc func(context.Context) (int64, error)
 }
 
-// NewBlacklistExemptionScheduler 创建过期豁免清理调度器
-func NewBlacklistExemptionScheduler() *BlacklistExemptionScheduler {
-	interval := time.Minute
-	if value := os.Getenv("BLACKLIST_EXEMPTION_INTERVAL"); value != "" {
-		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
-			interval = parsed
-		}
-	}
-	service := opsservice.NewBlacklistExemptionService()
-	return NewBlacklistExemptionSchedulerWithDeps(BlacklistExemptionSchedulerDeps{
-		Service:    service,
-		Interval:   interval,
-		Lifecycle:  schedulerx.NewLifecycle(),
-		ExpireFunc: service.ExpireOverdue,
-	})
-}
-
 func NewBlacklistExemptionSchedulerWithDeps(deps BlacklistExemptionSchedulerDeps) *BlacklistExemptionScheduler {
 	if deps.Service == nil {
 		panic("blacklist exemption scheduler requires service")
