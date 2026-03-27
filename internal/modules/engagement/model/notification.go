@@ -7,6 +7,7 @@ import (
 	"time"
 
 	projection "github.com/company/auto-healing/internal/modules/engagement/projection"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	"github.com/google/uuid"
 )
 
@@ -114,51 +115,5 @@ func (NotificationLog) TableName() string {
 	return "notification_logs"
 }
 
-// NotificationTriggerConfig 单个触发状态的通知配置
-type NotificationTriggerConfig struct {
-	Enabled    bool        `json:"enabled"`               // 是否启用此状态的通知
-	ChannelIDs []uuid.UUID `json:"channel_ids,omitempty"` // 渠道 IDs
-	TemplateID *uuid.UUID  `json:"template_id,omitempty"` // 模板 ID
-}
-
-// TaskNotificationConfig 任务通知配置（按状态独立配置）
-type TaskNotificationConfig struct {
-	Enabled   bool                       `json:"enabled"`              // 总开关
-	OnStart   *NotificationTriggerConfig `json:"on_start,omitempty"`   // 开始时通知配置
-	OnSuccess *NotificationTriggerConfig `json:"on_success,omitempty"` // 成功时通知配置
-	OnFailure *NotificationTriggerConfig `json:"on_failure,omitempty"` // 失败时通知配置
-}
-
-// GetTriggerConfig 根据状态获取对应的触发配置
-func (c *TaskNotificationConfig) GetTriggerConfig(status string) *NotificationTriggerConfig {
-	if c == nil || !c.Enabled {
-		return nil
-	}
-	switch status {
-	case "start":
-		return c.OnStart
-	case "success":
-		return c.OnSuccess
-	case "failed", "timeout": // timeout 也走 failure 配置
-		return c.OnFailure
-	default:
-		return nil
-	}
-}
-
-// Scan 实现 sql.Scanner 接口
-func (c *TaskNotificationConfig) Scan(value interface{}) error {
-	if value == nil {
-		return nil
-	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("failed to unmarshal TaskNotificationConfig: %v", value)
-	}
-	return json.Unmarshal(bytes, c)
-}
-
-// Value 实现 driver.Valuer 接口
-func (c TaskNotificationConfig) Value() (driver.Value, error) {
-	return json.Marshal(c)
-}
+type NotificationTriggerConfig = modeltypes.NotificationTriggerConfig
+type TaskNotificationConfig = modeltypes.TaskNotificationConfig

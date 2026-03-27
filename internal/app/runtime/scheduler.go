@@ -27,6 +27,7 @@ import (
 	gitSvc "github.com/company/auto-healing/internal/modules/integrations/service/git"
 	playbookSvc "github.com/company/auto-healing/internal/modules/integrations/service/playbook"
 	pluginSvc "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
+	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	opssched "github.com/company/auto-healing/internal/modules/ops/scheduler"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	secretsrepo "github.com/company/auto-healing/internal/modules/secrets/repository"
@@ -96,6 +97,9 @@ func NewManager() *Manager {
 		HTTPClient:   httpClient,
 	})
 	cmdbService := pluginSvc.NewCMDBServiceWithDeps(pluginSvc.CMDBServiceDeps{CMDBRepo: cmdbRepo})
+	blacklistExemptionService := opsservice.NewBlacklistExemptionServiceWithDeps(opsservice.BlacklistExemptionServiceDeps{
+		Repo: opsrepo.NewBlacklistExemptionRepository(database.DB),
+	})
 	return &Manager{
 		pluginScheduler: integrationsched.NewPluginSchedulerWithDeps(integrationsched.PluginSchedulerDeps{
 			PluginService: pluginService,
@@ -122,7 +126,11 @@ func NewManager() *Manager {
 			Now:        time.Now,
 		}),
 		notificationScheduler: engagementsched.NewNotificationRetryScheduler(),
-		blacklistScheduler:    opssched.NewBlacklistExemptionScheduler(),
+		blacklistScheduler: opssched.NewBlacklistExemptionSchedulerWithDeps(opssched.BlacklistExemptionSchedulerDeps{
+			Service:    blacklistExemptionService,
+			Lifecycle:  schedulerx.NewLifecycle(),
+			ExpireFunc: blacklistExemptionService.ExpireOverdue,
+		}),
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -65,7 +66,7 @@ func TestOptionalAuthTenantContextAllowsMissingTenantInjection(t *testing.T) {
 		c.Set(middleware.DefaultTenantIDKey, tenantID.String())
 		c.Set(middleware.TenantIDsKey, []string{tenantID.String()})
 	}, optionalAuthTenantContext(tenantRepo), func(c *gin.Context) {
-		if _, ok := accessrepo.TenantIDFromContextOK(c.Request.Context()); ok {
+		if _, ok := platformrepo.TenantIDFromContextOK(c.Request.Context()); ok {
 			t.Fatal("tenant context injected unexpectedly")
 		}
 		c.Status(http.StatusNoContent)

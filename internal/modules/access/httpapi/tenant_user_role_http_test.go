@@ -13,6 +13,7 @@ import (
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -206,7 +207,7 @@ func testTenantContextMiddleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		c.Request = c.Request.WithContext(accessrepo.WithTenantID(c.Request.Context(), tenantID))
+		c.Request = c.Request.WithContext(platformrepo.WithTenantID(c.Request.Context(), tenantID))
 		c.Next()
 	}
 }

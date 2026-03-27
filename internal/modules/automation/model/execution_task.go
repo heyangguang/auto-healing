@@ -3,8 +3,8 @@ package model
 import (
 	"time"
 
-	engagementmodel "github.com/company/auto-healing/internal/modules/engagement/model"
 	integrationsmodel "github.com/company/auto-healing/internal/modules/integrations/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	"github.com/google/uuid"
 )
 
@@ -23,7 +23,7 @@ type ExecutionTask struct {
 	Description      string      `json:"description" gorm:"type:text"`
 	SecretsSourceIDs StringArray `json:"secrets_source_ids" gorm:"type:jsonb;default:'[]'"`
 
-	NotificationConfig *engagementmodel.TaskNotificationConfig `json:"notification_config,omitempty" gorm:"type:jsonb"`
+	NotificationConfig *modeltypes.TaskNotificationConfig `json:"notification_config,omitempty" gorm:"type:jsonb"`
 
 	PlaybookVariablesSnapshot JSONArray `json:"playbook_variables_snapshot" gorm:"type:jsonb;default:'[]'"`
 	NeedsReview               bool      `json:"needs_review" gorm:"default:false"`
