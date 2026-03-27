@@ -41,10 +41,9 @@ func main() {
 	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	cleanup := initializeInfrastructure(cfg)
+	db, cleanup := initializeInfrastructure(cfg)
 	defer cleanup()
 	defer middleware.Shutdown()
-	db := database.DB
 	if err := runStartupJobsWithDeps(signalCtx, newStartupDepsWithDB(db)); err != nil {
 		logger.Fatal("启动任务失败: %v", err)
 	}
@@ -69,9 +68,10 @@ func mustLoadConfig() *config.Config {
 	return cfg
 }
 
-func initializeInfrastructure(cfg *config.Config) func() {
+func initializeInfrastructure(cfg *config.Config) (*gorm.DB, func()) {
 	logger.Init(&cfg.Log)
-	if err := database.Init(cfg); err != nil {
+	db, err := database.Init(cfg)
+	if err != nil {
 		logger.Fatal("数据库初始化失败: %v", err)
 	}
 	if err := database.AutoMigrate(); err != nil {
@@ -80,7 +80,7 @@ func initializeInfrastructure(cfg *config.Config) func() {
 	if err := database.InitRedis(&cfg.Redis); err != nil {
 		logger.Fatal("Redis 初始化失败: %v", err)
 	}
-	return func() {
+	return db, func() {
 		database.CloseRedis()
 		database.Close()
 		logger.Sync()

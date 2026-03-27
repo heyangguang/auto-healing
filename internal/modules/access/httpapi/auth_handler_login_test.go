@@ -110,21 +110,31 @@ func TestSetupAuthRoutesLoginReturnsTokensAndCurrentTenant(t *testing.T) {
 		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
 	}
 
-	var resp authService.LoginResponse
+	var resp struct {
+		Code    int                       `json:"code"`
+		Message string                    `json:"message"`
+		Data    authService.LoginResponse `json:"data"`
+	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if resp.AccessToken == "" || resp.RefreshToken == "" {
-		t.Fatalf("tokens = (%q, %q), want both non-empty", resp.AccessToken, resp.RefreshToken)
+	if resp.Code != response.CodeSuccess {
+		t.Fatalf("code = %d, want %d", resp.Code, response.CodeSuccess)
 	}
-	if resp.User.Username != "login-user" {
-		t.Fatalf("username = %q, want %q", resp.User.Username, "login-user")
+	if resp.Message != "success" {
+		t.Fatalf("message = %q, want %q", resp.Message, "success")
 	}
-	if resp.CurrentTenantID != tenantID.String() {
-		t.Fatalf("current_tenant_id = %q, want %q", resp.CurrentTenantID, tenantID.String())
+	if resp.Data.AccessToken == "" || resp.Data.RefreshToken == "" {
+		t.Fatalf("tokens = (%q, %q), want both non-empty", resp.Data.AccessToken, resp.Data.RefreshToken)
 	}
-	if len(resp.Tenants) != 1 || resp.Tenants[0].ID != tenantID.String() {
-		t.Fatalf("tenants = %+v, want tenant %s", resp.Tenants, tenantID)
+	if resp.Data.User.Username != "login-user" {
+		t.Fatalf("username = %q, want %q", resp.Data.User.Username, "login-user")
+	}
+	if resp.Data.CurrentTenantID != tenantID.String() {
+		t.Fatalf("current_tenant_id = %q, want %q", resp.Data.CurrentTenantID, tenantID.String())
+	}
+	if len(resp.Data.Tenants) != 1 || resp.Data.Tenants[0].ID != tenantID.String() {
+		t.Fatalf("tenants = %+v, want tenant %s", resp.Data.Tenants, tenantID)
 	}
 }
 

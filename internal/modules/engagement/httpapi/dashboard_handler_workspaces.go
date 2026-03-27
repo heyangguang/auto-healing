@@ -117,7 +117,7 @@ func (h *DashboardHandler) DeleteSystemWorkspace(c *gin.Context) {
 		respondInternalError(c, "DASHBOARD", "failed to delete workspace", err)
 		return
 	}
-	response.Success(c, map[string]interface{}{"message": "workspace deleted"})
+	response.Message(c, "workspace deleted")
 }
 
 // AssignRoleWorkspaces 为角色分配工作区
@@ -152,7 +152,7 @@ func (h *DashboardHandler) AssignRoleWorkspaces(c *gin.Context) {
 		respondInternalError(c, "DASHBOARD", "failed to assign workspaces", err)
 		return
 	}
-	response.Success(c, map[string]interface{}{"message": "workspaces assigned"})
+	response.Message(c, "workspaces assigned")
 }
 
 // GetRoleWorkspaces 获取角色关联的工作区

@@ -29,31 +29,33 @@
 
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expires_in": 86400,
-  "token_type": "Bearer",
-  "user": {
-    "id": "uuid",
-    "username": "admin",
-    "email": "admin@example.com",
-    "display_name": "管理员",
-    "is_platform_admin": true,
-    "roles": ["admin"],
-    "permissions": ["platform:users:view"]
-  },
-  "tenants": [
-    {
+  "code": 0,
+  "message": "success",
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expires_in": 86400,
+    "token_type": "Bearer",
+    "user": {
       "id": "uuid",
-      "name": "Default Tenant",
-      "code": "default"
-    }
-  ],
-  "current_tenant_id": "uuid"
+      "username": "admin",
+      "email": "admin@example.com",
+      "display_name": "管理员",
+      "is_platform_admin": true,
+      "roles": ["admin"],
+      "permissions": ["platform:users:view"]
+    },
+    "tenants": [
+      {
+        "id": "uuid",
+        "name": "Default Tenant",
+        "code": "default"
+      }
+    ],
+    "current_tenant_id": "uuid"
+  }
 }
 ```
-
-> 登录接口保持原始返回格式，不包裹 `code/message/data`。
 
 > **注意**: 登录失败超过限制次数会触发账户锁定。
 
@@ -75,31 +77,33 @@
 
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expires_in": 86400,
-  "token_type": "Bearer",
-  "user": {
-    "id": "uuid",
-    "username": "admin",
-    "email": "admin@example.com",
-    "display_name": "管理员",
-    "is_platform_admin": true,
-    "roles": ["admin"],
-    "permissions": ["platform:users:view"]
-  },
-  "tenants": [
-    {
+  "code": 0,
+  "message": "success",
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expires_in": 86400,
+    "token_type": "Bearer",
+    "user": {
       "id": "uuid",
-      "name": "Default Tenant",
-      "code": "default"
-    }
-  ],
-  "current_tenant_id": "uuid"
+      "username": "admin",
+      "email": "admin@example.com",
+      "display_name": "管理员",
+      "is_platform_admin": true,
+      "roles": ["admin"],
+      "permissions": ["platform:users:view"]
+    },
+    "tenants": [
+      {
+        "id": "uuid",
+        "name": "Default Tenant",
+        "code": "default"
+      }
+    ],
+    "current_tenant_id": "uuid"
+  }
 }
 ```
-
-> 刷新接口与登录接口一样，返回新的完整 `LoginResponse`，不包裹 `code/message/data`。
 
 ---
 
@@ -137,6 +141,7 @@
 ```json
 {
   "code": 0,
+  "message": "success",
   "data": {
     "id": "uuid",
     "username": "admin",

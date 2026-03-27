@@ -20,11 +20,11 @@ import (
 // 初始化超级管理员脚本
 func main() {
 	cfg := mustLoadCLIConfig()
-	initializeCLI(cfg)
+	db := initializeCLI(cfg)
 	defer database.Close()
 
 	ctx := context.Background()
-	repos := newAdminReposWithDB(database.DB)
+	repos := newAdminReposWithDB(db)
 
 	ensureUsersTableEmpty(ctx, repos.user)
 	admin, password, err := bootstrapInitialAdmin(ctx, repos)
@@ -43,14 +43,16 @@ func mustLoadCLIConfig() *config.Config {
 	return cfg
 }
 
-func initializeCLI(cfg *config.Config) {
+func initializeCLI(cfg *config.Config) *gorm.DB {
 	logger.Init(&cfg.Log)
-	if err := database.Init(cfg); err != nil {
+	db, err := database.Init(cfg)
+	if err != nil {
 		log.Fatalf("数据库连接失败: %v", err)
 	}
 	if err := prepareCLIData(); err != nil {
 		log.Fatalf("初始化基础数据失败: %v", err)
 	}
+	return db
 }
 
 func prepareCLIData() error {

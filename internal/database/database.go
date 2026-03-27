@@ -24,9 +24,7 @@ import (
 var DB *gorm.DB
 
 // Init 初始化数据库连接
-func Init(cfg *config.Config) error {
-	var err error
-
+func Init(cfg *config.Config) (*gorm.DB, error) {
 	// 根据配置设置 GORM 日志级别 (使用 log.db_level)
 	// GORM 支持: info(显示所有SQL), warn(慢查询), error(只有错误), off(关闭)
 	logLevel := gormlogger.Silent
@@ -43,7 +41,7 @@ func Init(cfg *config.Config) error {
 		logLevel = gormlogger.Warn
 	}
 
-	DB, err = gorm.Open(postgres.Open(cfg.Database.DSN()), &gorm.Config{
+	db, err := gorm.Open(postgres.Open(cfg.Database.DSN()), &gorm.Config{
 		DisableForeignKeyConstraintWhenMigrating: true, // 迁移时不创建/修改外键约束，避免关联表冲突
 		Logger: gormlogger.New(
 			log.New(os.Stderr, "\r\n", log.LstdFlags),
@@ -56,13 +54,13 @@ func Init(cfg *config.Config) error {
 		),
 	})
 	if err != nil {
-		return fmt.Errorf("连接数据库失败: %w", err)
+		return nil, fmt.Errorf("连接数据库失败: %w", err)
 	}
 
 	// 获取底层 sql.DB 并配置连接池
-	sqlDB, err := DB.DB()
+	sqlDB, err := db.DB()
 	if err != nil {
-		return fmt.Errorf("获取数据库连接失败: %w", err)
+		return nil, fmt.Errorf("获取数据库连接失败: %w", err)
 	}
 
 	sqlDB.SetMaxOpenConns(cfg.Database.MaxOpenConns)
@@ -71,11 +69,12 @@ func Init(cfg *config.Config) error {
 
 	// 测试连接
 	if err := sqlDB.Ping(); err != nil {
-		return fmt.Errorf("数据库连接测试失败: %w", err)
+		return nil, fmt.Errorf("数据库连接测试失败: %w", err)
 	}
 
+	DB = db
 	logger.Info("数据库连接成功")
-	return nil
+	return db, nil
 }
 
 // AutoMigrate 自动迁移数据库表结构（增量：只创建不存在的表）

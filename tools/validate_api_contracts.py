@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import sys
 from typing import List
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 OPENAPI_PATH = ROOT / "api/openapi.yaml"
@@ -47,18 +48,29 @@ def has_regex(content: str, pattern: str) -> bool:
     return re.search(pattern, content, re.S) is not None
 
 
-def parse_openapi_methods(content: str) -> dict:
+def load_openapi_document(content: str, errors: List[str]) -> dict | None:
+    try:
+        document = yaml.safe_load(content)
+    except yaml.YAMLError as exc:
+        errors.append(f"openapi.yaml 不是合法 YAML: {exc}")
+        return None
+    if not isinstance(document, dict):
+        errors.append("openapi.yaml 顶层结构必须是 object")
+        return None
+    paths = document.get("paths")
+    if not isinstance(paths, dict):
+        errors.append("openapi.yaml 缺少合法的 paths 对象")
+        return None
+    return document
+
+
+def parse_openapi_methods(document: dict) -> dict:
     openapi_methods = {}
-    current_path = None
-    for line in content.splitlines():
-        path_match = re.match(r"^  (/[^:]+):$", line)
-        if path_match:
-            current_path = path_match.group(1)
-            openapi_methods[current_path] = set()
+    for path, item in document.get("paths", {}).items():
+        if not isinstance(item, dict):
             continue
-        method_match = re.match(r"^    (get|post|put|patch|delete):$", line)
-        if method_match and current_path:
-            openapi_methods[current_path].add(method_match.group(1).upper())
+        methods = {method.upper() for method in item.keys() if method.lower() in {"get", "post", "put", "patch", "delete"}}
+        openapi_methods[path] = methods
     return openapi_methods
 
 
@@ -102,8 +114,8 @@ def collect_route_methods(route_files: List[Path]) -> dict:
     return route_methods
 
 
-def validate_route_openapi_sync(content: str, errors: List[str]) -> None:
-    openapi_methods = parse_openapi_methods(content)
+def validate_route_openapi_sync(document: dict, errors: List[str]) -> None:
+    openapi_methods = parse_openapi_methods(document)
     route_methods = collect_route_methods(ROUTE_FILES)
 
     missing = []
@@ -118,8 +130,10 @@ def validate_route_openapi_sync(content: str, errors: List[str]) -> None:
     require(errors, not missing, "openapi 与路由存在未同步 path/method: " + ", ".join(missing[:12]))
 
 
-def validate_openapi(content: str, errors: List[str]) -> None:
-    validate_route_openapi_sync(content, errors)
+def validate_openapi(content: str, document: dict | None, errors: List[str]) -> None:
+    if document is None:
+        return
+    validate_route_openapi_sync(document, errors)
     require(errors, "/incidents/{id}/dismiss:" in content, "openapi 缺少 /incidents/{id}/dismiss")
     require(errors, "/incidents/{id}/trigger:" in content, "openapi 缺少 /incidents/{id}/trigger")
     require(errors, "/healing/instances/stats:" in content, "openapi 缺少 /healing/instances/stats")
@@ -217,8 +231,13 @@ def validate_openapi(content: str, errors: List[str]) -> None:
     require(errors, "default_recipients:" not in content, "openapi 仍使用 default_recipients 旧字段")
     require(
         errors,
-        has_regex(content, r"/auth/login:.*?access_token:"),
-        "openapi 缺少 auth login 原始 token 响应定义",
+        has_regex(content, r"/auth/login:.*?allOf:.*?LoginPayload"),
+        "openapi 的 auth login 响应仍未对齐统一 success.data 包装",
+    )
+    require(
+        errors,
+        has_regex(content, r"/auth/refresh:.*?allOf:.*?LoginPayload"),
+        "openapi 的 auth refresh 响应仍未对齐统一 success.data 包装",
     )
     require(
         errors,
@@ -347,15 +366,16 @@ def validate_healing_doc(content: str, errors: List[str]) -> None:
 
 
 def validate_api_readme(content: str, errors: List[str]) -> None:
-    require(errors, "jq -r '.access_token'" in content, "docs/api/README.md 登录示例仍在读取 .data.access_token")
-    require(errors, "除 `/auth/login` 与 `/auth/refresh` 外" in content, "docs/api/README.md 未说明 auth 接口的响应特例")
+    require(errors, "jq -r '.data.access_token'" in content, "docs/api/README.md 登录示例仍未读取 .data.access_token")
+    require(errors, "业务接口统一使用如下响应包裹格式" in content, "docs/api/README.md 仍保留 auth 响应特例说明")
 
 
 def validate_auth_doc(content: str, errors: List[str]) -> None:
-    require(errors, '"code": 0' not in content.split("## 1. 用户登录", 1)[1].split("## 2. 刷新 Token", 1)[0], "docs/api/auth.md 登录示例仍使用统一包装响应")
-    require(errors, '"code": 0' not in content.split("## 2. 刷新 Token", 1)[1].split("## 3. 用户登出", 1)[0], "docs/api/auth.md 刷新示例仍使用统一包装响应")
-    require(errors, "登录接口保持原始返回格式" in content, "docs/api/auth.md 未说明登录原始响应格式")
-    require(errors, "刷新接口与登录接口一样" in content, "docs/api/auth.md 未说明 refresh 原始响应格式")
+    login_section = content.split("## 1. 用户登录", 1)[1].split("## 2. 刷新 Token", 1)[0]
+    refresh_section = content.split("## 2. 刷新 Token", 1)[1].split("## 3. 用户登出", 1)[0]
+    require(errors, '"code": 0' in login_section and '"data": {' in login_section, "docs/api/auth.md 登录示例仍未使用统一包装响应")
+    require(errors, '"code": 0' in refresh_section and '"data": {' in refresh_section, "docs/api/auth.md 刷新示例仍未使用统一包装响应")
+    require(errors, "原始返回格式" not in content, "docs/api/auth.md 仍说明登录/刷新走原始响应格式")
     require(errors, '"code": 40000' in content, "docs/api/auth.md 的错误码示例仍使用 HTTP 状态码")
 
 
@@ -476,7 +496,9 @@ def validate_common_docs(errors: List[str]) -> None:
 
 def main() -> int:
     errors: List[str] = []
-    validate_openapi(read_text(OPENAPI_PATH), errors)
+    openapi_content = read_text(OPENAPI_PATH)
+    openapi_document = load_openapi_document(openapi_content, errors)
+    validate_openapi(openapi_content, openapi_document, errors)
     validate_api_readme(read_text(API_README_PATH), errors)
     validate_auth_doc(read_text(AUTH_DOC_PATH), errors)
     validate_incidents_doc(read_text(INCIDENTS_DOC_PATH), errors)

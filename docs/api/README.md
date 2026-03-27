@@ -11,7 +11,7 @@
 # 1. 登录获取 Token
 TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123456"}' | jq -r '.access_token')
+  -d '{"username":"admin","password":"admin123456"}' | jq -r '.data.access_token')
 
 # 2. 使用 Token 调用接口
 curl -s -H "Authorization: Bearer $TOKEN" \
@@ -22,7 +22,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 ## 通用响应格式
 
-除 `/auth/login` 与 `/auth/refresh` 外，大多数业务接口都使用如下统一响应包裹格式：
+业务接口统一使用如下响应包裹格式：
 
 ```json
 {

@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Login 用户登录（保持原有响应格式以兼容前端）
+// Login 用户登录
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req authService.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -47,7 +47,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	platformlifecycle.Go(func(rootCtx context.Context) {
 		h.writeLoginAuditLog(rootCtx, &userID, resp.User.Username, clientIP, userAgent, "success", "", startTime, http.StatusOK, resp.User.IsPlatformAdmin, resp.CurrentTenantID)
 	})
-	c.JSON(http.StatusOK, resp)
+	response.Success(c, resp)
 }
 
 // Logout 用户登出
@@ -134,7 +134,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		response.InternalError(c, "刷新令牌轮换失败")
 		return
 	}
-	c.JSON(http.StatusOK, authService.LoginResponse{
+	response.Success(c, authService.LoginResponse{
 		AccessToken:     tokenPair.AccessToken,
 		RefreshToken:    tokenPair.RefreshToken,
 		TokenType:       tokenPair.TokenType,

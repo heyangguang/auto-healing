@@ -34,7 +34,7 @@ func TestLiveBootstrapAgainstPostgresAndRedis(t *testing.T) {
 	})
 
 	cfg := integrationConfig(dbName)
-	if err := Init(cfg); err != nil {
+	if _, err := Init(cfg); err != nil {
 		t.Fatalf("Init() error = %v", err)
 	}
 	t.Cleanup(func() { _ = Close() })

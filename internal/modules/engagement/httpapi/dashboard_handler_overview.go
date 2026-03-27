@@ -134,5 +134,5 @@ func (h *DashboardHandler) SaveConfig(c *gin.Context) {
 		respondInternalError(c, "DASHBOARD", "failed to save config", err)
 		return
 	}
-	response.Success(c, map[string]interface{}{"message": "config saved successfully"})
+	response.Message(c, "config saved successfully")
 }
