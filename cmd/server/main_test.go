@@ -72,28 +72,26 @@ func TestRunStartupJobSwallowsOptionalJobError(t *testing.T) {
 }
 
 func TestRunStartupJobsReturnsErrorWhenDictionarySeedFails(t *testing.T) {
-	restore := stubStartupDependencies(
-		func() []startupJob { return nil },
-		func() dictionarySeeder { return fakeDictionarySeeder{err: errors.New("dict failed")} },
-		func() siteMessageCleaner { return fakeSiteMessageCleaner{} },
-	)
+	restore := stubStartupJobs(func() []startupJob { return nil })
 	defer restore()
 
-	err := runStartupJobs(context.Background())
+	err := runStartupJobsWithDeps(context.Background(), startupDeps{
+		dictionary: fakeDictionarySeeder{err: errors.New("dict failed")},
+		cleaner:    fakeSiteMessageCleaner{},
+	})
 	if err == nil {
 		t.Fatal("runStartupJobs() error = nil, want dictionary seed failure")
 	}
 }
 
 func TestRunStartupJobsIgnoresCleanExpiredFailure(t *testing.T) {
-	restore := stubStartupDependencies(
-		func() []startupJob { return nil },
-		func() dictionarySeeder { return fakeDictionarySeeder{} },
-		func() siteMessageCleaner { return fakeSiteMessageCleaner{err: errors.New("clean failed")} },
-	)
+	restore := stubStartupJobs(func() []startupJob { return nil })
 	defer restore()
 
-	if err := runStartupJobs(context.Background()); err != nil {
+	if err := runStartupJobsWithDeps(context.Background(), startupDeps{
+		dictionary: fakeDictionarySeeder{},
+		cleaner:    fakeSiteMessageCleaner{err: errors.New("clean failed")},
+	}); err != nil {
 		t.Fatalf("runStartupJobs() error = %v, want nil", err)
 	}
 }
@@ -114,22 +112,12 @@ func (f fakeSiteMessageCleaner) CleanExpired(context.Context) (int64, error) {
 	return 0, f.err
 }
 
-func stubStartupDependencies(
-	jobs func() []startupJob,
-	dict func() dictionarySeeder,
-	cleaner func() siteMessageCleaner,
-) func() {
+func stubStartupJobs(jobs func() []startupJob) func() {
 	oldJobs := listStartupSeedJobs
-	oldDict := newDictionaryService
-	oldCleaner := newSiteMessageRepo
 
 	listStartupSeedJobs = jobs
-	newDictionaryService = dict
-	newSiteMessageRepo = cleaner
 
 	return func() {
 		listStartupSeedJobs = oldJobs
-		newDictionaryService = oldDict
-		newSiteMessageRepo = oldCleaner
 	}
 }

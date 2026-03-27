@@ -37,6 +37,12 @@ func NewNotificationRetryScheduler() *NotificationRetryScheduler {
 }
 
 func NewNotificationRetrySchedulerWithDeps(deps NotificationRetrySchedulerDeps) *NotificationRetryScheduler {
+	if deps.NotificationService == nil {
+		deps.NotificationService = notification.NewConfiguredService(database.DB)
+	}
+	if deps.Interval == 0 {
+		deps.Interval = notificationRetryInterval()
+	}
 	return &NotificationRetryScheduler{
 		notifSvc:  deps.NotificationService,
 		interval:  deps.Interval,

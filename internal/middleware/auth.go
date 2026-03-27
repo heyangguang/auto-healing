@@ -33,6 +33,11 @@ const (
 
 // JWTAuth JWT认证中间件
 func JWTAuth(jwtService *jwt.Service) gin.HandlerFunc {
+	return JWTAuthWithDeps(jwtService, NewRuntimeDeps())
+}
+
+func JWTAuthWithDeps(jwtService *jwt.Service, deps RuntimeDeps) gin.HandlerFunc {
+	deps = deps.withDefaults()
 	return func(c *gin.Context) {
 		tokenString, ok := resolveBearerToken(c)
 		if !ok {
@@ -57,7 +62,7 @@ func JWTAuth(jwtService *jwt.Service) gin.HandlerFunc {
 			abortUnauthorized(c, "Token has been revoked", ErrorCodeUnauthorized)
 			return
 		}
-		if !ensureActiveUser(c, claims.Subject) {
+		if !ensureActiveUserWithRepo(c, deps.UserRepo, claims.Subject) {
 			return
 		}
 		setAuthContext(c, claims)
@@ -94,7 +99,10 @@ func queryTokenHeader(c *gin.Context) string {
 }
 
 func ensureActiveUser(c *gin.Context, subject string) bool {
-	userRepo := accessrepo.NewUserRepository()
+	return ensureActiveUserWithRepo(c, NewRuntimeDeps().UserRepo, subject)
+}
+
+func ensureActiveUserWithRepo(c *gin.Context, userRepo *accessrepo.UserRepository, subject string) bool {
 	uid, err := uuid.Parse(subject)
 	if err != nil {
 		logger.Auth("TOKEN").Warn("鉴权失败: token subject 非法 | user=%s ip=%s err=%v", subject, c.ClientIP(), err)

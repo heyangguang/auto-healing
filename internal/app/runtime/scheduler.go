@@ -125,7 +125,9 @@ func NewManager() *Manager {
 			InFlight:   schedulerx.NewInFlightSet(),
 			Now:        time.Now,
 		}),
-		notificationScheduler: engagementsched.NewNotificationRetryScheduler(),
+		notificationScheduler: engagementsched.NewNotificationRetrySchedulerWithDeps(engagementsched.NotificationRetrySchedulerDeps{
+			NotificationService: notifSvc,
+		}),
 		blacklistScheduler: opssched.NewBlacklistExemptionSchedulerWithDeps(opssched.BlacklistExemptionSchedulerDeps{
 			Service:    blacklistExemptionService,
 			Lifecycle:  schedulerx.NewLifecycle(),

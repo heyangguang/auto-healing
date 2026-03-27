@@ -97,30 +97,36 @@ type siteMessageCleaner interface {
 	CleanExpired(context.Context) (int64, error)
 }
 
-var (
-	newDictionaryService = func() dictionarySeeder {
-		return opsservice.NewDictionaryService()
-	}
-	newSiteMessageRepo = func() siteMessageCleaner {
-		return engagementrepo.NewSiteMessageRepository()
-	}
-	listStartupSeedJobs = startupSeedJobs
-)
+type startupDeps struct {
+	dictionary dictionarySeeder
+	cleaner    siteMessageCleaner
+}
+
+var listStartupSeedJobs = startupSeedJobs
 
 func runStartupJobs(ctx context.Context) error {
+	return runStartupJobsWithDeps(ctx, newStartupDeps())
+}
+
+func newStartupDeps() startupDeps {
+	return startupDeps{
+		dictionary: opsservice.NewDictionaryService(),
+		cleaner:    engagementrepo.NewSiteMessageRepository(),
+	}
+}
+
+func runStartupJobsWithDeps(ctx context.Context, deps startupDeps) error {
 	for _, job := range listStartupSeedJobs() {
 		if err := runStartupJob(job); err != nil {
 			return err
 		}
 	}
 
-	dictSvc := newDictionaryService()
-	if err := dictSvc.SeedDictionaries(ctx); err != nil {
+	if err := deps.dictionary.SeedDictionaries(ctx); err != nil {
 		return fmt.Errorf("字典种子数据同步失败: %w", err)
 	}
 
-	siteMessageRepo := newSiteMessageRepo()
-	if _, err := siteMessageRepo.CleanExpired(ctx); err != nil {
+	if _, err := deps.cleaner.CleanExpired(ctx); err != nil {
 		logger.Error("站内信过期清理失败: %v", err)
 	}
 	return nil
@@ -152,11 +158,7 @@ type lifecycleService interface {
 
 func startSchedulers() []lifecycleService {
 	schedulers := []lifecycleService{
-		appruntime.NewScheduler(),
-		appruntime.NewGitScheduler(),
-		appruntime.NewExecutionScheduler(),
-		appruntime.NewNotificationRetryScheduler(),
-		appruntime.NewBlacklistExemptionScheduler(),
+		appruntime.NewManager(),
 		healing.DefaultScheduler(),
 	}
 	for _, item := range schedulers {

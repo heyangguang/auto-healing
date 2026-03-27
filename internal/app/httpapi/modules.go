@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/config"
+	"github.com/company/auto-healing/internal/middleware"
 	accessmodule "github.com/company/auto-healing/internal/modules/access"
 	accesshttp "github.com/company/auto-healing/internal/modules/access/httpapi"
 	automationmodule "github.com/company/auto-healing/internal/modules/automation"
@@ -36,6 +37,7 @@ type moduleRegistrars struct {
 }
 
 func newModules(cfg *config.Config) moduleSet {
+	middlewareDeps := middleware.NewRuntimeDeps()
 	access := accessmodule.New(cfg)
 	automation := automationmodule.New()
 	engagement := engagementmodule.New()
@@ -50,13 +52,14 @@ func newModules(cfg *config.Config) moduleSet {
 		integrations: integrations,
 		ops:          ops,
 		secrets:      secrets,
-		routes: moduleRegistrars{
-			access: accesshttp.New(accesshttp.Dependencies{
-				Auth:          access.Auth,
-				Impersonation: access.Impersonation,
-				Permission:    access.Permission,
-				Role:          access.Role,
-				Tenant:        access.Tenant,
+			routes: moduleRegistrars{
+				access: accesshttp.New(accesshttp.Dependencies{
+					Auth:          access.Auth,
+					Impersonation: access.Impersonation,
+					Middleware:    middlewareDeps,
+					Permission:    access.Permission,
+					Role:          access.Role,
+					Tenant:        access.Tenant,
 				TenantUser:    access.TenantUser,
 				User:          access.User,
 			}),

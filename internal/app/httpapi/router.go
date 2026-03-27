@@ -18,11 +18,12 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config) {
 }
 
 func registerCommonRoutes(api *gin.RouterGroup, modules moduleSet) {
+	middlewareDeps := modules.routes.access.Dependencies().Middleware
 	common := api.Group("/common")
-	common.Use(middleware.JWTAuth(modules.access.Auth.GetJWTService()))
-	common.Use(middleware.ImpersonationMiddleware())
-	common.Use(middleware.CommonTenantMiddleware())
-	common.Use(middleware.AuditMiddleware())
+	common.Use(middleware.JWTAuthWithDeps(modules.access.Auth.GetJWTService(), middlewareDeps))
+	common.Use(middleware.ImpersonationMiddlewareWithDeps(middlewareDeps))
+	common.Use(middleware.CommonTenantMiddlewareWithDeps(middlewareDeps))
+	common.Use(middleware.AuditMiddlewareWithDeps(middlewareDeps))
 
 	modules.routes.access.RegisterCommonRoutes(common)
 	modules.routes.engagement.RegisterCommonRoutes(common)
@@ -30,11 +31,12 @@ func registerCommonRoutes(api *gin.RouterGroup, modules moduleSet) {
 }
 
 func registerPlatformRoutes(api *gin.RouterGroup, modules moduleSet) {
+	middlewareDeps := modules.routes.access.Dependencies().Middleware
 	platform := api.Group("/platform")
-	platform.Use(middleware.JWTAuth(modules.access.Auth.GetJWTService()))
-	platform.Use(middleware.ImpersonationMiddleware())
-	platform.Use(middleware.AuditMiddleware())
-	platform.Use(middleware.RequirePlatformAdmin())
+	platform.Use(middleware.JWTAuthWithDeps(modules.access.Auth.GetJWTService(), middlewareDeps))
+	platform.Use(middleware.ImpersonationMiddlewareWithDeps(middlewareDeps))
+	platform.Use(middleware.AuditMiddlewareWithDeps(middlewareDeps))
+	platform.Use(middleware.RequirePlatformAdminWithDeps(middlewareDeps))
 
 	modules.routes.access.RegisterPlatformRoutes(platform)
 	modules.routes.engagement.RegisterPlatformRoutes(platform)
@@ -42,11 +44,12 @@ func registerPlatformRoutes(api *gin.RouterGroup, modules moduleSet) {
 }
 
 func registerTenantRoutes(api *gin.RouterGroup, modules moduleSet) {
+	middlewareDeps := modules.routes.access.Dependencies().Middleware
 	tenant := api.Group("/tenant")
-	tenant.Use(middleware.JWTAuth(modules.access.Auth.GetJWTService()))
-	tenant.Use(middleware.ImpersonationMiddleware())
-	tenant.Use(middleware.TenantMiddleware())
-	tenant.Use(middleware.AuditMiddleware())
+	tenant.Use(middleware.JWTAuthWithDeps(modules.access.Auth.GetJWTService(), middlewareDeps))
+	tenant.Use(middleware.ImpersonationMiddlewareWithDeps(middlewareDeps))
+	tenant.Use(middleware.TenantMiddlewareWithDeps(middlewareDeps))
+	tenant.Use(middleware.AuditMiddlewareWithDeps(middlewareDeps))
 
 	modules.routes.access.RegisterTenantRoutes(tenant)
 	modules.routes.integrations.RegisterTenantRoutes(tenant)

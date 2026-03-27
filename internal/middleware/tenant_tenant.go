@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -10,20 +9,25 @@ const ErrorCodeTenantMembershipLookupFailed = "TENANT_MEMBERSHIP_LOOKUP_FAILED"
 
 // TenantMiddleware 租户上下文中间件
 func TenantMiddleware() gin.HandlerFunc {
+	return TenantMiddlewareWithDeps(NewRuntimeDeps())
+}
+
+func TenantMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
+	deps = deps.withDefaults()
 	return func(c *gin.Context) {
 		tenantIDs, defaultTenantID := middlewareTenantClaims(c)
 
-		tenantID, ok := resolveTenantRouteTenant(c, tenantIDs, defaultTenantID)
+		tenantID, ok := resolveTenantRouteTenantWithRepo(c, deps.TenantRepo, tenantIDs, defaultTenantID)
 		if !ok {
 			return
 		}
-		if !ensureActiveTenant(c, tenantID) {
+		if !ensureActiveTenantWithRepo(c, deps.TenantRepo, tenantID) {
 			return
 		}
 
 		injectTenantContext(c, tenantID)
 		if !IsPlatformAdmin(c) && !IsImpersonating(c) {
-			if err := reloadTenantPermissions(c, tenantID); err != nil {
+			if err := reloadTenantPermissions(c, deps.PermissionRepo, tenantID); err != nil {
 				abortInternalError(c, "刷新租户权限失败", ErrorCodeTenantPermissionReloadFailed)
 				return
 			}
@@ -33,10 +37,14 @@ func TenantMiddleware() gin.HandlerFunc {
 }
 
 func resolveTenantRouteTenant(c *gin.Context, tenantIDs []string, defaultTenantID string) (uuid.UUID, bool) {
+	return resolveTenantRouteTenantWithRepo(c, NewRuntimeDeps().TenantRepo, tenantIDs, defaultTenantID)
+}
+
+func resolveTenantRouteTenantWithRepo(c *gin.Context, tenantRepo userTenantLister, tenantIDs []string, defaultTenantID string) (uuid.UUID, bool) {
 	if IsPlatformAdmin(c) {
 		return resolveImpersonationTenant(c)
 	}
-	return resolveRegularTenant(c, tenantIDs, defaultTenantID)
+	return resolveRegularTenantWithRepo(c, tenantRepo, tenantIDs, defaultTenantID)
 }
 
 func resolveImpersonationTenant(c *gin.Context) (uuid.UUID, bool) {
@@ -59,6 +67,10 @@ func resolveImpersonationTenant(c *gin.Context) (uuid.UUID, bool) {
 }
 
 func resolveRegularTenant(c *gin.Context, tenantIDs []string, defaultTenantID string) (uuid.UUID, bool) {
+	return resolveRegularTenantWithRepo(c, NewRuntimeDeps().TenantRepo, tenantIDs, defaultTenantID)
+}
+
+func resolveRegularTenantWithRepo(c *gin.Context, tenantRepo userTenantLister, tenantIDs []string, defaultTenantID string) (uuid.UUID, bool) {
 	tenantIDStr := c.GetHeader("X-Tenant-ID")
 	if tenantIDStr == "" {
 		if defaultTenantID == "" {
@@ -70,9 +82,9 @@ func resolveRegularTenant(c *gin.Context, tenantIDs []string, defaultTenantID st
 			abortForbidden(c, "默认租户无效，请重新登录", ErrorCodeDefaultTenantInvalid)
 			return uuid.Nil, false
 		}
-		if !ensureTenantMembership(c, tenantIDs, defaultTenantID) {
-			return uuid.Nil, false
-		}
+			if !ensureTenantMembership(c, tenantRepo, tenantIDs, defaultTenantID) {
+				return uuid.Nil, false
+			}
 		return tenantID, true
 	}
 
@@ -81,20 +93,19 @@ func resolveRegularTenant(c *gin.Context, tenantIDs []string, defaultTenantID st
 		abortBadRequest(c, "无效的 X-Tenant-ID 格式", ErrorCodeTenantIDInvalid)
 		return uuid.Nil, false
 	}
-	if ensureTenantMembership(c, tenantIDs, tenantIDStr) {
+	if ensureTenantMembership(c, tenantRepo, tenantIDs, tenantIDStr) {
 		return tenantID, true
 	}
 	return uuid.Nil, false
 }
 
-func ensureTenantMembership(c *gin.Context, tenantIDs []string, tenantIDStr string) bool {
+func ensureTenantMembership(c *gin.Context, tenantRepo userTenantLister, tenantIDs []string, tenantIDStr string) bool {
 	userID, err := uuid.Parse(GetUserID(c))
 	if err != nil {
 		abortForbidden(c, "无权访问该租户", ErrorCodeTenantAccessDenied)
 		return false
 	}
 
-	tenantRepo := accessrepo.NewTenantRepository()
 	dbTenants, dbErr := tenantRepo.GetUserTenants(c.Request.Context(), userID, "")
 	if dbErr != nil {
 		abortInternalError(c, "租户成员关系校验失败", ErrorCodeTenantMembershipLookupFailed)

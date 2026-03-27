@@ -68,7 +68,7 @@ func loadImpersonationPermissions(ctx context.Context) ([]string, error) {
 }
 
 func loadImpersonationPermissionsFromDB(ctx context.Context) ([]string, error) {
-	roleRepo := accessrepo.NewRoleRepository()
+	roleRepo := NewRuntimeDeps().RoleRepo
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	role, err := roleRepo.GetByName(ctx, "impersonation_accessor")
@@ -90,8 +90,11 @@ func loadImpersonationPermissionsFromDB(ctx context.Context) ([]string, error) {
 // 4. 在 gin.Context 中设置 impersonation 标记
 // 5. 用 impersonation_accessor 角色权限覆盖 JWT 中的 * 通配符
 func ImpersonationMiddleware() gin.HandlerFunc {
-	repo := accessrepo.NewImpersonationRepository()
+	return ImpersonationMiddlewareWithDeps(NewRuntimeDeps())
+}
 
+func ImpersonationMiddlewareWithDeps(deps RuntimeDeps) gin.HandlerFunc {
+	deps = deps.withDefaults()
 	return func(c *gin.Context) {
 		c.Set(ImpersonationKey, false)
 		if !requestIsImpersonating(c) {
@@ -106,7 +109,7 @@ func ImpersonationMiddleware() gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		req, ok := loadActiveImpersonationRequest(c, repo, requestID)
+		req, ok := loadActiveImpersonationRequest(c, deps.ImpersonationRepo, requestID)
 		if !ok {
 			return
 		}
