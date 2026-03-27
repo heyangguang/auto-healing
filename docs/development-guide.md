@@ -31,79 +31,118 @@ make build
 
 ## Project Structure
 
-```
+```text
 auto-healing/
 ├── cmd/
-│   ├── server/          # Main server entry point
-│   └── init-admin/      # Admin initialization tool
+│   ├── server/                      # Main server entry point
+│   └── init-admin/                  # Admin initialization tool
 ├── internal/
-│   ├── config/          # Configuration loading
-│   ├── database/        # Database connection
-│   ├── middleware/       # HTTP middleware (JWT, CORS, Audit)
-│   ├── model/           # GORM data models
-│   ├── repository/      # Database CRUD layer
-│   ├── service/         # Business logic layer
-│   ├── handler/         # HTTP handlers & DTOs
-│   ├── adapter/         # External system adapters (ITSM/CMDB)
-│   ├── engine/          # Execution engine (Ansible)
-│   ├── scheduler/       # Background job scheduler
-│   ├── secrets/         # Secrets management providers
-│   ├── notification/    # Notification engine (Email/DingTalk/Webhook)
-│   ├── gitclient/       # Git client wrapper
-│   └── pkg/             # Internal utilities (logger, jwt, response)
-├── migrations/          # SQL migration files
-├── configs/             # Configuration templates
-├── deployments/         # Docker Compose & deployment configs
-├── docs/                # Documentation
-├── docker/              # Dockerfile and executor images
-└── web/                 # Frontend source (React)
+│   ├── app/httpapi/                 # Top-level route composition
+│   ├── config/                      # Configuration loading
+│   ├── database/                    # Database / Redis initialization
+│   ├── middleware/                  # Shared HTTP middleware
+│   ├── model/                       # GORM data models
+│   ├── modules/                     # Domain modules
+│   │   ├── access/
+│   │   ├── automation/
+│   │   ├── engagement/
+│   │   ├── integrations/
+│   │   ├── ops/
+│   │   └── secrets/
+│   ├── platform/                    # Shared runtime capabilities
+│   │   ├── events/
+│   │   ├── httpx/
+│   │   ├── lifecycle/
+│   │   ├── repository/
+│   │   └── repositoryx/
+│   ├── engine/                      # Execution engine
+│   ├── scheduler/                   # Background schedulers
+│   ├── notification/                # Notification engine + providers
+│   ├── secrets/                     # Secrets providers
+│   ├── git/                         # Git base capabilities
+│   └── pkg/                         # Shared utility packages
+├── migrations/                      # SQL migration files
+├── configs/                         # Configuration templates
+├── deployments/                     # Deployment configs
+├── docs/                            # Documentation
+├── docker/                          # Docker / executor images
+└── web/                             # Frontend source
 ```
 
 ## Architecture
 
-### Layered Architecture
+### Top-Level Organization
 
-```
-Handler → Service → Repository → Database
+Backend code is organized by **business domain first**, not by a top-level global `handler / service / repository` split.
+
+At the top level:
+
+- `internal/modules/*` owns business code
+- `internal/platform/*` owns shared runtime capabilities
+- `internal/app/httpapi` owns route composition
+
+Within a single domain module, code is still separated by responsibility:
+
+```text
+internal/modules/<domain>/
+├── module.go
+├── httpapi/
+├── service/
+└── repository/
 ```
 
-| Layer | Directory | Responsibility |
-|-------|-----------|---------------|
-| **Handler** | `internal/handler/` | HTTP request handling, DTO definition |
-| **Service** | `internal/service/<module>/` | Business logic (accepts Model or primitives only) |
-| **Repository** | `internal/repository/` | Database CRUD operations |
-| **Model** | `internal/model/` | GORM struct definitions |
+### Domain Modules
+
+| Module | Responsibility |
+|-------|----------------|
+| `access` | auth, tenant, user, role, permission, impersonation |
+| `automation` | execution, healing, scheduling |
+| `engagement` | dashboard, workbench, search, notification, site message, preference |
+| `integrations` | plugin, git, cmdb, playbook |
+| `ops` | audit, blacklist, dictionary, platform settings |
+| `secrets` | secrets source admin and query |
+
+### Shared Runtime
+
+| Directory | Responsibility |
+|-----------|----------------|
+| `internal/platform/httpx/` | pagination, query parsing, validation formatting, SSE, resource error helpers |
+| `internal/platform/lifecycle/` | lifecycle hooks and cleanup |
+| `internal/platform/events/` | shared event bus |
+| `internal/platform/repository/` | shared repositories such as `audit`, `cmdb`, `incident`, `settings` |
+| `internal/platform/repositoryx/` | tenant context and scoped DB helpers |
+
+### Route Composition
+
+Routes are composed in:
+
+- `internal/app/httpapi/router.go`
+- `internal/app/httpapi/modules.go`
+
+New APIs should be registered through the relevant domain registrar and module wiring, not through a global legacy `routes.go`.
 
 ### Key Principles
 
-- **DTO stays in Handler layer** — Service layer never accepts DTOs
-- **DTOs must provide `ToModel()` method** for conversion
-- **Backend Authority** — Frontend is display-only; all business logic resides in backend
-- **Provider Pattern** — External integrations use `interface.go` + `provider/` structure
+- **Domain-first organization** — new business code goes under `internal/modules/<domain>/...`
+- **Shared runtime stays in platform** — cross-domain helpers belong in `internal/platform/*`
+- **HTTP DTOs stay close to handlers** — request/response structs belong in each module’s `httpapi/`
+- **Backend Authority** — frontend is display-only; business rules live in backend
+- **Provider Pattern** — engines, notifications, schedulers, and secrets integrations keep explicit provider structures
 
 ### Provider Pattern
 
 ```go
-// interface.go — Interface definition + factory function
 type Provider interface {
     Execute(ctx context.Context, params Params) (Result, error)
 }
-
-func NewProvider(providerType string) Provider {
-    switch providerType {
-    case "ansible":
-        return &AnsibleProvider{}
-    // ...
-    }
-}
 ```
 
-```
+Typical provider-oriented layout:
+
+```text
 module/
-├── interface.go          # Interface + factory
-├── types/                # Shared types (optional)
-│   └── types.go
-└── provider/             # Implementations
+├── interface.go
+└── provider/
     ├── impl_a.go
     └── impl_b.go
 ```
@@ -112,40 +151,46 @@ module/
 
 ### New API Endpoint
 
-1. Define Model in `internal/model/<entity>.go`
-2. Create Repository in `internal/repository/<entity>.go`
-3. Create Service in `internal/service/<module>/service.go`
-4. Create Handler in `internal/handler/<module>_handler.go`
-5. Create DTOs in `internal/handler/<module>_dto.go`
-6. Register routes in `internal/handler/routes.go`
-7. Add migration in `migrations/`
+1. Add or update model definitions in `internal/model/` when persistence shape changes
+2. Implement repository logic in `internal/modules/<domain>/repository/`
+3. Implement use-case logic in `internal/modules/<domain>/service/`
+4. Implement handlers and DTOs in `internal/modules/<domain>/httpapi/`
+5. Wire dependencies in `internal/modules/<domain>/module.go`
+6. Register the module endpoint via `internal/app/httpapi/modules.go`
+7. Add migration in `migrations/` if schema changes
 8. Update `docs/openapi.yaml`
+
+### New Shared HTTP / Runtime Helper
+
+1. Put HTTP-centric helpers in `internal/platform/httpx/`
+2. Put shared lifecycle/event helpers in `internal/platform/lifecycle/` or `internal/platform/events/`
+3. Put cross-domain repository helpers in `internal/platform/repository/` or `internal/platform/repositoryx/`
 
 ### New Provider Implementation
 
 1. Create `internal/<module>/provider/<impl>.go`
-2. Implement the Provider interface
-3. Register in `interface.go` factory function
+2. Implement the required interface
+3. Register it in the module’s factory / registry
 
 ## Database Migrations
 
-Migration files are in `migrations/` directory, executed sequentially on startup.
+Migration files are in `migrations/` and executed sequentially on startup.
 
 ```bash
-# Create new migration
 touch migrations/$(date +%Y%m%d%H%M%S)_add_new_table.sql
 ```
 
-**Rules:**
-- New environments: Only modify migration files
-- Existing environments: Migration file + manual `ALTER TABLE` execution
-- Use `TIMESTAMPTZ` for all timestamps
+Rules:
+
+- New environments: only modify migration files
+- Existing environments: migration file + explicit rollout steps
+- Use `TIMESTAMPTZ` for timestamps
 - Use `UUID` for primary keys
 - Use `JSONB` for dynamic data
 
 ## Configuration
 
-Configuration via `configs/config.yaml`, overridable with environment variables prefixed `AH_`:
+Configuration lives in `configs/config.yaml` and can be overridden with environment variables prefixed `AH_`:
 
 ```bash
 AH_DATABASE_HOST=db.prod.local
@@ -160,8 +205,8 @@ AH_SERVER_PORT=8080
 # Run all tests
 make test
 
-# Run specific package tests
-go test ./internal/service/healing/... -v
+# Run one domain service package
+go test ./internal/modules/automation/service/healing/... -v
 
 # Run with race detector
 go test ./... -race
@@ -170,14 +215,15 @@ go test ./... -race
 ## Code Style
 
 - Run `golangci-lint` before committing: `make lint`
-- Follow standard Go project layout
-- Use `json:"-"` to hide fields from JSON output (don't delete the field)
+- Prefer domain modules over new top-level horizontal layers
+- Keep shared helpers in `internal/platform/*`, not in ad-hoc utility packages
+- Use `json:"-"` to hide fields from JSON output
 - Use pointer types (`*Type`) for nullable fields
-- Use `json:"field_name"` (no omitempty) to always show null values
+- Use explicit JSON tags for API fields
 
 ## Commit Convention
 
-```
+```text
 feat: add new feature
 fix: bug fix
 docs: documentation changes

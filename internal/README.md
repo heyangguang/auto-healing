@@ -1,175 +1,137 @@
 # Internal 目录结构说明
 
-此目录包含 Auto-Healing 平台的核心代码，按照 Go 项目标准实践组织。
+此目录包含 Auto-Healing 平台的核心后端代码。
 
-> 📘 完整开发规范请参考 [开发指南](../docs/development-guide.md)
+> 完整开发规范请参考 [开发指南](../docs/development-guide.md)
 
-## 分层架构
+## 当前组织方式
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Handler Layer                          │
-│  - HTTP 请求处理、DTO 定义与转换                              │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Service Layer                          │
-│  - 业务逻辑（只接受 Model 或原始类型）                         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Repository Layer                         │
-│  - 数据库 CRUD 操作                                          │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 分层目录
-
-| 目录 | 职责 | 文件命名规范 |
-|------|------|-------------|
-| `model/` | 数据模型（GORM struct） | `<entity>.go` |
-| `repository/` | 数据库 CRUD 操作 | `<entity>.go` |
-| `service/<module>/` | 业务逻辑处理 | `service.go` |
-| `handler/` | HTTP API 路由和请求处理 | `<module>_handler.go`, `<module>_dto.go` |
-
-## Handler 层规范
+当前后端不再按顶层 `handler / service / repository` 三层目录组织业务代码，而是按业务域拆到 `internal/modules/*`，共享运行时能力收口到 `internal/platform/*`，统一 HTTP 装配收口到 `internal/app/httpapi`。
 
 ```
-handler/
-├── routes.go              # 统一路由注册
-├── <module>_handler.go    # HTTP 处理函数
-└── <module>_dto.go        # 请求/响应 DTO
+internal/
+├── app/httpapi/                 # 统一路由装配与模块注册入口
+├── modules/                     # 按业务域拆分的核心模块
+│   ├── access/
+│   ├── automation/
+│   ├── engagement/
+│   ├── integrations/
+│   ├── ops/
+│   └── secrets/
+├── platform/                    # 跨模块共享的 HTTP / 生命周期 / 事件 / 仓储辅助
+├── middleware/                  # HTTP 中间件
+├── model/                       # GORM 模型
+├── notification/                # 通知引擎与 provider
+├── engine/                      # 执行引擎
+├── scheduler/                   # 后台调度器
+├── secrets/                     # 密钥 provider
+├── git/                         # Git 基础能力
+├── config/                      # 配置加载
+├── database/                    # DB / Redis 初始化与迁移
+└── pkg/                         # 通用工具
 ```
 
-**DTO 规则**：
-- DTO 只存在于 Handler 层
-- Service 只接受 Model 或原始类型
-- DTO 必须提供 `ToModel()` 方法
+## 模块结构
 
----
+每个业务域模块统一放在 `internal/modules/<domain>/` 下，内部再按职责拆分：
 
-## 独立功能模块
+```
+internal/modules/<domain>/
+├── module.go                    # 模块构造与依赖装配
+├── httpapi/                     # HTTP handler、DTO、路由注册器
+├── service/                     # 领域服务 / use case
+└── repository/                  # 该业务域自己的仓储实现
+```
 
-独立模块采用统一的 `interface.go` + `provider/` 结构：
+当前业务域模块：
+
+| 模块 | 职责 |
+|------|------|
+| `access` | 认证、租户、用户、角色、权限、Impersonation |
+| `automation` | 执行、自愈、调度 |
+| `engagement` | Dashboard、Workbench、Search、Notification、Site Message、Preference |
+| `integrations` | Plugin、Git、CMDB、Playbook |
+| `ops` | Audit、Dictionary、Blacklist、Platform Settings |
+| `secrets` | 密钥源管理与查询 |
+
+## 共享运行时层
+
+跨模块共享的运行时能力不再放在业务仓储目录里，而是放到 `internal/platform/*`：
+
+| 目录 | 职责 |
+|------|------|
+| `platform/httpx/` | 分页、校验、SSE、资源错误回包、查询过滤等 HTTP 通用能力 |
+| `platform/lifecycle/` | 生命周期与 goroutine cleanup |
+| `platform/events/` | 站内信事件总线等共享事件能力 |
+| `platform/repository/` | 跨模块共享的仓储实现（如 `audit / cmdb / incident / settings`） |
+| `platform/repositoryx/` | 共享 tenant context / scoped DB helper |
+
+## 统一路由入口
+
+统一 HTTP 入口在：
+
+```
+internal/app/httpapi/router.go
+internal/app/httpapi/modules.go
+```
+
+这里负责：
+- 创建各业务域模块
+- 组装模块级 route registrar
+- 将 `/common`、`/platform`、`/tenant` 路由绑定到对应模块
+
+新增 API 时，不再修改旧的 `internal/handler/routes.go`，而是：
+1. 在对应业务域的 `httpapi/` 中新增 handler 或 registrar
+2. 在对应模块的 `module.go` 中装配依赖
+3. 在 `internal/app/httpapi/modules.go` 中接入模块依赖
+
+## 独立 provider / runtime 模块
+
+这类目录仍保持自己的 provider 结构：
 
 | 模块 | 路径 | 结构 |
 |------|------|------|
-| **adapter** | `adapter/` | `interface.go` + `types/` + `provider/` |
-| **engine** | `engine/` | `interface.go` + `provider/ansible/` |
-| **scheduler** | `scheduler/` | `interface.go` + `provider/` |
-| **secrets** | `secrets/` | `interface.go` + `provider/` |
-| **notification** | `notification/` | `service.go` + `provider/` |
-
-### 模块结构规范
-
-```
-module/
-├── interface.go          # 接口定义、工厂函数、类型别名
-├── types/                # 共享类型（可选，用于避免循环导入）
-│   └── types.go
-└── provider/             # 具体实现
-    ├── impl_a.go
-    └── impl_b.go
-```
-
-### 当前模块详情
-
-#### adapter/（外部系统适配器）
-```
-adapter/
-├── interface.go          # PluginAdapter 接口、NewAdapter 工厂
-├── types/
-│   └── types.go          # RawIncident, RawCMDBItem, FieldMapping
-└── provider/
-    ├── servicenow.go     # ServiceNow 适配器
-    └── other.go          # Jira, Custom 适配器
-```
-
-#### engine/（执行引擎）
-```
-engine/
-├── interface.go          # Executor 接口、NewExecutor 工厂
-└── provider/
-    └── ansible/          # Ansible 执行器
-        ├── executor.go
-        ├── docker_executor.go
-        └── local_executor.go
-```
-
-#### scheduler/（调度器）
-```
-scheduler/
-├── interface.go          # Manager、NewScheduler 工厂
-└── provider/
-    ├── plugin.go         # 插件同步调度
-    ├── execution.go      # 执行调度
-    └── git.go            # Git 同步调度
-```
-
-#### secrets/（密钥管理）
-```
-secrets/
-├── interface.go          # Provider 接口、NewProvider 工厂
-└── provider/
-    ├── errors.go         # 共享错误定义
-    ├── file.go           # 文件密钥
-    ├── vault.go          # HashiCorp Vault
-    └── webhook.go        # Webhook 密钥
-```
-
-#### notification/（通知推送）
-```
-notification/
-├── service.go            # 主服务
-├── template.go           # 模板解析
-├── variable.go           # 变量构建
-└── provider/
-    ├── interface.go      # NotificationProvider 接口
-    ├── dingtalk.go       # 钉钉
-    ├── email.go          # 邮件
-    └── webhook.go        # Webhook
-```
-
----
+| `engine` | `internal/engine/` | `interface` + `provider/ansible` |
+| `scheduler` | `internal/scheduler/` | 调度器与 provider |
+| `secrets` | `internal/secrets/` | provider 实现 |
+| `notification` | `internal/notification/` | 通知服务与 provider |
 
 ## 基础设施目录
 
 | 目录 | 职责 |
 |------|------|
-| `config/` | 配置文件加载 |
-| `database/` | 数据库连接管理 |
-| `middleware/` | HTTP 中间件（JWT、CORS、日志） |
-| `pkg/` | 内部公共工具（logger、response、jwt） |
-| `gitclient/` | Git 客户端封装 |
-
----
+| `config/` | 配置加载 |
+| `database/` | 数据库、Redis、迁移、种子初始化 |
+| `middleware/` | 通用 HTTP 中间件 |
+| `model/` | 数据模型 |
+| `pkg/` | 内部通用工具 |
 
 ## 快速参考
 
-### 新增业务模块
+### 新增业务接口
 
 ```
-1. internal/model/<entity>.go
-2. internal/repository/<entity>.go
-3. internal/service/<module>/service.go
-4. internal/handler/<module>_handler.go
-5. internal/handler/<module>_dto.go
-6. 在 routes.go 中注册路由
+1. 如需新增模型，先更新 internal/model/<entity>.go
+2. 在目标业务域下新增或扩展 internal/modules/<domain>/repository/
+3. 在目标业务域下新增或扩展 internal/modules/<domain>/service/
+4. 在目标业务域下新增或扩展 internal/modules/<domain>/httpapi/
+5. 在 internal/modules/<domain>/module.go 中装配依赖
+6. 在 internal/app/httpapi/modules.go 中接入模块 registrar
 7. 更新 docs/openapi.yaml
+8. 如涉及存储结构变化，补 migrations/*.sql
 ```
 
-### 新增独立模块 Provider
+### 新增 provider
 
 ```
-1. internal/<module>/provider/<impl>.go
-2. 实现 Provider 接口
-3. 在 interface.go 工厂函数中注册
+1. 在对应独立模块下新增 provider 实现，例如 internal/<module>/provider/<impl>.go
+2. 实现接口并在工厂或注册表中接入
+3. 补齐对应测试
 ```
 
 ### 同步更新检查清单
 
 - [ ] 模型字段变更 → `migrations/*.sql` + `docs/openapi.yaml`
-- [ ] 新增 API → `routes.go` + `docs/openapi.yaml`
-- [ ] 新增模块 → 按上述规范创建文件
+- [ ] 新增 API → 对应 `internal/modules/<domain>/httpapi/` + `internal/app/httpapi/modules.go` + `docs/openapi.yaml`
+- [ ] 新增共享 HTTP/运行时能力 → `internal/platform/*`
+- [ ] 新增业务模块代码 → `internal/modules/<domain>/...`

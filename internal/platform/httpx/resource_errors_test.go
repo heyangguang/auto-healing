@@ -1,4 +1,4 @@
-package handler
+package httpx
 
 import (
 	"encoding/json"
@@ -17,7 +17,7 @@ func TestRespondResourceErrorReturnsNotFoundForSentinel(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 
-	respondResourceError(ctx, "GIT", "获取仓库失败", "仓库不存在", integrationrepo.ErrGitRepositoryNotFound, resourceErrorModeInternal, integrationrepo.ErrGitRepositoryNotFound)
+	RespondResourceError(ctx, "GIT", "获取仓库失败", "仓库不存在", integrationrepo.ErrGitRepositoryNotFound, ResourceErrorModeInternal, integrationrepo.ErrGitRepositoryNotFound)
 
 	assertResponseCode(t, recorder, http.StatusNotFound, response.CodeNotFound)
 }
@@ -26,7 +26,7 @@ func TestRespondResourceErrorReturnsBadRequestWhenConfigured(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 
-	respondResourceError(ctx, "PLAYBOOK", "扫描失败", "Playbook不存在", integrationrepo.ErrPlaybookNotFound, resourceErrorModeBadRequest, errors.New("路径非法"))
+	RespondResourceError(ctx, "PLAYBOOK", "扫描失败", "Playbook不存在", integrationrepo.ErrPlaybookNotFound, ResourceErrorModeBadRequest, errors.New("路径非法"))
 
 	assertResponseCode(t, recorder, http.StatusBadRequest, response.CodeBadRequest)
 }
@@ -35,7 +35,7 @@ func TestRespondResourceErrorReturnsInternalForUnexpectedError(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 
-	respondResourceError(ctx, "SCHEDULE", "获取调度失败", "调度不存在", automationrepo.ErrScheduleNotFound, resourceErrorModeInternal, errors.New("db down"))
+	RespondResourceError(ctx, "SCHEDULE", "获取调度失败", "调度不存在", automationrepo.ErrScheduleNotFound, ResourceErrorModeInternal, errors.New("db down"))
 
 	assertResponseCode(t, recorder, http.StatusInternalServerError, response.CodeInternal)
 }
