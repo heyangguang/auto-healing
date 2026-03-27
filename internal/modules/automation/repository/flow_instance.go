@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
@@ -24,11 +23,6 @@ type IncidentSyncOptions struct {
 	FlowInstanceID    *uuid.UUID
 	Scanned           *bool
 	ResetFlowInstance bool
-}
-
-// NewFlowInstanceRepository 创建流程实例仓库
-func NewFlowInstanceRepository() *FlowInstanceRepository {
-	return NewFlowInstanceRepositoryWithDB(database.DB)
 }
 
 func NewFlowInstanceRepositoryWithDB(db *gorm.DB) *FlowInstanceRepository {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
@@ -49,11 +48,6 @@ type ScheduleTimelineItem struct {
 	LastRunAt    *time.Time `json:"last_run_at,omitempty"`
 	TaskID       uuid.UUID  `json:"task_id"`
 	TaskName     string     `json:"task_name"`
-}
-
-// NewScheduleRepository 创建定时任务调度仓库
-func NewScheduleRepository() *ScheduleRepository {
-	return NewScheduleRepositoryWithDB(database.DB)
 }
 
 func NewScheduleRepositoryWithDB(db *gorm.DB) *ScheduleRepository {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
@@ -14,11 +13,6 @@ import (
 // HealingRuleRepository 自愈规则仓库
 type HealingRuleRepository struct {
 	db *gorm.DB
-}
-
-// NewHealingRuleRepository 创建自愈规则仓库
-func NewHealingRuleRepository() *HealingRuleRepository {
-	return NewHealingRuleRepositoryWithDB(database.DB)
 }
 
 func NewHealingRuleRepositoryWithDB(db *gorm.DB) *HealingRuleRepository {

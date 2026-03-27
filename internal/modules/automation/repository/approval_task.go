@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -14,11 +13,6 @@ import (
 // ApprovalTaskRepository 审批任务仓库
 type ApprovalTaskRepository struct {
 	db *gorm.DB
-}
-
-// NewApprovalTaskRepository 创建审批任务仓库
-func NewApprovalTaskRepository() *ApprovalTaskRepository {
-	return NewApprovalTaskRepositoryWithDB(database.DB)
 }
 
 func NewApprovalTaskRepositoryWithDB(db *gorm.DB) *ApprovalTaskRepository {

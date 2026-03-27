@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
@@ -19,11 +18,6 @@ var ErrGitRepositoryNotFound = errors.New("仓库不存在")
 // GitRepositoryRepository Git 仓库仓储
 type GitRepositoryRepository struct {
 	db *gorm.DB
-}
-
-// NewGitRepositoryRepository 创建 Git 仓库仓储
-func NewGitRepositoryRepository() *GitRepositoryRepository {
-	return NewGitRepositoryRepositoryWithDB(database.DB)
 }
 
 func NewGitRepositoryRepositoryWithDB(db *gorm.DB) *GitRepositoryRepository {

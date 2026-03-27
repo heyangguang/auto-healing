@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
@@ -36,11 +35,6 @@ type PlaybookListOptions struct {
 	SortOrder       string
 	CreatedFrom     *time.Time
 	CreatedTo       *time.Time
-}
-
-// NewPlaybookRepository 创建 Playbook 仓库
-func NewPlaybookRepository() *PlaybookRepository {
-	return NewPlaybookRepositoryWithDB(database.DB)
 }
 
 func NewPlaybookRepositoryWithDB(db *gorm.DB) *PlaybookRepository {

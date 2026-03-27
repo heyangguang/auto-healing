@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	"github.com/company/auto-healing/internal/pkg/query"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
@@ -22,11 +21,6 @@ var (
 // PluginRepository 插件数据仓库
 type PluginRepository struct {
 	db *gorm.DB
-}
-
-// NewPluginRepository 创建插件仓库
-func NewPluginRepository() *PluginRepository {
-	return NewPluginRepositoryWithDB(database.DB)
 }
 
 func NewPluginRepositoryWithDB(db *gorm.DB) *PluginRepository {
@@ -171,11 +165,6 @@ func (r *PluginRepository) UpdateSyncInfo(ctx context.Context, id uuid.UUID, las
 // PluginSyncLogRepository 插件同步日志仓库
 type PluginSyncLogRepository struct {
 	db *gorm.DB
-}
-
-// NewPluginSyncLogRepository 创建同步日志仓库
-func NewPluginSyncLogRepository() *PluginSyncLogRepository {
-	return NewPluginSyncLogRepositoryWithDB(database.DB)
 }
 
 func NewPluginSyncLogRepositoryWithDB(db *gorm.DB) *PluginSyncLogRepository {

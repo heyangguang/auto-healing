@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 
-	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -12,11 +11,6 @@ import (
 // FlowLogRepository 流程执行日志仓库
 type FlowLogRepository struct {
 	db *gorm.DB
-}
-
-// NewFlowLogRepository 创建流程执行日志仓库
-func NewFlowLogRepository() *FlowLogRepository {
-	return NewFlowLogRepositoryWithDB(database.DB)
 }
 
 func NewFlowLogRepositoryWithDB(db *gorm.DB) *FlowLogRepository {

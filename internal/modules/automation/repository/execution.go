@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/company/auto-healing/internal/database"
 	qf "github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -48,11 +47,6 @@ type RunListOptions struct {
 	StartedBefore *time.Time
 	Page          int
 	PageSize      int
-}
-
-// NewExecutionRepository 创建执行任务仓库
-func NewExecutionRepository() *ExecutionRepository {
-	return NewExecutionRepositoryWithDB(database.DB)
 }
 
 func NewExecutionRepositoryWithDB(db *gorm.DB) *ExecutionRepository {
