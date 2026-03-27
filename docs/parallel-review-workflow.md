@@ -10,15 +10,18 @@
 - 每个模块：一个独立终端 / SSH 会话 / Codex 进程
 
 这些模块是“业务/平台/基础设施/质量”分组，不包含脚手架本身。
-脚手架本身只在工具分支 `chore/parallel-review-tooling`。
+脚手架本身只在工具分支 `chore/parallel-review-tooling`，也不属于 `quality_ops_surface` 的审查范围。
 
 ## 目录
 
 - 模块定义：[scripts/review/backend_modules.csv](/root/auto-healing-tooling/scripts/review/backend_modules.csv)
-- session 生成脚本：[scripts/review/setup_parallel_review.sh](/root/auto-healing-tooling/scripts/review/setup_parallel_review.sh)
+- session 入口脚本：[scripts/review/setup_parallel_review.sh](/root/auto-healing-tooling/scripts/review/setup_parallel_review.sh)
+- session 公共逻辑：[scripts/review/parallel_review_common.sh](/root/auto-healing-tooling/scripts/review/parallel_review_common.sh)
+- session 写入逻辑：[scripts/review/parallel_review_writer.sh](/root/auto-healing-tooling/scripts/review/parallel_review_writer.sh)
+- 生成模板与校验器：[scripts/review/create_worktrees.template.sh](/root/auto-healing-tooling/scripts/review/create_worktrees.template.sh)、[scripts/review/module_csv_validator.awk](/root/auto-healing-tooling/scripts/review/module_csv_validator.awk)、[scripts/review/module_prompt.template.md](/root/auto-healing-tooling/scripts/review/module_prompt.template.md)、[scripts/review/session_readme.template.md](/root/auto-healing-tooling/scripts/review/session_readme.template.md)
 - 运行产物：`.parallel-review/<session>/`
 
-`.parallel-review/` 已加入 [.gitignore](/root/auto-healing-tooling/.gitignore)，不会污染仓库。
+`.parallel-review/` 和 `.codex-tasks/` 已加入 [.gitignore](/root/auto-healing-tooling/.gitignore)，不会把工具运行产物带进提交。
 
 ## 一次完整流程
 
@@ -29,9 +32,21 @@ cd /root/auto-healing-tooling
 bash scripts/review/setup_parallel_review.sh dev-20260326
 ```
 
+补充约束：
+
+- 运行 `setup_parallel_review.sh` 需要 `bash`、`git`、`awk`、`python3` 或 `python`
+- session 名只能包含 `A-Z a-z 0-9 . _ -`
+- session 名不能以 `-` 开头
+- 如果 session 目录已存在，脚本会直接报错，避免静默覆盖
+- `REVIEW_ROOT` 和 `REVIEW_MODULES` 都支持仓库相对路径和绝对路径
+- `backend_modules.csv` 采用简单 9 列 CSV；不支持带英文逗号的字段，也不支持 quoted CSV
+- `backend_modules.csv` 里的 `worktree_suffix` 和 `branch_suffix` 必须全局唯一
+- 可用 `bash scripts/review/setup_parallel_review.sh --help` 查看说明
+
 会生成：
 
 - `.parallel-review/<session>/modules.csv`
+- `.parallel-review/<session>/module_csv_validator.awk`
 - `.parallel-review/<session>/review_status.csv`
 - `.parallel-review/<session>/repair_plan.csv`
 - `.parallel-review/<session>/prompts/*.md`
@@ -39,10 +54,6 @@ bash scripts/review/setup_parallel_review.sh dev-20260326
 - `.parallel-review/<session>/create_worktrees.sh`
 
 ### 2. 创建独立 worktree 和分支
-
-```bash
-bash .parallel-review/<session>/create_worktrees.sh auth_middleware tenant_user_role
-```
 
 先看模块清单和备注：
 
@@ -56,8 +67,11 @@ bash .parallel-review/<session>/create_worktrees.sh --list
 bash .parallel-review/<session>/create_worktrees.sh auth_middleware tenant_user_role
 ```
 
-如果你确实要全量创建，再不带模块参数执行。  
-如果你当前是 detached HEAD，需要显式指定基线分支：
+生成 session 时，`create_worktrees.sh` 会把当时所在分支固化成默认基线。
+如果你确实要全量创建，再不带模块参数执行。
+如果 session 是从 detached HEAD 生成的，或者你要显式覆盖默认基线分支，再传 `REVIEW_BASE_BRANCH`：
+
+如果命令里混入了不存在的 `module_id`，helper 会先直接报错，不会先创建一部分 worktree 再失败。
 
 ```bash
 REVIEW_BASE_BRANCH=main bash .parallel-review/<session>/create_worktrees.sh
@@ -94,10 +108,11 @@ codex
 ```
 
 然后把刚才 prompt 文件内容贴给这个进程里的 Codex。
+生成的 prompt 已经写入主仓库 session 目录下的绝对回写路径，所以模块 worktree 里不需要自己拼 `.parallel-review/...` 相对路径。
 
 ## Prompt 在哪里
 
-所有模块 prompt 都在：
+所有模块 prompt 都在主仓库的：
 
 ```bash
 .parallel-review/<session>/prompts/
@@ -127,8 +142,8 @@ sed -n '1,200p' .parallel-review/dev-20260326/prompts/execution_healing.md
 4. 把 prompt 内容贴进去
 5. 在当前模块分支里先审再修
 6. 跑本模块最小必要验证
-7. 把 findings / fixes / validation 写回 `findings/<module>.md`
-8. 更新 `review_status.csv`
+7. 按 prompt 里的绝对路径把 findings / fixes / validation 写回 `findings/<module>.md`
+8. 按 prompt 里的绝对路径更新 `review_status.csv`
 9. 提交并 push 当前模块分支
 
 ## 当前模块拆分
@@ -163,3 +178,18 @@ sed -n '1,200p' .parallel-review/dev-20260326/prompts/execution_healing.md
 - 公共文件：只指定一个模块负责
 
 像共享装配文件和跨模块接口，不要让多个模块同时处理。
+
+## 自动化测试
+
+这套并行审查脚手架现在有 4 层自动化测试：
+
+- 单元测试：`make test-review-tooling-unit`
+- 集成测试：`make test-review-tooling-integration`
+- 接口/契约测试：`make test-review-tooling-interface`
+- 端到端测试：`make test-review-tooling-e2e`
+
+如果要一次跑完这 4 层：
+
+```bash
+make test-review-tooling
+```

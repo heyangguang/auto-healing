@@ -20,6 +20,7 @@ logs/
 .cursor/
 .copilot/
 .parallel-review/
+.codex-tasks/
 
 # OS
 .DS_Store
