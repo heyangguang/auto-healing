@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/crypto"
 	"github.com/company/auto-healing/internal/pkg/jwt"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 )
 
@@ -16,7 +16,7 @@ import (
 func (s *Service) Login(ctx context.Context, req *LoginRequest, clientIP string) (*LoginResponse, error) {
 	user, err := s.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
+		if errors.Is(err, accessrepo.ErrUserNotFound) {
 			return nil, ErrInvalidCredentials
 		}
 		return nil, err

@@ -10,7 +10,6 @@ import (
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -114,7 +113,7 @@ func loadValidInvitation(c *gin.Context, token string) (*model.TenantInvitation,
 }
 
 func ensureInvitationTargetsValid(ctx context.Context, inv *model.TenantInvitation) error {
-	tenant, err := repository.NewTenantRepository().GetByID(ctx, inv.TenantID)
+	tenant, err := accessrepo.NewTenantRepository().GetByID(ctx, inv.TenantID)
 	if err != nil {
 		return businessError("邀请已失效，请联系管理员重新发起邀请")
 	}
@@ -122,7 +121,7 @@ func ensureInvitationTargetsValid(ctx context.Context, inv *model.TenantInvitati
 		return businessError("邀请已失效，请联系管理员重新发起邀请")
 	}
 
-	role, err := repository.NewRoleRepository().GetTenantRoleByID(ctx, inv.TenantID, inv.RoleID)
+	role, err := accessrepo.NewRoleRepository().GetTenantRoleByID(ctx, inv.TenantID, inv.RoleID)
 	if err != nil {
 		return businessError("邀请已失效，请联系管理员重新发起邀请")
 	}
@@ -133,7 +132,7 @@ func ensureInvitationTargetsValid(ctx context.Context, inv *model.TenantInvitati
 }
 
 func completeInvitationRegistration(ctx context.Context, userID uuid.UUID, inv *model.TenantInvitation) error {
-	tenantRepo := repository.NewTenantRepository()
+	tenantRepo := accessrepo.NewTenantRepository()
 	if err := tenantRepo.AddMember(ctx, userID, inv.TenantID, inv.RoleID); err != nil {
 		return rollbackInvitationRegistration(ctx, userID, inv.TenantID, fmt.Errorf("关联邀请角色失败: %w", err))
 	}
@@ -144,10 +143,10 @@ func completeInvitationRegistration(ctx context.Context, userID uuid.UUID, inv *
 }
 
 func rollbackInvitationRegistration(ctx context.Context, userID, tenantID uuid.UUID, cause error) error {
-	if err := repository.NewTenantRepository().RemoveMember(ctx, userID, tenantID); err != nil {
+	if err := accessrepo.NewTenantRepository().RemoveMember(ctx, userID, tenantID); err != nil {
 		return fmt.Errorf("%w; 回滚租户成员失败: %v", cause, err)
 	}
-	if err := repository.NewUserRepository().Delete(ctx, userID); err != nil {
+	if err := accessrepo.NewUserRepository().Delete(ctx, userID); err != nil {
 		return fmt.Errorf("%w; 回滚用户失败: %v", cause, err)
 	}
 	return cause

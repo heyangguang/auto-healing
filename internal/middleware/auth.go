@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -94,7 +94,7 @@ func queryTokenHeader(c *gin.Context) string {
 }
 
 func ensureActiveUser(c *gin.Context, subject string) bool {
-	userRepo := repository.NewUserRepository()
+	userRepo := accessrepo.NewUserRepository()
 	uid, err := uuid.Parse(subject)
 	if err != nil {
 		logger.Auth("TOKEN").Warn("鉴权失败: token subject 非法 | user=%s ip=%s err=%v", subject, c.ClientIP(), err)
@@ -105,7 +105,7 @@ func ensureActiveUser(c *gin.Context, subject string) bool {
 	if userErr == nil && user.Status == "active" {
 		return true
 	}
-	if userErr != nil && errors.Is(userErr, repository.ErrUserNotFound) {
+	if userErr != nil && errors.Is(userErr, accessrepo.ErrUserNotFound) {
 		logger.Auth("TOKEN").Warn("鉴权失败: 用户不存在 | user=%s ip=%s", subject, c.ClientIP())
 		abortUnauthorized(c, "账户不存在或已失效，请重新登录", ErrorCodeAccountNotFound)
 		return false

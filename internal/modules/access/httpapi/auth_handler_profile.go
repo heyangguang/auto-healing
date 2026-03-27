@@ -7,9 +7,9 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -23,7 +23,7 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 
 	userInfo, err := h.authSvc.GetCurrentUser(c.Request.Context(), userID)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
+		if errors.Is(err, accessrepo.ErrUserNotFound) {
 			response.NotFound(c, "用户不存在")
 			return
 		}
@@ -67,12 +67,12 @@ func (h *AuthHandler) applyEffectivePermissions(c *gin.Context, userID uuid.UUID
 	if err != nil {
 		return fmt.Errorf("解析当前租户失败: %w", err)
 	}
-	tenantPerms, err := repository.NewPermissionRepository().GetTenantPermissionCodes(c.Request.Context(), userID, tenantID)
+	tenantPerms, err := accessrepo.NewPermissionRepository().GetTenantPermissionCodes(c.Request.Context(), userID, tenantID)
 	if err != nil {
 		return err
 	}
 	userInfo.Permissions = tenantPerms
-	tenantRoles, err := repository.NewTenantRepository().GetUserTenantRoles(c.Request.Context(), userID, tenantID)
+	tenantRoles, err := accessrepo.NewTenantRepository().GetUserTenantRoles(c.Request.Context(), userID, tenantID)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 
 	profile, err := h.authSvc.GetUserProfile(c.Request.Context(), userID)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
+		if errors.Is(err, accessrepo.ErrUserNotFound) {
 			response.NotFound(c, "用户不存在")
 			return
 		}

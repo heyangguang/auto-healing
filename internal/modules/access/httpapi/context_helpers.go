@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/middleware"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -39,14 +39,14 @@ func authTenantContext(required bool) gin.HandlerFunc {
 		}
 		if inject {
 			c.Set(middleware.TenantIDKey, tenantID.String())
-			c.Request = c.Request.WithContext(repository.WithTenantID(c.Request.Context(), tenantID))
+			c.Request = c.Request.WithContext(accessrepo.WithTenantID(c.Request.Context(), tenantID))
 		}
 		c.Next()
 	}
 }
 
 func resolveAuthTenantContext(c *gin.Context, required bool) (uuid.UUID, bool, bool) {
-	if tenantID, ok := repository.TenantIDFromContextOK(c.Request.Context()); ok {
+	if tenantID, ok := accessrepo.TenantIDFromContextOK(c.Request.Context()); ok {
 		return tenantID, true, true
 	}
 	if middleware.IsImpersonating(c) {
@@ -140,7 +140,7 @@ func currentUserHasTenant(c *gin.Context, tenantID string, failOnError bool) (bo
 		}
 		return false, true
 	}
-	tenants, err := repository.NewTenantRepository().GetUserTenants(c.Request.Context(), userID, "")
+	tenants, err := accessrepo.NewTenantRepository().GetUserTenants(c.Request.Context(), userID, "")
 	if err != nil {
 		if failOnError {
 			response.InternalError(c, "加载租户上下文失败")

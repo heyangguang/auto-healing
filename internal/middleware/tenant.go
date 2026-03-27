@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -30,7 +30,7 @@ const (
 )
 
 func ensureActiveTenant(c *gin.Context, tenantID uuid.UUID) bool {
-	tenantRepo := repository.NewTenantRepository()
+	tenantRepo := accessrepo.NewTenantRepository()
 	tenant, tenantErr := tenantRepo.GetByID(c.Request.Context(), tenantID)
 	if tenantErr != nil {
 		if errors.Is(tenantErr, gorm.ErrRecordNotFound) {
@@ -53,7 +53,7 @@ func ensureActiveTenant(c *gin.Context, tenantID uuid.UUID) bool {
 
 func injectTenantContext(c *gin.Context, tenantID uuid.UUID) {
 	c.Set(TenantIDKey, tenantID.String())
-	ctx := repository.WithTenantID(c.Request.Context(), tenantID)
+	ctx := accessrepo.WithTenantID(c.Request.Context(), tenantID)
 	c.Request = c.Request.WithContext(ctx)
 }
 

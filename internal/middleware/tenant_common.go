@@ -3,7 +3,7 @@ package middleware
 import (
 	"fmt"
 
-	"github.com/company/auto-healing/internal/repository"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -103,7 +103,7 @@ func reloadTenantPermissions(c *gin.Context, tenantID uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("解析当前用户失败: %w", err)
 	}
-	permRepo := repository.NewPermissionRepository()
+	permRepo := accessrepo.NewPermissionRepository()
 	dbPerms, permErr := permRepo.GetTenantPermissionCodes(c.Request.Context(), userID, tenantID)
 	if permErr != nil {
 		return permErr

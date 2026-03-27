@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/crypto"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -70,7 +70,7 @@ func (s *Service) assignRegisterRoles(ctx context.Context, userID uuid.UUID, rol
 	return assignRegisterRolesWithRepo(s.userRepo, ctx, userID, roleIDs)
 }
 
-func assignRegisterRolesWithRepo(userRepo *repository.UserRepository, ctx context.Context, userID uuid.UUID, roleIDs []uuid.UUID) error {
+func assignRegisterRolesWithRepo(userRepo *accessrepo.UserRepository, ctx context.Context, userID uuid.UUID, roleIDs []uuid.UUID) error {
 	if len(roleIDs) == 0 {
 		return nil
 	}
@@ -84,7 +84,7 @@ func (s *Service) attachRegisterTenant(ctx context.Context, userID uuid.UUID, te
 	return attachRegisterTenantWithRepo(s.roleRepo, s.tenantRepo, ctx, userID, tenantID)
 }
 
-func attachRegisterTenantWithRepo(roleRepo *repository.RoleRepository, tenantRepo *repository.TenantRepository, ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID) error {
+func attachRegisterTenantWithRepo(roleRepo *accessrepo.RoleRepository, tenantRepo *accessrepo.TenantRepository, ctx context.Context, userID uuid.UUID, tenantID *uuid.UUID) error {
 	if tenantID == nil {
 		return nil
 	}
@@ -103,9 +103,9 @@ func attachRegisterTenantWithRepo(roleRepo *repository.RoleRepository, tenantRep
 
 func (s *Service) registerTx(ctx context.Context, user *model.User, roleIDs []uuid.UUID, tenantID *uuid.UUID) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		userRepo := repository.NewUserRepositoryWithDB(tx)
-		roleRepo := repository.NewRoleRepositoryWithDB(tx)
-		tenantRepo := repository.NewTenantRepositoryWithDB(tx)
+		userRepo := accessrepo.NewUserRepositoryWithDB(tx)
+		roleRepo := accessrepo.NewRoleRepositoryWithDB(tx)
+		tenantRepo := accessrepo.NewTenantRepositoryWithDB(tx)
 		if err := userRepo.Create(ctx, user); err != nil {
 			return err
 		}

@@ -9,11 +9,11 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/pkg/response"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -152,15 +152,15 @@ func (h *AuthHandler) refreshUserInfo(c *gin.Context, userIDStr string) (uuid.UU
 	}
 	userInfo, err := h.authSvc.GetCurrentUser(c.Request.Context(), userID)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
-			return uuid.Nil, nil, repository.ErrUserNotFound
+		if errors.Is(err, accessrepo.ErrUserNotFound) {
+			return uuid.Nil, nil, accessrepo.ErrUserNotFound
 		}
 		return uuid.Nil, nil, fmt.Errorf("加载刷新用户信息失败: %w", err)
 	}
-	user, userErr := repository.NewUserRepository().GetByID(c.Request.Context(), userID)
+	user, userErr := accessrepo.NewUserRepository().GetByID(c.Request.Context(), userID)
 	if userErr != nil {
-		if errors.Is(userErr, repository.ErrUserNotFound) {
-			return uuid.Nil, nil, repository.ErrUserNotFound
+		if errors.Is(userErr, accessrepo.ErrUserNotFound) {
+			return uuid.Nil, nil, accessrepo.ErrUserNotFound
 		}
 		return uuid.Nil, nil, fmt.Errorf("校验刷新用户状态失败: %w", userErr)
 	}
@@ -173,7 +173,7 @@ func (h *AuthHandler) refreshUserInfo(c *gin.Context, userIDStr string) (uuid.UU
 func respondRefreshUserInfoError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, errRefreshTokenInvalid),
-		errors.Is(err, repository.ErrUserNotFound),
+		errors.Is(err, accessrepo.ErrUserNotFound),
 		errors.Is(err, errRefreshUserInactive):
 		response.Unauthorized(c, err.Error())
 	default:
@@ -185,7 +185,7 @@ func (h *AuthHandler) refreshUserTenants(c *gin.Context, userInfo *authService.U
 	if userInfo.IsPlatformAdmin {
 		return nil, nil
 	}
-	return repository.NewTenantRepository().GetUserTenants(c.Request.Context(), userID, "")
+	return accessrepo.NewTenantRepository().GetUserTenants(c.Request.Context(), userID, "")
 }
 
 func (h *AuthHandler) issueRefreshTokenPair(userInfo *authService.UserInfo, userID string, tenants []model.Tenant) (*jwt.TokenPair, string, []authService.TenantBrief, error) {

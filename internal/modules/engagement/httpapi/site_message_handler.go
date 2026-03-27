@@ -7,40 +7,41 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
 	platformevents "github.com/company/auto-healing/internal/platform/events"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 // SiteMessageHandler 站内信处理器
 type SiteMessageHandler struct {
-	repo             *repository.SiteMessageRepository
+	repo             *engagementrepo.SiteMessageRepository
 	platformSettings *settingsrepo.PlatformSettingsRepository
 	eventBus         *platformevents.MessageEventBus
-	tenantRepo       *repository.TenantRepository
-	userRepo         *repository.UserRepository
+	tenantRepo       *accessrepo.TenantRepository
+	userRepo         *accessrepo.UserRepository
 }
 
 type SiteMessageHandlerDeps struct {
-	SiteMessageRepo      *repository.SiteMessageRepository
+	SiteMessageRepo      *engagementrepo.SiteMessageRepository
 	PlatformSettingsRepo *settingsrepo.PlatformSettingsRepository
 	EventBus             *platformevents.MessageEventBus
-	TenantRepo           *repository.TenantRepository
-	UserRepo             *repository.UserRepository
+	TenantRepo           *accessrepo.TenantRepository
+	UserRepo             *accessrepo.UserRepository
 }
 
 // NewSiteMessageHandler 创建站内信处理器
 func NewSiteMessageHandler() *SiteMessageHandler {
 	return NewSiteMessageHandlerWithDeps(SiteMessageHandlerDeps{
-		SiteMessageRepo:      repository.NewSiteMessageRepository(),
+		SiteMessageRepo:      engagementrepo.NewSiteMessageRepository(),
 		PlatformSettingsRepo: settingsrepo.NewPlatformSettingsRepository(),
 		EventBus:             platformevents.GetMessageEventBus(),
-		TenantRepo:           repository.NewTenantRepository(),
-		UserRepo:             repository.NewUserRepository(),
+		TenantRepo:           accessrepo.NewTenantRepository(),
+		UserRepo:             accessrepo.NewUserRepository(),
 	})
 }
 

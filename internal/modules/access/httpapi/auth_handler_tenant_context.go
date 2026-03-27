@@ -5,7 +5,7 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -18,7 +18,7 @@ var (
 )
 
 func currentTenantOrNil(c *gin.Context) uuid.UUID {
-	if tenantID, ok := repository.TenantIDFromContextOK(c.Request.Context()); ok {
+	if tenantID, ok := accessrepo.TenantIDFromContextOK(c.Request.Context()); ok {
 		return tenantID
 	}
 	if tenantID, ok := headerTenantOrNil(c); ok {
@@ -33,7 +33,7 @@ func currentTenantOrNil(c *gin.Context) uuid.UUID {
 func authTenantIDOrError(c *gin.Context) (uuid.UUID, error) {
 	tenantID := currentTenantOrNil(c)
 	if tenantID == uuid.Nil {
-		return uuid.Nil, repository.ErrTenantContextRequired
+		return uuid.Nil, accessrepo.ErrTenantContextRequired
 	}
 	if err := ensureAuthTenantAccessible(c, tenantID); err != nil {
 		return uuid.Nil, err
@@ -42,7 +42,7 @@ func authTenantIDOrError(c *gin.Context) (uuid.UUID, error) {
 }
 
 func ensureAuthTenantAccessible(c *gin.Context, tenantID uuid.UUID) error {
-	tenant, err := repository.NewTenantRepository().GetByID(c.Request.Context(), tenantID)
+	tenant, err := accessrepo.NewTenantRepository().GetByID(c.Request.Context(), tenantID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errAuthTenantNotFound
@@ -66,7 +66,7 @@ func ensureAuthTenantMembership(c *gin.Context, tenantID uuid.UUID) error {
 	if err != nil {
 		return errAuthTenantAccess
 	}
-	tenants, queryErr := repository.NewTenantRepository().GetUserTenants(c.Request.Context(), userID, "")
+	tenants, queryErr := accessrepo.NewTenantRepository().GetUserTenants(c.Request.Context(), userID, "")
 	if queryErr != nil {
 		return queryErr
 	}

@@ -3,9 +3,9 @@ package httpapi
 import (
 	"errors"
 
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 )
 
@@ -13,7 +13,7 @@ func respondChangePasswordError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, authService.ErrPasswordMismatch):
 		response.BadRequest(c, ToBusinessError(err))
-	case errors.Is(err, repository.ErrUserNotFound):
+	case errors.Is(err, accessrepo.ErrUserNotFound):
 		response.NotFound(c, "用户不存在")
 	default:
 		respondInternalError(c, "AUTH", "修改密码失败", err)
@@ -21,7 +21,7 @@ func respondChangePasswordError(c *gin.Context, err error) {
 }
 
 func respondUpdateProfileError(c *gin.Context, err error) {
-	if errors.Is(err, repository.ErrUserNotFound) {
+	if errors.Is(err, accessrepo.ErrUserNotFound) {
 		response.NotFound(c, "用户不存在")
 		return
 	}
@@ -30,7 +30,7 @@ func respondUpdateProfileError(c *gin.Context, err error) {
 
 func respondProfileAuditQueryError(c *gin.Context, publicMsg string, err error) {
 	switch {
-	case errors.Is(err, repository.ErrTenantContextRequired):
+	case errors.Is(err, accessrepo.ErrTenantContextRequired):
 		response.Forbidden(c, "租户上下文缺失或无效")
 	case errors.Is(err, errAuthTenantNotFound):
 		response.Forbidden(c, errAuthTenantNotFound.Error())

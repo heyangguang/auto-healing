@@ -6,17 +6,18 @@ import (
 
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/notification/provider"
 	"github.com/company/auto-healing/internal/pkg/query"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // Service 通知服务
 type Service struct {
-	repo             *repository.NotificationRepository
-	healingFlowRepo  *repository.HealingFlowRepository
+	repo             *engagementrepo.NotificationRepository
+	healingFlowRepo  *automationrepo.HealingFlowRepository
 	providerRegistry *provider.Registry
 	templateParser   *TemplateParser
 	variableBuilder  *VariableBuilder
@@ -26,8 +27,8 @@ type Service struct {
 // NewService 创建通知服务
 func NewService(db *gorm.DB, systemName, systemURL, systemVersion string) *Service {
 	return &Service{
-		repo:             repository.NewNotificationRepository(db),
-		healingFlowRepo:  repository.NewHealingFlowRepository(),
+		repo:             engagementrepo.NewNotificationRepository(db),
+		healingFlowRepo:  automationrepo.NewHealingFlowRepository(),
 		providerRegistry: provider.NewRegistry(),
 		templateParser:   NewTemplateParser(),
 		variableBuilder:  NewVariableBuilder(systemName, systemURL, systemVersion),
@@ -125,7 +126,7 @@ func (s *Service) GetTemplate(ctx context.Context, id uuid.UUID) (*model.Notific
 	return template, err
 }
 
-func (s *Service) ListTemplates(ctx context.Context, opts *repository.TemplateListOptions) ([]model.NotificationTemplate, int64, error) {
+func (s *Service) ListTemplates(ctx context.Context, opts *engagementrepo.TemplateListOptions) ([]model.NotificationTemplate, int64, error) {
 	return s.repo.ListTemplates(ctx, opts)
 }
 
@@ -143,6 +144,6 @@ func (s *Service) GetNotification(ctx context.Context, id uuid.UUID) (*model.Not
 }
 
 // ListNotifications 获取通知日志列表
-func (s *Service) ListNotifications(ctx context.Context, opts *repository.NotificationLogListOptions) ([]model.NotificationLog, int64, error) {
+func (s *Service) ListNotifications(ctx context.Context, opts *engagementrepo.NotificationLogListOptions) ([]model.NotificationLog, int64, error) {
 	return s.repo.ListLogs(ctx, opts)
 }

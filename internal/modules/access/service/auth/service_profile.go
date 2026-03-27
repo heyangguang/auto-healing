@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/company/auto-healing/internal/model"
-	"github.com/company/auto-healing/internal/repository"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/google/uuid"
 )
 
@@ -85,7 +85,7 @@ func (s *Service) GetUserProfile(ctx context.Context, userID uuid.UUID) (*UserPr
 	}, nil
 }
 
-func buildRoleDetails(user *model.User, tenantRepo *repository.TenantRepository, ctx context.Context) ([]RoleDetail, error) {
+func buildRoleDetails(user *model.User, tenantRepo *accessrepo.TenantRepository, ctx context.Context) ([]RoleDetail, error) {
 	roleDetails := make([]RoleDetail, 0, len(user.Roles))
 	roleNameSet := make(map[string]bool)
 	for _, role := range user.Roles {

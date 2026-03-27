@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -68,7 +68,7 @@ func loadImpersonationPermissions(ctx context.Context) ([]string, error) {
 }
 
 func loadImpersonationPermissionsFromDB(ctx context.Context) ([]string, error) {
-	roleRepo := repository.NewRoleRepository()
+	roleRepo := accessrepo.NewRoleRepository()
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	role, err := roleRepo.GetByName(ctx, "impersonation_accessor")
@@ -90,7 +90,7 @@ func loadImpersonationPermissionsFromDB(ctx context.Context) ([]string, error) {
 // 4. 在 gin.Context 中设置 impersonation 标记
 // 5. 用 impersonation_accessor 角色权限覆盖 JWT 中的 * 通配符
 func ImpersonationMiddleware() gin.HandlerFunc {
-	repo := repository.NewImpersonationRepository()
+	repo := accessrepo.NewImpersonationRepository()
 
 	return func(c *gin.Context) {
 		c.Set(ImpersonationKey, false)
@@ -135,7 +135,7 @@ func parseImpersonationRequestID(c *gin.Context) (uuid.UUID, bool) {
 	return requestID, true
 }
 
-func loadActiveImpersonationRequest(c *gin.Context, repo *repository.ImpersonationRepository, requestID uuid.UUID) (*model.ImpersonationRequest, bool) {
+func loadActiveImpersonationRequest(c *gin.Context, repo *accessrepo.ImpersonationRepository, requestID uuid.UUID) (*model.ImpersonationRequest, bool) {
 	req, err := repo.GetByID(c.Request.Context(), requestID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

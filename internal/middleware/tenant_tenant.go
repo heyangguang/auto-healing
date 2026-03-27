@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"github.com/company/auto-healing/internal/repository"
+	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -94,7 +94,7 @@ func ensureTenantMembership(c *gin.Context, tenantIDs []string, tenantIDStr stri
 		return false
 	}
 
-	tenantRepo := repository.NewTenantRepository()
+	tenantRepo := accessrepo.NewTenantRepository()
 	dbTenants, dbErr := tenantRepo.GetUserTenants(c.Request.Context(), userID, "")
 	if dbErr != nil {
 		abortInternalError(c, "租户成员关系校验失败", ErrorCodeTenantMembershipLookupFailed)
