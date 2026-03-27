@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
@@ -135,7 +135,7 @@ func parseImpersonationRequestID(c *gin.Context) (uuid.UUID, bool) {
 	return requestID, true
 }
 
-func loadActiveImpersonationRequest(c *gin.Context, repo *accessrepo.ImpersonationRepository, requestID uuid.UUID) (*model.ImpersonationRequest, bool) {
+func loadActiveImpersonationRequest(c *gin.Context, repo *accessrepo.ImpersonationRepository, requestID uuid.UUID) (*accessmodel.ImpersonationRequest, bool) {
 	req, err := repo.GetByID(c.Request.Context(), requestID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -155,7 +155,7 @@ func loadActiveImpersonationRequest(c *gin.Context, repo *accessrepo.Impersonati
 	return req, true
 }
 
-func validateImpersonationRequest(c *gin.Context, req *model.ImpersonationRequest) bool {
+func validateImpersonationRequest(c *gin.Context, req *accessmodel.ImpersonationRequest) bool {
 	userID, _ := uuid.Parse(GetUserID(c))
 	if req.RequesterID != userID {
 		abortForbidden(c, "Impersonation 申请与当前用户不匹配", ErrorCodeImpersonationUserMismatch)

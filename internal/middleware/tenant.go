@@ -3,7 +3,7 @@ package middleware
 import (
 	"errors"
 
-	"github.com/company/auto-healing/internal/model"
+	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -44,7 +44,7 @@ func ensureActiveTenant(c *gin.Context, tenantID uuid.UUID) bool {
 		abortForbidden(c, "租户不存在", ErrorCodeTenantNotFound)
 		return false
 	}
-	if tenant.Status != model.TenantStatusActive {
+	if tenant.Status != accessmodel.TenantStatusActive {
 		abortForbidden(c, "该租户已被禁用，请联系平台管理员", ErrorCodeTenantDisabled)
 		return false
 	}
@@ -97,7 +97,7 @@ func contains(slice []string, item string) bool {
 }
 
 // containsTenantByID 检查租户列表中是否包含指定 ID 的租户
-func containsTenantByID(tenants []model.Tenant, targetID string) bool {
+func containsTenantByID(tenants []accessmodel.Tenant, targetID string) bool {
 	for _, tenant := range tenants {
 		if tenant.ID.String() == targetID {
 			return true

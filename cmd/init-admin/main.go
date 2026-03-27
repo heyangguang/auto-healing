@@ -9,7 +9,7 @@ import (
 
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/crypto"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -96,18 +96,18 @@ func ensureUsersTableEmpty(ctx context.Context, userRepo *accessrepo.UserReposit
 	}
 }
 
-func createInitialAdmin(ctx context.Context, userRepo *accessrepo.UserRepository) (model.User, string, error) {
+func createInitialAdmin(ctx context.Context, userRepo *accessrepo.UserRepository) (accessmodel.User, string, error) {
 	password, err := resolveInitialAdminPassword()
 	if err != nil {
-		return model.User{}, "", fmt.Errorf("生成初始密码失败: %w", err)
+		return accessmodel.User{}, "", fmt.Errorf("生成初始密码失败: %w", err)
 	}
 
 	passwordHash, err := crypto.HashPassword(password)
 	if err != nil {
-		return model.User{}, "", fmt.Errorf("密码加密失败: %w", err)
+		return accessmodel.User{}, "", fmt.Errorf("密码加密失败: %w", err)
 	}
 
-	admin := model.User{
+	admin := accessmodel.User{
 		Username:        "admin",
 		Email:           "admin@example.com",
 		PasswordHash:    passwordHash,
@@ -117,26 +117,26 @@ func createInitialAdmin(ctx context.Context, userRepo *accessrepo.UserRepository
 	}
 
 	if err := userRepo.Create(ctx, &admin); err != nil {
-		return model.User{}, "", fmt.Errorf("创建用户失败: %w", err)
+		return accessmodel.User{}, "", fmt.Errorf("创建用户失败: %w", err)
 	}
 	return admin, password, nil
 }
 
-func bootstrapInitialAdmin(ctx context.Context, repos adminRepos) (model.User, string, error) {
+func bootstrapInitialAdmin(ctx context.Context, repos adminRepos) (accessmodel.User, string, error) {
 	admin, password, err := createInitialAdmin(ctx, repos.user)
 	if err != nil {
-		return model.User{}, "", err
+		return accessmodel.User{}, "", err
 	}
 	if err := bindPlatformAdminRole(ctx, repos, admin.ID); err != nil {
 		if deleteErr := repos.user.Delete(ctx, admin.ID); deleteErr != nil {
-			return model.User{}, "", fmt.Errorf("绑定平台管理员角色失败: %w；回滚用户失败: %v", err, deleteErr)
+			return accessmodel.User{}, "", fmt.Errorf("绑定平台管理员角色失败: %w；回滚用户失败: %v", err, deleteErr)
 		}
-		return model.User{}, "", err
+		return accessmodel.User{}, "", err
 	}
 	return admin, password, nil
 }
 
-func printAdminBootstrapResult(admin model.User, password string) {
+func printAdminBootstrapResult(admin accessmodel.User, password string) {
 	fmt.Println("✅ 平台管理员初始化成功!")
 	fmt.Println("")
 	fmt.Println("📝 登录信息:")
