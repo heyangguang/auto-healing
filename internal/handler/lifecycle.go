@@ -81,6 +81,10 @@ func registerHandlerCleanup(fn func()) {
 	handlerCleanups = append(handlerCleanups, fn)
 }
 
+func RegisterCleanup(fn func()) {
+	registerHandlerCleanup(fn)
+}
+
 func Cleanup() {
 	handlerCleanupMu.Lock()
 	cleanups := handlerCleanups

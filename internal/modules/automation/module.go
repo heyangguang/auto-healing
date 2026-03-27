@@ -11,9 +11,12 @@ type Module struct {
 
 // New 创建 automation 域模块。
 func New() *Module {
-	return &Module{
+	module := &Module{
 		Execution: handler.NewExecutionHandler(),
 		Healing:   handler.NewHealingHandler(),
 		Schedule:  handler.NewScheduleHandler(),
 	}
+	handler.RegisterCleanup(module.Execution.Shutdown)
+	handler.RegisterCleanup(module.Healing.Shutdown)
+	return module
 }

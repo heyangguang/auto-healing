@@ -16,9 +16,7 @@ func TestRegisteredDashboardOverviewRouteRejectsUnauthorizedSections(t *testing.
 		defaultTenantID: uuid.NewString(),
 		permissions:     []string{"dashboard:view"},
 	})
-	registerTenantDashboardRoutes(router.Group("/api/v1/tenant/dashboard"), &Handlers{
-		Dashboard: &DashboardHandler{},
-	})
+	registerTenantDashboardRoutes(router.Group("/api/v1/tenant/dashboard"), &DashboardHandler{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tenant/dashboard/overview?sections=playbooks", nil)
 	recorder := httptest.NewRecorder()

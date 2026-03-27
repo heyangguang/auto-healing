@@ -184,10 +184,7 @@ func newIncidentRouteTestHarness(t *testing.T, permissions []string, schemas ...
 	t.Cleanup(pluginHandler.Shutdown)
 	router := gin.New()
 	router.Use(injectIncidentRouteContext(tenantID, permissions))
-	registerTenantIncidentRoutes(router.Group("/api/v1/tenant/incidents"), &Handlers{
-		Plugin:  pluginHandler,
-		Healing: &HealingHandler{},
-	})
+	registerTenantIncidentRoutes(router.Group("/api/v1/tenant/incidents"), pluginHandler, &HealingHandler{})
 	return router, db, tenantID
 }
 

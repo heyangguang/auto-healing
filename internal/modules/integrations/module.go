@@ -12,10 +12,13 @@ type Module struct {
 
 // New 创建 integrations 域模块。
 func New() *Module {
-	return &Module{
+	module := &Module{
 		Plugin:   handler.NewPluginHandler(),
 		CMDB:     handler.NewCMDBHandler(),
 		GitRepo:  handler.NewGitRepoHandler(),
 		Playbook: handler.NewPlaybookHandler(),
 	}
+	handler.RegisterCleanup(module.Plugin.Shutdown)
+	handler.RegisterCleanup(module.GitRepo.Shutdown)
+	return module
 }

@@ -35,7 +35,7 @@ func TestExecutionRunCancelAPIUpdatesRunStatus(t *testing.T) {
 	t.Cleanup(handler.Shutdown)
 
 	router := newTenantAuthorizedRouter(tenantID, "task:cancel")
-	registerTenantExecutionRunRoutes(router.Group("/api/v1/tenant/execution-runs"), &Handlers{Execution: handler})
+	registerTenantExecutionRunRoutes(router.Group("/api/v1/tenant/execution-runs"), handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenant/execution-runs/"+runID.String()+"/cancel", nil)
 	recorder := httptest.NewRecorder()
@@ -74,7 +74,7 @@ func TestHealingInstanceCancelAPIUpdatesInstanceApprovalAndIncident(t *testing.T
 	t.Cleanup(handler.Shutdown)
 
 	router := newTenantAuthorizedRouter(tenantID, "healing:flows:update")
-	registerTenantHealingInstanceRoutes(router.Group("/api/v1/tenant/healing/instances"), &Handlers{Healing: handler})
+	registerTenantHealingInstanceRoutes(router.Group("/api/v1/tenant/healing/instances"), handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenant/healing/instances/"+instanceID.String()+"/cancel", nil)
 	recorder := httptest.NewRecorder()

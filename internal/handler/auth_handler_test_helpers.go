@@ -97,50 +97,48 @@ func newAuthHandlerTestRouterWithJWTService(t *testing.T, db *gorm.DB, jwtSvc *j
 	gin.SetMode(gin.TestMode)
 	logger.Init(&config.LogConfig{})
 	router := gin.New()
-	handlers := &Handlers{
-		Auth: &AuthHandler{
-			authSvc:           authService.NewService(jwtSvc),
-			jwtSvc:            jwtSvc,
-			auditRepo:         repository.NewAuditLogRepository(db),
-			platformAuditRepo: repository.NewPlatformAuditLogRepository(),
-			userRepo:          repository.NewUserRepository(),
-		},
+	authHandler := &AuthHandler{
+		authSvc:           authService.NewService(jwtSvc),
+		jwtSvc:            jwtSvc,
+		auditRepo:         repository.NewAuditLogRepository(db),
+		platformAuditRepo: repository.NewPlatformAuditLogRepository(),
+		userRepo:          repository.NewUserRepository(),
 	}
 
 	api := router.Group("/api/v1")
-	registerAuthTestRoutes(api, handlers)
+	registerAuthTestRoutes(api, authHandler)
 	return router
 }
 
-func registerAuthTestRoutes(api *gin.RouterGroup, handlers *Handlers) {
+func registerAuthTestRoutes(api *gin.RouterGroup, authHandler *AuthHandler) {
 	auth := api.Group("/auth")
-	auth.POST("/login", handlers.Auth.Login)
-	auth.POST("/refresh", handlers.Auth.RefreshToken)
+	auth.POST("/login", authHandler.Login)
+	auth.POST("/refresh", authHandler.RefreshToken)
 	auth.GET("/invitation/:token", ValidateInvitation)
-	auth.POST("/register", RegisterByInvitation(handlers.Auth.GetAuthService()))
+	auth.POST("/register", RegisterByInvitation(authHandler.GetAuthService()))
 
 	authProtected := auth.Group("")
-	authProtected.Use(middleware.JWTAuth(handlers.Auth.GetJWTService()))
+	authProtected.Use(middleware.JWTAuth(authHandler.GetJWTService()))
 	authProtected.GET("/me",
 		middleware.ImpersonationMiddleware(),
 		RequireAuthTenantContext(),
-		handlers.Auth.GetCurrentUser,
+		authHandler.GetCurrentUser,
 	)
-	authProtected.GET("/profile", handlers.Auth.GetProfile)
-	authProtected.GET("/profile/login-history", handlers.Auth.GetLoginHistory)
+	authProtected.GET("/profile", authHandler.GetProfile)
+	authProtected.GET("/profile/login-history", authHandler.GetLoginHistory)
 	authProtected.GET("/profile/activities",
 		middleware.ImpersonationMiddleware(),
 		RequireAuthTenantContext(),
-		handlers.Auth.GetProfileActivities,
+		authHandler.GetProfileActivities,
 	)
 
 	authAudited := authProtected.Group("")
 	authAudited.Use(middleware.ImpersonationMiddleware())
 	authAudited.Use(OptionalAuthTenantContext())
 	authAudited.Use(middleware.AuditMiddleware())
-	authAudited.PUT("/profile", handlers.Auth.UpdateProfile)
-	authAudited.PUT("/password", handlers.Auth.ChangePassword)
-	authAudited.POST("/logout", handlers.Auth.Logout)
+	authAudited.PUT("/profile", authHandler.UpdateProfile)
+	authAudited.PUT("/password", authHandler.ChangePassword)
+	authAudited.POST("/logout", authHandler.Logout)
 }
 
 func issueAuthMe(t *testing.T, router *gin.Engine, token string, headers map[string]string) authMeResponse {
