@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -102,11 +103,11 @@ func splitAndTrim(s string) []string {
 	return result
 }
 
-func sanitizeAuditPayload(payload model.JSON) model.JSON {
+func sanitizeAuditPayload(payload modeltypes.JSON) modeltypes.JSON {
 	if payload == nil {
 		return nil
 	}
-	masked := make(model.JSON, len(payload))
+	masked := make(modeltypes.JSON, len(payload))
 	for k, v := range payload {
 		masked[k] = sanitizeAuditValue(k, v)
 	}
@@ -120,7 +121,7 @@ func sanitizeAuditValue(key string, value interface{}) interface{} {
 	}
 
 	switch typed := value.(type) {
-	case model.JSON:
+	case modeltypes.JSON:
 		return sanitizeAuditPayload(typed)
 	case map[string]interface{}:
 		masked := make(map[string]interface{}, len(typed))
@@ -139,7 +140,7 @@ func sanitizeAuditValue(key string, value interface{}) interface{} {
 	}
 }
 
-func writeAuditCSV(c *gin.Context, logs []model.AuditLog) {
+func writeAuditCSV(c *gin.Context, logs []platformmodel.AuditLog) {
 	filename := fmt.Sprintf("audit_logs_%s.csv", time.Now().Format("20060102_150405"))
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
@@ -153,7 +154,7 @@ func writeAuditCSV(c *gin.Context, logs []model.AuditLog) {
 	}
 }
 
-func auditCSVRow(log model.AuditLog) []string {
+func auditCSVRow(log platformmodel.AuditLog) []string {
 	riskLevelLabels := map[string]string{"low": "低", "medium": "中", "high": "高危", "critical": "极高"}
 	riskLevel, _ := auditRiskFields(log.Action, log.ResourceType)
 	label := riskLevelLabels[riskLevel]

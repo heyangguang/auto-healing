@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -15,7 +15,7 @@ import (
 
 func TestBuildIncidentSyncUpdatesExcludesRuntimeFields(t *testing.T) {
 	now := time.Now()
-	incident := &model.Incident{
+	incident := &platformmodel.Incident{
 		PluginID:         ptrUUID(uuid.New()),
 		SourcePluginName: "plugin",
 		ExternalID:       "ext-1",

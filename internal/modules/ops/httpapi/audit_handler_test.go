@@ -3,11 +3,11 @@ package httpapi
 import (
 	"testing"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 )
 
 func TestSanitizeAuditPayloadMasksNestedSensitiveFields(t *testing.T) {
-	payload := model.JSON{
+	payload := modeltypes.JSON{
 		"config": map[string]interface{}{
 			"auth": map[string]interface{}{
 				"token":       "secret-token",

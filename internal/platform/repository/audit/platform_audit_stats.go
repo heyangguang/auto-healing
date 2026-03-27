@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"gorm.io/gorm"
 )
 
@@ -36,7 +36,7 @@ func (r *PlatformAuditLogRepository) GetStats(ctx context.Context) (*PlatformAud
 func (r *PlatformAuditLogRepository) GetTrend(ctx context.Context, days int) ([]TrendItem, error) {
 	var items []TrendItem
 	since := time.Now().AddDate(0, 0, -days)
-	err := r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}).
+	err := r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}).
 		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, count(*) as count").
 		Where("created_at >= ?", since).
 		Group("TO_CHAR(created_at, 'YYYY-MM-DD')").
@@ -45,14 +45,14 @@ func (r *PlatformAuditLogRepository) GetTrend(ctx context.Context, days int) ([]
 	return items, err
 }
 
-func (r *PlatformAuditLogRepository) GetHighRiskLogs(ctx context.Context, page, pageSize int) ([]model.PlatformAuditLog, int64, error) {
-	queryBuilder := r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}).Where(buildHighRiskCondition())
+func (r *PlatformAuditLogRepository) GetHighRiskLogs(ctx context.Context, page, pageSize int) ([]platformmodel.PlatformAuditLog, int64, error) {
+	queryBuilder := r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}).Where(buildHighRiskCondition())
 	total, err := countWithClone(queryBuilder)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	var logs []model.PlatformAuditLog
+	var logs []platformmodel.PlatformAuditLog
 	offset := (page - 1) * pageSize
 	err = queryBuilder.Order("created_at DESC").
 		Offset(offset).
@@ -63,7 +63,7 @@ func (r *PlatformAuditLogRepository) GetHighRiskLogs(ctx context.Context, page, 
 
 func (r *PlatformAuditLogRepository) GetResourceTypeStats(ctx context.Context, days int) ([]ResourceTypeGroupItem, error) {
 	var items []ResourceTypeGroupItem
-	err := applyDaysFilter(r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}).Select("resource_type, count(*) as count"), days).
+	err := applyDaysFilter(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}).Select("resource_type, count(*) as count"), days).
 		Group("resource_type").
 		Order("count DESC").
 		Scan(&items).Error
@@ -72,7 +72,7 @@ func (r *PlatformAuditLogRepository) GetResourceTypeStats(ctx context.Context, d
 
 func (r *PlatformAuditLogRepository) GetActionGrouping(ctx context.Context, action string, days int) ([]ActionGroupItem, error) {
 	var items []ActionGroupItem
-	query := applyDaysFilter(r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}).Select("action, resource_type, username, count(*) as count"), days)
+	query := applyDaysFilter(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}).Select("action, resource_type, username, count(*) as count"), days)
 	if action != "" {
 		query = query.Where("action = ?", action)
 	}
@@ -81,7 +81,7 @@ func (r *PlatformAuditLogRepository) GetActionGrouping(ctx context.Context, acti
 }
 
 func (r *PlatformAuditLogRepository) platformAuditSummaryCounts(ctx context.Context) (int64, int64, int64, int64, int64, error) {
-	newDB := func() *gorm.DB { return r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}) }
+	newDB := func() *gorm.DB { return r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}) }
 	totalCount, err := auditCount(newDB())
 	if err != nil {
 		return 0, 0, 0, 0, 0, err
@@ -110,11 +110,11 @@ func (r *PlatformAuditLogRepository) platformAuditPeriodCounts(ctx context.Conte
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	weekStart := todayStart.AddDate(0, 0, -int(now.Weekday()))
 
-	todayCount, err := auditCount(r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}).Where("created_at >= ?", todayStart))
+	todayCount, err := auditCount(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}).Where("created_at >= ?", todayStart))
 	if err != nil {
 		return 0, 0, err
 	}
-	weekCount, err := auditCount(r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}).Where("created_at >= ?", weekStart))
+	weekCount, err := auditCount(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}).Where("created_at >= ?", weekStart))
 	if err != nil {
 		return 0, 0, err
 	}
@@ -123,7 +123,7 @@ func (r *PlatformAuditLogRepository) platformAuditPeriodCounts(ctx context.Conte
 
 func (r *PlatformAuditLogRepository) platformAuditActionStats(ctx context.Context) ([]ActionStat, error) {
 	var actionStats []ActionStat
-	err := r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}).
+	err := r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}).
 		Select("action, count(*) as count").
 		Group("action").
 		Order("count DESC").

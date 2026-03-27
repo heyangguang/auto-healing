@@ -3,7 +3,7 @@ package incident
 import (
 	"context"
 
-	"github.com/company/auto-healing/internal/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"gorm.io/gorm"
 )
 
@@ -25,14 +25,14 @@ type IncidentStats struct {
 func (r *IncidentRepository) GetStats(ctx context.Context) (*IncidentStats, error) {
 	stats := &IncidentStats{}
 	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
-	if err := newDB().Model(&model.Incident{}).Count(&stats.Total).Error; err != nil {
+	if err := newDB().Model(&platformmodel.Incident{}).Count(&stats.Total).Error; err != nil {
 		return nil, err
 	}
-	if err := newDB().Model(&model.Incident{}).Where("scanned = ?", true).Count(&stats.Scanned).Error; err != nil {
+	if err := newDB().Model(&platformmodel.Incident{}).Where("scanned = ?", true).Count(&stats.Scanned).Error; err != nil {
 		return nil, err
 	}
 	stats.Unscanned = stats.Total - stats.Scanned
-	if err := newDB().Model(&model.Incident{}).Where("matched_rule_id IS NOT NULL").Count(&stats.Matched).Error; err != nil {
+	if err := newDB().Model(&platformmodel.Incident{}).Where("matched_rule_id IS NOT NULL").Count(&stats.Matched).Error; err != nil {
 		return nil, err
 	}
 	if err := countIncidentsByHealingStatus(newDB, "pending", &stats.Pending); err != nil {
@@ -57,5 +57,5 @@ func (r *IncidentRepository) GetStats(ctx context.Context) (*IncidentStats, erro
 }
 
 func countIncidentsByHealingStatus(newDB func() *gorm.DB, status string, count *int64) error {
-	return newDB().Model(&model.Incident{}).Where("healing_status = ?", status).Count(count).Error
+	return newDB().Model(&platformmodel.Incident{}).Where("healing_status = ?", status).Count(count).Error
 }

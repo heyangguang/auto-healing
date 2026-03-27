@@ -3,7 +3,8 @@ package middleware
 import (
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	"github.com/google/uuid"
 )
 
@@ -39,8 +40,8 @@ type auditEvent struct {
 	action          string
 	resourceID      *uuid.UUID
 	resourceName    string
-	bodyJSON        model.JSON
-	changes         model.JSON
+	bodyJSON        modeltypes.JSON
+	changes         modeltypes.JSON
 	status          string
 	errorMessage    string
 	statusCode      int
@@ -52,8 +53,8 @@ type auditEvent struct {
 	isImpersonating bool
 }
 
-func newPlatformAuditLog(event auditEvent) *model.PlatformAuditLog {
-	return &model.PlatformAuditLog{
+func newPlatformAuditLog(event auditEvent) *platformmodel.PlatformAuditLog {
+	return &platformmodel.PlatformAuditLog{
 		UserID:         event.userID,
 		Username:       event.username,
 		IPAddress:      event.ipAddress,
@@ -74,8 +75,8 @@ func newPlatformAuditLog(event auditEvent) *model.PlatformAuditLog {
 	}
 }
 
-func newTenantAuditLog(event auditEvent, username string) *model.AuditLog {
-	return &model.AuditLog{
+func newTenantAuditLog(event auditEvent, username string) *platformmodel.AuditLog {
+	return &platformmodel.AuditLog{
 		UserID:         event.userID,
 		Username:       username,
 		IPAddress:      event.ipAddress,

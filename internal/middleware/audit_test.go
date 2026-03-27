@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -15,7 +15,7 @@ import (
 )
 
 func TestSanitizeAuditJSONMasksNestedSensitiveFields(t *testing.T) {
-	payload := model.JSON{
+	payload := modeltypes.JSON{
 		"config": map[string]interface{}{
 			"auth": map[string]interface{}{
 				"token":       "secret-token",
@@ -93,7 +93,7 @@ func TestResolveResourceNameReturnsTenantLookupError(t *testing.T) {
 		t.Fatalf("open sqlite db: %v", err)
 	}
 
-	body := model.JSON{"tenant_id": uuid.NewString()}
+	body := modeltypes.JSON{"tenant_id": uuid.NewString()}
 	_, err = resolveResourceName(db, "/api/v1/platform/impersonation/requests", nil, "", body, uuid.Nil)
 	if err == nil {
 		t.Fatal("resolveResourceName() error = nil, want tenant lookup error")

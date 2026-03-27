@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -172,11 +172,11 @@ func buildAuditEvent(state *auditRequestState, actor auditActor, db *gorm.DB) au
 	}
 }
 
-func parseAuditRequestBody(requestBody []byte) model.JSON {
+func parseAuditRequestBody(requestBody []byte) modeltypes.JSON {
 	if len(requestBody) == 0 || len(requestBody) > maxAuditRequestBodyBytes {
 		return nil
 	}
-	var bodyJSON model.JSON
+	var bodyJSON modeltypes.JSON
 	if json.Unmarshal(requestBody, &bodyJSON) != nil {
 		return nil
 	}
@@ -197,7 +197,7 @@ func auditStatus(statusCode int, responseBody []byte) (string, string) {
 	return "success", ""
 }
 
-func computeAuditChanges(status, method, action string, oldState map[string]interface{}, bodyJSON model.JSON) model.JSON {
+func computeAuditChanges(status, method, action string, oldState map[string]interface{}, bodyJSON modeltypes.JSON) modeltypes.JSON {
 	if status != "success" {
 		return nil
 	}

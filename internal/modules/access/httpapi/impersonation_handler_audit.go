@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
-	accessmodel "github.com/company/auto-healing/internal/model"
+	accessmodel "github.com/company/auto-healing/internal/modules/access/model"
+	engagementmodel "github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
 )
 
@@ -42,8 +43,8 @@ func impersonationAuditRequestPath(requestID uuid.UUID, action string) string {
 	return "/api/v1/platform/impersonation/requests/" + requestID.String() + "/" + action[len("impersonation_"):]
 }
 
-func buildPlatformImpersonationAudit(userID *uuid.UUID, username, ipAddress, userAgent, tenantName, action string, requestID uuid.UUID, requestPath string, statusCode int, createdAt time.Time) *model.PlatformAuditLog {
-	return &model.PlatformAuditLog{
+func buildPlatformImpersonationAudit(userID *uuid.UUID, username, ipAddress, userAgent, tenantName, action string, requestID uuid.UUID, requestPath string, statusCode int, createdAt time.Time) *platformmodel.PlatformAuditLog {
+	return &platformmodel.PlatformAuditLog{
 		UserID:         userID,
 		Username:       username,
 		IPAddress:      ipAddress,
@@ -61,8 +62,8 @@ func buildPlatformImpersonationAudit(userID *uuid.UUID, username, ipAddress, use
 	}
 }
 
-func buildTenantImpersonationAudit(userID *uuid.UUID, username, ipAddress, userAgent string, tenantID uuid.UUID, tenantName, action string, requestID uuid.UUID, requestPath string, statusCode int, createdAt time.Time) *model.AuditLog {
-	return &model.AuditLog{
+func buildTenantImpersonationAudit(userID *uuid.UUID, username, ipAddress, userAgent string, tenantID uuid.UUID, tenantName, action string, requestID uuid.UUID, requestPath string, statusCode int, createdAt time.Time) *platformmodel.AuditLog {
+	return &platformmodel.AuditLog{
 		TenantID:       &tenantID,
 		UserID:         userID,
 		Username:       username + " [Impersonation]",
@@ -91,10 +92,10 @@ func (h *ImpersonationHandler) notifyApproversNewRequest(ctx context.Context, im
 	notifyCtx, cancel := detachedTimeoutContext(ctx, 5*time.Second)
 	defer cancel()
 
-	msg := &model.SiteMessage{
+	msg := &engagementmodel.SiteMessage{
 		TenantID:       &impReq.TenantID,
 		TargetTenantID: &impReq.TenantID,
-		Category:       model.SiteMessageCategoryServiceNotice,
+		Category:       engagementmodel.SiteMessageCategoryServiceNotice,
 		Title:          "新的临时提权申请待审批",
 		Content:        impReq.RequesterName + " 申请临时访问本租户（" + impReq.TenantName + "），申请时长 " + formatMinutes(impReq.DurationMinutes) + "，请及时处理。",
 	}
@@ -114,10 +115,10 @@ func (h *ImpersonationHandler) notifyRequesterDecision(ctx context.Context, impR
 	defer cancel()
 
 	title, content := impersonationDecisionMessage(impReq, approved, approverName)
-	msg := &model.SiteMessage{
+	msg := &engagementmodel.SiteMessage{
 		TenantID:       &impReq.TenantID,
 		TargetTenantID: nil,
-		Category:       model.SiteMessageCategoryServiceNotice,
+		Category:       engagementmodel.SiteMessageCategoryServiceNotice,
 		Title:          title,
 		Content:        content,
 	}

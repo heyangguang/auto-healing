@@ -7,7 +7,7 @@ import (
 	"errors"
 
 	"github.com/company/auto-healing/internal/database"
-	rootmodel "github.com/company/auto-healing/internal/model"
+	automationmodel "github.com/company/auto-healing/internal/modules/automation/model"
 	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -259,14 +259,14 @@ func (r *SecretsSourceRepository) UpdateTestTime(ctx context.Context, id uuid.UU
 // CountTasksUsingSource 统计引用指定密钥源的任务模板数量
 func (r *SecretsSourceRepository) CountTasksUsingSource(ctx context.Context, sourceID string) (int64, error) {
 	var count int64
-	err := countSecretsSourceUsage(TenantDB(r.db, ctx).Model(&rootmodel.ExecutionTask{}), r.db.Dialector.Name(), sourceID, &count)
+	err := countSecretsSourceUsage(TenantDB(r.db, ctx).Model(&automationmodel.ExecutionTask{}), r.db.Dialector.Name(), sourceID, &count)
 	return count, err
 }
 
 // CountSchedulesUsingSource 统计引用指定密钥源的调度任务数量
 func (r *SecretsSourceRepository) CountSchedulesUsingSource(ctx context.Context, sourceID string) (int64, error) {
 	var count int64
-	err := countSecretsSourceUsage(TenantDB(r.db, ctx).Model(&rootmodel.ExecutionSchedule{}), r.db.Dialector.Name(), sourceID, &count)
+	err := countSecretsSourceUsage(TenantDB(r.db, ctx).Model(&automationmodel.ExecutionSchedule{}), r.db.Dialector.Name(), sourceID, &count)
 	return count, err
 }
 

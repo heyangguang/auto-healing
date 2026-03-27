@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/query"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -31,7 +31,7 @@ func NewCMDBItemRepositoryWithDB(db *gorm.DB) *CMDBItemRepository {
 }
 
 // Create 创建配置项
-func (r *CMDBItemRepository) Create(ctx context.Context, item *model.CMDBItem) error {
+func (r *CMDBItemRepository) Create(ctx context.Context, item *platformmodel.CMDBItem) error {
 	if err := FillTenantID(ctx, &item.TenantID); err != nil {
 		return err
 	}
@@ -39,8 +39,8 @@ func (r *CMDBItemRepository) Create(ctx context.Context, item *model.CMDBItem) e
 }
 
 // GetByID 根据 ID 获取配置项
-func (r *CMDBItemRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.CMDBItem, error) {
-	var item model.CMDBItem
+func (r *CMDBItemRepository) GetByID(ctx context.Context, id uuid.UUID) (*platformmodel.CMDBItem, error) {
+	var item platformmodel.CMDBItem
 	err := TenantDB(r.db, ctx).First(&item, "id = ?", id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -52,14 +52,14 @@ func (r *CMDBItemRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.
 }
 
 // Update 更新配置项
-func (r *CMDBItemRepository) Update(ctx context.Context, item *model.CMDBItem) error {
+func (r *CMDBItemRepository) Update(ctx context.Context, item *platformmodel.CMDBItem) error {
 	return UpdateTenantScopedModel(r.db, ctx, item.ID, item)
 }
 
 // UpsertByExternalID 根据外部 ID 创建或更新配置项
 // 返回: (isNew, error) - isNew=true 表示新增，false 表示更新
-func (r *CMDBItemRepository) UpsertByExternalID(ctx context.Context, item *model.CMDBItem) (bool, error) {
-	var existing model.CMDBItem
+func (r *CMDBItemRepository) UpsertByExternalID(ctx context.Context, item *platformmodel.CMDBItem) (bool, error) {
+	var existing platformmodel.CMDBItem
 	err := TenantDB(r.db, ctx).
 		Where("plugin_id = ? AND external_id = ?", item.PluginID, item.ExternalID).
 		First(&existing).Error
@@ -85,11 +85,11 @@ func (r *CMDBItemRepository) UpsertByExternalID(ctx context.Context, item *model
 	return false, nil
 }
 
-func (r *CMDBItemRepository) updateFromSync(ctx context.Context, existing model.CMDBItem, item *model.CMDBItem) error {
-	return TenantDB(r.db, ctx).Model(&model.CMDBItem{}).Where("id = ?", existing.ID).Updates(buildCMDBSyncUpdates(existing, item)).Error
+func (r *CMDBItemRepository) updateFromSync(ctx context.Context, existing platformmodel.CMDBItem, item *platformmodel.CMDBItem) error {
+	return TenantDB(r.db, ctx).Model(&platformmodel.CMDBItem{}).Where("id = ?", existing.ID).Updates(buildCMDBSyncUpdates(existing, item)).Error
 }
 
-func buildCMDBSyncUpdates(existing model.CMDBItem, item *model.CMDBItem) map[string]any {
+func buildCMDBSyncUpdates(existing platformmodel.CMDBItem, item *platformmodel.CMDBItem) map[string]any {
 	updates := map[string]any{
 		"plugin_id":          item.PluginID,
 		"source_plugin_name": item.SourcePluginName,

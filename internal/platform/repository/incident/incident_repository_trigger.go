@@ -4,25 +4,25 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // ListPendingTrigger 获取待手动触发的工单列表
-func (r *IncidentRepository) ListPendingTrigger(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string) ([]model.Incident, int64, error) {
+func (r *IncidentRepository) ListPendingTrigger(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string) ([]platformmodel.Incident, int64, error) {
 	return r.listTriggerIncidents(ctx, page, pageSize, title, severity, dateFrom, dateTo, false)
 }
 
 // ListDismissedTrigger 获取已忽略的手动触发工单列表
-func (r *IncidentRepository) ListDismissedTrigger(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string) ([]model.Incident, int64, error) {
+func (r *IncidentRepository) ListDismissedTrigger(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string) ([]platformmodel.Incident, int64, error) {
 	return r.listTriggerIncidents(ctx, page, pageSize, title, severity, dateFrom, dateTo, true)
 }
 
-func (r *IncidentRepository) listTriggerIncidents(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string, dismissed bool) ([]model.Incident, int64, error) {
-	var incidents []model.Incident
+func (r *IncidentRepository) listTriggerIncidents(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string, dismissed bool) ([]platformmodel.Incident, int64, error) {
+	var incidents []platformmodel.Incident
 	var total int64
-	query := TenantDB(r.db, ctx).Model(&model.Incident{}).Where("scanned = ?", true).Where("matched_rule_id IS NOT NULL")
+	query := TenantDB(r.db, ctx).Model(&platformmodel.Incident{}).Where("scanned = ?", true).Where("matched_rule_id IS NOT NULL")
 	if dismissed {
 		query = query.Where("healing_status = ?", "dismissed")
 	} else {
@@ -66,12 +66,12 @@ func (r *IncidentRepository) MarkScanned(ctx context.Context, id uuid.UUID, matc
 	if flowInstanceID != nil {
 		updates["healing_flow_instance_id"] = *flowInstanceID
 	}
-	return TenantDB(r.db, ctx).Model(&model.Incident{}).Where("id = ?", id).Updates(updates).Error
+	return TenantDB(r.db, ctx).Model(&platformmodel.Incident{}).Where("id = ?", id).Updates(updates).Error
 }
 
 func (r *IncidentRepository) SyncState(ctx context.Context, opts IncidentSyncOptions) error {
 	result := TenantDB(r.db, ctx).
-		Model(&model.Incident{}).
+		Model(&platformmodel.Incident{}).
 		Where("id = ?", opts.IncidentID).
 		Updates(incidentSyncUpdates(opts))
 	if result.Error != nil {
@@ -85,12 +85,12 @@ func (r *IncidentRepository) SyncState(ctx context.Context, opts IncidentSyncOpt
 
 // ResetScan 重置工单扫描状态
 func (r *IncidentRepository) ResetScan(ctx context.Context, id uuid.UUID) error {
-	return TenantDB(r.db, ctx).Model(&model.Incident{}).Where("id = ?", id).Updates(resetIncidentScanUpdates()).Error
+	return TenantDB(r.db, ctx).Model(&platformmodel.Incident{}).Where("id = ?", id).Updates(resetIncidentScanUpdates()).Error
 }
 
 // BatchResetScan 批量重置工单扫描状态
 func (r *IncidentRepository) BatchResetScan(ctx context.Context, ids []uuid.UUID, healingStatus string) (int64, error) {
-	query := TenantDB(r.db, ctx).Model(&model.Incident{})
+	query := TenantDB(r.db, ctx).Model(&platformmodel.Incident{})
 	if len(ids) > 0 {
 		query = query.Where("id IN ?", ids)
 	}

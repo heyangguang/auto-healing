@@ -3,12 +3,12 @@ package cmdb
 import (
 	"testing"
 
-	"github.com/company/auto-healing/internal/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 )
 
 func TestBuildCMDBSyncUpdatesPreservesMaintenanceStatus(t *testing.T) {
-	existing := model.CMDBItem{Status: "maintenance"}
-	incoming := &model.CMDBItem{Status: "active", Name: "host"}
+	existing := platformmodel.CMDBItem{Status: "maintenance"}
+	incoming := &platformmodel.CMDBItem{Status: "active", Name: "host"}
 
 	updates := buildCMDBSyncUpdates(existing, incoming)
 	if _, exists := updates["status"]; exists {

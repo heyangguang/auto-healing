@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -103,7 +103,7 @@ func parseOptionalRFC3339Time(value, key string) (*time.Time, error) {
 	return &parsed, nil
 }
 
-func formatPlatformAuditLogs(logs []model.PlatformAuditLog) []gin.H {
+func formatPlatformAuditLogs(logs []platformmodel.PlatformAuditLog) []gin.H {
 	result := make([]gin.H, len(logs))
 	for i, log := range logs {
 		result[i] = formatPlatformAuditLog(log)
@@ -111,7 +111,7 @@ func formatPlatformAuditLogs(logs []model.PlatformAuditLog) []gin.H {
 	return result
 }
 
-func formatPlatformAuditLog(log model.PlatformAuditLog) gin.H {
+func formatPlatformAuditLog(log platformmodel.PlatformAuditLog) gin.H {
 	return gin.H{
 		"id":              log.ID,
 		"user_id":         log.UserID,

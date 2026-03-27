@@ -6,10 +6,10 @@ import (
 	"strconv"
 
 	"github.com/company/auto-healing/internal/middleware"
-	"github.com/company/auto-healing/internal/model"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -221,7 +221,7 @@ func (h *AuthHandler) loadProfileActivityItems(c *gin.Context, userID uuid.UUID,
 	return buildTenantActivityItems(logs), nil
 }
 
-func buildPlatformLoginHistoryItems(logs []model.PlatformAuditLog) []LoginHistoryItem {
+func buildPlatformLoginHistoryItems(logs []platformmodel.PlatformAuditLog) []LoginHistoryItem {
 	items := make([]LoginHistoryItem, 0, len(logs))
 	for _, log := range logs {
 		items = append(items, LoginHistoryItem{
@@ -240,7 +240,7 @@ func buildPlatformLoginHistoryItems(logs []model.PlatformAuditLog) []LoginHistor
 	return items
 }
 
-func buildTenantLoginHistoryItems(logs []model.AuditLog) []LoginHistoryItem {
+func buildTenantLoginHistoryItems(logs []platformmodel.AuditLog) []LoginHistoryItem {
 	items := make([]LoginHistoryItem, 0, len(logs))
 	for _, log := range logs {
 		items = append(items, LoginHistoryItem{
@@ -259,7 +259,7 @@ func buildTenantLoginHistoryItems(logs []model.AuditLog) []LoginHistoryItem {
 	return items
 }
 
-func buildPlatformActivityItems(logs []model.PlatformAuditLog) []ProfileActivityItem {
+func buildPlatformActivityItems(logs []platformmodel.PlatformAuditLog) []ProfileActivityItem {
 	items := make([]ProfileActivityItem, 0, len(logs))
 	for _, log := range logs {
 		items = append(items, ProfileActivityItem{
@@ -278,7 +278,7 @@ func buildPlatformActivityItems(logs []model.PlatformAuditLog) []ProfileActivity
 	return items
 }
 
-func buildTenantActivityItems(logs []model.AuditLog) []ProfileActivityItem {
+func buildTenantActivityItems(logs []platformmodel.AuditLog) []ProfileActivityItem {
 	items := make([]ProfileActivityItem, 0, len(logs))
 	for _, log := range logs {
 		items = append(items, ProfileActivityItem{

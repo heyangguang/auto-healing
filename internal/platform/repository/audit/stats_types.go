@@ -1,6 +1,6 @@
 package audit
 
-import "github.com/company/auto-healing/internal/model"
+import platformmodel "github.com/company/auto-healing/internal/platform/model"
 
 type AuditStats struct {
 	TotalCount    int64        `json:"total_count"`
@@ -52,6 +52,6 @@ type TrendItem struct {
 }
 
 type HighRiskLog struct {
-	model.AuditLog
+	platformmodel.AuditLog
 	RiskReason string `json:"risk_reason" gorm:"-"`
 }

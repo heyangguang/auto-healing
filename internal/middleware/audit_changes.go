@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -91,7 +91,7 @@ var relationshipActions = map[string]bool{
 }
 
 // computeChanges 比较旧状态和请求体，生成变更记录
-func computeChanges(method string, action string, oldState map[string]interface{}, requestBody model.JSON) model.JSON {
+func computeChanges(method string, action string, oldState map[string]interface{}, requestBody modeltypes.JSON) modeltypes.JSON {
 	if method == "DELETE" {
 		return buildDeleteChanges(oldState)
 	}
@@ -108,7 +108,7 @@ func computeChanges(method string, action string, oldState map[string]interface{
 	return buildDiffChanges(oldState, reqBody)
 }
 
-func buildDeleteChanges(oldState map[string]interface{}) model.JSON {
+func buildDeleteChanges(oldState map[string]interface{}) modeltypes.JSON {
 	if oldState == nil {
 		return nil
 	}
@@ -121,7 +121,7 @@ func buildDeleteChanges(oldState map[string]interface{}) model.JSON {
 	return auditChangesOrNil(changes)
 }
 
-func decodeAuditRequestBody(requestBody model.JSON) map[string]interface{} {
+func decodeAuditRequestBody(requestBody modeltypes.JSON) map[string]interface{} {
 	if requestBody == nil {
 		return nil
 	}
@@ -133,7 +133,7 @@ func decodeAuditRequestBody(requestBody model.JSON) map[string]interface{} {
 	return reqBody
 }
 
-func buildAssignedChanges(reqBody map[string]interface{}) model.JSON {
+func buildAssignedChanges(reqBody map[string]interface{}) modeltypes.JSON {
 	changes := make(map[string]interface{})
 	for key, value := range reqBody {
 		if sensitiveFields[key] {
@@ -144,7 +144,7 @@ func buildAssignedChanges(reqBody map[string]interface{}) model.JSON {
 	return auditChangesOrNil(changes)
 }
 
-func buildCreateChanges(reqBody map[string]interface{}) model.JSON {
+func buildCreateChanges(reqBody map[string]interface{}) modeltypes.JSON {
 	changes := make(map[string]interface{})
 	for key, value := range reqBody {
 		if sensitiveFields[key] {
@@ -155,7 +155,7 @@ func buildCreateChanges(reqBody map[string]interface{}) model.JSON {
 	return auditChangesOrNil(changes)
 }
 
-func buildDiffChanges(oldState, reqBody map[string]interface{}) model.JSON {
+func buildDiffChanges(oldState, reqBody map[string]interface{}) modeltypes.JSON {
 	changes := make(map[string]interface{})
 	for key, newVal := range reqBody {
 		if sensitiveFields[key] {
@@ -173,11 +173,11 @@ func buildDiffChanges(oldState, reqBody map[string]interface{}) model.JSON {
 	return auditChangesOrNil(changes)
 }
 
-func auditChangesOrNil(changes map[string]interface{}) model.JSON {
+func auditChangesOrNil(changes map[string]interface{}) modeltypes.JSON {
 	if len(changes) == 0 {
 		return nil
 	}
-	return model.JSON(changes)
+	return modeltypes.JSON(changes)
 }
 
 // formatForCompare 将值序列化为可比较的字符串

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/company/auto-healing/internal/middleware"
-	rootmodel "github.com/company/auto-healing/internal/model"
+	automationmodel "github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	opsmodel "github.com/company/auto-healing/internal/modules/ops/model"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
@@ -146,7 +146,7 @@ func parseBlacklistExemptionIDs(c *gin.Context, taskIDValue, ruleIDValue string)
 	return taskID, ruleID, true
 }
 
-func (h *BlacklistExemptionHandler) loadBlacklistExemptionDependencies(c *gin.Context, taskID, ruleID uuid.UUID) (*rootmodel.ExecutionTask, *opsmodel.CommandBlacklist, bool) {
+func (h *BlacklistExemptionHandler) loadBlacklistExemptionDependencies(c *gin.Context, taskID, ruleID uuid.UUID) (*automationmodel.ExecutionTask, *opsmodel.CommandBlacklist, bool) {
 	task, err := h.taskRepo.GetTaskByID(c.Request.Context(), taskID)
 	if err != nil {
 		respondBlacklistExemptionDependencyError(c, err, "任务模板不存在或不属于当前租户", "查询任务模板失败")

@@ -3,19 +3,19 @@ package audit
 import (
 	"context"
 
-	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/query"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"gorm.io/gorm"
 )
 
-func (r *AuditLogRepository) List(ctx context.Context, opts *AuditLogListOptions) ([]model.AuditLog, int64, error) {
-	queryBuilder := applyAuditLogFilters(tenantDB(r.db, ctx).Model(&model.AuditLog{}), opts)
+func (r *AuditLogRepository) List(ctx context.Context, opts *AuditLogListOptions) ([]platformmodel.AuditLog, int64, error) {
+	queryBuilder := applyAuditLogFilters(tenantDB(r.db, ctx).Model(&platformmodel.AuditLog{}), opts)
 	total, err := countWithClone(queryBuilder)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	var logs []model.AuditLog
+	var logs []platformmodel.AuditLog
 	offset := (opts.Page - 1) * opts.PageSize
 	err = queryBuilder.Order(auditLogOrderClause(opts)).
 		Offset(offset).

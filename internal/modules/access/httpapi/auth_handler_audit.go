@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
 )
 
@@ -46,7 +46,7 @@ func (h *AuthHandler) resolveLoginAuditUser(parentCtx context.Context, userID **
 }
 
 func (h *AuthHandler) writePlatformLoginAudit(ctx context.Context, userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, statusCode int) {
-	log := &model.PlatformAuditLog{
+	log := &platformmodel.PlatformAuditLog{
 		ID:             uuid.New(),
 		UserID:         userID,
 		Username:       username,
@@ -68,7 +68,7 @@ func (h *AuthHandler) writePlatformLoginAudit(ctx context.Context, userID *uuid.
 }
 
 func (h *AuthHandler) writeTenantLoginAudit(ctx context.Context, userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, statusCode int, defaultTenantID string) {
-	log := &model.AuditLog{
+	log := &platformmodel.AuditLog{
 		ID:             uuid.New(),
 		UserID:         userID,
 		Username:       username,
@@ -131,8 +131,8 @@ func parseAuditUserID(userIDStr string) *uuid.UUID {
 	return nil
 }
 
-func buildPlatformLogoutAuditLog(userID *uuid.UUID, username, ipAddress, userAgent string, createdAt time.Time, statusCode int) *model.PlatformAuditLog {
-	return &model.PlatformAuditLog{
+func buildPlatformLogoutAuditLog(userID *uuid.UUID, username, ipAddress, userAgent string, createdAt time.Time, statusCode int) *platformmodel.PlatformAuditLog {
+	return &platformmodel.PlatformAuditLog{
 		ID:             uuid.New(),
 		UserID:         userID,
 		Username:       username,
@@ -149,8 +149,8 @@ func buildPlatformLogoutAuditLog(userID *uuid.UUID, username, ipAddress, userAge
 	}
 }
 
-func buildTenantLogoutAuditLog(userID *uuid.UUID, username, ipAddress, userAgent string, createdAt time.Time, statusCode int, tenantID uuid.UUID) *model.AuditLog {
-	log := &model.AuditLog{
+func buildTenantLogoutAuditLog(userID *uuid.UUID, username, ipAddress, userAgent string, createdAt time.Time, statusCode int, tenantID uuid.UUID) *platformmodel.AuditLog {
+	log := &platformmodel.AuditLog{
 		ID:             uuid.New(),
 		UserID:         userID,
 		Username:       username,

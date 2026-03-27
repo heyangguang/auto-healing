@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/query"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -22,12 +22,12 @@ func NewPlatformAuditLogRepositoryWithDB(db *gorm.DB) *PlatformAuditLogRepositor
 	return &PlatformAuditLogRepository{db: db}
 }
 
-func (r *PlatformAuditLogRepository) Create(ctx context.Context, log *model.PlatformAuditLog) error {
+func (r *PlatformAuditLogRepository) Create(ctx context.Context, log *platformmodel.PlatformAuditLog) error {
 	return r.db.WithContext(ctx).Create(log).Error
 }
 
-func (r *PlatformAuditLogRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.PlatformAuditLog, error) {
-	var log model.PlatformAuditLog
+func (r *PlatformAuditLogRepository) GetByID(ctx context.Context, id uuid.UUID) (*platformmodel.PlatformAuditLog, error) {
+	var log platformmodel.PlatformAuditLog
 	err := r.db.WithContext(ctx).First(&log, "id = ?", id).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, nil
@@ -38,14 +38,14 @@ func (r *PlatformAuditLogRepository) GetByID(ctx context.Context, id uuid.UUID) 
 	return &log, nil
 }
 
-func (r *PlatformAuditLogRepository) List(ctx context.Context, opts *PlatformAuditListOptions) ([]model.PlatformAuditLog, int64, error) {
-	queryBuilder := applyPlatformAuditFilters(r.db.WithContext(ctx).Model(&model.PlatformAuditLog{}), opts)
+func (r *PlatformAuditLogRepository) List(ctx context.Context, opts *PlatformAuditListOptions) ([]platformmodel.PlatformAuditLog, int64, error) {
+	queryBuilder := applyPlatformAuditFilters(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}), opts)
 	total, err := countWithClone(queryBuilder)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	var logs []model.PlatformAuditLog
+	var logs []platformmodel.PlatformAuditLog
 	err = queryBuilder.Order(platformAuditOrderClause(opts)).
 		Offset((opts.Page - 1) * opts.PageSize).
 		Limit(opts.PageSize).

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/query"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -24,10 +24,10 @@ var cmdbAllowedSortFields = map[string]bool{
 }
 
 // List 获取配置项列表（支持过滤和排序）
-func (r *CMDBItemRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, scopes ...func(*gorm.DB) *gorm.DB) ([]model.CMDBItem, int64, error) {
-	var items []model.CMDBItem
+func (r *CMDBItemRepository) List(ctx context.Context, page, pageSize int, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, search query.StringFilter, hasPlugin *bool, sortBy, sortOrder string, scopes ...func(*gorm.DB) *gorm.DB) ([]platformmodel.CMDBItem, int64, error) {
+	var items []platformmodel.CMDBItem
 	var total int64
-	q := TenantDB(r.db, ctx).Model(&model.CMDBItem{})
+	q := TenantDB(r.db, ctx).Model(&platformmodel.CMDBItem{})
 	q = applyCMDBFilters(q, pluginID, itemType, status, environment, sourcePluginName, search, hasPlugin)
 	for _, scope := range scopes {
 		q = scope(q)
@@ -61,7 +61,7 @@ type CMDBItemBasic struct {
 func (r *CMDBItemRepository) ListIDs(ctx context.Context, pluginID *uuid.UUID, itemType, status, environment, sourcePluginName string, hasPlugin *bool) ([]CMDBItemBasic, int64, error) {
 	var items []CMDBItemBasic
 	var total int64
-	q := TenantDB(r.db, ctx).Model(&model.CMDBItem{})
+	q := TenantDB(r.db, ctx).Model(&platformmodel.CMDBItem{})
 	q = applyCMDBFilters(q, pluginID, itemType, status, environment, sourcePluginName, query.StringFilter{}, hasPlugin)
 	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -76,7 +76,7 @@ func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface
 	newDB := func() *gorm.DB { return TenantDB(r.db, ctx) }
 
 	var total int64
-	if err := newDB().Model(&model.CMDBItem{}).Count(&total).Error; err != nil {
+	if err := newDB().Model(&platformmodel.CMDBItem{}).Count(&total).Error; err != nil {
 		return nil, err
 	}
 	stats["total"] = total
@@ -86,7 +86,7 @@ func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface
 		Count int64  `json:"count"`
 	}
 	var typeCounts []typeCount
-	if err := newDB().Model(&model.CMDBItem{}).Select("type, count(*) as count").Group("type").Scan(&typeCounts).Error; err != nil {
+	if err := newDB().Model(&platformmodel.CMDBItem{}).Select("type, count(*) as count").Group("type").Scan(&typeCounts).Error; err != nil {
 		return nil, err
 	}
 	stats["by_type"] = typeCounts
@@ -96,7 +96,7 @@ func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface
 		Count  int64  `json:"count"`
 	}
 	var statusCounts []statusCount
-	if err := newDB().Model(&model.CMDBItem{}).Select("status, count(*) as count").Group("status").Scan(&statusCounts).Error; err != nil {
+	if err := newDB().Model(&platformmodel.CMDBItem{}).Select("status, count(*) as count").Group("status").Scan(&statusCounts).Error; err != nil {
 		return nil, err
 	}
 	stats["by_status"] = statusCounts
@@ -106,13 +106,13 @@ func (r *CMDBItemRepository) GetStats(ctx context.Context) (map[string]interface
 		Count       int64  `json:"count"`
 	}
 	var envCounts []envCount
-	if err := newDB().Model(&model.CMDBItem{}).Select("environment, count(*) as count").Group("environment").Scan(&envCounts).Error; err != nil {
+	if err := newDB().Model(&platformmodel.CMDBItem{}).Select("environment, count(*) as count").Group("environment").Scan(&envCounts).Error; err != nil {
 		return nil, err
 	}
 	stats["by_environment"] = envCounts
 
 	var maintenanceCount int64
-	if err := newDB().Model(&model.CMDBItem{}).Where("status = ?", "maintenance").Count(&maintenanceCount).Error; err != nil {
+	if err := newDB().Model(&platformmodel.CMDBItem{}).Where("status = ?", "maintenance").Count(&maintenanceCount).Error; err != nil {
 		return nil, err
 	}
 	stats["maintenance_count"] = maintenanceCount

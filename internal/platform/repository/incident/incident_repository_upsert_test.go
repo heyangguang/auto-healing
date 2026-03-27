@@ -4,7 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/company/auto-healing/internal/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	"github.com/google/uuid"
 )
 
@@ -69,12 +70,12 @@ func TestIncidentUpsertPreservesTenantAndHealingMetadata(t *testing.T) {
 		flowInstanceID.String(),
 	)
 
-	incoming := &model.Incident{
+	incoming := &platformmodel.Incident{
 		PluginID:         &pluginID,
 		SourcePluginName: "plugin-a",
 		ExternalID:       "ext-1",
 		Title:            "new-title",
-		RawData:          model.JSON{"new": "value"},
+		RawData:          modeltypes.JSON{"new": "value"},
 		HealingStatus:    "pending",
 	}
 	isNew, err := repo.UpsertByExternalID(ctx, incoming)
@@ -91,7 +92,7 @@ func TestIncidentUpsertPreservesTenantAndHealingMetadata(t *testing.T) {
 		t.Fatalf("incoming healing_status = %s, want processing", incoming.HealingStatus)
 	}
 
-	var stored model.Incident
+	var stored platformmodel.Incident
 	if err := db.Where("id = ?", incidentID.String()).First(&stored).Error; err != nil {
 		t.Fatalf("query incident: %v", err)
 	}

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/platform/modeltypes"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -56,7 +56,7 @@ var pathSegmentToTable = map[string]tableInfo{
 
 // resolveResourceName 根据 URL 路径和资源 ID 查询资源名称
 // 对平台级资源不使用 tenant_id 过滤
-func resolveResourceName(db *gorm.DB, path string, resourceID *uuid.UUID, resourceKey string, bodyJSON model.JSON, tenantID uuid.UUID) (string, error) {
+func resolveResourceName(db *gorm.DB, path string, resourceID *uuid.UUID, resourceKey string, bodyJSON modeltypes.JSON, tenantID uuid.UUID) (string, error) {
 	if info := matchTableInfo(path); info != nil {
 		name, ok, err := queryResolvedResourceName(db, info, resourceID, resourceKey, tenantID)
 		if err != nil {
@@ -101,7 +101,7 @@ func queryResolvedResourceName(db *gorm.DB, info *tableInfo, resourceID *uuid.UU
 	return name, true, nil
 }
 
-func extractResourceNameFromBody(db *gorm.DB, bodyJSON model.JSON) (string, bool, error) {
+func extractResourceNameFromBody(db *gorm.DB, bodyJSON modeltypes.JSON) (string, bool, error) {
 	body, ok := decodeAuditBody(bodyJSON)
 	if !ok {
 		return "", false, nil
@@ -112,7 +112,7 @@ func extractResourceNameFromBody(db *gorm.DB, bodyJSON model.JSON) (string, bool
 	return lookupTenantNameFromBody(db, body)
 }
 
-func decodeAuditBody(bodyJSON model.JSON) (map[string]interface{}, bool) {
+func decodeAuditBody(bodyJSON modeltypes.JSON) (map[string]interface{}, bool) {
 	if bodyJSON == nil {
 		return nil, false
 	}
@@ -187,11 +187,11 @@ func matchTableInfo(path string) *tableInfo {
 	return nil
 }
 
-func sanitizeAuditJSON(payload model.JSON) model.JSON {
+func sanitizeAuditJSON(payload modeltypes.JSON) modeltypes.JSON {
 	if payload == nil {
 		return nil
 	}
-	masked := make(model.JSON, len(payload))
+	masked := make(modeltypes.JSON, len(payload))
 	for k, v := range payload {
 		masked[k] = sanitizeAuditValue(k, v)
 	}
@@ -216,7 +216,7 @@ func sanitizeAuditValue(key string, value interface{}) interface{} {
 	}
 
 	switch typed := value.(type) {
-	case model.JSON:
+	case modeltypes.JSON:
 		return sanitizeAuditJSON(typed)
 	case map[string]interface{}:
 		return sanitizeAuditMap(typed)
