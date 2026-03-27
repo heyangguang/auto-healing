@@ -9,7 +9,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
+	engagementmodel "github.com/company/auto-healing/internal/modules/engagement/model"
 	notificationSvc "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
@@ -156,7 +157,7 @@ func (e *FlowExecutor) sendConfiguredNotifications(ctx context.Context, instance
 	logger.Exec("NODE").Info("[%s] 通知发送完成, 共发送 %d 条通知", shortID(instance), len(allLogs))
 }
 
-func (e *FlowExecutor) sendNotificationToChannel(ctx context.Context, cfg channelTemplateConfig, variables map[string]interface{}, subject, body string) ([]*model.NotificationLog, error) {
+func (e *FlowExecutor) sendNotificationToChannel(ctx context.Context, cfg channelTemplateConfig, variables map[string]interface{}, subject, body string) ([]*engagementmodel.NotificationLog, error) {
 	channelUUID, err := uuid.Parse(cfg.ChannelID)
 	if err != nil {
 		return nil, err

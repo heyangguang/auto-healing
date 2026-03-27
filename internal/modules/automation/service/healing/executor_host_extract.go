@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 )
 
 type hostExtractionConfig struct {

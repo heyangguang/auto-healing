@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	executionService "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	scheduleService "github.com/company/auto-healing/internal/modules/automation/service/schedule"

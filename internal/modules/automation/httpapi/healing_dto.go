@@ -3,7 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 )
 
 type cmdbValidationConfig struct {
@@ -145,7 +146,7 @@ func isInvalidCMDBStatus(status string) bool {
 	return status == "maintenance" || status == "offline"
 }
 
-func (e *FlowExecutor) handleInvalidCMDBStatus(ctx context.Context, instance *model.FlowInstance, node *model.FlowNode, prepared cmdbValidationConfig, host string, cmdbItem *model.CMDBItem) (map[string]interface{}, map[string]interface{}, error) {
+func (e *FlowExecutor) handleInvalidCMDBStatus(ctx context.Context, instance *model.FlowInstance, node *model.FlowNode, prepared cmdbValidationConfig, host string, cmdbItem *platformmodel.CMDBItem) (map[string]interface{}, map[string]interface{}, error) {
 	reason := invalidCMDBStatusReason(cmdbItem.Status)
 	invalidHost := map[string]interface{}{
 		"original_name":      host,
@@ -169,7 +170,7 @@ func invalidCMDBStatusReason(status string) string {
 	return "maintenance_status"
 }
 
-func buildValidatedCMDBHost(instance *model.FlowInstance, host string, cmdbItem *model.CMDBItem) map[string]interface{} {
+func buildValidatedCMDBHost(instance *model.FlowInstance, host string, cmdbItem *platformmodel.CMDBItem) map[string]interface{} {
 	ipAddress := cmdbItem.IPAddress
 	if ipAddress == "" {
 		ipAddress = host

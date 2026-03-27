@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
@@ -41,7 +42,7 @@ func (s *Scheduler) scan(ctx context.Context) {
 	}
 }
 
-func (s *Scheduler) markIncidentsScannedWithoutRules(ctx context.Context, incidents []model.Incident) {
+func (s *Scheduler) markIncidentsScannedWithoutRules(ctx context.Context, incidents []platformmodel.Incident) {
 	for _, incident := range incidents {
 		incidentCtx := schedulerTenantContext(ctx, &incident)
 		if err := s.syncIncidentSkipped(incidentCtx, incident.ID); err != nil {
@@ -50,7 +51,7 @@ func (s *Scheduler) markIncidentsScannedWithoutRules(ctx context.Context, incide
 	}
 }
 
-func schedulerTenantContext(ctx context.Context, incident *model.Incident) context.Context {
+func schedulerTenantContext(ctx context.Context, incident *platformmodel.Incident) context.Context {
 	if incident.TenantID != nil {
 		return platformrepo.WithTenantID(ctx, *incident.TenantID)
 	}
@@ -58,7 +59,7 @@ func schedulerTenantContext(ctx context.Context, incident *model.Incident) conte
 }
 
 // processIncident 处理单个工单
-func (s *Scheduler) processIncident(ctx context.Context, incident *model.Incident, rules []model.HealingRule) {
+func (s *Scheduler) processIncident(ctx context.Context, incident *platformmodel.Incident, rules []model.HealingRule) {
 	matchedRule := s.matchIncidentRule(ctx, incident, rules)
 	if matchedRule == nil {
 		if err := s.syncIncidentSkipped(ctx, incident.ID); err != nil {
@@ -92,7 +93,7 @@ func (s *Scheduler) syncIncidentSkipped(ctx context.Context, incidentID uuid.UUI
 	})
 }
 
-func (s *Scheduler) matchIncidentRule(ctx context.Context, incident *model.Incident, rules []model.HealingRule) *model.HealingRule {
+func (s *Scheduler) matchIncidentRule(ctx context.Context, incident *platformmodel.Incident, rules []model.HealingRule) *model.HealingRule {
 	for i := range rules {
 		rule := &rules[i]
 		if incident.TenantID != nil && rule.TenantID != nil && *rule.TenantID != *incident.TenantID {
@@ -105,7 +106,7 @@ func (s *Scheduler) matchIncidentRule(ctx context.Context, incident *model.Incid
 	return nil
 }
 
-func (s *Scheduler) processAutoTriggeredIncident(ctx context.Context, incident *model.Incident, rule *model.HealingRule) {
+func (s *Scheduler) processAutoTriggeredIncident(ctx context.Context, incident *platformmodel.Incident, rule *model.HealingRule) {
 	instance, err := s.createFlowInstance(ctx, incident, rule)
 	if err != nil {
 		logger.Sched("HEAL").Error("创建流程实例失败: %v", err)
@@ -119,7 +120,7 @@ func (s *Scheduler) processAutoTriggeredIncident(ctx context.Context, incident *
 }
 
 // createFlowInstance 创建流程实例（快照流程定义）
-func (s *Scheduler) createFlowInstance(ctx context.Context, incident *model.Incident, rule *model.HealingRule) (*model.FlowInstance, error) {
+func (s *Scheduler) createFlowInstance(ctx context.Context, incident *platformmodel.Incident, rule *model.HealingRule) (*model.FlowInstance, error) {
 	if rule.FlowID == nil {
 		return nil, fmt.Errorf("规则 %s 未关联流程", rule.ID)
 	}
@@ -155,7 +156,7 @@ func (s *Scheduler) createFlowInstance(ctx context.Context, incident *model.Inci
 }
 
 // incidentToMap 将 Incident 结构体转换为 map，确保 JSON 序列化正确
-func incidentToMap(incident *model.Incident) map[string]interface{} {
+func incidentToMap(incident *platformmodel.Incident) map[string]interface{} {
 	if incident == nil {
 		return nil
 	}

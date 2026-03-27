@@ -4,9 +4,10 @@ import (
 	"context"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 )
 
@@ -70,8 +71,8 @@ type MockIncident struct {
 }
 
 // ToIncident 转换为 Incident 模型
-func (m *MockIncident) ToIncident() *model.Incident {
-	return &model.Incident{
+func (m *MockIncident) ToIncident() *platformmodel.Incident {
+	return &platformmodel.Incident{
 		Title:           m.Title,
 		Description:     m.Description,
 		Severity:        m.Severity,

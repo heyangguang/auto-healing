@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 )
 

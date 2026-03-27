@@ -9,7 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 )
 
 // RuleMatcher 规则匹配器
@@ -23,7 +24,7 @@ func NewRuleMatcher() *RuleMatcher {
 }
 
 // Match 判断工单是否匹配规则
-func (m *RuleMatcher) Match(ctx context.Context, incident *model.Incident, rule *model.HealingRule) bool {
+func (m *RuleMatcher) Match(ctx context.Context, incident *platformmodel.Incident, rule *model.HealingRule) bool {
 	// 解析规则条件
 	conditions, err := m.parseConditions(rule.Conditions)
 	if err != nil || len(conditions) == 0 {
@@ -51,7 +52,7 @@ func (m *RuleMatcher) parseConditions(conditionsJSON model.JSONArray) ([]model.R
 
 // evaluateConditions 递归评估条件列表
 // matchMode: "all" (AND) 或 "any" (OR)
-func (m *RuleMatcher) evaluateConditions(incident *model.Incident, conditions []model.RuleCondition, matchMode string) bool {
+func (m *RuleMatcher) evaluateConditions(incident *platformmodel.Incident, conditions []model.RuleCondition, matchMode string) bool {
 	if len(conditions) == 0 {
 		return true
 	}
@@ -95,7 +96,7 @@ func (m *RuleMatcher) evaluateConditions(incident *model.Incident, conditions []
 }
 
 // evaluateCondition 评估单个条件
-func (m *RuleMatcher) evaluateCondition(incident *model.Incident, cond model.RuleCondition) bool {
+func (m *RuleMatcher) evaluateCondition(incident *platformmodel.Incident, cond model.RuleCondition) bool {
 	// 获取工单字段值
 	fieldValue := m.getFieldValue(incident, cond.Field)
 
@@ -123,7 +124,7 @@ func (m *RuleMatcher) evaluateCondition(incident *model.Incident, cond model.Rul
 }
 
 // getFieldValue 获取工单字段值
-func (m *RuleMatcher) getFieldValue(incident *model.Incident, field string) interface{} {
+func (m *RuleMatcher) getFieldValue(incident *platformmodel.Incident, field string) interface{} {
 	switch field {
 	case "title":
 		return incident.Title

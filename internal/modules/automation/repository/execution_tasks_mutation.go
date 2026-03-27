@@ -4,7 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
+	engagementmodel "github.com/company/auto-healing/internal/modules/engagement/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -80,7 +81,7 @@ func (r *ExecutionRepository) deleteTaskDependencies(tx *gorm.DB, taskID uuid.UU
 	if len(runIDs) == 0 {
 		return nil
 	}
-	if err := tx.Where("execution_run_id IN ?", runIDs).Delete(&model.NotificationLog{}).Error; err != nil {
+	if err := tx.Where("execution_run_id IN ?", runIDs).Delete(&engagementmodel.NotificationLog{}).Error; err != nil {
 		return err
 	}
 	if err := tx.Where("run_id IN ?", runIDs).Delete(&model.ExecutionLog{}).Error; err != nil {

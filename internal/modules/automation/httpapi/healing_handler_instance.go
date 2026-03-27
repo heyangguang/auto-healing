@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	healing "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	"github.com/company/auto-healing/internal/pkg/logger"

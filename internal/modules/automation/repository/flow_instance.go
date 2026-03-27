@@ -6,7 +6,8 @@ import (
 	"fmt"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -52,7 +53,7 @@ func (r *FlowInstanceRepository) CreateWithIncidentSync(ctx context.Context, ins
 
 func updateIncidentSyncTx(tx *gorm.DB, ctx context.Context, opts IncidentSyncOptions) error {
 	result := TenantDB(tx, ctx).
-		Model(&model.Incident{}).
+		Model(&platformmodel.Incident{}).
 		Where("id = ?", opts.IncidentID).
 		Updates(incidentSyncUpdates(opts))
 	if result.Error != nil {

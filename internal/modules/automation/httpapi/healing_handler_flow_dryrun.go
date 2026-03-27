@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	healing "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"

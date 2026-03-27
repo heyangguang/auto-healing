@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 )
 
 func TestValidateAndSetNextRunCronSetsNextRunAt(t *testing.T) {

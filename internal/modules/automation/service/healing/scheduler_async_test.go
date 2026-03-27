@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"

@@ -7,7 +7,10 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
+	engagementmodel "github.com/company/auto-healing/internal/modules/engagement/model"
+	integrationsmodel "github.com/company/auto-healing/internal/modules/integrations/model"
+	opsmodel "github.com/company/auto-healing/internal/modules/ops/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 )
@@ -21,7 +24,7 @@ type runProcessResult struct {
 }
 
 // executeInBackground 后台执行任务
-func (s *Service) executeInBackground(rootCtx context.Context, runID uuid.UUID, task *model.ExecutionTask, playbook *model.Playbook, gitRepo *model.GitRepository, params *executeParams) {
+func (s *Service) executeInBackground(rootCtx context.Context, runID uuid.UUID, task *model.ExecutionTask, playbook *integrationsmodel.Playbook, gitRepo *integrationsmodel.GitRepository, params *executeParams) {
 	ctx, cleanup := s.bindRunContext(rootCtx, runID)
 	defer cleanup()
 	defer s.recoverRunPanic(ctx, runID)
@@ -116,7 +119,9 @@ func (s *Service) sendRunStartNotification(ctx context.Context, runID uuid.UUID,
 		logger.Exec("RUN").Warn("[%s] 加载执行记录失败，跳过开始通知: %v", shortRunID(runID), err)
 		return
 	}
-	if logs, err := s.notificationSvc.SendOnStart(ctx, run, task); err != nil {
+	notifyRun := toNotificationRun(run)
+	notifyTask := toNotificationTask(task, task.Playbook)
+	if logs, err := s.notificationSvc.SendOnStart(ctx, notifyRun, notifyTask); err != nil {
 		s.appendLog(ctx, runID, "warn", "notification", fmt.Sprintf("发送开始通知失败: %v", err), nil)
 	} else if len(logs) > 0 {
 		s.appendLog(ctx, runID, "info", "notification", fmt.Sprintf("已发送开始通知: %d 条", len(logs)), nil)
@@ -153,7 +158,7 @@ func (s *Service) abortOnSecurityViolations(ctx context.Context, runID uuid.UUID
 	return true
 }
 
-func (s *Service) filterExemptedViolations(ctx context.Context, runID, taskID uuid.UUID, violations []model.CommandBlacklistViolation) []model.CommandBlacklistViolation {
+func (s *Service) filterExemptedViolations(ctx context.Context, runID, taskID uuid.UUID, violations []opsmodel.CommandBlacklistViolation) []opsmodel.CommandBlacklistViolation {
 	if len(violations) == 0 {
 		return violations
 	}
@@ -189,7 +194,7 @@ func (s *Service) filterExemptedViolations(ctx context.Context, runID, taskID uu
 	return filtered
 }
 
-func (s *Service) logSecurityViolations(ctx context.Context, runID uuid.UUID, violations []model.CommandBlacklistViolation) {
+func (s *Service) logSecurityViolations(ctx context.Context, runID uuid.UUID, violations []opsmodel.CommandBlacklistViolation) {
 	violationList := make([]map[string]any, 0, len(violations))
 	var msg strings.Builder
 	msg.WriteString(fmt.Sprintf("检测到 %d 个高危指令，执行已拦截:\n", len(violations)))
@@ -213,7 +218,7 @@ func (s *Service) logSecurityViolations(ctx context.Context, runID uuid.UUID, vi
 	})
 }
 
-func (s *Service) executePlaybook(ctx context.Context, runID uuid.UUID, task *model.ExecutionTask, playbook *model.Playbook, workDir, inventoryPath string, extraVars map[string]any, executor ansible.Executor) (*ansible.ExecuteResult, error) {
+func (s *Service) executePlaybook(ctx context.Context, runID uuid.UUID, task *model.ExecutionTask, playbook *integrationsmodel.Playbook, workDir, inventoryPath string, extraVars map[string]any, executor ansible.Executor) (*ansible.ExecuteResult, error) {
 	s.appendLog(ctx, runID, "info", "execute", fmt.Sprintf("开始执行 Playbook (执行器: %s)", executor.Name()), nil)
 	return executor.Execute(ctx, &ansible.ExecuteRequest{
 		PlaybookPath: playbook.FilePath,
@@ -243,4 +248,62 @@ func (s *Service) selectExecutor(executorType string) ansible.Executor {
 		return s.dockerExecutor
 	}
 	return s.localExecutor
+}
+
+func toNotificationRun(run *model.ExecutionRun) *engagementmodel.ExecutionRun {
+	if run == nil {
+		return nil
+	}
+	return &engagementmodel.ExecutionRun{
+		ID:          run.ID,
+		TenantID:    run.TenantID,
+		TaskID:      run.TaskID,
+		Status:      run.Status,
+		ExitCode:    run.ExitCode,
+		Stats:       engagementmodel.JSON(run.Stats),
+		Stdout:      run.Stdout,
+		Stderr:      run.Stderr,
+		TriggeredBy: run.TriggeredBy,
+		StartedAt:   run.StartedAt,
+		CompletedAt: run.CompletedAt,
+		CreatedAt:   run.CreatedAt,
+	}
+}
+
+func toNotificationTask(task *model.ExecutionTask, playbook *integrationsmodel.Playbook) *engagementmodel.ExecutionTask {
+	if task == nil {
+		return nil
+	}
+	notifyTask := &engagementmodel.ExecutionTask{
+		ID:                 task.ID,
+		PlaybookID:         task.PlaybookID,
+		Name:               task.Name,
+		Description:        task.Description,
+		TargetHosts:        task.TargetHosts,
+		ExecutorType:       task.ExecutorType,
+		NotificationConfig: task.NotificationConfig,
+	}
+	if playbook == nil {
+		return notifyTask
+	}
+	notifyPlaybook := &engagementmodel.Playbook{
+		ID:           playbook.ID,
+		RepositoryID: playbook.RepositoryID,
+		Name:         playbook.Name,
+		Description:  playbook.Description,
+		FilePath:     playbook.FilePath,
+		Status:       playbook.Status,
+	}
+	if playbook.Repository != nil {
+		notifyPlaybook.Repository = &engagementmodel.GitRepository{
+			ID:            playbook.Repository.ID,
+			Name:          playbook.Repository.Name,
+			URL:           playbook.Repository.URL,
+			DefaultBranch: playbook.Repository.DefaultBranch,
+			Status:        playbook.Repository.Status,
+			LastSyncAt:    playbook.Repository.LastSyncAt,
+		}
+	}
+	notifyTask.Playbook = notifyPlaybook
+	return notifyTask
 }

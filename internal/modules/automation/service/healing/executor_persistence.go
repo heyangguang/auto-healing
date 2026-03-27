@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	"github.com/google/uuid"
 )
 
@@ -26,7 +27,7 @@ func (e *FlowExecutor) persistInstance(ctx context.Context, instance *model.Flow
 	return nil
 }
 
-func (e *FlowExecutor) persistIncident(ctx context.Context, incident *model.Incident, action string) error {
+func (e *FlowExecutor) persistIncident(ctx context.Context, incident *platformmodel.Incident, action string) error {
 	if err := e.incidentRepo.UpdateHealingStatus(ctx, incident.ID, incident.HealingStatus); err != nil {
 		return fmt.Errorf("%s: %w", action, err)
 	}

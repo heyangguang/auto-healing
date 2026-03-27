@@ -4,7 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
+	integrationsmodel "github.com/company/auto-healing/internal/modules/integrations/model"
 	qf "github.com/company/auto-healing/internal/pkg/query"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -32,8 +33,8 @@ func (r *ExecutionRepository) GetTaskByID(ctx context.Context, id uuid.UUID) (*m
 }
 
 // GetPlaybookByID 根据 ID 获取 Playbook
-func (r *ExecutionRepository) GetPlaybookByID(ctx context.Context, id uuid.UUID) (*model.Playbook, error) {
-	var playbook model.Playbook
+func (r *ExecutionRepository) GetPlaybookByID(ctx context.Context, id uuid.UUID) (*integrationsmodel.Playbook, error) {
+	var playbook integrationsmodel.Playbook
 	err := r.tenantDB(ctx).
 		Preload("Repository").
 		First(&playbook, "id = ?", id).Error

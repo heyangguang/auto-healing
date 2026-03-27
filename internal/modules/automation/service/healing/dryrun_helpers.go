@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 )
 
 // 辅助方法
@@ -191,7 +192,7 @@ func (e *DryRunExecutor) getNestedValue(data map[string]interface{}, path string
 		current, ok = val.(map[string]interface{})
 		if !ok {
 			// 尝试从 incident 结构体中获取
-			if incident, ok := val.(*model.Incident); ok && len(parts) > i+1 {
+			if incident, ok := val.(*platformmodel.Incident); ok && len(parts) > i+1 {
 				return e.getIncidentField(incident, parts[i+1])
 			}
 			return nil
@@ -200,7 +201,7 @@ func (e *DryRunExecutor) getNestedValue(data map[string]interface{}, path string
 	return nil
 }
 
-func (e *DryRunExecutor) getIncidentField(incident *model.Incident, field string) interface{} {
+func (e *DryRunExecutor) getIncidentField(incident *platformmodel.Incident, field string) interface{} {
 	switch field {
 	case "affected_ci":
 		return incident.AffectedCI

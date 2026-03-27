@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
@@ -33,7 +33,7 @@ func TestMarkIncidentsScannedWithoutRulesSyncsSkippedStatusWithTenantContext(t *
 	mustExecHealing(t, db, `INSERT INTO incidents (id, tenant_id, healing_status, scanned) VALUES (?, ?, ?, ?)`, incidentID.String(), tenantID.String(), "pending", false)
 
 	scheduler := &Scheduler{incidentRepo: incidentrepo.NewIncidentRepository()}
-	scheduler.markIncidentsScannedWithoutRules(context.Background(), []model.Incident{{
+	scheduler.markIncidentsScannedWithoutRules(context.Background(), []platformmodel.Incident{{
 		ID:       incidentID,
 		TenantID: &tenantID,
 	}})
@@ -63,7 +63,7 @@ func TestProcessIncidentWithoutMatchedRuleMarksIncidentSkipped(t *testing.T) {
 	mustExecHealing(t, db, `INSERT INTO incidents (id, tenant_id, healing_status, scanned) VALUES (?, ?, ?, ?)`, incidentID.String(), tenantID.String(), "pending", false)
 
 	scheduler := &Scheduler{}
-	incident := &model.Incident{ID: incidentID, TenantID: &tenantID}
+	incident := &platformmodel.Incident{ID: incidentID, TenantID: &tenantID}
 	scheduler.incidentRepo = incidentrepo.NewIncidentRepository()
 	scheduler.processIncident(ctx, incident, nil)
 

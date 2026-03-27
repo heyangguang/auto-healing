@@ -6,7 +6,8 @@ import (
 	"strings"
 
 	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
+	integrationsmodel "github.com/company/auto-healing/internal/modules/integrations/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 )
@@ -65,7 +66,7 @@ func (s *Service) logRunOutcome(ctx context.Context, runID uuid.UUID, result run
 	}
 }
 
-func (s *Service) sendRunCompletionNotification(ctx context.Context, runID uuid.UUID, task *model.ExecutionTask, playbook *model.Playbook, skipNotification bool) {
+func (s *Service) sendRunCompletionNotification(ctx context.Context, runID uuid.UUID, task *model.ExecutionTask, playbook *integrationsmodel.Playbook, skipNotification bool) {
 	if skipNotification {
 		s.appendLog(ctx, runID, "info", "notification", "本次执行跳过通知", nil)
 		return
@@ -80,7 +81,7 @@ func (s *Service) sendRunCompletionNotification(ctx context.Context, runID uuid.
 		return
 	}
 	task.Playbook = playbook
-	logs, err := s.notificationSvc.SendFromExecution(ctx, run, task)
+	logs, err := s.notificationSvc.SendFromExecution(ctx, toNotificationRun(run), toNotificationTask(task, playbook))
 	if err != nil {
 		s.appendLog(ctx, runID, "warn", "notification", fmt.Sprintf("发送通知失败: %v", err), nil)
 		return

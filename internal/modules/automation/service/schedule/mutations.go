@@ -1,6 +1,6 @@
 package schedule
 
-import "github.com/company/auto-healing/internal/model"
+import "github.com/company/auto-healing/internal/modules/automation/model"
 
 func buildScheduleDefinitionUpdates(schedule *model.ExecutionSchedule) map[string]any {
 	return map[string]any{

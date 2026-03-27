@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	integrationsmodel "github.com/company/auto-healing/internal/modules/integrations/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
 )
@@ -112,7 +113,7 @@ func resolveSecretsSourceIDs(task *model.ExecutionTask, opts *ExecuteOptions) ([
 	return result, nil
 }
 
-func (s *Service) scheduleExecution(runID uuid.UUID, task *model.ExecutionTask, playbook *model.Playbook, gitRepo *model.GitRepository, params *executeParams) {
+func (s *Service) scheduleExecution(runID uuid.UUID, task *model.ExecutionTask, playbook *integrationsmodel.Playbook, gitRepo *integrationsmodel.GitRepository, params *executeParams) {
 	lifecycle := s.ensureLifecycle()
 	lifecycle.Go(func(rootCtx context.Context) {
 		if !lifecycle.Acquire(rootCtx) {

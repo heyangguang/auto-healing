@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	executionService "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	platformsched "github.com/company/auto-healing/internal/platform/schedulerx"

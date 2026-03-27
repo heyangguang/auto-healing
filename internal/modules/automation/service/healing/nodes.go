@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/company/auto-healing/internal/database"
-	"github.com/company/auto-healing/internal/model"
+	"github.com/company/auto-healing/internal/modules/automation/model"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	"github.com/company/auto-healing/internal/pkg/query"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/google/uuid"
 )
@@ -74,7 +75,7 @@ func parseHostExtractorConfig(config map[string]interface{}) *HostExtractorConfi
 	return cfg
 }
 
-func extractHostsFromIncident(incident *model.Incident, cfg *HostExtractorConfig) ([]string, error) {
+func extractHostsFromIncident(incident *platformmodel.Incident, cfg *HostExtractorConfig) ([]string, error) {
 	re, err := regexp.Compile(cfg.Pattern)
 	if err != nil {
 		return nil, err
@@ -82,7 +83,7 @@ func extractHostsFromIncident(incident *model.Incident, cfg *HostExtractorConfig
 	return uniqueHosts(re.FindAllString(hostExtractorSourceText(incident, cfg), -1)), nil
 }
 
-func hostExtractorSourceText(incident *model.Incident, cfg *HostExtractorConfig) string {
+func hostExtractorSourceText(incident *platformmodel.Incident, cfg *HostExtractorConfig) string {
 	switch cfg.Source {
 	case "title":
 		return incident.Title
@@ -256,7 +257,7 @@ func parseNotificationTemplateID(config map[string]interface{}) *uuid.UUID {
 }
 
 // getIncidentFromContext 从实例上下文获取工单
-func (e *NodeExecutors) getIncidentFromContext(instance *model.FlowInstance) *model.Incident {
+func (e *NodeExecutors) getIncidentFromContext(instance *model.FlowInstance) *platformmodel.Incident {
 	if instance.Context == nil {
 		return nil
 	}
@@ -272,7 +273,7 @@ func (e *NodeExecutors) getIncidentFromContext(instance *model.FlowInstance) *mo
 		return nil
 	}
 
-	var incident model.Incident
+	var incident platformmodel.Incident
 	if err := json.Unmarshal(data, &incident); err != nil {
 		return nil
 	}
