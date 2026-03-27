@@ -10,7 +10,7 @@ LDFLAGS := -s -w \
 	-X main.BuildTime=$(BUILD_TIME) \
 	-X main.GitCommit=$(GIT_COMMIT)
 
-GO := go
+GO := $(shell command -v go 2>/dev/null || printf '/usr/local/go/bin/go')
 GOFLAGS := -trimpath
 SERVER_ENTRY := ./cmd/server
 INIT_ADMIN_ENTRY := ./cmd/init-admin
@@ -49,6 +49,25 @@ tidy: ## Tidy Go modules
 .PHONY: test
 test: ## Run unit tests
 	$(GO) test ./... -v -count=1
+
+.PHONY: test-review-tooling-unit
+test-review-tooling-unit: ## Run parallel review tooling unit tests
+	$(GO) test ./tests/reviewtooling -run 'TestModuleCSVValidator|TestSetupHelpWorksStandalone' -count=1
+
+.PHONY: test-review-tooling-integration
+test-review-tooling-integration: ## Run parallel review tooling integration tests
+	$(GO) test ./tests/reviewtooling -run 'TestSetupGeneratesReviewSessionArtifacts|TestCreateWorktreesRejectsUnknownModuleBeforeMutation|TestSetupFailsWithoutPythonBeforeCreatingSession' -count=1
+
+.PHONY: test-review-tooling-interface
+test-review-tooling-interface: ## Run parallel review tooling interface tests
+	$(GO) test ./tests/reviewtooling -run 'TestSetupHelpContract|TestGeneratedArtifactsMatchDocumentedContracts|TestCreateWorktreesHelpAndListContracts' -count=1
+
+.PHONY: test-review-tooling-e2e
+test-review-tooling-e2e: ## Run parallel review tooling end-to-end test
+	bash tests/e2e/test_parallel_review_tooling.sh
+
+.PHONY: test-review-tooling
+test-review-tooling: test-review-tooling-unit test-review-tooling-integration test-review-tooling-interface test-review-tooling-e2e ## Run all parallel review tooling tests
 
 .PHONY: lint
 lint: ## Run linter (requires golangci-lint)
