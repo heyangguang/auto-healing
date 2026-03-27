@@ -11,7 +11,7 @@ import (
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/pkg/response"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -81,7 +81,7 @@ func TestIncidentCloseEndToEnd(t *testing.T) {
 		t.Fatalf("path = %v, want /close/INC-42", req["path"])
 	}
 
-	ctx := repository.WithTenantID(context.Background(), tenantID)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 	incident, err := incidentrepo.NewIncidentRepository().GetByID(ctx, incidentID)
 	if err != nil {
 		t.Fatalf("reload incident: %v", err)

@@ -15,7 +15,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -227,7 +227,7 @@ func injectIncidentRouteContext(tenantID uuid.UUID, permissions []string) gin.Ha
 	return func(c *gin.Context) {
 		c.Set(middleware.PermissionsKey, permissions)
 		c.Set(middleware.TenantIDKey, tenantID.String())
-		c.Request = c.Request.WithContext(repository.WithTenantID(c.Request.Context(), tenantID))
+		c.Request = c.Request.WithContext(platformrepo.WithTenantID(c.Request.Context(), tenantID))
 		c.Next()
 	}
 }
