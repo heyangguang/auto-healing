@@ -5,9 +5,9 @@ import (
 
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
+	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/repository"
-	authService "github.com/company/auto-healing/internal/service/auth"
 	"github.com/google/uuid"
 )
 

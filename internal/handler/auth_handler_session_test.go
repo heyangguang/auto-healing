@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/middleware"
+	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
-	authService "github.com/company/auto-healing/internal/service/auth"
 	"github.com/gin-gonic/gin"
 	golangjwt "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"

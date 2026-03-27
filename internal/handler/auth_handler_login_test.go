@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/crypto"
 	"github.com/company/auto-healing/internal/pkg/response"
-	authService "github.com/company/auto-healing/internal/service/auth"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

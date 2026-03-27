@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/company/auto-healing/internal/model"
+	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/repository"
-	authService "github.com/company/auto-healing/internal/service/auth"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

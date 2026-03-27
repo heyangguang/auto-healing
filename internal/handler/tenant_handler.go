@@ -1,8 +1,8 @@
 package handler
 
 import (
+	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/repository"
-	authService "github.com/company/auto-healing/internal/service/auth"
 )
 
 // TenantHandler 租户处理器

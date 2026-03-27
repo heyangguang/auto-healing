@@ -3,9 +3,9 @@ package handler
 import (
 	"errors"
 
+	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
-	authService "github.com/company/auto-healing/internal/service/auth"
 	"github.com/gin-gonic/gin"
 )
 

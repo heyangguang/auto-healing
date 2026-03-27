@@ -3,7 +3,7 @@ package handler
 import (
 	"testing"
 
-	authService "github.com/company/auto-healing/internal/service/auth"
+	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/google/uuid"
 )
 

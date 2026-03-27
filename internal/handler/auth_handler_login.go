@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
+	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
-	authService "github.com/company/auto-healing/internal/service/auth"
 )
 
 func isLoginUnauthorizedError(err error) bool {
