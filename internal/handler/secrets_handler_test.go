@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/company/auto-healing/internal/middleware"
-	secretsSvc "github.com/company/auto-healing/internal/service/secrets"
+	secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 	"github.com/gin-gonic/gin"
 )
 

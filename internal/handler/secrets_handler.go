@@ -1,6 +1,6 @@
 package handler
 
-import secretsSvc "github.com/company/auto-healing/internal/service/secrets"
+import secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 
 // SecretsHandler 密钥处理器
 type SecretsHandler struct {

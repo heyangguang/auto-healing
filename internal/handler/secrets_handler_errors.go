@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/company/auto-healing/internal/model"
+	secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 	"github.com/company/auto-healing/internal/pkg/response"
-	secretsSvc "github.com/company/auto-healing/internal/service/secrets"
 	"github.com/gin-gonic/gin"
 )
 

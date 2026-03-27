@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	secretsSvc "github.com/company/auto-healing/internal/service/secrets"
+	secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 )
 
 func TestClassifySecretQueryError(t *testing.T) {

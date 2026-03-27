@@ -2,7 +2,7 @@ package secrets
 
 import (
 	"github.com/company/auto-healing/internal/handler"
-	secretsSvc "github.com/company/auto-healing/internal/service/secrets"
+	secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 )
 
 // Module 聚合 secrets 域处理器构造。

@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/database"
+	secretsSvc "github.com/company/auto-healing/internal/modules/secrets/service/secrets"
 	"github.com/company/auto-healing/internal/repository"
-	secretsSvc "github.com/company/auto-healing/internal/service/secrets"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
