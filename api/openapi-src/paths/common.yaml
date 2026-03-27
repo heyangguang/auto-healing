@@ -1,0 +1,180 @@
+/common/search:
+  get:
+    tags:
+    - 公共能力
+    summary: 全局搜索
+    parameters:
+    - name: q
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  total:
+                    type: integer
+/common/user/preferences:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取用户偏好
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+  put:
+    tags:
+    - 公共能力
+    summary: 全量更新用户偏好
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+  patch:
+    tags:
+    - 公共能力
+    summary: 局部更新用户偏好
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/common/user/favorites:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取用户收藏菜单
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+  post:
+    tags:
+    - 公共能力
+    summary: 添加用户收藏菜单
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/common/user/favorites/{menu_key}:
+  delete:
+    tags:
+    - 公共能力
+    summary: 删除用户收藏菜单
+    parameters:
+    - name: menu_key
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/common/user/recents:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取最近访问菜单
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+  post:
+    tags:
+    - 公共能力
+    summary: 记录最近访问菜单
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/common/user/tenants:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取当前用户可访问租户
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/common/workbench/overview:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取工作台概览
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/common/workbench/activities:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取工作台近期活动
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/common/workbench/schedule-calendar:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取工作台日历
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/common/workbench/announcements:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取工作台公告
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/common/workbench/favorites:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取工作台快捷入口
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/common/site-messages/categories:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取站内信分类字典
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: integer
+                message:
+                  type: string
+                data:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+/common/dictionaries:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取字典值
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/common/dictionaries/types:
+  get:
+    tags:
+    - 公共能力
+    summary: 获取字典类型列表
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'

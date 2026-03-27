@@ -1,0 +1,1844 @@
+/tenant/execution-tasks:
+  get:
+    tags:
+    - 执行任务
+    summary: 获取任务模板列表
+    description: '获取任务模板列表，支持多条件筛选。
+
+      - **search**: 模糊搜索任务名称或描述
+
+      - **executor_type**: 筛选执行器类型
+
+      - **status**: 筛选任务状态（pending_review = 需审核，ready = 就绪）
+
+      - **playbook_id**: 筛选关联的 Playbook
+
+      '
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: search
+      in: query
+      description: 模糊搜索（匹配任务名称或描述）
+      schema:
+        type: string
+    - name: executor_type
+      in: query
+      description: 执行器类型筛选
+      schema:
+        type: string
+        enum:
+        - local
+        - docker
+    - name: status
+      in: query
+      description: 状态筛选（pending_review = 需审核，ready = 就绪）
+      schema:
+        type: string
+        enum:
+        - pending_review
+        - ready
+    - name: playbook_id
+      in: query
+      description: 关联的 Playbook ID
+      schema:
+        type: string
+        format: uuid
+    - name: target_hosts
+      in: query
+      description: 模糊搜索（匹配目标主机）
+      schema:
+        type: string
+    - name: playbook_name
+      in: query
+      description: 模糊搜索（关联的 Playbook 名称）
+      schema:
+        type: string
+    - name: repository_name
+      in: query
+      description: 模糊搜索（关联的仓库名称）
+      schema:
+        type: string
+    - name: has_runs
+      in: query
+      description: 筛选有执行记录的任务 (true) 或无执行记录的任务 (false)
+      schema:
+        type: boolean
+    - name: min_run_count
+      in: query
+      description: 最小执行次数，筛选 run_count >= N 的任务
+      schema:
+        type: integer
+        minimum: 1
+    - name: last_run_status
+      in: query
+      description: 按最后执行状态筛选
+      schema:
+        type: string
+        enum:
+        - pending
+        - running
+        - success
+        - failed
+        - cancelled
+        - timeout
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ExecutionTask'
+                total:
+                  type: integer
+  post:
+    tags:
+    - 执行任务
+    summary: 创建任务模板
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - playbook_id
+            - target_hosts
+            properties:
+              name:
+                type: string
+                description: 任务名称
+              playbook_id:
+                type: string
+                format: uuid
+                description: Playbook ID（状态必须为 ready 或 outdated）
+/tenant/execution-tasks/stats:
+  get:
+    tags:
+    - 执行任务
+    summary: 获取任务模板统计
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ExecutionTaskStats'
+/tenant/execution-tasks/search-schema:
+  get:
+    tags:
+    - 执行任务
+    summary: 获取任务模板搜索字段定义
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionTask'
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SearchableField'
+/tenant/execution-tasks/{id}:
+  get:
+    tags:
+    - 执行任务
+    summary: 获取任务模板详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionTask'
+  delete:
+    tags:
+    - 执行任务
+    summary: 删除任务模板（级联删除执行记录和日志）
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '204':
+        description: 删除成功
+  put:
+    tags:
+    - 执行任务
+    summary: 更新任务模板
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - name
+            - playbook_id
+            - target_hosts
+            properties:
+              name:
+                type: string
+                description: 任务名称
+              playbook_id:
+                type: string
+                format: uuid
+                description: 关联的 Playbook ID
+              target_hosts:
+                type: string
+                description: 目标主机
+              extra_vars:
+                type: object
+                description: 变量值
+              executor_type:
+                type: string
+                enum:
+                - local
+                - docker
+                default: local
+              description:
+                type: string
+                description: 任务描述
+              secrets_source_ids:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+                description: 关联的密钥源 ID 列表
+              schedule_expr:
+                type: string
+                description: 定时表达式 (cron 格式)
+              is_recurring:
+                type: boolean
+                default: false
+              notification_config:
+                $ref: '#/components/schemas/TaskNotificationConfig'
+    responses:
+      '200':
+        description: 更新成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionTask'
+/tenant/execution-tasks/{id}/execute:
+  post:
+    tags:
+    - 执行任务
+    summary: 执行任务（创建执行记录并运行）
+    description: '如果任务模板的 needs_review = true，将返回错误，必须先调用确认审核接口。
+
+      '
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              triggered_by:
+                type: string
+                description: 触发者
+              secrets_source_id:
+                type: string
+                format: uuid
+                description: 密钥源ID（可选，向后兼容）
+              secrets_source_ids:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+                description: 多密钥源ID（可选，优先使用，用于混合认证场景）
+              extra_vars:
+                type: object
+                description: 运行时覆盖变量
+              target_hosts:
+                type: string
+                description: 覆盖目标主机（逗号分隔）
+              skip_notification:
+                type: boolean
+                description: 跳过本次通知（全局）
+    responses:
+      '200':
+        description: 执行完成
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionRun'
+      '400':
+        description: 执行失败（如 needs_review = true）
+/tenant/execution-tasks/{id}/confirm-review:
+  post:
+    tags:
+    - 执行任务
+    summary: 确认审核变量变更
+    description: '当 Playbook 变量变更后，关联的任务模板会被标记为 needs_review = true。
+
+      调用此接口确认审核完成，清除 needs_review 状态并更新变量快照。
+
+      '
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 审核确认成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionTask'
+/tenant/execution-tasks/{id}/runs:
+  get:
+    tags:
+    - 执行任务
+    summary: 获取任务的执行历史
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ExecutionRun'
+                total:
+                  type: integer
+/tenant/execution-schedules:
+  get:
+    tags:
+    - 定时调度
+    summary: 获取定时任务调度列表
+    description: '获取定时任务调度列表，支持多条件筛选。
+
+      - **search**: 模糊搜索调度名称或描述
+
+      - **task_id**: 按关联的任务模板筛选
+
+      - **enabled**: 按启用状态筛选
+
+      - **is_recurring**: 按是否循环执行筛选
+
+      '
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: search
+      in: query
+      description: 模糊搜索（匹配调度名称或描述）
+      schema:
+        type: string
+    - name: task_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+      description: 按任务模板筛选
+    - name: enabled
+      in: query
+      schema:
+        type: boolean
+      description: 按启用状态筛选
+    - name: is_recurring
+      in: query
+      schema:
+        type: boolean
+      description: 按是否循环执行筛选
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ExecutionSchedule'
+                total:
+                  type: integer
+  post:
+    tags:
+    - 定时调度
+    summary: 创建定时任务调度
+    description: '创建定时任务调度，支持配置执行参数覆盖（与手动执行保持一致）。
+
+      覆盖参数为可选，不填则使用任务模板的默认配置。
+
+      '
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - name
+            - task_id
+            - schedule_expr
+            properties:
+              name:
+                type: string
+                description: 调度名称
+              task_id:
+                type: string
+                format: uuid
+                description: 关联的任务模板 ID
+              schedule_expr:
+                type: string
+                description: Cron 表达式
+              is_recurring:
+                type: boolean
+                default: true
+              description:
+                type: string
+              target_hosts_override:
+                type: string
+                description: 覆盖目标主机（逗号分隔）
+              extra_vars_override:
+                type: object
+                description: 覆盖变量
+              secrets_source_ids:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+                description: 覆盖密钥源
+              skip_notification:
+                type: boolean
+                description: 跳过通知（全局）
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionSchedule'
+/tenant/execution-schedules/{id}:
+  get:
+    tags:
+    - 定时调度
+    summary: 获取定时任务调度详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionSchedule'
+  put:
+    tags:
+    - 定时调度
+    summary: 更新定时任务调度
+    description: '更新定时任务调度配置，支持修改执行参数覆盖。
+
+      '
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+              schedule_expr:
+                type: string
+              is_recurring:
+                type: boolean
+              description:
+                type: string
+              target_hosts_override:
+                type: string
+                description: 覆盖目标主机（逗号分隔）
+              extra_vars_override:
+                type: object
+                description: 覆盖变量
+              secrets_source_ids:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+                description: 覆盖密钥源
+              skip_notification:
+                type: boolean
+                description: 跳过通知（全局）
+    responses:
+      '200':
+        description: 更新成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionSchedule'
+  delete:
+    tags:
+    - 定时调度
+    summary: 删除定时任务调度
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '204':
+        description: 删除成功
+/tenant/execution-schedules/{id}/enable:
+  post:
+    tags:
+    - 定时调度
+    summary: 启用定时任务调度
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 启用成功
+/tenant/execution-schedules/{id}/disable:
+  post:
+    tags:
+    - 定时调度
+    summary: 禁用定时任务调度
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 禁用成功
+/tenant/execution-runs:
+  get:
+    tags:
+    - 执行记录
+    summary: 获取执行记录列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: run_id
+      in: query
+      schema:
+        type: string
+    - name: task_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: task_name
+      in: query
+      schema:
+        type: string
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - pending
+        - running
+        - success
+        - failed
+        - cancelled
+        - partial
+    - name: triggered_by
+      in: query
+      schema:
+        type: string
+    - name: started_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    - name: started_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExecutionRun'
+/tenant/execution-runs/search-schema:
+  get:
+    tags:
+    - 执行记录
+    summary: 获取执行记录搜索字段定义
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SearchableField'
+/tenant/execution-runs/stats:
+  get:
+    tags:
+    - 执行记录
+    summary: 获取执行记录统计概览
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ExecutionRunStats'
+/tenant/execution-runs/trend:
+  get:
+    tags:
+    - 执行记录
+    summary: 获取执行趋势
+    parameters:
+    - name: days
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 365
+        default: 7
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExecutionRunTrendItem'
+/tenant/execution-runs/trigger-distribution:
+  get:
+    tags:
+    - 执行记录
+    summary: 获取触发方式分布
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExecutionRunTriggerDistributionItem'
+/tenant/execution-runs/top-failed:
+  get:
+    tags:
+    - 执行记录
+    summary: 获取失败率最高的任务
+    parameters:
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 5
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExecutionRunTopFailedItem'
+/tenant/execution-runs/top-active:
+  get:
+    tags:
+    - 执行记录
+    summary: 获取最活跃的任务
+    parameters:
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 5
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExecutionRunTopActiveItem'
+/tenant/execution-runs/{id}:
+  get:
+    tags:
+    - 执行记录
+    summary: 获取执行记录详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionRun'
+/tenant/execution-runs/{id}/logs:
+  get:
+    tags:
+    - 执行记录
+    summary: 获取执行日志
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExecutionLog'
+/tenant/execution-runs/{id}/cancel:
+  post:
+    tags:
+    - 执行记录
+    summary: 取消执行
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/execution-runs/{id}/stream:
+  get:
+    tags:
+    - 执行记录
+    summary: SSE 实时日志流
+    description: 'Server-Sent Events (SSE) 实时日志推送。
+
+      - `event: log` - 新日志条目
+
+      - `event: done` - 执行完成（status, exit_code, stats）
+
+      '
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: SSE 事件流
+        content:
+          text/event-stream:
+            schema:
+              type: string
+              example: 'event: log
+
+                data: {"stage":"prepare","message":"开始准备执行环境"}
+
+
+                event: done
+
+                data: {"status":"success","exit_code":0}
+
+                '
+/tenant/healing/flows:
+  get:
+    tags:
+    - 自愈流程
+    summary: 获取自愈流程列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: is_active
+      in: query
+      schema:
+        type: boolean
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HealingFlow'
+  post:
+    tags:
+    - 自愈流程
+    summary: 创建自愈流程
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HealingFlowCreate'
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealingFlow'
+/tenant/healing/flows/{id}:
+  get:
+    tags:
+    - 自愈流程
+    summary: 获取自愈流程详情
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealingFlow'
+  put:
+    tags:
+    - 自愈流程
+    summary: 更新自愈流程
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HealingFlowUpdate'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealingFlow'
+  delete:
+    tags:
+    - 自愈流程
+    summary: 删除自愈流程
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/healing/rules:
+  get:
+    tags:
+    - 自愈规则
+    summary: 获取自愈规则列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: is_active
+      in: query
+      schema:
+        type: boolean
+    - name: flow_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HealingRule'
+  post:
+    tags:
+    - 自愈规则
+    summary: 创建自愈规则
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HealingRuleCreate'
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealingRule'
+/tenant/healing/rules/{id}:
+  get:
+    tags:
+    - 自愈规则
+    summary: 获取自愈规则详情
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealingRule'
+  put:
+    tags:
+    - 自愈规则
+    summary: 更新自愈规则
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HealingRuleUpdate'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealingRule'
+  delete:
+    tags:
+    - 自愈规则
+    summary: 删除自愈规则
+    description: '删除规则时，如果有关联的流程实例：
+
+      - 不带 `force` 参数：返回 409 Conflict
+
+      - 带 `force=true`：将关联实例的 rule_id 设为 NULL，然后删除规则
+
+      '
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: force
+      in: query
+      description: 是否强制删除（同时解除关联的流程实例）
+      schema:
+        type: boolean
+        default: false
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+      '409':
+        description: 规则有关联的流程实例，需要使用 force=true 强制删除
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: integer
+                message:
+                  type: string
+/tenant/healing/rules/{id}/activate:
+  post:
+    tags:
+    - 自愈规则
+    summary: 启用自愈规则
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/healing/rules/{id}/deactivate:
+  post:
+    tags:
+    - 自愈规则
+    summary: 停用自愈规则
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/healing/instances:
+  get:
+    tags:
+    - 流程实例
+    summary: 获取流程实例列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - pending
+        - running
+        - waiting_approval
+        - completed
+        - failed
+        - cancelled
+    - name: flow_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: rule_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: incident_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: search
+      in: query
+      description: 模糊搜索实例 ID、流程名、规则名或工单标题
+      schema:
+        type: string
+    - name: flow_name
+      in: query
+      description: 按流程名称筛选
+      schema:
+        type: string
+    - name: rule_name
+      in: query
+      description: 按规则名称筛选
+      schema:
+        type: string
+    - name: incident_title
+      in: query
+      description: 按工单标题筛选
+      schema:
+        type: string
+    - name: current_node_id
+      in: query
+      description: 当前节点 ID
+      schema:
+        type: string
+    - name: error_message
+      in: query
+      description: 错误信息关键词
+      schema:
+        type: string
+    - name: has_error
+      in: query
+      description: 是否存在错误
+      schema:
+        type: boolean
+    - name: approval_status
+      in: query
+      description: 按节点审批结果筛选
+      schema:
+        type: string
+        enum:
+        - approved
+        - rejected
+    - name: created_from
+      in: query
+      description: 创建时间起始（RFC3339 或 YYYY-MM-DD）
+      schema:
+        type: string
+    - name: created_to
+      in: query
+      description: 创建时间结束（RFC3339 或 YYYY-MM-DD）
+      schema:
+        type: string
+    - name: started_from
+      in: query
+      description: 开始时间起始
+      schema:
+        type: string
+    - name: started_to
+      in: query
+      description: 开始时间结束
+      schema:
+        type: string
+    - name: completed_from
+      in: query
+      description: 完成时间起始
+      schema:
+        type: string
+    - name: completed_to
+      in: query
+      description: 完成时间结束
+      schema:
+        type: string
+    - name: min_nodes
+      in: query
+      description: 最少节点数
+      schema:
+        type: integer
+        minimum: 0
+    - name: max_nodes
+      in: query
+      description: 最多节点数
+      schema:
+        type: integer
+        minimum: 0
+    - name: min_failed_nodes
+      in: query
+      description: 最少失败节点数
+      schema:
+        type: integer
+        minimum: 0
+    - name: max_failed_nodes
+      in: query
+      description: 最多失败节点数
+      schema:
+        type: integer
+        minimum: 0
+    - name: sort_by
+      in: query
+      description: 排序字段
+      schema:
+        type: string
+        enum:
+        - created_at
+        - started_at
+        - completed_at
+        - status
+        - flow_name
+        - rule_name
+    - name: sort_order
+      in: query
+      description: 排序方向
+      schema:
+        type: string
+        enum:
+        - asc
+        - desc
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FlowInstance'
+/tenant/healing/instances/stats:
+  get:
+    tags:
+    - 流程实例
+    summary: 获取流程实例统计
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: integer
+                  example: 0
+                message:
+                  type: string
+                  example: success
+                data:
+                  type: object
+                  properties:
+                    total:
+                      type: integer
+                      example: 500
+                    by_status:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum:
+                            - pending
+                            - running
+                            - waiting_approval
+                            - completed
+                            - failed
+                            - cancelled
+                          count:
+                            type: integer
+                            example: 10
+/tenant/healing/instances/{id}:
+  get:
+    tags:
+    - 流程实例
+    summary: 获取流程实例详情
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlowInstance'
+/tenant/healing/instances/{id}/cancel:
+  post:
+    tags:
+    - 流程实例
+    summary: 取消流程实例
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/healing/instances/{id}/retry:
+  post:
+    tags:
+    - 流程实例
+    summary: 重试流程实例
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              from_node_id:
+                type: string
+                description: 从指定节点 ID 开始重试，不传则从头重试
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/healing/instances/{id}/events:
+  get:
+    tags:
+    - 流程实例
+    summary: 流程实例事件流
+    description: 'Server-Sent Events (SSE) 实时推送流程实例状态与节点事件。
+
+      '
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        description: SSE 事件流
+        content:
+          text/event-stream:
+            schema:
+              type: string
+              example: 'event: initial
+
+                data: {"event":"initial","data":{"instance_id":"uuid","status":"running"},"timestamp":"2026-03-26T10:00:00Z"}
+
+
+                event: node_start
+
+                data: {"event":"node_start","data":{"node_id":"approval"},"timestamp":"2026-03-26T10:00:02Z"}
+
+                '
+/tenant/healing/approvals:
+  get:
+    tags:
+    - 审批任务
+    summary: 获取审批任务列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: flow_instance_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - pending
+        - approved
+        - rejected
+        - expired
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApprovalTask'
+/tenant/healing/approvals/pending:
+  get:
+    tags:
+    - 审批任务
+    summary: 获取待审批任务列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: node_name
+      in: query
+      description: 按节点名称模糊筛选（匹配 node_id）
+      schema:
+        type: string
+    - name: date_from
+      in: query
+      description: 创建时间起始（YYYY-MM-DD）
+      schema:
+        type: string
+    - name: date_to
+      in: query
+      description: 创建时间结束（YYYY-MM-DD）
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApprovalTask'
+/tenant/healing/pending/trigger:
+  get:
+    tags:
+    - 待触发工单
+    summary: 获取待触发工单列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: title
+      in: query
+      description: 模糊搜索（标题、external_id、affected_ci）
+      schema:
+        type: string
+    - name: severity
+      in: query
+      schema:
+        type: string
+        enum:
+        - critical
+        - high
+        - medium
+        - low
+    - name: date_from
+      in: query
+      description: 创建时间起始（YYYY-MM-DD）
+      schema:
+        type: string
+    - name: date_to
+      in: query
+      description: 创建时间结束（YYYY-MM-DD）
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Incident'
+/tenant/healing/pending/dismissed:
+  get:
+    tags:
+    - 待触发工单
+    summary: 获取已忽略工单列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: title
+      in: query
+      description: 模糊搜索（标题、external_id、affected_ci）
+      schema:
+        type: string
+    - name: severity
+      in: query
+      schema:
+        type: string
+        enum:
+        - critical
+        - high
+        - medium
+        - low
+    - name: date_from
+      in: query
+      description: 创建时间起始（YYYY-MM-DD）
+      schema:
+        type: string
+    - name: date_to
+      in: query
+      description: 创建时间结束（YYYY-MM-DD）
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Incident'
+/tenant/healing/approvals/{id}:
+  get:
+    tags:
+    - 审批任务
+    summary: 获取审批任务详情
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalTask'
+/tenant/healing/approvals/{id}/approve:
+  post:
+    tags:
+    - 审批任务
+    summary: 批准审批任务
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              comment:
+                type: string
+                description: 审批意见
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/healing/approvals/{id}/reject:
+  post:
+    tags:
+    - 审批任务
+    summary: 拒绝审批任务
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              comment:
+                type: string
+                description: 拒绝理由
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/execution-schedules/stats:
+  get:
+    tags:
+    - 定时调度
+    summary: 获取定时任务统计
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/execution-schedules/timeline:
+  get:
+    tags:
+    - 定时调度
+    summary: 获取调度时间线
+    parameters:
+    - name: date
+      in: query
+      schema:
+        type: string
+        format: date
+    - name: enabled
+      in: query
+      schema:
+        type: boolean
+    - name: schedule_type
+      in: query
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+/tenant/execution-tasks/batch-confirm-review:
+  post:
+    tags:
+    - 执行任务
+    summary: 批量确认审核
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              task_ids:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+              playbook_id:
+                type: string
+                format: uuid
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      confirmed_count:
+                        type: integer
+                      message:
+                        type: string
+/tenant/healing/flows/node-schema:
+  get:
+    tags:
+    - 自愈流程
+    summary: 获取节点类型 Schema
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+/tenant/healing/flows/search-schema:
+  get:
+    tags:
+    - 自愈流程
+    summary: 获取流程搜索字段定义
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SearchableField'
+/tenant/healing/flows/stats:
+  get:
+    tags:
+    - 自愈流程
+    summary: 获取流程统计
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/healing/rules/search-schema:
+  get:
+    tags:
+    - 自愈规则
+    summary: 获取规则搜索字段定义
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SearchableField'
+/tenant/healing/rules/stats:
+  get:
+    tags:
+    - 自愈规则
+    summary: 获取规则统计
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/healing/instances/search-schema:
+  get:
+    tags:
+    - 流程实例
+    summary: 获取流程实例搜索字段定义
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SearchableField'
+/tenant/healing/flows/{id}/dry-run:
+  post:
+    tags:
+    - 自愈流程
+    summary: 试运行流程
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/healing/flows/{id}/dry-run-stream:
+  post:
+    tags:
+    - 自愈流程
+    summary: 流式试运行流程
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      '200':
+        description: SSE 事件流
+        content:
+          text/event-stream:
+            schema:
+              type: string

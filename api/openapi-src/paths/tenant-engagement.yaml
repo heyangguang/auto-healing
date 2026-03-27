@@ -1,0 +1,728 @@
+/tenant/channels:
+  get:
+    tags:
+    - 通知渠道
+    summary: 获取渠道列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: type
+      in: query
+      schema:
+        type: string
+        enum:
+        - webhook
+        - dingtalk
+        - email
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationChannel'
+  post:
+    tags:
+    - 通知渠道
+    summary: 创建渠道
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NotificationChannelCreate'
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannel'
+/tenant/channels/{id}:
+  get:
+    tags:
+    - 通知渠道
+    summary: 获取渠道详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannel'
+  put:
+    tags:
+    - 通知渠道
+    summary: 更新渠道
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NotificationChannelUpdate'
+    responses:
+      '200':
+        description: 更新成功
+  delete:
+    tags:
+    - 通知渠道
+    summary: 删除渠道
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/channels/{id}/test:
+  post:
+    tags:
+    - 通知渠道
+    summary: 测试渠道连接
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/templates:
+  get:
+    tags:
+    - 通知模板
+    summary: 获取模板列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: event_type
+      in: query
+      schema:
+        type: string
+        enum:
+        - incident_created
+        - incident_resolved
+        - approval_required
+        - execution_result
+        - custom
+    - name: name
+      in: query
+      schema:
+        type: string
+    - name: format
+      in: query
+      schema:
+        type: string
+        enum:
+        - text
+        - markdown
+        - html
+    - name: supported_channel
+      in: query
+      schema:
+        type: string
+        enum:
+        - email
+        - dingtalk
+        - webhook
+    - name: is_active
+      in: query
+      schema:
+        type: boolean
+    - name: sort_by
+      in: query
+      schema:
+        type: string
+        enum:
+        - name
+        - created_at
+        - updated_at
+    - name: sort_order
+      in: query
+      schema:
+        type: string
+        enum:
+        - asc
+        - desc
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationTemplate'
+  post:
+    tags:
+    - 通知模板
+    summary: 创建模板
+    description: '创建通知模板，支持 40+ 变量进行模板替换。
+
+      变量使用 `{{变量名}}` 格式引用。
+
+      '
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NotificationTemplateCreate'
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationTemplate'
+/tenant/templates/{id}:
+  get:
+    tags:
+    - 通知模板
+    summary: 获取模板详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationTemplate'
+  put:
+    tags:
+    - 通知模板
+    summary: 更新模板
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NotificationTemplateUpdate'
+    responses:
+      '200':
+        description: 更新成功
+  delete:
+    tags:
+    - 通知模板
+    summary: 删除模板
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/templates/{id}/preview:
+  post:
+    tags:
+    - 通知模板
+    summary: 预览模板
+    description: 使用示例数据渲染模板，预览效果
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              sample_data:
+                type: object
+                description: 示例数据，用于渲染模板变量
+    responses:
+      '200':
+        description: 预览成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subject:
+                  type: string
+                  description: 渲染后的标题
+                body:
+                  type: string
+                  description: 渲染后的正文
+/tenant/template-variables:
+  get:
+    tags:
+    - 模板变量
+    summary: 获取所有可用模板变量
+    description: '返回所有支持的 40 个模板变量，包含变量名、分类和描述。
+
+      变量分类包括：timestamp, execution, task, repository, stats, system, error
+
+      '
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TemplateVariable'
+/tenant/notifications/send:
+  post:
+    tags:
+    - 通知记录
+    summary: 发送通知
+    description: 手动发送通知到指定渠道
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              channel_ids:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+                description: 目标渠道ID列表
+              template_id:
+                type: string
+                format: uuid
+                description: 可选，使用模板ID
+              subject:
+                type: string
+                description: 通知标题
+              body:
+                type: string
+                description: 通知正文
+              variables:
+                type: object
+                description: 模板变量（当使用 template_id 时）
+              format:
+                type: string
+                enum:
+                - text
+                - markdown
+                - html
+                description: 未使用模板时的消息格式，默认 text
+    responses:
+      '200':
+        description: 发送成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      notification_ids:
+                        type: array
+                        items:
+                          type: string
+                          format: uuid
+                      logs:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Notification'
+/tenant/notifications:
+  get:
+    tags:
+    - 通知记录
+    summary: 获取通知发送记录
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - pending
+        - sent
+        - delivered
+        - failed
+        - bounced
+    - name: task_name
+      in: query
+      schema:
+        type: string
+    - name: triggered_by
+      in: query
+      schema:
+        type: string
+    - name: subject
+      in: query
+      schema:
+        type: string
+    - name: channel_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: template_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: task_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: execution_run_id
+      in: query
+      description: 执行记录ID
+      schema:
+        type: string
+        format: uuid
+    - name: created_after
+      in: query
+      schema:
+        type: string
+        format: date-time
+    - name: created_before
+      in: query
+      schema:
+        type: string
+        format: date-time
+    - name: sort_by
+      in: query
+      schema:
+        type: string
+        enum:
+        - created_at
+        - status
+        - subject
+        - sent_at
+    - name: sort_order
+      in: query
+      schema:
+        type: string
+        enum:
+        - asc
+        - desc
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+/tenant/notifications/stats:
+  get:
+    tags:
+    - 通知记录
+    summary: 获取通知统计
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/NotificationStats'
+/tenant/notifications/{id}:
+  get:
+    tags:
+    - 通知记录
+    summary: 获取通知详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Notification'
+/tenant/dashboard/overview:
+  get:
+    tags:
+    - Dashboard
+    summary: 获取 Dashboard 概览
+    parameters:
+    - name: sections
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/dashboard/config:
+  get:
+    tags:
+    - Dashboard
+    summary: 获取 Dashboard 配置
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+  put:
+    tags:
+    - Dashboard
+    summary: 更新 Dashboard 配置
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/dashboard/workspaces:
+  get:
+    tags:
+    - Dashboard
+    summary: 获取系统工作区列表
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+  post:
+    tags:
+    - Dashboard
+    summary: 创建系统工作区
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - name
+            - config
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              config:
+                type: object
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/site-messages:
+  get:
+    tags:
+    - 站内信
+    summary: 查询站内信列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: keyword
+      in: query
+      schema:
+        type: string
+    - name: category
+      in: query
+      schema:
+        type: string
+    - name: is_read
+      in: query
+      schema:
+        type: string
+    - name: date_from
+      in: query
+      schema:
+        type: string
+    - name: date_to
+      in: query
+      schema:
+        type: string
+    - name: sort
+      in: query
+      schema:
+        type: string
+    - name: order
+      in: query
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SiteMessage'
+/tenant/site-messages/unread-count:
+  get:
+    tags:
+    - 站内信
+    summary: 获取未读消息数
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: integer
+/tenant/site-messages/read:
+  put:
+    tags:
+    - 站内信
+    summary: 批量标记已读
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - ids
+            properties:
+              ids:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/site-messages/read-all:
+  put:
+    tags:
+    - 站内信
+    summary: 标记全部已读
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: integer
+/tenant/site-messages/events:
+  get:
+    tags:
+    - 站内信
+    summary: 站内信实时事件流
+    responses:
+      '200':
+        description: SSE 事件流
+        content:
+          text/event-stream:
+            schema:
+              type: string
+/tenant/dashboard/workspaces/{id}:
+  put:
+    tags:
+    - Dashboard
+    summary: 更新系统工作区
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+  delete:
+    tags:
+    - Dashboard
+    summary: 删除系统工作区
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'

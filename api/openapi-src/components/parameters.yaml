@@ -1,0 +1,19 @@
+ID:
+  name: id
+  in: path
+  required: true
+  schema:
+    type: string
+    format: uuid
+Page:
+  name: page
+  in: query
+  schema:
+    type: integer
+    default: 1
+PageSize:
+  name: page_size
+  in: query
+  schema:
+    type: integer
+    default: 20

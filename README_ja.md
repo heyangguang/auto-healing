@@ -285,7 +285,7 @@ docker run -d --name auto-healing \
 
 | ドキュメント | 説明 |
 |------------|------|
-| [API リファレンス](api/openapi.yaml) | OpenAPI 3.0 仕様 |
+| [API リファレンス](api/openapi.yaml) | フロントエンド/外部ツール向けの OpenAPI 3.0 bundle |
 | [API テストガイド](docs/api-testing-guide.md) | cURL サンプルとテストワークフロー |
 | [プロジェクト紹介](docs/auto_healing_project_intro.md) | 製品の包括的な概要 |
 

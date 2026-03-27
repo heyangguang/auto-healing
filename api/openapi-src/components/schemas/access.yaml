@@ -1,0 +1,104 @@
+UserInfo:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    username:
+      type: string
+    email:
+      type: string
+    display_name:
+      type: string
+    roles:
+      type: array
+      items:
+        type: string
+    permissions:
+      type: array
+      items:
+        type: string
+LoginPayload:
+  type: object
+  properties:
+    access_token:
+      type: string
+    refresh_token:
+      type: string
+    token_type:
+      type: string
+      example: Bearer
+    expires_in:
+      type: integer
+      example: 3600
+    user:
+      $ref: '#/components/schemas/UserInfo'
+    tenants:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+          name:
+            type: string
+          code:
+            type: string
+    current_tenant_id:
+      type: string
+User:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    username:
+      type: string
+    email:
+      type: string
+    display_name:
+      type: string
+    status:
+      type: string
+      enum:
+      - active
+      - inactive
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+Role:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    display_name:
+      type: string
+    description:
+      type: string
+    is_system:
+      type: boolean
+    created_at:
+      type: string
+      format: date-time
+Permission:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    code:
+      type: string
+    name:
+      type: string
+    module:
+      type: string
+    resource:
+      type: string
+    action:
+      type: string

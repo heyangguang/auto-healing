@@ -1,0 +1,329 @@
+/platform/tenant-roles:
+  get:
+    tags:
+    - 平台角色管理
+    summary: 获取系统租户角色模板
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Role'
+/platform/settings:
+  get:
+    tags:
+    - 平台租户管理
+    summary: 获取平台设置
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/settings/{key}:
+  put:
+    tags:
+    - 平台租户管理
+    summary: 更新单个平台设置
+    parameters:
+    - name: key
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/tenants:
+  get:
+    tags:
+    - 平台租户管理
+    summary: 获取租户列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+  post:
+    tags:
+    - 平台租户管理
+    summary: 创建租户
+    responses:
+      '201':
+        $ref: '#/components/responses/Success'
+/platform/tenants/stats:
+  get:
+    tags:
+    - 平台租户管理
+    summary: 获取租户统计
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/tenants/trends:
+  get:
+    tags:
+    - 平台租户管理
+    summary: 获取租户趋势
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/tenants/{id}:
+  get:
+    tags:
+    - 平台租户管理
+    summary: 获取租户详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+  put:
+    tags:
+    - 平台租户管理
+    summary: 更新租户
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+  delete:
+    tags:
+    - 平台租户管理
+    summary: 删除租户
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/tenants/{id}/members:
+  get:
+    tags:
+    - 平台租户管理
+    summary: 获取租户成员
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+  post:
+    tags:
+    - 平台租户管理
+    summary: 添加租户成员
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/tenants/{id}/members/{userId}:
+  delete:
+    tags:
+    - 平台租户管理
+    summary: 移除租户成员
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    - name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/tenants/{id}/members/{userId}/role:
+  put:
+    tags:
+    - 平台租户管理
+    summary: 更新租户成员角色
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    - name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/tenants/{id}/invitations:
+  post:
+    tags:
+    - 平台租户管理
+    summary: 邀请用户加入租户
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+  get:
+    tags:
+    - 平台租户管理
+    summary: 获取租户邀请列表
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/tenants/{id}/invitations/{invId}:
+  delete:
+    tags:
+    - 平台租户管理
+    summary: 取消租户邀请
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    - name: invId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/site-messages:
+  post:
+    tags:
+    - 平台站内信
+    summary: 创建站内信
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/site-messages/settings:
+  get:
+    tags:
+    - 平台站内信
+    summary: 获取站内信设置
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+  put:
+    tags:
+    - 平台站内信
+    summary: 更新站内信设置
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/audit-logs:
+  get:
+    tags:
+    - 平台审计
+    summary: 获取平台审计日志列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+/platform/audit-logs/stats:
+  get:
+    tags:
+    - 平台审计
+    summary: 获取平台审计统计
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/audit-logs/trend:
+  get:
+    tags:
+    - 平台审计
+    summary: 获取平台审计趋势
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/audit-logs/user-ranking:
+  get:
+    tags:
+    - 平台审计
+    summary: 获取平台审计用户排行
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/audit-logs/high-risk:
+  get:
+    tags:
+    - 平台审计
+    summary: 获取平台高危审计日志
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+/platform/audit-logs/{id}:
+  get:
+    tags:
+    - 平台审计
+    summary: 获取平台审计日志详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/dictionaries:
+  post:
+    tags:
+    - 平台字典
+    summary: 创建字典项
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/dictionaries/{id}:
+  put:
+    tags:
+    - 平台字典
+    summary: 更新字典项
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+  delete:
+    tags:
+    - 平台字典
+    summary: 删除字典项
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'

@@ -1,0 +1,66 @@
+openapi: 3.0.3
+info:
+  title: 运维自愈系统 API
+  description: '运维自愈系统完整 API 文档
+
+
+    **认证方式**: Bearer Token (JWT)
+
+
+    **测试账号（仅在测试环境显式设置 `INIT_ADMIN_PASSWORD=admin123456` 时成立）**:
+
+    - 用户名: admin
+
+    - 密码: admin123456
+
+    '
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+servers:
+- url: http://192.168.31.66:8080/api/v1
+  description: 本地开发环境
+- url: http://192.168.31.66:8080/api/v1
+  description: 生产环境
+tags:
+- name: 认证
+  description: 用户认证相关接口
+- name: 用户管理
+  description: 用户 CRUD 接口
+- name: 角色管理
+  description: 角色 CRUD 接口
+- name: 权限
+  description: 权限查询接口
+- name: 插件管理
+  description: 插件 CRUD 和同步接口
+- name: 工单管理
+  description: 工单查询接口
+- name: CMDB
+  description: CMDB 配置项管理
+- name: 密钥管理
+  description: 密钥源管理和密钥查询
+- name: Git仓库
+  description: Playbook 仓库管理
+- name: Playbook模板
+  description: Playbook 模板管理和变量扫描
+- name: 执行任务
+  description: Ansible Playbook 执行任务管理
+- name: 通知渠道
+  description: 通知渠道管理 (Webhook, 钉钉, 邮件)
+- name: 通知模板
+  description: 通知模板管理 (支持 40+ 变量)
+- name: 通知记录
+  description: 通知发送记录查询
+- name: 模板变量
+  description: 模板可用变量查询
+- name: 自愈流程
+  description: 自愈流程管理（DAG 编排）
+- name: 自愈规则
+  description: 自愈规则管理（条件匹配）
+- name: 流程实例
+  description: 流程执行实例查询
+- name: 审批任务
+  description: 审批任务管理
+security:
+- BearerAuth: []

@@ -1,0 +1,1009 @@
+Plugin:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    type:
+      type: string
+      enum:
+      - itsm
+      - cmdb
+      description: 插件类型
+    description:
+      type: string
+    version:
+      type: string
+    status:
+      type: string
+      enum:
+      - active
+      - inactive
+      - error
+    config:
+      type: object
+      description: '连接配置，包含：
+
+        - url: API地址 (必填)
+
+        - auth_type: 认证方式 basic/bearer/api_key (必填)
+
+        - username/password: Basic认证
+
+        - token: Bearer认证
+
+        - api_key/api_key_header: API Key认证
+
+        - since_param: 增量同步时间参数名
+
+        - response_data_path: 响应数据路径
+
+        - extra_params: 额外查询参数 (对象格式)
+
+        - close_incident_url: 关闭工单接口URL (ITSM专用)
+
+        '
+    field_mapping:
+      type: object
+      description: '字段映射规则，格式：
+
+        incident_mapping: { 标准字段: 外部字段 }
+
+        cmdb_mapping: { 标准字段: 外部字段 }
+
+        '
+    sync_filter:
+      type: object
+      description: 同步过滤器配置，支持 logic/rules 嵌套条件
+    sync_enabled:
+      type: boolean
+    sync_interval_minutes:
+      type: integer
+    last_sync_at:
+      type: string
+      format: date-time
+    next_sync_at:
+      type: string
+      format: date-time
+    error_message:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+PluginStats:
+  type: object
+  description: 插件统计数据
+  properties:
+    total:
+      type: integer
+      description: 总数
+    by_type:
+      type: object
+      description: 按类型分布
+      additionalProperties:
+        type: integer
+      example:
+        itsm: 5
+        cmdb: 3
+    by_status:
+      type: object
+      description: 按状态分布
+      additionalProperties:
+        type: integer
+      example:
+        active: 4
+        inactive: 3
+        error: 1
+    sync_enabled:
+      type: integer
+      description: 启用同步数
+    sync_disabled:
+      type: integer
+      description: 未启用同步数
+    active_count:
+      type: integer
+      description: 激活数
+    inactive_count:
+      type: integer
+      description: 未激活数
+    error_count:
+      type: integer
+      description: 错误数
+PluginSyncLog:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    plugin_id:
+      type: string
+      format: uuid
+    sync_type:
+      type: string
+      enum:
+      - manual
+      - scheduled
+    status:
+      type: string
+      enum:
+      - running
+      - success
+      - failed
+    records_fetched:
+      type: integer
+    records_processed:
+      type: integer
+    records_failed:
+      type: integer
+    details:
+      type: object
+      description: 同步详情
+      properties:
+        new_count:
+          type: integer
+          description: 新增工单数
+        updated_count:
+          type: integer
+          description: 更新工单数
+    started_at:
+      type: string
+      format: date-time
+    completed_at:
+      type: string
+      format: date-time
+    error_message:
+      type: string
+Incident:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    plugin_id:
+      type: string
+      format: uuid
+      description: 插件ID（插件删除后为空）
+      nullable: true
+    source_plugin_name:
+      type: string
+      description: 来源插件名称（插件删除后保留，如 "Mock ITSM (已删除)"）
+    external_id:
+      type: string
+    title:
+      type: string
+    description:
+      type: string
+    severity:
+      type: string
+      enum:
+      - critical
+      - high
+      - medium
+      - low
+    priority:
+      type: string
+    status:
+      type: string
+      enum:
+      - open
+      - in_progress
+      - resolved
+      - closed
+    category:
+      type: string
+    healing_status:
+      type: string
+      enum:
+      - pending
+      - processing
+      - healed
+      - failed
+      - skipped
+      - dismissed
+    affected_ci:
+      type: string
+    affected_service:
+      type: string
+    assignee:
+      type: string
+    reporter:
+      type: string
+    scanned:
+      type: boolean
+    matched_rule_id:
+      type: string
+      format: uuid
+      nullable: true
+    healing_flow_instance_id:
+      type: string
+      format: uuid
+      nullable: true
+    raw_data:
+      type: object
+      additionalProperties: true
+    source_created_at:
+      type: string
+      format: date-time
+      nullable: true
+    source_updated_at:
+      type: string
+      format: date-time
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+CMDBItem:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    plugin_id:
+      type: string
+      format: uuid
+      nullable: true
+    source_plugin_name:
+      type: string
+    external_id:
+      type: string
+    name:
+      type: string
+    type:
+      type: string
+      enum:
+      - server
+      - application
+      - network
+      - database
+    status:
+      type: string
+      enum:
+      - active
+      - offline
+      - maintenance
+    ip_address:
+      type: string
+    hostname:
+      type: string
+    os:
+      type: string
+    os_version:
+      type: string
+    cpu:
+      type: string
+    memory:
+      type: string
+    disk:
+      type: string
+    location:
+      type: string
+    owner:
+      type: string
+    environment:
+      type: string
+      enum:
+      - production
+      - staging
+      - development
+    manufacturer:
+      type: string
+    model:
+      type: string
+    serial_number:
+      type: string
+    department:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    maintenance_reason:
+      type: string
+      description: 维护原因
+    maintenance_start_at:
+      type: string
+      format: date-time
+      description: 维护开始时间
+    maintenance_end_at:
+      type: string
+      format: date-time
+      description: 维护结束时间
+CMDBMaintenanceLog:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    cmdb_item_id:
+      type: string
+      format: uuid
+    cmdb_item_name:
+      type: string
+    action:
+      type: string
+      enum:
+      - enter
+      - exit
+      description: 操作类型
+    reason:
+      type: string
+      description: 原因
+    scheduled_end_at:
+      type: string
+      format: date-time
+      description: 计划结束时间
+    actual_end_at:
+      type: string
+      format: date-time
+      description: 实际结束时间
+    exit_type:
+      type: string
+      enum:
+      - manual
+      - auto
+      description: 退出方式
+    operator:
+      type: string
+      description: 操作人
+    created_at:
+      type: string
+      format: date-time
+CMDBStats:
+  type: object
+  properties:
+    total:
+      type: integer
+    by_type:
+      type: array
+      items:
+        type: object
+        properties:
+          type:
+            type: string
+          count:
+            type: integer
+    by_status:
+      type: array
+      items:
+        type: object
+        properties:
+          status:
+            type: string
+          count:
+            type: integer
+    by_environment:
+      type: array
+      items:
+        type: object
+        properties:
+          environment:
+            type: string
+          count:
+            type: integer
+ConnectionTestResult:
+  type: object
+  description: SSH 连接测试结果
+  properties:
+    cmdb_id:
+      type: string
+      format: uuid
+    host:
+      type: string
+      description: IP 地址
+    success:
+      type: boolean
+      description: 连接是否成功
+    message:
+      type: string
+      description: 结果消息
+    auth_type:
+      type: string
+      description: 认证类型 (ssh_key 或 password)
+    latency_ms:
+      type: integer
+      description: 连接延迟（毫秒）
+CloseIncidentRequest:
+  type: object
+  properties:
+    resolution:
+      type: string
+      description: 解决方案描述
+    work_notes:
+      type: string
+      description: 工作备注
+    close_code:
+      type: string
+      description: 关闭代码
+    close_status:
+      type: string
+      enum:
+      - resolved
+      - closed
+CloseIncidentResponse:
+  type: object
+  properties:
+    message:
+      type: string
+    local_status:
+      type: string
+    source_updated:
+      type: boolean
+SecretsSource:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    type:
+      type: string
+      enum:
+      - vault
+      - file
+      - webhook
+    auth_type:
+      type: string
+      enum:
+      - ssh_key
+      - password
+      description: SSH 认证类型（file 类型只支持 ssh_key）
+    config:
+      type: object
+      description: 配置详情（根据 type 不同结构不同）
+    is_default:
+      type: boolean
+      description: 是否默认密钥源
+    priority:
+      type: integer
+      description: 优先级（数字越小越优先）
+    status:
+      type: string
+      enum:
+      - active
+      - inactive
+    created_at:
+      type: string
+      format: date-time
+CreateSecretsSourceRequest:
+  type: object
+  required:
+  - name
+  - type
+  - auth_type
+  - config
+  properties:
+    name:
+      type: string
+    type:
+      type: string
+      enum:
+      - vault
+      - file
+      - webhook
+    auth_type:
+      type: string
+      enum:
+      - ssh_key
+      - password
+      description: SSH 认证类型
+    config:
+      oneOf:
+      - $ref: '#/components/schemas/FileConfig'
+      - $ref: '#/components/schemas/VaultConfig'
+      - $ref: '#/components/schemas/WebhookConfig'
+    is_default:
+      type: boolean
+    priority:
+      type: integer
+FileConfig:
+  type: object
+  description: File 类型配置（仅支持 ssh_key）
+  required:
+  - key_path
+  properties:
+    key_path:
+      type: string
+      description: SSH 密钥文件路径
+    username:
+      type: string
+      description: SSH 用户名，默认 root
+VaultConfig:
+  type: object
+  description: Vault 类型配置
+  required:
+  - address
+  - secret_path
+  - auth
+  properties:
+    address:
+      type: string
+      description: Vault 服务地址
+    secret_path:
+      type: string
+      description: 密钥基础路径
+    namespace:
+      type: string
+      description: 命名空间（企业版）
+    query_key:
+      type: string
+      enum:
+      - ip
+      - hostname
+      description: 查询键，系统自动拼接 secret_path/{query_key}
+    auth:
+      $ref: '#/components/schemas/VaultAuth'
+    field_mapping:
+      $ref: '#/components/schemas/FieldMapping'
+VaultAuth:
+  type: object
+  description: Vault 认证配置
+  required:
+  - type
+  properties:
+    type:
+      type: string
+      enum:
+      - token
+      - approle
+    token:
+      type: string
+      description: Token（type=token 时必填）
+    role_id:
+      type: string
+      description: AppRole Role ID（type=approle 时必填）
+    secret_id:
+      type: string
+      description: AppRole Secret ID（type=approle 时必填）
+WebhookConfig:
+  type: object
+  description: Webhook 类型配置
+  required:
+  - url
+  properties:
+    url:
+      type: string
+      description: 基础 URL
+    method:
+      type: string
+      enum:
+      - GET
+      - POST
+      description: HTTP 方法，默认 GET
+    query_key:
+      type: string
+      enum:
+      - ip
+      - hostname
+      description: 查询键，系统自动拼接 url/{query_key}
+    auth:
+      $ref: '#/components/schemas/WebhookAuth'
+    timeout:
+      type: integer
+      description: 超时秒数，默认 30
+    response_data_path:
+      type: string
+      description: 响应数据根路径
+    field_mapping:
+      $ref: '#/components/schemas/FieldMapping'
+WebhookAuth:
+  type: object
+  description: Webhook 认证配置
+  properties:
+    type:
+      type: string
+      enum:
+      - none
+      - basic
+      - bearer
+      - api_key
+      description: 认证类型
+    username:
+      type: string
+      description: Basic Auth 用户名
+    password:
+      type: string
+      description: Basic Auth 密码
+    token:
+      type: string
+      description: Bearer Token
+    header_name:
+      type: string
+      description: API Key Header 名称
+    api_key:
+      type: string
+      description: API Key 值
+FieldMapping:
+  type: object
+  description: 字段路径映射（支持点分隔路径）
+  properties:
+    username:
+      type: string
+      description: username 字段路径，默认 "username"
+    password:
+      type: string
+      description: password 字段路径，默认 "password"
+    private_key:
+      type: string
+      description: private_key 字段路径，默认 "private_key"
+SecretQuery:
+  type: object
+  required:
+  - hostname
+  properties:
+    hostname:
+      type: string
+    ip_address:
+      type: string
+    source_id:
+      type: string
+      description: 密钥源ID（可选，不指定则使用默认密钥源）
+Secret:
+  type: object
+  properties:
+    auth_type:
+      type: string
+      enum:
+      - ssh_key
+      - password
+      description: 认证类型
+    username:
+      type: string
+      description: SSH 用户名
+    private_key:
+      type: string
+      description: 私钥内容（ssh_key 方式）
+    password:
+      type: string
+      description: 密码（password 方式）
+GitRepository:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    url:
+      type: string
+    default_branch:
+      type: string
+    auth_type:
+      type: string
+      enum:
+      - none
+      - token
+      - password
+      - ssh_key
+    local_path:
+      type: string
+    last_sync_at:
+      type: string
+      format: date-time
+    status:
+      type: string
+      enum:
+      - pending
+      - ready
+      - syncing
+      - error
+    error_message:
+      type: string
+      description: 错误信息（status=error 时）
+    last_commit_id:
+      type: string
+      description: 最后同步的 commit ID
+    sync_enabled:
+      type: boolean
+      description: 是否启用定时同步
+    sync_interval:
+      type: string
+      description: 同步间隔，如 10s, 5m, 1h
+    next_sync_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: 下次同步时间
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+CommitInfo:
+  type: object
+  description: Git Commit 信息
+  properties:
+    commit_id:
+      type: string
+      description: 短 commit ID
+    full_id:
+      type: string
+      description: 完整 commit ID
+    message:
+      type: string
+      description: commit 消息
+    author:
+      type: string
+      description: 作者名
+    author_email:
+      type: string
+      description: 作者邮箱
+    date:
+      type: string
+      description: 提交时间（ISO 8601）
+GitSyncLog:
+  type: object
+  description: Git 仓库同步日志
+  properties:
+    id:
+      type: string
+      format: uuid
+    repository_id:
+      type: string
+      format: uuid
+    trigger_type:
+      type: string
+      enum:
+      - manual
+      - auto
+      - create
+      description: 触发类型
+    action:
+      type: string
+      enum:
+      - clone
+      - pull
+      description: 操作类型
+    status:
+      type: string
+      enum:
+      - success
+      - failed
+    commit_id:
+      type: string
+      description: 成功时的 commit ID
+    branch:
+      type: string
+    duration_ms:
+      type: integer
+      description: 耗时（毫秒）
+    error_message:
+      type: string
+      description: 失败时的错误信息
+    created_at:
+      type: string
+      format: date-time
+CreateGitRepoRequest:
+  type: object
+  required:
+  - name
+  - url
+  properties:
+    name:
+      type: string
+      description: 仓库名称（全局唯一）
+    url:
+      type: string
+      description: Git 仓库 URL
+    default_branch:
+      type: string
+      description: 默认分支
+      default: main
+    auth_type:
+      type: string
+      enum:
+      - none
+      - token
+      - password
+      - ssh_key
+      description: 认证类型
+      default: none
+    auth_config:
+      type: object
+      description: '认证配置，格式取决于 auth_type：
+
+        - token: { "token": "xxx" }
+
+        - password: { "username": "user", "password": "pass" }
+
+        - ssh_key: { "private_key": "-----BEGIN...", "passphrase": "可选" }
+
+        '
+    sync_enabled:
+      type: boolean
+      description: 是否启用定时同步
+      default: false
+    sync_interval:
+      type: string
+      description: 同步间隔，如 10s, 5m, 1h
+      default: 1h
+UpdateGitRepoRequest:
+  type: object
+  description: 更新仓库请求，所有字段均为可选
+  properties:
+    default_branch:
+      type: string
+      description: 默认分支
+    auth_type:
+      type: string
+      enum:
+      - none
+      - token
+      - password
+      - ssh_key
+      description: 认证类型
+    auth_config:
+      type: object
+      description: 认证配置
+    sync_enabled:
+      type: boolean
+      description: 是否启用定时同步
+    sync_interval:
+      type: string
+      description: 同步间隔，如 10s, 5m, 1h
+PlaybookVariable:
+  type: object
+  properties:
+    name:
+      type: string
+      description: 变量名
+    type:
+      type: string
+      enum:
+      - string
+      - number
+      - boolean
+      - list
+      - object
+      - enum
+      - password
+      description: 变量类型
+    description:
+      type: string
+      description: 描述
+    required:
+      type: boolean
+      description: 是否必填
+    default:
+      description: 默认值
+    sources:
+      type: array
+      description: 所有来源位置
+      items:
+        type: object
+        properties:
+          file:
+            type: string
+          line:
+            type: integer
+    primary_source:
+      type: string
+      description: 主来源（类型推断来源）
+    in_code:
+      type: boolean
+      description: 是否在代码中存在
+    enum:
+      type: array
+      items:
+        type: string
+    min:
+      type: number
+    max:
+      type: number
+    pattern:
+      type: string
+Playbook:
+  type: object
+  description: Playbook 模板
+  properties:
+    id:
+      type: string
+      format: uuid
+    repository_id:
+      type: string
+      format: uuid
+      description: 关联的 Git 仓库
+    name:
+      type: string
+      description: 模板名称
+    file_path:
+      type: string
+      description: 入口文件路径
+    description:
+      type: string
+    status:
+      type: string
+      enum:
+      - pending
+      - ready
+      - error
+    variables:
+      type: array
+      items:
+        $ref: '#/components/schemas/PlaybookVariable'
+    last_scan_at:
+      type: string
+      format: date-time
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+PlaybookScanLog:
+  type: object
+  description: Playbook 扫描日志
+  properties:
+    id:
+      type: string
+      format: uuid
+    playbook_id:
+      type: string
+      format: uuid
+    trigger_type:
+      type: string
+      enum:
+      - manual
+      - auto
+      - sync
+    files_scanned:
+      type: integer
+      description: 扫描的文件数
+    variables_found:
+      type: integer
+      description: 发现的变量数
+    variables_added:
+      type: integer
+      description: 新增的变量数
+    variables_removed:
+      type: integer
+      description: 移除的变量数
+    created_at:
+      type: string
+      format: date-time
+PaginatedPlaybooks:
+  allOf:
+  - $ref: '#/components/schemas/PaginationResponse'
+  - type: object
+    properties:
+      data:
+        type: array
+        items:
+          $ref: '#/components/schemas/Playbook'
+PaginatedPlaybookScanLogs:
+  allOf:
+  - $ref: '#/components/schemas/PaginationResponse'
+  - type: object
+    properties:
+      data:
+        type: array
+        items:
+          $ref: '#/components/schemas/PlaybookScanLog'
+ActivateRequest:
+  type: object
+  required:
+  - main_playbook
+  - config_mode
+  properties:
+    main_playbook:
+      type: string
+      description: 主入口文件
+    config_mode:
+      type: string
+      enum:
+      - auto
+      - enhanced
+      description: 配置模式
+    variables:
+      type: array
+      description: enhanced 模式下的变量定义
+      items:
+        $ref: '#/components/schemas/PlaybookVariable'

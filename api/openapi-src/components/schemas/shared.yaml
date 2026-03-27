@@ -1,0 +1,95 @@
+Success:
+  type: object
+  properties:
+    code:
+      type: integer
+      example: 0
+    message:
+      type: string
+      example: 操作成功
+    data:
+      type: object
+      additionalProperties: true
+      nullable: true
+PaginatedResponse:
+  type: object
+  properties:
+    code:
+      type: integer
+      example: 0
+    message:
+      type: string
+      example: success
+    data:
+      type: array
+      items:
+        type: object
+    total:
+      type: integer
+    page:
+      type: integer
+    page_size:
+      type: integer
+Error:
+  type: object
+  properties:
+    code:
+      type: integer
+      example: 40000
+    message:
+      type: string
+    error_code:
+      type: string
+    details:
+      type: object
+      additionalProperties: true
+      nullable: true
+FilterOption:
+  type: object
+  properties:
+    label:
+      type: string
+    value:
+      type: string
+SearchableField:
+  type: object
+  properties:
+    key:
+      type: string
+    label:
+      type: string
+    type:
+      type: string
+      enum:
+      - text
+      - enum
+      - boolean
+      - dateRange
+    match_modes:
+      type: array
+      items:
+        type: string
+    default_match_mode:
+      type: string
+    placeholder:
+      type: string
+    description:
+      type: string
+    options:
+      type: array
+      items:
+        $ref: '#/components/schemas/FilterOption'
+SearchSchemaData:
+  type: object
+  properties:
+    fields:
+      type: array
+      items:
+        $ref: '#/components/schemas/SearchableField'
+SearchSchemaResponse:
+  allOf:
+  - $ref: '#/components/schemas/Success'
+  - type: object
+    properties:
+      data:
+        $ref: '#/components/schemas/SearchSchemaData'

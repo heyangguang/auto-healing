@@ -1,0 +1,637 @@
+/tenant/secrets/query:
+  post:
+    tags:
+    - 密钥管理
+    summary: 按主机查询密钥
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SecretQuery'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Secret'
+/tenant/audit-logs:
+  get:
+    tags:
+    - 审计日志
+    summary: 获取租户审计日志列表
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/audit-logs/stats:
+  get:
+    tags:
+    - 审计日志
+    summary: 获取审计统计概览
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/audit-logs/user-ranking:
+  get:
+    tags:
+    - 审计日志
+    summary: 获取用户操作排行
+    parameters:
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        default: 10
+    - name: days
+      in: query
+      schema:
+        type: integer
+        default: 7
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+/tenant/audit-logs/action-grouping:
+  get:
+    tags:
+    - 审计日志
+    summary: 按操作类型分组统计
+    parameters:
+    - name: action
+      in: query
+      schema:
+        type: string
+    - name: days
+      in: query
+      schema:
+        type: integer
+        default: 30
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+/tenant/audit-logs/resource-stats:
+  get:
+    tags:
+    - 审计日志
+    summary: 获取资源类型统计
+    parameters:
+    - name: days
+      in: query
+      schema:
+        type: integer
+        default: 30
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+/tenant/audit-logs/trend:
+  get:
+    tags:
+    - 审计日志
+    summary: 获取操作趋势
+    parameters:
+    - name: days
+      in: query
+      schema:
+        type: integer
+        default: 30
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+/tenant/audit-logs/high-risk:
+  get:
+    tags:
+    - 审计日志
+    summary: 获取高危操作日志
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+/tenant/audit-logs/export:
+  get:
+    tags:
+    - 审计日志
+    summary: 导出审计日志
+    responses:
+      '200':
+        description: CSV 导出成功
+        content:
+          text/csv:
+            schema:
+              type: string
+/tenant/blacklist-exemptions:
+  get:
+    tags:
+    - 黑名单豁免
+    summary: 获取黑名单豁免列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: status
+      in: query
+      schema:
+        type: string
+    - name: task_id
+      in: query
+      schema:
+        type: string
+    - name: rule_id
+      in: query
+      schema:
+        type: string
+    - name: search
+      in: query
+      schema:
+        type: string
+    - name: sort_by
+      in: query
+      schema:
+        type: string
+    - name: sort_order
+      in: query
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      additionalProperties: true
+  post:
+    tags:
+    - 黑名单豁免
+    summary: 创建黑名单豁免申请
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - task_id
+            - rule_id
+            - reason
+            properties:
+              task_id:
+                type: string
+                format: uuid
+              task_name:
+                type: string
+              rule_id:
+                type: string
+                format: uuid
+              rule_name:
+                type: string
+              rule_severity:
+                type: string
+              rule_pattern:
+                type: string
+              reason:
+                type: string
+              validity_days:
+                type: integer
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    additionalProperties: true
+/tenant/blacklist-exemptions/pending:
+  get:
+    tags:
+    - 黑名单豁免
+    summary: 获取待审批豁免列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+/tenant/blacklist-exemptions/search-schema:
+  get:
+    tags:
+    - 黑名单豁免
+    summary: 获取黑名单豁免搜索字段定义
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/command-blacklist:
+  get:
+    tags:
+    - 高危指令黑名单
+    summary: 获取黑名单规则列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    - name: search
+      in: query
+      schema:
+        type: string
+    - name: severity
+      in: query
+      schema:
+        type: string
+    - name: is_active
+      in: query
+      schema:
+        type: boolean
+    - name: match_type
+      in: query
+      schema:
+        type: string
+    - name: pattern
+      in: query
+      schema:
+        type: string
+    - name: operator
+      in: query
+      schema:
+        type: string
+    - name: scope
+      in: query
+      schema:
+        type: string
+    - name: sort_by
+      in: query
+      schema:
+        type: string
+    - name: sort_order
+      in: query
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CommandBlacklist'
+  post:
+    tags:
+    - 高危指令黑名单
+    summary: 创建黑名单规则
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CommandBlacklist'
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandBlacklist'
+/tenant/command-blacklist/batch-toggle:
+  post:
+    tags:
+    - 高危指令黑名单
+    summary: 批量启用或禁用规则
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - ids
+            - is_active
+            properties:
+              ids:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+              is_active:
+                type: boolean
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/command-blacklist/search-schema:
+  get:
+    tags:
+    - 高危指令黑名单
+    summary: 获取黑名单搜索字段定义
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/command-blacklist/simulate:
+  post:
+    tags:
+    - 高危指令黑名单
+    summary: 仿真测试黑名单匹配
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - pattern
+            - match_type
+            properties:
+              pattern:
+                type: string
+              match_type:
+                type: string
+              files:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+              content:
+                type: string
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+/tenant/audit-logs/{id}:
+  get:
+    tags:
+    - 审计日志
+    summary: 获取审计日志详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/command-blacklist/{id}:
+  get:
+    tags:
+    - 高危指令黑名单
+    summary: 获取黑名单规则详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+  put:
+    tags:
+    - 高危指令黑名单
+    summary: 更新黑名单规则
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+  delete:
+    tags:
+    - 高危指令黑名单
+    summary: 删除黑名单规则
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/command-blacklist/{id}/toggle:
+  post:
+    tags:
+    - 高危指令黑名单
+    summary: 启用或禁用黑名单规则
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/blacklist-exemptions/{id}:
+  get:
+    tags:
+    - 黑名单豁免
+    summary: 获取豁免申请详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+/tenant/blacklist-exemptions/{id}/approve:
+  post:
+    tags:
+    - 黑名单豁免
+    summary: 批准豁免申请
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/tenant/blacklist-exemptions/{id}/reject:
+  post:
+    tags:
+    - 黑名单豁免
+    summary: 拒绝豁免申请
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              reject_reason:
+                type: string
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'

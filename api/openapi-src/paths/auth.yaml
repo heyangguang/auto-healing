@@ -1,0 +1,220 @@
+/auth/login:
+  post:
+    tags:
+    - 认证
+    summary: 用户登录
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - username
+            - password
+            properties:
+              username:
+                type: string
+                example: admin
+              password:
+                type: string
+                example: admin123456
+    responses:
+      '200':
+        description: 登录成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/LoginPayload'
+      '401':
+        $ref: '#/components/responses/Unauthorized'
+/auth/logout:
+  post:
+    tags:
+    - 认证
+    summary: 用户登出
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/auth/refresh:
+  post:
+    tags:
+    - 认证
+    summary: 刷新令牌
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - refresh_token
+            properties:
+              refresh_token:
+                type: string
+    responses:
+      '200':
+        description: 刷新成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/LoginPayload'
+/auth/me:
+  get:
+    tags:
+    - 认证
+    summary: 获取当前用户信息
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserInfo'
+/auth/password:
+  put:
+    tags:
+    - 认证
+    summary: 修改密码
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - old_password
+            - new_password
+            properties:
+              old_password:
+                type: string
+              new_password:
+                type: string
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/auth/profile:
+  get:
+    tags:
+    - 认证
+    summary: 获取当前用户资料
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: integer
+                message:
+                  type: string
+                data:
+                  $ref: '#/components/schemas/UserInfo'
+  put:
+    tags:
+    - 认证
+    summary: 更新当前用户资料
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              display_name:
+                type: string
+              email:
+                type: string
+                format: email
+              phone:
+                type: string
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: integer
+                message:
+                  type: string
+                data:
+                  $ref: '#/components/schemas/UserInfo'
+/auth/profile/login-history:
+  get:
+    tags:
+    - 认证
+    summary: 获取当前用户登录历史
+    parameters:
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        default: 10
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/auth/profile/activities:
+  get:
+    tags:
+    - 认证
+    summary: 获取当前用户近期活动
+    parameters:
+    - name: limit
+      in: query
+      schema:
+        type: integer
+        default: 10
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/auth/invitation/{token}:
+  get:
+    tags:
+    - 认证
+    summary: 校验邀请令牌
+    parameters:
+    - name: token
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/auth/register:
+  post:
+    tags:
+    - 认证
+    summary: 通过邀请注册用户
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      '201':
+        $ref: '#/components/responses/Success'

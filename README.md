@@ -490,7 +490,7 @@ kubectl apply -f deployments/kubernetes/
 
 | Document | Description |
 |----------|-------------|
-| [API Reference](api/openapi.yaml) | OpenAPI 3.0 specification |
+| [API Reference](api/openapi.yaml) | Bundled OpenAPI 3.0 specification |
 | [API Testing Guide](docs/api-testing-guide.md) | cURL examples and test workflows |
 | [Project Introduction](docs/auto_healing_project_intro.md) | Comprehensive product overview |
 | [Internal Architecture](internal/README.md) | Internal directory structure |
@@ -501,7 +501,7 @@ kubectl apply -f deployments/kubernetes/
 # Authenticate
 TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123456"}' | jq -r '.access_token')
+  -d '{"username":"admin","password":"admin123456"}' | jq -r '.data.access_token')
 
 # List plugins
 curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/plugins | jq

@@ -158,7 +158,7 @@ module/
 5. Wire dependencies in `internal/modules/<domain>/module.go`
 6. Register the module endpoint via `internal/app/httpapi/modules.go`
 7. Add migration in `migrations/` if schema changes
-8. Update `api/openapi.yaml`
+8. Update `api/openapi-src/**`, then run `python tools/build_openapi.py`
 
 ### New Shared HTTP / Runtime Helper
 

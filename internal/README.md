@@ -117,7 +117,7 @@ internal/app/httpapi/modules.go
 4. 在目标业务域下新增或扩展 internal/modules/<domain>/httpapi/
 5. 在 internal/modules/<domain>/module.go 中装配依赖
 6. 在 internal/app/httpapi/modules.go 中接入模块 registrar
-7. 更新 api/openapi.yaml
+7. 更新 `api/openapi-src/**`，然后执行 `python tools/build_openapi.py`
 8. 如涉及存储结构变化，补 migrations/*.sql
 ```
 
@@ -131,7 +131,7 @@ internal/app/httpapi/modules.go
 
 ### 同步更新检查清单
 
-- [ ] 模型字段变更 → `migrations/*.sql` + `api/openapi.yaml`
-- [ ] 新增 API → 对应 `internal/modules/<domain>/httpapi/` + `internal/app/httpapi/modules.go` + `api/openapi.yaml`
+- [ ] 模型字段变更 → `migrations/*.sql` + `api/openapi-src/**` + `python tools/build_openapi.py`
+- [ ] 新增 API → 对应 `internal/modules/<domain>/httpapi/` + `internal/app/httpapi/modules.go` + `api/openapi-src/**` + `python tools/build_openapi.py`
 - [ ] 新增共享 HTTP/运行时能力 → `internal/platform/*`
 - [ ] 新增业务模块代码 → `internal/modules/<domain>/...`

@@ -1,0 +1,321 @@
+/platform/users:
+  get:
+    tags:
+    - 平台用户管理
+    summary: 获取平台用户列表
+    parameters:
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+  post:
+    tags:
+    - 平台用户管理
+    summary: 创建平台用户
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+/platform/users/simple:
+  get:
+    tags:
+    - 平台用户管理
+    summary: 获取平台简要用户列表
+    parameters:
+    - name: name
+      in: query
+      schema:
+        type: string
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - active
+        - inactive
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: integer
+                message:
+                  type: string
+                data:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+/platform/users/{id}:
+  get:
+    tags:
+    - 平台用户管理
+    summary: 获取平台用户详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+  put:
+    tags:
+    - 平台用户管理
+    summary: 更新平台用户
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 更新成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+  delete:
+    tags:
+    - 平台用户管理
+    summary: 删除平台用户
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/users/{id}/reset-password:
+  post:
+    tags:
+    - 平台用户管理
+    summary: 重置平台用户密码
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/users/{id}/roles:
+  put:
+    tags:
+    - 平台用户管理
+    summary: 分配平台用户角色
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/roles:
+  get:
+    tags:
+    - 平台角色管理
+    summary: 获取平台角色列表
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Role'
+  post:
+    tags:
+    - 平台角色管理
+    summary: 创建平台角色
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Role'
+/platform/roles/{id}:
+  get:
+    tags:
+    - 平台角色管理
+    summary: 获取平台角色详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Role'
+  put:
+    tags:
+    - 平台角色管理
+    summary: 更新平台角色
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 更新成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Role'
+  delete:
+    tags:
+    - 平台角色管理
+    summary: 删除平台角色
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/roles/{id}/permissions:
+  put:
+    tags:
+    - 平台角色管理
+    summary: 分配平台角色权限
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/roles/{id}/users:
+  get:
+    tags:
+    - 平台角色管理
+    summary: 获取平台角色成员
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    - $ref: '#/components/parameters/Page'
+    - $ref: '#/components/parameters/PageSize'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/PaginatedResponse'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+/platform/permissions:
+  get:
+    tags:
+    - 平台角色管理
+    summary: 获取平台权限列表
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Permission'
+/platform/permissions/tree:
+  get:
+    tags:
+    - 平台角色管理
+    summary: 获取平台权限树
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Permission'
+/platform/impersonation/requests:
+  post:
+    tags:
+    - 平台提权
+    summary: 创建提权请求
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+  get:
+    tags:
+    - 平台提权
+    summary: 获取我的提权请求
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/impersonation/requests/{id}:
+  get:
+    tags:
+    - 平台提权
+    summary: 获取提权请求详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/impersonation/requests/{id}/enter:
+  post:
+    tags:
+    - 平台提权
+    summary: 进入租户提权视角
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/impersonation/requests/{id}/exit:
+  post:
+    tags:
+    - 平台提权
+    summary: 退出租户提权视角
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/impersonation/requests/{id}/terminate:
+  post:
+    tags:
+    - 平台提权
+    summary: 终止提权会话
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
+/platform/impersonation/requests/{id}/cancel:
+  post:
+    tags:
+    - 平台提权
+    summary: 取消提权请求
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'

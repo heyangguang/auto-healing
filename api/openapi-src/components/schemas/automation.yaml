@@ -1,0 +1,655 @@
+ExecutionTask:
+  type: object
+  description: 任务模板
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+      description: 任务名称
+    playbook_id:
+      type: string
+      format: uuid
+      description: 关联的 Playbook ID
+    target_hosts:
+      type: string
+      description: 目标主机
+    extra_vars:
+      type: object
+      description: 变量值
+    executor_type:
+      type: string
+      enum:
+      - local
+      - docker
+    description:
+      type: string
+      description: 任务描述
+    secrets_source_ids:
+      type: array
+      items:
+        type: string
+        format: uuid
+      description: 关联的密钥源 ID 列表
+    notification_config:
+      $ref: '#/components/schemas/TaskNotificationConfig'
+    playbook_variables_snapshot:
+      type: array
+      items:
+        type: object
+      description: Playbook 变量快照（创建时复制）
+    needs_review:
+      type: boolean
+      description: 是否需要审核（Playbook 变量已变更）
+    changed_variables:
+      type: array
+      items:
+        type: string
+      description: 变更的变量名列表
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    playbook:
+      $ref: '#/components/schemas/Playbook'
+ExecutionSchedule:
+  type: object
+  description: 定时任务调度
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+      description: 调度名称
+    task_id:
+      type: string
+      format: uuid
+      description: 关联的任务模板 ID
+    schedule_expr:
+      type: string
+      description: Cron 表达式
+    is_recurring:
+      type: boolean
+      description: 是否循环执行
+    next_run_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: 下次执行时间
+    enabled:
+      type: boolean
+      description: 是否启用
+    description:
+      type: string
+      description: 描述
+    target_hosts_override:
+      type: string
+      description: 覆盖目标主机（逗号分隔）
+    extra_vars_override:
+      type: object
+      description: 覆盖变量
+    secrets_source_ids:
+      type: array
+      items:
+        type: string
+        format: uuid
+      description: 覆盖密钥源
+    skip_notification:
+      type: boolean
+      description: 跳过通知（全局）
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    task:
+      $ref: '#/components/schemas/ExecutionTask'
+ExecutionRun:
+  type: object
+  description: 执行记录
+  properties:
+    id:
+      type: string
+      format: uuid
+    task_id:
+      type: string
+      format: uuid
+    status:
+      type: string
+      enum:
+      - pending
+      - running
+      - success
+      - failed
+      - cancelled
+      - timeout
+    exit_code:
+      type: integer
+      nullable: true
+    stats:
+      type: object
+      properties:
+        ok:
+          type: integer
+        changed:
+          type: integer
+        unreachable:
+          type: integer
+        failed:
+          type: integer
+        skipped:
+          type: integer
+    triggered_by:
+      type: string
+    started_at:
+      type: string
+      format: date-time
+    completed_at:
+      type: string
+      format: date-time
+    created_at:
+      type: string
+      format: date-time
+    task:
+      $ref: '#/components/schemas/ExecutionTask'
+ExecutionLog:
+  type: object
+  description: 执行日志
+  properties:
+    id:
+      type: string
+      format: uuid
+    run_id:
+      type: string
+      format: uuid
+      description: 执行记录ID
+    log_level:
+      type: string
+      enum:
+      - debug
+      - info
+      - warn
+      - error
+    stage:
+      type: string
+      enum:
+      - prepare
+      - execute
+      - cleanup
+    message:
+      type: string
+    host:
+      type: string
+    task_name:
+      type: string
+    play_name:
+      type: string
+    details:
+      type: object
+    sequence:
+      type: integer
+    created_at:
+      type: string
+      format: date-time
+ExecutionRunStats:
+  type: object
+  properties:
+    total_count:
+      type: integer
+    success_count:
+      type: integer
+    failed_count:
+      type: integer
+    partial_count:
+      type: integer
+    cancelled_count:
+      type: integer
+    success_rate:
+      type: number
+      format: float
+    avg_duration_sec:
+      type: number
+      format: float
+    today_count:
+      type: integer
+ExecutionRunTrendItem:
+  type: object
+  properties:
+    date:
+      type: string
+      example: '2026-03-26'
+    status:
+      type: string
+      enum:
+      - pending
+      - running
+      - success
+      - failed
+      - cancelled
+      - partial
+    count:
+      type: integer
+ExecutionRunTriggerDistributionItem:
+  type: object
+  properties:
+    triggered_by:
+      type: string
+    count:
+      type: integer
+ExecutionRunTopFailedItem:
+  type: object
+  properties:
+    task_id:
+      type: string
+    task_name:
+      type: string
+    total:
+      type: integer
+    failed:
+      type: integer
+    fail_rate:
+      type: number
+      format: float
+ExecutionRunTopActiveItem:
+  type: object
+  properties:
+    task_id:
+      type: string
+    task_name:
+      type: string
+    total:
+      type: integer
+ExecutionTaskStats:
+  type: object
+  properties:
+    total:
+      type: integer
+    docker:
+      type: integer
+    local:
+      type: integer
+    needs_review:
+      type: integer
+    changed_playbooks:
+      type: integer
+    ready:
+      type: integer
+    never_executed:
+      type: integer
+    last_run_failed:
+      type: integer
+HealingFlow:
+  type: object
+  description: 自愈流程
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    description:
+      type: string
+    nodes:
+      type: array
+      description: DAG 节点定义
+      items:
+        $ref: '#/components/schemas/FlowNode'
+    edges:
+      type: array
+      description: DAG 边定义
+      items:
+        $ref: '#/components/schemas/FlowEdge'
+    is_active:
+      type: boolean
+    created_by:
+      type: string
+      format: uuid
+    created_at:
+      type: string
+      format: date-time
+HealingFlowCreate:
+  type: object
+  required:
+  - name
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    nodes:
+      type: array
+      items:
+        $ref: '#/components/schemas/FlowNode'
+    edges:
+      type: array
+      items:
+        $ref: '#/components/schemas/FlowEdge'
+    is_active:
+      type: boolean
+HealingFlowUpdate:
+  type: object
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    nodes:
+      type: array
+      items:
+        $ref: '#/components/schemas/FlowNode'
+    edges:
+      type: array
+      items:
+        $ref: '#/components/schemas/FlowEdge'
+    is_active:
+      type: boolean
+FlowNode:
+  type: object
+  description: 流程节点
+  properties:
+    id:
+      type: string
+    type:
+      type: string
+      enum:
+      - start
+      - end
+      - host_extractor
+      - cmdb_validator
+      - approval
+      - execution
+      - notification
+      - condition
+      - set_variable
+    name:
+      type: string
+    position:
+      type: object
+      properties:
+        x:
+          type: integer
+        y:
+          type: integer
+    config:
+      type: object
+      description: '节点配置对象，不同节点类型有不同的配置参数。
+
+        详细配置说明请参考 `/docs/workflow-node-reference.md`。
+
+
+        常用节点配置示例：
+
+        - **host_extractor**: `{source_field, extract_mode, split_by, output_key}`
+
+        - **cmdb_validator**: `{input_key, output_key, fail_on_unknown}`
+
+        - **approval**: `{title, description, approvers, approver_roles, timeout_hours}`
+
+        - **execution**: `{git_repo_id, executor_type, hosts_key, secrets_source_id, extra_vars, keep_credentials}`
+
+        - **notification**: `{channel_ids, template_id}`
+
+        - **condition**: `{conditions, default_target}`
+
+        - **set_variable**: `{variables}`
+
+        '
+FlowEdge:
+  type: object
+  description: 流程边
+  properties:
+    from:
+      type: string
+    to:
+      type: string
+    condition:
+      type: string
+HealingRule:
+  type: object
+  description: 自愈规则
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    description:
+      type: string
+    priority:
+      type: integer
+    trigger_mode:
+      type: string
+      enum:
+      - auto
+      - manual
+    conditions:
+      type: array
+      items:
+        $ref: '#/components/schemas/RuleCondition'
+    match_mode:
+      type: string
+      enum:
+      - all
+      - any
+    flow_id:
+      type: string
+      format: uuid
+    is_active:
+      type: boolean
+    last_run_at:
+      type: string
+      format: date-time
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+HealingRuleCreate:
+  type: object
+  required:
+  - name
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    priority:
+      type: integer
+    trigger_mode:
+      type: string
+      enum:
+      - auto
+      - manual
+    conditions:
+      type: array
+      items:
+        $ref: '#/components/schemas/RuleCondition'
+    match_mode:
+      type: string
+      enum:
+      - all
+      - any
+    flow_id:
+      type: string
+      format: uuid
+    is_active:
+      type: boolean
+HealingRuleUpdate:
+  type: object
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    priority:
+      type: integer
+    trigger_mode:
+      type: string
+      enum:
+      - auto
+      - manual
+    conditions:
+      type: array
+      items:
+        $ref: '#/components/schemas/RuleCondition'
+    match_mode:
+      type: string
+      enum:
+      - all
+      - any
+    flow_id:
+      type: string
+      format: uuid
+    is_active:
+      type: boolean
+RuleCondition:
+  type: object
+  description: 规则条件
+  properties:
+    field:
+      type: string
+      description: 工单字段 (title, description, severity, etc.)
+    operator:
+      type: string
+      enum:
+      - equals
+      - contains
+      - in
+      - regex
+      - gt
+      - lt
+      - gte
+      - lte
+    value:
+      description: 匹配值
+FlowInstance:
+  type: object
+  description: 流程实例
+  properties:
+    id:
+      type: string
+      format: uuid
+    flow_id:
+      type: string
+      format: uuid
+    rule_id:
+      type: string
+      format: uuid
+      nullable: true
+    incident_id:
+      type: string
+      format: uuid
+      nullable: true
+    status:
+      type: string
+      enum:
+      - pending
+      - running
+      - waiting_approval
+      - completed
+      - failed
+      - cancelled
+    current_node_id:
+      type: string
+    error_message:
+      type: string
+      nullable: true
+    started_at:
+      type: string
+      format: date-time
+      nullable: true
+    completed_at:
+      type: string
+      format: date-time
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+ApprovalTask:
+  type: object
+  description: 审批任务
+  properties:
+    id:
+      type: string
+      format: uuid
+    flow_instance_id:
+      type: string
+      format: uuid
+    node_id:
+      type: string
+    status:
+      type: string
+      enum:
+      - pending
+      - approved
+      - rejected
+      - expired
+    timeout_at:
+      type: string
+      format: date-time
+      nullable: true
+    decided_by:
+      type: string
+      format: uuid
+      nullable: true
+    decided_at:
+      type: string
+      format: date-time
+      nullable: true
+    decision_comment:
+      type: string
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+FlowExecutionLog:
+  type: object
+  description: 流程节点执行日志
+  properties:
+    id:
+      type: string
+      format: uuid
+    flow_instance_id:
+      type: string
+      format: uuid
+    node_id:
+      type: string
+      description: 节点ID (如 execution_1, cmdb_validator_1)
+    node_type:
+      type: string
+      enum:
+      - start
+      - end
+      - host_extractor
+      - cmdb_validator
+      - approval
+      - execution
+      - notification
+      - condition
+      - set_variable
+      description: 节点类型
+    level:
+      type: string
+      enum:
+      - debug
+      - info
+      - warn
+      - error
+      description: 日志级别
+    message:
+      type: string
+      description: 日志消息
+    details:
+      type: object
+      description: 日志详情（节点执行的输入输出等）
+      example:
+        hosts:
+        - 192.168.1.100
+        execution_time_ms: 1500
+    created_at:
+      type: string
+      format: date-time
