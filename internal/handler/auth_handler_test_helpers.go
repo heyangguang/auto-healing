@@ -11,6 +11,7 @@ import (
 
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
+	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
 	"github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/company/auto-healing/internal/pkg/logger"
@@ -107,8 +108,39 @@ func newAuthHandlerTestRouterWithJWTService(t *testing.T, db *gorm.DB, jwtSvc *j
 	}
 
 	api := router.Group("/api/v1")
-	setupAuthRoutes(api, handlers)
+	registerAuthTestRoutes(api, handlers)
 	return router
+}
+
+func registerAuthTestRoutes(api *gin.RouterGroup, handlers *Handlers) {
+	auth := api.Group("/auth")
+	auth.POST("/login", handlers.Auth.Login)
+	auth.POST("/refresh", handlers.Auth.RefreshToken)
+	auth.GET("/invitation/:token", ValidateInvitation)
+	auth.POST("/register", RegisterByInvitation(handlers.Auth.GetAuthService()))
+
+	authProtected := auth.Group("")
+	authProtected.Use(middleware.JWTAuth(handlers.Auth.GetJWTService()))
+	authProtected.GET("/me",
+		middleware.ImpersonationMiddleware(),
+		RequireAuthTenantContext(),
+		handlers.Auth.GetCurrentUser,
+	)
+	authProtected.GET("/profile", handlers.Auth.GetProfile)
+	authProtected.GET("/profile/login-history", handlers.Auth.GetLoginHistory)
+	authProtected.GET("/profile/activities",
+		middleware.ImpersonationMiddleware(),
+		RequireAuthTenantContext(),
+		handlers.Auth.GetProfileActivities,
+	)
+
+	authAudited := authProtected.Group("")
+	authAudited.Use(middleware.ImpersonationMiddleware())
+	authAudited.Use(OptionalAuthTenantContext())
+	authAudited.Use(middleware.AuditMiddleware())
+	authAudited.PUT("/profile", handlers.Auth.UpdateProfile)
+	authAudited.PUT("/password", handlers.Auth.ChangePassword)
+	authAudited.POST("/logout", handlers.Auth.Logout)
 }
 
 func issueAuthMe(t *testing.T, router *gin.Engine, token string, headers map[string]string) authMeResponse {

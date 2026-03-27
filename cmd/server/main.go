@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	httproutes "github.com/company/auto-healing/internal/app/httpapi"
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/handler"
@@ -183,7 +184,7 @@ func newRouter(cfg *config.Config) *gin.Engine {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
-	handler.SetupRoutes(r, cfg)
+	httproutes.SetupRoutes(r, cfg)
 	middleware.ValidateAuditResourceTypes(r)
 	return r
 }

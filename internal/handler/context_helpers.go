@@ -23,6 +23,14 @@ func requiredAuthTenantContext() gin.HandlerFunc {
 	return authTenantContext(true)
 }
 
+func OptionalAuthTenantContext() gin.HandlerFunc {
+	return optionalAuthTenantContext()
+}
+
+func RequireAuthTenantContext() gin.HandlerFunc {
+	return requiredAuthTenantContext()
+}
+
 func authTenantContext(required bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tenantID, inject, ok := resolveAuthTenantContext(c, required)
