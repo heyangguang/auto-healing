@@ -2,8 +2,8 @@ package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/middleware"
-	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/pkg/query"
+	"github.com/company/auto-healing/internal/pkg/response"
 	platformhttp "github.com/company/auto-healing/internal/platform/httpx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
