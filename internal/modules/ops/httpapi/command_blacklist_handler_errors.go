@@ -7,7 +7,7 @@ import (
 
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -46,7 +46,7 @@ func respondCommandBlacklistError(c *gin.Context, publicMsg string, err error) {
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		response.NotFound(c, "规则不存在")
-	case errors.Is(err, repository.ErrTenantContextRequired):
+	case errors.Is(err, platformrepo.ErrTenantContextRequired):
 		respondInternalError(c, "BLACKLIST", publicMsg, err)
 	case isCommandBlacklistBadRequest(err):
 		response.BadRequest(c, err.Error())

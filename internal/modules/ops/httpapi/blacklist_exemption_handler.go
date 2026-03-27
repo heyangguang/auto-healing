@@ -10,7 +10,7 @@ import (
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/response"
-	sharedrepo "github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -307,7 +307,7 @@ func respondBlacklistExemptionMutationError(c *gin.Context, err error, internalM
 		response.NotFound(c, "豁免申请不存在")
 	case errors.Is(err, opsrepo.ErrBlacklistExemptionNotPending):
 		response.Conflict(c, "该豁免申请已被其他审批人处理")
-	case errors.Is(err, sharedrepo.ErrTenantContextRequired):
+	case errors.Is(err, platformrepo.ErrTenantContextRequired):
 		respondInternalError(c, "BLACKLIST", internalMsg, err)
 	default:
 		if isBlacklistExemptionBadRequest(err) {

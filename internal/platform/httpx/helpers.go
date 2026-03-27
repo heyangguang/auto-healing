@@ -5,7 +5,7 @@ import (
 
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -42,7 +42,7 @@ func RespondInternalError(c *gin.Context, sub, publicMsg string, err error) {
 }
 
 func RequireTenantID(c *gin.Context, sub string) (uuid.UUID, bool) {
-	tenantID, err := repository.RequireTenantID(c.Request.Context())
+	tenantID, err := platformrepo.RequireTenantID(c.Request.Context())
 	if err != nil {
 		RespondInternalError(c, sub, "租户上下文缺失", err)
 		return uuid.Nil, false

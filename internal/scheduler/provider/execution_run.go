@@ -9,7 +9,7 @@ import (
 	"github.com/company/auto-healing/internal/model"
 	executionService "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -67,7 +67,7 @@ func scheduleTenantContext(ctx context.Context, sched model.ExecutionSchedule) c
 	if sched.TenantID == nil {
 		return ctx
 	}
-	return repository.WithTenantID(ctx, *sched.TenantID)
+	return platformrepo.WithTenantID(ctx, *sched.TenantID)
 }
 
 func buildExecutionOptions(sched model.ExecutionSchedule) (*executionService.ExecuteOptions, error) {

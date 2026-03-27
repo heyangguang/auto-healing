@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 )
 
@@ -56,5 +56,5 @@ func withTenantContext(ctx context.Context, tenantID *uuid.UUID) context.Context
 	if tenantID == nil {
 		return ctx
 	}
-	return repository.WithTenantID(ctx, *tenantID)
+	return platformrepo.WithTenantID(ctx, *tenantID)
 }

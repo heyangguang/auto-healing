@@ -9,10 +9,10 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	executionService "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	scheduleService "github.com/company/auto-healing/internal/modules/automation/service/schedule"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -24,7 +24,7 @@ const executionClaimLease = 40 * time.Minute
 type ExecutionScheduler struct {
 	execSvc               *executionService.Service
 	scheduleSvc           *scheduleService.Service
-	scheduleRepo          *repository.ScheduleRepository
+	scheduleRepo          *automationrepo.ScheduleRepository
 	db                    *gorm.DB
 	interval              time.Duration
 	lifecycle             *schedulerLifecycle
@@ -54,7 +54,7 @@ func NewExecutionScheduler() *ExecutionScheduler {
 	s := &ExecutionScheduler{
 		execSvc:      executionService.NewService(),
 		scheduleSvc:  scheduleService.NewService(),
-		scheduleRepo: repository.NewScheduleRepository(),
+		scheduleRepo: automationrepo.NewScheduleRepository(),
 		db:           database.DB,
 		interval:     30 * time.Second,
 		inFlight:     newInFlightSet(),

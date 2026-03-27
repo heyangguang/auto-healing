@@ -8,7 +8,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/model"
 	opsrepo "github.com/company/auto-healing/internal/modules/ops/repository"
-	"github.com/company/auto-healing/internal/repository"
+	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -30,7 +30,7 @@ func TestCommandBlacklistServiceCreateForcesTenantRule(t *testing.T) {
 	}
 	tenantID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 
-	if err := svc.Create(repository.WithTenantID(context.Background(), tenantID), rule); err != nil {
+	if err := svc.Create(platformrepo.WithTenantID(context.Background(), tenantID), rule); err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
 	if rule.IsSystem {
