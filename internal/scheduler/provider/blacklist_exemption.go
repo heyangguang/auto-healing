@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/service"
 )
 
 // BlacklistExemptionScheduler 过期豁免清理调度器
 type BlacklistExemptionScheduler struct {
-	svc        *service.BlacklistExemptionService
+	svc        *opsservice.BlacklistExemptionService
 	interval   time.Duration
 	lifecycle  *schedulerLifecycle
 	running    bool
@@ -30,10 +30,10 @@ func NewBlacklistExemptionScheduler() *BlacklistExemptionScheduler {
 	}
 
 	return &BlacklistExemptionScheduler{
-		svc:        service.NewBlacklistExemptionService(),
+		svc:        opsservice.NewBlacklistExemptionService(),
 		interval:   interval,
 		lifecycle:  newSchedulerLifecycle(),
-		expireFunc: service.NewBlacklistExemptionService().ExpireOverdue,
+		expireFunc: opsservice.NewBlacklistExemptionService().ExpireOverdue,
 	}
 }
 

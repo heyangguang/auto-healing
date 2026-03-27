@@ -8,10 +8,10 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/model"
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/notification"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/repository"
-	parentService "github.com/company/auto-healing/internal/service"
 	"github.com/google/uuid"
 )
 
@@ -27,9 +27,9 @@ type Service struct {
 	workspaceManager *ansible.WorkspaceManager
 	localExecutor    *ansible.LocalExecutor
 	dockerExecutor   *ansible.DockerExecutor
-	notificationSvc  *notification.Service                  // 通知服务
-	blacklistSvc     *parentService.CommandBlacklistService // 高危指令扫描
-	exemptionSvc     *parentService.BlacklistExemptionService
+	notificationSvc  *notification.Service               // 通知服务
+	blacklistSvc     *opsservice.CommandBlacklistService // 高危指令扫描
+	exemptionSvc     *opsservice.BlacklistExemptionService
 	lifecycle        *asyncLifecycle
 
 	// 运行中的执行映射，用于取消操作
@@ -48,8 +48,8 @@ func NewService() *Service {
 		localExecutor:    ansible.NewLocalExecutor(),
 		dockerExecutor:   ansible.NewDockerExecutor(),
 		notificationSvc:  notification.NewConfiguredService(database.DB),
-		blacklistSvc:     parentService.NewCommandBlacklistService(),
-		exemptionSvc:     parentService.NewBlacklistExemptionService(),
+		blacklistSvc:     opsservice.NewCommandBlacklistService(),
+		exemptionSvc:     opsservice.NewBlacklistExemptionService(),
 		lifecycle:        newAsyncLifecycle(maxExecutionWorkers),
 	}
 }

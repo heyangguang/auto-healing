@@ -5,25 +5,25 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 // CommandBlacklistHandler 高危指令黑名单处理器
 type CommandBlacklistHandler struct {
-	svc *service.CommandBlacklistService
+	svc *opsservice.CommandBlacklistService
 }
 
 type CommandBlacklistHandlerDeps struct {
-	Service *service.CommandBlacklistService
+	Service *opsservice.CommandBlacklistService
 }
 
 // NewCommandBlacklistHandler 创建处理器
 func NewCommandBlacklistHandler() *CommandBlacklistHandler {
 	return NewCommandBlacklistHandlerWithDeps(CommandBlacklistHandlerDeps{
-		Service: service.NewCommandBlacklistService(),
+		Service: opsservice.NewCommandBlacklistService(),
 	})
 }
 
@@ -242,7 +242,7 @@ func (h *CommandBlacklistHandler) BatchToggle(c *gin.Context) {
 // Simulate 仿真测试
 // POST /api/v1/command-blacklist/simulate
 func (h *CommandBlacklistHandler) Simulate(c *gin.Context) {
-	var req service.SimulateRequest
+	var req opsservice.SimulateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return
@@ -282,6 +282,6 @@ func (h *CommandBlacklistHandler) Simulate(c *gin.Context) {
 }
 
 // GetService 返回服务实例（用于 Seed）
-func (h *CommandBlacklistHandler) GetService() *service.CommandBlacklistService {
+func (h *CommandBlacklistHandler) GetService() *opsservice.CommandBlacklistService {
 	return h.svc
 }

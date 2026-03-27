@@ -1,8 +1,8 @@
 package middleware
 
 import (
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/logger"
-	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -13,7 +13,7 @@ import (
 func ValidateAuditResourceTypes(router *gin.Engine) {
 	// 1. 收集字典种子中已有的 resource_type（key 集合）
 	dictKeys := make(map[string]bool)
-	for _, d := range service.AllDictionarySeeds {
+	for _, d := range opsservice.AllDictionarySeeds {
 		if d.DictType == "audit_resource_tenant" || d.DictType == "audit_resource_platform" {
 			dictKeys[d.DictKey] = true
 		}

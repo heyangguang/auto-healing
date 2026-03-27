@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/company/auto-healing/internal/model"
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/response"
-	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -18,11 +18,11 @@ import (
 
 // DictionaryHandler 字典值处理器
 type DictionaryHandler struct {
-	svc *service.DictionaryService
+	svc *opsservice.DictionaryService
 }
 
 type DictionaryHandlerDeps struct {
-	Service *service.DictionaryService
+	Service *opsservice.DictionaryService
 }
 
 type updateDictionaryRequest struct {
@@ -40,7 +40,7 @@ type updateDictionaryRequest struct {
 
 // NewDictionaryHandler 创建处理器
 func NewDictionaryHandler() *DictionaryHandler {
-	svc := service.NewDictionaryService()
+	svc := opsservice.NewDictionaryService()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := svc.LoadCache(ctx); err != nil {
@@ -175,7 +175,7 @@ func (h *DictionaryHandler) DeleteDictionary(c *gin.Context) {
 }
 
 // GetDictionaryService 返回服务实例（供路由外部调用 Seed）
-func (h *DictionaryHandler) GetDictionaryService() *service.DictionaryService {
+func (h *DictionaryHandler) GetDictionaryService() *opsservice.DictionaryService {
 	return h.svc
 }
 

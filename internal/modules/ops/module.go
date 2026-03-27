@@ -7,8 +7,8 @@ import (
 
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/handler"
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/repository"
-	"github.com/company/auto-healing/internal/service"
 )
 
 // Module 聚合 ops 域处理器构造。
@@ -23,7 +23,7 @@ type Module struct {
 
 // New 创建 ops 域模块。
 func New() *Module {
-	dictSvc := service.NewDictionaryService()
+	dictSvc := opsservice.NewDictionaryService()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := dictSvc.LoadCache(ctx); err != nil {
@@ -44,10 +44,10 @@ func New() *Module {
 			Service: dictSvc,
 		}),
 		CommandBlacklist: handler.NewCommandBlacklistHandlerWithDeps(handler.CommandBlacklistHandlerDeps{
-			Service: service.NewCommandBlacklistService(),
+			Service: opsservice.NewCommandBlacklistService(),
 		}),
 		BlacklistExemption: handler.NewBlacklistExemptionHandlerWithDeps(handler.BlacklistExemptionHandlerDeps{
-			Service:       service.NewBlacklistExemptionService(),
+			Service:       opsservice.NewBlacklistExemptionService(),
 			TaskRepo:      repository.NewExecutionRepository(),
 			BlacklistRepo: repository.NewCommandBlacklistRepository(),
 		}),

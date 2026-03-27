@@ -8,9 +8,9 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	engagementservice "github.com/company/auto-healing/internal/modules/engagement/service"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
-	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -164,7 +164,7 @@ func (h *TenantHandler) buildInviteResponse(c *gin.Context, sendEmail bool, emai
 		return resp
 	}
 
-	emailSvc := service.NewPlatformEmailService()
+	emailSvc := engagementservice.NewPlatformEmailService()
 	if !emailSvc.IsConfigured(c.Request.Context()) {
 		resp.EmailMessage = "平台邮箱服务未配置，请在平台设置中配置 SMTP 参数，或手动复制链接发送给用户。"
 		return resp

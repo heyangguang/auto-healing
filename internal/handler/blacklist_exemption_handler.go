@@ -6,29 +6,29 @@ import (
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/model"
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/company/auto-healing/internal/repository"
-	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type BlacklistExemptionHandler struct {
-	svc           *service.BlacklistExemptionService
+	svc           *opsservice.BlacklistExemptionService
 	taskRepo      *repository.ExecutionRepository
 	blacklistRepo *repository.CommandBlacklistRepository
 }
 
 type BlacklistExemptionHandlerDeps struct {
-	Service       *service.BlacklistExemptionService
+	Service       *opsservice.BlacklistExemptionService
 	TaskRepo      *repository.ExecutionRepository
 	BlacklistRepo *repository.CommandBlacklistRepository
 }
 
 func NewBlacklistExemptionHandler() *BlacklistExemptionHandler {
 	return NewBlacklistExemptionHandlerWithDeps(BlacklistExemptionHandlerDeps{
-		Service:       service.NewBlacklistExemptionService(),
+		Service:       opsservice.NewBlacklistExemptionService(),
 		TaskRepo:      repository.NewExecutionRepository(),
 		BlacklistRepo: repository.NewCommandBlacklistRepository(),
 	})

@@ -16,11 +16,11 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/modules/automation/service/healing"
+	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/company/auto-healing/internal/repository"
 	"github.com/company/auto-healing/internal/scheduler"
-	"github.com/company/auto-healing/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -99,7 +99,7 @@ type siteMessageCleaner interface {
 
 var (
 	newDictionaryService = func() dictionarySeeder {
-		return service.NewDictionaryService()
+		return opsservice.NewDictionaryService()
 	}
 	newSiteMessageRepo = func() siteMessageCleaner {
 		return repository.NewSiteMessageRepository()
