@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/company/auto-healing/internal/database"
 	gitclient "github.com/company/auto-healing/internal/modules/integrations/gitclient"
@@ -26,38 +24,6 @@ type Service struct {
 	reposDir     string
 	playbookSvc  func() *playbookSvc.Service
 	lifecycle    *asyncLifecycle
-}
-
-type ServiceDeps struct {
-	Repo         *integrationrepo.GitRepositoryRepository
-	PlaybookRepo *integrationrepo.PlaybookRepository
-	ReposDir     string
-	PlaybookSvc  func() *playbookSvc.Service
-	Lifecycle    *asyncLifecycle
-}
-
-func DefaultServiceDeps() ServiceDeps {
-	return DefaultServiceDepsWithDB(database.DB)
-}
-
-func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
-	return ServiceDeps{
-		Repo:         integrationrepo.NewGitRepositoryRepositoryWithDB(db),
-		PlaybookRepo: integrationrepo.NewPlaybookRepositoryWithDB(db),
-		ReposDir:     defaultReposDir(),
-		PlaybookSvc: func() *playbookSvc.Service {
-			return playbookSvc.NewServiceWithDB(db)
-		},
-		Lifecycle: newAsyncLifecycle(),
-	}
-}
-
-func defaultReposDir() string {
-	reposDir := os.Getenv("GIT_REPOS_DIR")
-	if reposDir == "" {
-		return DefaultReposDir
-	}
-	return reposDir
 }
 
 // NewService 创建 Git 仓库服务
@@ -88,34 +54,6 @@ func NewServiceWithDeps(deps ServiceDeps) *Service {
 		playbookSvc:  deps.PlaybookSvc,
 		lifecycle:    deps.Lifecycle,
 	}
-}
-
-// ValidateRepoResult 验证仓库结果
-type ValidateRepoResult struct {
-	Branches      []string `json:"branches"`
-	DefaultBranch string   `json:"default_branch"`
-}
-
-// FileInfo 文件信息
-type FileInfo struct {
-	Name     string     `json:"name"`
-	Type     string     `json:"type"`
-	Size     int64      `json:"size,omitempty"`
-	Path     string     `json:"path"`
-	Children []FileInfo `json:"children,omitempty"`
-}
-
-// PlaybookVariable Playbook 变量定义
-type PlaybookVariable struct {
-	Name        string   `json:"name"`
-	Type        string   `json:"type"`
-	Description string   `json:"description,omitempty"`
-	Required    bool     `json:"required,omitempty"`
-	Default     any      `json:"default,omitempty"`
-	Enum        []string `json:"enum,omitempty"`
-	Min         *int     `json:"min,omitempty"`
-	Max         *int     `json:"max,omitempty"`
-	Pattern     string   `json:"pattern,omitempty"`
 }
 
 // CreateRepo 创建仓库
@@ -202,38 +140,6 @@ func (s *Service) UpdateRepo(ctx context.Context, id uuid.UUID, defaultBranch, a
 	return s.repo.GetByID(ctx, id)
 }
 
-func applyRepoUpdates(repo *model.GitRepository, defaultBranch, authType string, authConfig model.JSON, syncEnabled *bool, syncInterval *string, maxFailures *int) {
-	if defaultBranch != "" {
-		repo.DefaultBranch = defaultBranch
-	}
-	if authType != "" {
-		repo.AuthType = authType
-	}
-	if authConfig != nil {
-		repo.AuthConfig = authConfig
-	}
-	if syncEnabled != nil {
-		repo.SyncEnabled = *syncEnabled
-	}
-	if syncInterval != nil && *syncInterval != "" {
-		repo.SyncInterval = *syncInterval
-	}
-	if maxFailures != nil {
-		repo.MaxFailures = *maxFailures
-	}
-}
-
-func nextRepoSyncAt(syncEnabled bool, syncInterval string) *time.Time {
-	if !syncEnabled {
-		return nil
-	}
-	if duration, err := time.ParseDuration(syncInterval); err == nil {
-		next := time.Now().Add(duration)
-		return &next
-	}
-	return nil
-}
-
 // DeleteRepo 删除仓库（保护性删除）
 func (s *Service) DeleteRepo(ctx context.Context, id uuid.UUID) error {
 	repo, err := s.repo.GetByID(ctx, id)
@@ -281,11 +187,7 @@ func (s *Service) ResetStatus(ctx context.Context, id uuid.UUID, targetStatus st
 // ValidateRepo 验证仓库（无需创建）
 func (s *Service) ValidateRepo(ctx context.Context, url, authType string, authConfig model.JSON) (*ValidateRepoResult, error) {
 	tempRepo := &model.GitRepository{URL: url, AuthType: authType, AuthConfig: authConfig}
-	branches, defaultBranch, err := gitclient.NewClient(tempRepo, s.reposDir).ValidateAndListBranches(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &ValidateRepoResult{Branches: branches, DefaultBranch: defaultBranch}, nil
+	return buildValidateRepoResult(gitclient.NewClient(tempRepo, s.reposDir), ctx)
 }
 
 // GetSyncLogs 获取同步日志
@@ -300,16 +202,6 @@ func (s *Service) GetStats(ctx context.Context) (map[string]interface{}, error) 
 
 func (s *Service) getPlaybookService() *playbookSvc.Service {
 	return s.playbookSvc()
-}
-
-func cleanupRepoDirectory(path string) error {
-	if path == "" {
-		return nil
-	}
-	if err := os.RemoveAll(path); err != nil {
-		return fmt.Errorf("清理仓库目录失败: %w", err)
-	}
-	return nil
 }
 
 // 注意：Activate、Deactivate 函数已移除
