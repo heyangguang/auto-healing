@@ -19,10 +19,8 @@ info:
     name: API Support
     email: support@example.com
 servers:
-- url: http://192.168.31.66:8080/api/v1
-  description: 本地开发环境
-- url: http://192.168.31.66:8080/api/v1
-  description: 生产环境
+- url: /api/v1
+  description: 当前环境 API 前缀
 tags:
 - name: 认证
   description: 用户认证相关接口
@@ -101,6 +99,7 @@ paths:
                       $ref: '#/components/schemas/LoginPayload'
         '401':
           $ref: '#/components/responses/Unauthorized'
+      operationId: postAuthLogin
   /auth/logout:
     post:
       tags:
@@ -109,6 +108,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postAuthLogout
   /auth/refresh:
     post:
       tags:
@@ -138,6 +138,7 @@ paths:
                   properties:
                     data:
                       $ref: '#/components/schemas/LoginPayload'
+      operationId: postAuthRefresh
   /auth/me:
     get:
       tags:
@@ -155,6 +156,7 @@ paths:
                   properties:
                     data:
                       $ref: '#/components/schemas/UserInfo'
+      operationId: getAuthMe
   /auth/password:
     put:
       tags:
@@ -177,6 +179,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putAuthPassword
   /auth/profile:
     get:
       tags:
@@ -196,6 +199,7 @@ paths:
                     type: string
                   data:
                     $ref: '#/components/schemas/UserInfo'
+      operationId: getAuthProfile
     put:
       tags:
       - 认证
@@ -228,6 +232,7 @@ paths:
                     type: string
                   data:
                     $ref: '#/components/schemas/UserInfo'
+      operationId: putAuthProfile
   /auth/profile/login-history:
     get:
       tags:
@@ -242,6 +247,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getAuthProfileLoginHistory
   /auth/profile/activities:
     get:
       tags:
@@ -256,6 +262,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getAuthProfileActivities
   /auth/invitation/{token}:
     get:
       tags:
@@ -270,6 +277,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getAuthInvitationByToken
   /auth/register:
     post:
       tags:
@@ -285,6 +293,7 @@ paths:
       responses:
         '201':
           $ref: '#/components/responses/Success'
+      operationId: postAuthRegister
   /common/search:
     get:
       tags:
@@ -313,6 +322,7 @@ paths:
                         additionalProperties: true
                     total:
                       type: integer
+      operationId: getCommonSearch
   /common/user/preferences:
     get:
       tags:
@@ -321,6 +331,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getCommonUserPreferences
     put:
       tags:
       - 公共能力
@@ -328,6 +339,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putCommonUserPreferences
     patch:
       tags:
       - 公共能力
@@ -335,6 +347,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: patchCommonUserPreferences
   /common/user/favorites:
     get:
       tags:
@@ -343,6 +356,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getCommonUserFavorites
     post:
       tags:
       - 公共能力
@@ -350,6 +364,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postCommonUserFavorites
   /common/user/favorites/{menu_key}:
     delete:
       tags:
@@ -364,6 +379,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteCommonUserFavoritesByMenuKey
   /common/user/recents:
     get:
       tags:
@@ -372,6 +388,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getCommonUserRecents
     post:
       tags:
       - 公共能力
@@ -379,6 +396,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postCommonUserRecents
   /common/user/tenants:
     get:
       tags:
@@ -387,6 +405,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getCommonUserTenants
   /common/workbench/overview:
     get:
       tags:
@@ -395,6 +414,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getCommonWorkbenchOverview
   /common/workbench/activities:
     get:
       tags:
@@ -403,6 +423,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getCommonWorkbenchActivities
   /common/workbench/schedule-calendar:
     get:
       tags:
@@ -422,6 +443,7 @@ paths:
                       type: array
                       items:
                         type: string
+      operationId: getCommonWorkbenchScheduleCalendar
   /common/workbench/announcements:
     get:
       tags:
@@ -430,6 +452,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getCommonWorkbenchAnnouncements
   /common/workbench/favorites:
     get:
       tags:
@@ -438,6 +461,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getCommonWorkbenchFavorites
   /common/site-messages/categories:
     get:
       tags:
@@ -460,6 +484,7 @@ paths:
                     items:
                       type: object
                       additionalProperties: true
+      operationId: getCommonSiteMessagesCategories
   /common/dictionaries:
     get:
       tags:
@@ -468,6 +493,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getCommonDictionaries
   /common/dictionaries/types:
     get:
       tags:
@@ -476,6 +502,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getCommonDictionariesTypes
   /platform/users:
     get:
       tags:
@@ -498,6 +525,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/User'
+      operationId: getPlatformUsers
     post:
       tags:
       - 平台用户管理
@@ -509,6 +537,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+      operationId: postPlatformUsers
   /platform/users/simple:
     get:
       tags:
@@ -543,6 +572,7 @@ paths:
                     items:
                       type: object
                       additionalProperties: true
+      operationId: getPlatformUsersSimple
   /platform/users/{id}:
     get:
       tags:
@@ -557,6 +587,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+      operationId: getPlatformUsersById
     put:
       tags:
       - 平台用户管理
@@ -570,6 +601,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+      operationId: putPlatformUsersById
     delete:
       tags:
       - 平台用户管理
@@ -579,6 +611,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deletePlatformUsersById
   /platform/users/{id}/reset-password:
     post:
       tags:
@@ -589,6 +622,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postPlatformUsersByIdResetPassword
   /platform/users/{id}/roles:
     put:
       tags:
@@ -599,6 +633,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putPlatformUsersByIdRoles
   /platform/roles:
     get:
       tags:
@@ -616,6 +651,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Role'
+      operationId: getPlatformRoles
     post:
       tags:
       - 平台角色管理
@@ -627,6 +663,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Role'
+      operationId: postPlatformRoles
   /platform/roles/{id}:
     get:
       tags:
@@ -641,6 +678,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Role'
+      operationId: getPlatformRolesById
     put:
       tags:
       - 平台角色管理
@@ -654,6 +692,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Role'
+      operationId: putPlatformRolesById
     delete:
       tags:
       - 平台角色管理
@@ -663,6 +702,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deletePlatformRolesById
   /platform/roles/{id}/permissions:
     put:
       tags:
@@ -673,6 +713,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putPlatformRolesByIdPermissions
   /platform/roles/{id}/users:
     get:
       tags:
@@ -696,6 +737,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/User'
+      operationId: getPlatformRolesByIdUsers
   /platform/permissions:
     get:
       tags:
@@ -713,6 +755,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Permission'
+      operationId: getPlatformPermissions
   /platform/permissions/tree:
     get:
       tags:
@@ -732,6 +775,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/Permission'
+      operationId: getPlatformPermissionsTree
   /platform/impersonation/requests:
     post:
       tags:
@@ -740,6 +784,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postPlatformImpersonationRequests
     get:
       tags:
       - 平台提权
@@ -747,6 +792,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getPlatformImpersonationRequests
   /platform/impersonation/requests/{id}:
     get:
       tags:
@@ -757,6 +803,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getPlatformImpersonationRequestsById
   /platform/impersonation/requests/{id}/enter:
     post:
       tags:
@@ -767,6 +814,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postPlatformImpersonationRequestsByIdEnter
   /platform/impersonation/requests/{id}/exit:
     post:
       tags:
@@ -777,6 +825,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postPlatformImpersonationRequestsByIdExit
   /platform/impersonation/requests/{id}/terminate:
     post:
       tags:
@@ -787,6 +836,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postPlatformImpersonationRequestsByIdTerminate
   /platform/impersonation/requests/{id}/cancel:
     post:
       tags:
@@ -797,6 +847,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postPlatformImpersonationRequestsByIdCancel
   /platform/tenant-roles:
     get:
       tags:
@@ -814,6 +865,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Role'
+      operationId: getPlatformTenantRoles
   /platform/settings:
     get:
       tags:
@@ -822,6 +874,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getPlatformSettings
   /platform/settings/{key}:
     put:
       tags:
@@ -836,6 +889,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putPlatformSettingsByKey
   /platform/tenants:
     get:
       tags:
@@ -859,6 +913,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getPlatformTenants
     post:
       tags:
       - 平台租户管理
@@ -866,6 +921,7 @@ paths:
       responses:
         '201':
           $ref: '#/components/responses/Success'
+      operationId: postPlatformTenants
   /platform/tenants/stats:
     get:
       tags:
@@ -874,6 +930,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getPlatformTenantsStats
   /platform/tenants/trends:
     get:
       tags:
@@ -882,6 +939,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getPlatformTenantsTrends
   /platform/tenants/{id}:
     get:
       tags:
@@ -892,6 +950,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getPlatformTenantsById
     put:
       tags:
       - 平台租户管理
@@ -901,6 +960,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putPlatformTenantsById
     delete:
       tags:
       - 平台租户管理
@@ -910,6 +970,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deletePlatformTenantsById
   /platform/tenants/{id}/members:
     get:
       tags:
@@ -920,6 +981,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getPlatformTenantsByIdMembers
     post:
       tags:
       - 平台租户管理
@@ -929,6 +991,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postPlatformTenantsByIdMembers
   /platform/tenants/{id}/members/{userId}:
     delete:
       tags:
@@ -945,6 +1008,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deletePlatformTenantsByIdMembersByUserId
   /platform/tenants/{id}/members/{userId}/role:
     put:
       tags:
@@ -961,6 +1025,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putPlatformTenantsByIdMembersByUserIdRole
   /platform/tenants/{id}/invitations:
     post:
       tags:
@@ -971,6 +1036,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postPlatformTenantsByIdInvitations
     get:
       tags:
       - 平台租户管理
@@ -980,6 +1046,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getPlatformTenantsByIdInvitations
   /platform/tenants/{id}/invitations/{invId}:
     delete:
       tags:
@@ -996,6 +1063,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deletePlatformTenantsByIdInvitationsByInvId
   /platform/site-messages:
     post:
       tags:
@@ -1004,6 +1072,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postPlatformSiteMessages
   /platform/site-messages/settings:
     get:
       tags:
@@ -1012,6 +1081,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getPlatformSiteMessagesSettings
     put:
       tags:
       - 平台站内信
@@ -1019,6 +1089,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putPlatformSiteMessagesSettings
   /platform/audit-logs:
     get:
       tags:
@@ -1042,6 +1113,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getPlatformAuditLogs
   /platform/audit-logs/stats:
     get:
       tags:
@@ -1050,6 +1122,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getPlatformAuditLogsStats
   /platform/audit-logs/trend:
     get:
       tags:
@@ -1070,6 +1143,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getPlatformAuditLogsTrend
   /platform/audit-logs/user-ranking:
     get:
       tags:
@@ -1090,6 +1164,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getPlatformAuditLogsUserRanking
   /platform/audit-logs/high-risk:
     get:
       tags:
@@ -1113,6 +1188,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getPlatformAuditLogsHighRisk
   /platform/audit-logs/{id}:
     get:
       tags:
@@ -1123,6 +1199,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getPlatformAuditLogsById
   /platform/dictionaries:
     post:
       tags:
@@ -1131,6 +1208,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postPlatformDictionaries
   /platform/dictionaries/{id}:
     put:
       tags:
@@ -1141,6 +1219,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putPlatformDictionariesById
     delete:
       tags:
       - 平台字典
@@ -1150,6 +1229,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deletePlatformDictionariesById
   /tenant/users:
     get:
       tags:
@@ -1179,6 +1259,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/User'
+      operationId: getTenantUsers
     post:
       tags:
       - 用户管理
@@ -1223,6 +1304,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+      operationId: postTenantUsers
   /tenant/users/{id}:
     get:
       tags:
@@ -1237,6 +1319,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+      operationId: getTenantUsersById
     put:
       tags:
       - 用户管理
@@ -1266,6 +1349,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+      operationId: putTenantUsersById
     delete:
       tags:
       - 用户管理
@@ -1275,6 +1359,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteTenantUsersById
   /tenant/users/{id}/reset-password:
     post:
       tags:
@@ -1296,6 +1381,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantUsersByIdResetPassword
   /tenant/users/{id}/roles:
     put:
       tags:
@@ -1320,6 +1406,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putTenantUsersByIdRoles
   /tenant/roles:
     get:
       tags:
@@ -1337,6 +1424,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Role'
+      operationId: getTenantRoles
     post:
       tags:
       - 角色管理
@@ -1364,6 +1452,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Role'
+      operationId: postTenantRoles
   /tenant/roles/{id}:
     get:
       tags:
@@ -1378,6 +1467,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Role'
+      operationId: getTenantRolesById
     put:
       tags:
       - 角色管理
@@ -1402,6 +1492,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Role'
+      operationId: putTenantRolesById
     delete:
       tags:
       - 角色管理
@@ -1411,6 +1502,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteTenantRolesById
   /tenant/roles/{id}/permissions:
     put:
       tags:
@@ -1435,6 +1527,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putTenantRolesByIdPermissions
   /tenant/permissions:
     get:
       tags:
@@ -1452,6 +1545,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Permission'
+      operationId: getTenantPermissions
   /tenant/permissions/tree:
     get:
       tags:
@@ -1471,6 +1565,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/Permission'
+      operationId: getTenantPermissionsTree
   /tenant/impersonation/history:
     get:
       tags:
@@ -1506,6 +1601,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantImpersonationHistory
   /tenant/impersonation/pending:
     get:
       tags:
@@ -1526,6 +1622,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantImpersonationPending
   /tenant/settings/impersonation-approvers:
     get:
       tags:
@@ -1546,6 +1643,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantSettingsImpersonationApprovers
     put:
       tags:
       - 租户设置
@@ -1565,6 +1663,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putTenantSettingsImpersonationApprovers
   /tenant/users/simple:
     get:
       tags:
@@ -1594,6 +1693,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantUsersSimple
   /tenant/roles/{id}/users:
     get:
       tags:
@@ -1622,6 +1722,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantRolesByIdUsers
   /tenant/dashboard/roles/{roleId}/workspaces:
     get:
       tags:
@@ -1652,6 +1753,7 @@ paths:
                           items:
                             type: string
                             format: uuid
+      operationId: getTenantDashboardRolesByRoleIdWorkspaces
     put:
       tags:
       - Dashboard
@@ -1690,6 +1792,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: putTenantDashboardRolesByRoleIdWorkspaces
   /tenant/impersonation/{id}/approve:
     post:
       tags:
@@ -1700,6 +1803,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantImpersonationByIdApprove
   /tenant/impersonation/{id}/reject:
     post:
       tags:
@@ -1710,6 +1814,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantImpersonationByIdReject
   /tenant/execution-tasks:
     get:
       tags:
@@ -1808,6 +1913,7 @@ paths:
                       $ref: '#/components/schemas/ExecutionTask'
                   total:
                     type: integer
+      operationId: getTenantExecutionTasks
     post:
       tags:
       - 执行任务
@@ -1829,6 +1935,35 @@ paths:
                   type: string
                   format: uuid
                   description: Playbook ID（状态必须为 ready 或 outdated）
+                target_hosts:
+                  type: string
+                  description: 目标主机
+                extra_vars:
+                  type: object
+                  description: 变量值
+                executor_type:
+                  type: string
+                  enum:
+                  - local
+                  - docker
+                  default: local
+                notification_config:
+                  $ref: '#/components/schemas/TaskNotificationConfig'
+                description:
+                  type: string
+                secrets_source_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionTask'
+      operationId: postTenantExecutionTasks
   /tenant/execution-tasks/stats:
     get:
       tags:
@@ -1846,6 +1981,7 @@ paths:
                   properties:
                     data:
                       $ref: '#/components/schemas/ExecutionTaskStats'
+      operationId: getTenantExecutionTasksStats
   /tenant/execution-tasks/search-schema:
     get:
       tags:
@@ -1871,6 +2007,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SearchableField'
+      operationId: getTenantExecutionTasksSearchSchema
   /tenant/execution-tasks/{id}:
     get:
       tags:
@@ -1885,6 +2022,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExecutionTask'
+      operationId: getTenantExecutionTasksById
     delete:
       tags:
       - 执行任务
@@ -1894,6 +2032,7 @@ paths:
       responses:
         '204':
           description: 删除成功
+      operationId: deleteTenantExecutionTasksById
     put:
       tags:
       - 执行任务
@@ -1954,6 +2093,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExecutionTask'
+      operationId: putTenantExecutionTasksById
   /tenant/execution-tasks/{id}/execute:
     post:
       tags:
@@ -2001,6 +2141,7 @@ paths:
                 $ref: '#/components/schemas/ExecutionRun'
         '400':
           description: 执行失败（如 needs_review = true）
+      operationId: postTenantExecutionTasksByIdExecute
   /tenant/execution-tasks/{id}/confirm-review:
     post:
       tags:
@@ -2020,6 +2161,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExecutionTask'
+      operationId: postTenantExecutionTasksByIdConfirmReview
   /tenant/execution-tasks/{id}/runs:
     get:
       tags:
@@ -2043,6 +2185,7 @@ paths:
                       $ref: '#/components/schemas/ExecutionRun'
                   total:
                     type: integer
+      operationId: getTenantExecutionTasksByIdRuns
   /tenant/execution-schedules:
     get:
       tags:
@@ -2097,6 +2240,7 @@ paths:
                       $ref: '#/components/schemas/ExecutionSchedule'
                   total:
                     type: integer
+      operationId: getTenantExecutionSchedules
     post:
       tags:
       - 定时调度
@@ -2154,6 +2298,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExecutionSchedule'
+      operationId: postTenantExecutionSchedules
   /tenant/execution-schedules/{id}:
     get:
       tags:
@@ -2168,6 +2313,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExecutionSchedule'
+      operationId: getTenantExecutionSchedulesById
     put:
       tags:
       - 定时调度
@@ -2214,6 +2360,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExecutionSchedule'
+      operationId: putTenantExecutionSchedulesById
     delete:
       tags:
       - 定时调度
@@ -2223,6 +2370,7 @@ paths:
       responses:
         '204':
           description: 删除成功
+      operationId: deleteTenantExecutionSchedulesById
   /tenant/execution-schedules/{id}/enable:
     post:
       tags:
@@ -2233,6 +2381,7 @@ paths:
       responses:
         '200':
           description: 启用成功
+      operationId: postTenantExecutionSchedulesByIdEnable
   /tenant/execution-schedules/{id}/disable:
     post:
       tags:
@@ -2243,6 +2392,7 @@ paths:
       responses:
         '200':
           description: 禁用成功
+      operationId: postTenantExecutionSchedulesByIdDisable
   /tenant/execution-runs:
     get:
       tags:
@@ -2303,6 +2453,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/ExecutionRun'
+      operationId: getTenantExecutionRuns
   /tenant/execution-runs/search-schema:
     get:
       tags:
@@ -2322,6 +2473,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SearchableField'
+      operationId: getTenantExecutionRunsSearchSchema
   /tenant/execution-runs/stats:
     get:
       tags:
@@ -2339,6 +2491,7 @@ paths:
                   properties:
                     data:
                       $ref: '#/components/schemas/ExecutionRunStats'
+      operationId: getTenantExecutionRunsStats
   /tenant/execution-runs/trend:
     get:
       tags:
@@ -2366,6 +2519,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/ExecutionRunTrendItem'
+      operationId: getTenantExecutionRunsTrend
   /tenant/execution-runs/trigger-distribution:
     get:
       tags:
@@ -2385,6 +2539,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/ExecutionRunTriggerDistributionItem'
+      operationId: getTenantExecutionRunsTriggerDistribution
   /tenant/execution-runs/top-failed:
     get:
       tags:
@@ -2412,6 +2567,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/ExecutionRunTopFailedItem'
+      operationId: getTenantExecutionRunsTopFailed
   /tenant/execution-runs/top-active:
     get:
       tags:
@@ -2439,6 +2595,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/ExecutionRunTopActiveItem'
+      operationId: getTenantExecutionRunsTopActive
   /tenant/execution-runs/{id}:
     get:
       tags:
@@ -2453,6 +2610,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExecutionRun'
+      operationId: getTenantExecutionRunsById
   /tenant/execution-runs/{id}/logs:
     get:
       tags:
@@ -2474,6 +2632,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/ExecutionLog'
+      operationId: getTenantExecutionRunsByIdLogs
   /tenant/execution-runs/{id}/cancel:
     post:
       tags:
@@ -2484,6 +2643,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantExecutionRunsByIdCancel
   /tenant/execution-runs/{id}/stream:
     get:
       tags:
@@ -2515,6 +2675,7 @@ paths:
                   data: {"status":"success","exit_code":0}
 
                   '
+      operationId: getTenantExecutionRunsByIdStream
   /tenant/healing/flows:
     get:
       tags:
@@ -2541,6 +2702,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/HealingFlow'
+      operationId: getTenantHealingFlows
     post:
       tags:
       - 自愈流程
@@ -2558,6 +2720,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealingFlow'
+      operationId: postTenantHealingFlows
   /tenant/healing/flows/{id}:
     get:
       tags:
@@ -2577,6 +2740,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealingFlow'
+      operationId: getTenantHealingFlowsById
     put:
       tags:
       - 自愈流程
@@ -2601,6 +2765,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealingFlow'
+      operationId: putTenantHealingFlowsById
     delete:
       tags:
       - 自愈流程
@@ -2615,6 +2780,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteTenantHealingFlowsById
   /tenant/healing/rules:
     get:
       tags:
@@ -2646,6 +2812,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/HealingRule'
+      operationId: getTenantHealingRules
     post:
       tags:
       - 自愈规则
@@ -2663,6 +2830,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealingRule'
+      operationId: postTenantHealingRules
   /tenant/healing/rules/{id}:
     get:
       tags:
@@ -2682,6 +2850,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealingRule'
+      operationId: getTenantHealingRulesById
     put:
       tags:
       - 自愈规则
@@ -2706,6 +2875,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealingRule'
+      operationId: putTenantHealingRulesById
     delete:
       tags:
       - 自愈规则
@@ -2744,6 +2914,7 @@ paths:
                     type: integer
                   message:
                     type: string
+      operationId: deleteTenantHealingRulesById
   /tenant/healing/rules/{id}/activate:
     post:
       tags:
@@ -2759,6 +2930,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantHealingRulesByIdActivate
   /tenant/healing/rules/{id}/deactivate:
     post:
       tags:
@@ -2774,6 +2946,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantHealingRulesByIdDeactivate
   /tenant/healing/instances:
     get:
       tags:
@@ -2939,6 +3112,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/FlowInstance'
+      operationId: getTenantHealingInstances
   /tenant/healing/instances/stats:
     get:
       tags:
@@ -2981,6 +3155,7 @@ paths:
                             count:
                               type: integer
                               example: 10
+      operationId: getTenantHealingInstancesStats
   /tenant/healing/instances/{id}:
     get:
       tags:
@@ -3000,6 +3175,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FlowInstance'
+      operationId: getTenantHealingInstancesById
   /tenant/healing/instances/{id}/cancel:
     post:
       tags:
@@ -3015,6 +3191,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantHealingInstancesByIdCancel
   /tenant/healing/instances/{id}/retry:
     post:
       tags:
@@ -3040,6 +3217,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantHealingInstancesByIdRetry
   /tenant/healing/instances/{id}/events:
     get:
       tags:
@@ -3072,6 +3250,7 @@ paths:
                   data: {"event":"node_start","data":{"node_id":"approval"},"timestamp":"2026-03-26T10:00:02Z"}
 
                   '
+      operationId: getTenantHealingInstancesByIdEvents
   /tenant/healing/approvals:
     get:
       tags:
@@ -3108,6 +3287,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/ApprovalTask'
+      operationId: getTenantHealingApprovals
   /tenant/healing/approvals/pending:
     get:
       tags:
@@ -3145,6 +3325,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/ApprovalTask'
+      operationId: getTenantHealingApprovalsPending
   /tenant/healing/pending/trigger:
     get:
       tags:
@@ -3191,6 +3372,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/Incident'
+      operationId: getTenantHealingPendingTrigger
   /tenant/healing/pending/dismissed:
     get:
       tags:
@@ -3237,6 +3419,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/Incident'
+      operationId: getTenantHealingPendingDismissed
   /tenant/healing/approvals/{id}:
     get:
       tags:
@@ -3256,6 +3439,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApprovalTask'
+      operationId: getTenantHealingApprovalsById
   /tenant/healing/approvals/{id}/approve:
     post:
       tags:
@@ -3280,6 +3464,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantHealingApprovalsByIdApprove
   /tenant/healing/approvals/{id}/reject:
     post:
       tags:
@@ -3304,6 +3489,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantHealingApprovalsByIdReject
   /tenant/execution-schedules/stats:
     get:
       tags:
@@ -3322,6 +3508,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantExecutionSchedulesStats
   /tenant/execution-schedules/timeline:
     get:
       tags:
@@ -3356,6 +3543,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantExecutionSchedulesTimeline
   /tenant/execution-tasks/batch-confirm-review:
     post:
       tags:
@@ -3393,6 +3581,7 @@ paths:
                           type: integer
                         message:
                           type: string
+      operationId: postTenantExecutionTasksBatchConfirmReview
   /tenant/healing/flows/node-schema:
     get:
       tags:
@@ -3413,6 +3602,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantHealingFlowsNodeSchema
   /tenant/healing/flows/search-schema:
     get:
       tags:
@@ -3432,6 +3622,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SearchableField'
+      operationId: getTenantHealingFlowsSearchSchema
   /tenant/healing/flows/stats:
     get:
       tags:
@@ -3450,6 +3641,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantHealingFlowsStats
   /tenant/healing/rules/search-schema:
     get:
       tags:
@@ -3469,6 +3661,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SearchableField'
+      operationId: getTenantHealingRulesSearchSchema
   /tenant/healing/rules/stats:
     get:
       tags:
@@ -3487,6 +3680,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantHealingRulesStats
   /tenant/healing/instances/search-schema:
     get:
       tags:
@@ -3506,6 +3700,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SearchableField'
+      operationId: getTenantHealingInstancesSearchSchema
   /tenant/healing/flows/{id}/dry-run:
     post:
       tags:
@@ -3533,6 +3728,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: postTenantHealingFlowsByIdDryRun
   /tenant/healing/flows/{id}/dry-run-stream:
     post:
       tags:
@@ -3554,6 +3750,7 @@ paths:
             text/event-stream:
               schema:
                 type: string
+      operationId: postTenantHealingFlowsByIdDryRunStream
   /tenant/channels:
     get:
       tags:
@@ -3584,6 +3781,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/NotificationChannel'
+      operationId: getTenantChannels
     post:
       tags:
       - 通知渠道
@@ -3601,6 +3799,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationChannel'
+      operationId: postTenantChannels
   /tenant/channels/{id}:
     get:
       tags:
@@ -3615,6 +3814,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationChannel'
+      operationId: getTenantChannelsById
     put:
       tags:
       - 通知渠道
@@ -3630,6 +3830,7 @@ paths:
       responses:
         '200':
           description: 更新成功
+      operationId: putTenantChannelsById
     delete:
       tags:
       - 通知渠道
@@ -3639,6 +3840,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteTenantChannelsById
   /tenant/channels/{id}/test:
     post:
       tags:
@@ -3649,6 +3851,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantChannelsByIdTest
   /tenant/templates:
     get:
       tags:
@@ -3720,6 +3923,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/NotificationTemplate'
+      operationId: getTenantTemplates
     post:
       tags:
       - 通知模板
@@ -3742,6 +3946,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationTemplate'
+      operationId: postTenantTemplates
   /tenant/templates/{id}:
     get:
       tags:
@@ -3756,6 +3961,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationTemplate'
+      operationId: getTenantTemplatesById
     put:
       tags:
       - 通知模板
@@ -3771,6 +3977,7 @@ paths:
       responses:
         '200':
           description: 更新成功
+      operationId: putTenantTemplatesById
     delete:
       tags:
       - 通知模板
@@ -3780,6 +3987,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteTenantTemplatesById
   /tenant/templates/{id}/preview:
     post:
       tags:
@@ -3812,6 +4020,7 @@ paths:
                   body:
                     type: string
                     description: 渲染后的正文
+      operationId: postTenantTemplatesByIdPreview
   /tenant/template-variables:
     get:
       tags:
@@ -3836,6 +4045,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/TemplateVariable'
+      operationId: getTenantTemplateVariables
   /tenant/notifications/send:
     post:
       tags:
@@ -3897,6 +4107,7 @@ paths:
                           type: array
                           items:
                             $ref: '#/components/schemas/Notification'
+      operationId: postTenantNotificationsSend
   /tenant/notifications:
     get:
       tags:
@@ -3988,6 +4199,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/Notification'
+      operationId: getTenantNotifications
   /tenant/notifications/stats:
     get:
       tags:
@@ -4005,6 +4217,7 @@ paths:
                   properties:
                     data:
                       $ref: '#/components/schemas/NotificationStats'
+      operationId: getTenantNotificationsStats
   /tenant/notifications/{id}:
     get:
       tags:
@@ -4019,6 +4232,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Notification'
+      operationId: getTenantNotificationsById
   /tenant/dashboard/overview:
     get:
       tags:
@@ -4043,6 +4257,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantDashboardOverview
   /tenant/dashboard/config:
     get:
       tags:
@@ -4061,6 +4276,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantDashboardConfig
     put:
       tags:
       - Dashboard
@@ -4075,6 +4291,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putTenantDashboardConfig
   /tenant/dashboard/workspaces:
     get:
       tags:
@@ -4095,6 +4312,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantDashboardWorkspaces
     post:
       tags:
       - Dashboard
@@ -4128,6 +4346,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: postTenantDashboardWorkspaces
   /tenant/site-messages:
     get:
       tags:
@@ -4178,6 +4397,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SiteMessage'
+      operationId: getTenantSiteMessages
   /tenant/site-messages/unread-count:
     get:
       tags:
@@ -4195,6 +4415,7 @@ paths:
                   properties:
                     data:
                       type: integer
+      operationId: getTenantSiteMessagesUnreadCount
   /tenant/site-messages/read:
     put:
       tags:
@@ -4217,6 +4438,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putTenantSiteMessagesRead
   /tenant/site-messages/read-all:
     put:
       tags:
@@ -4234,6 +4456,7 @@ paths:
                   properties:
                     data:
                       type: integer
+      operationId: putTenantSiteMessagesReadAll
   /tenant/site-messages/events:
     get:
       tags:
@@ -4246,6 +4469,7 @@ paths:
             text/event-stream:
               schema:
                 type: string
+      operationId: getTenantSiteMessagesEvents
   /tenant/dashboard/workspaces/{id}:
     put:
       tags:
@@ -4273,6 +4497,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: putTenantDashboardWorkspacesById
     delete:
       tags:
       - Dashboard
@@ -4282,6 +4507,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteTenantDashboardWorkspacesById
   /tenant/plugins:
     get:
       tags:
@@ -4319,6 +4545,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/Plugin'
+      operationId: getTenantPlugins
     post:
       tags:
       - 插件管理
@@ -4385,6 +4612,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Plugin'
+      operationId: postTenantPlugins
   /tenant/plugins/search-schema:
     get:
       tags:
@@ -4404,6 +4632,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SearchableField'
+      operationId: getTenantPluginsSearchSchema
   /tenant/plugins/stats:
     get:
       tags:
@@ -4422,6 +4651,7 @@ paths:
                   properties:
                     data:
                       $ref: '#/components/schemas/PluginStats'
+      operationId: getTenantPluginsStats
   /tenant/plugins/{id}:
     get:
       tags:
@@ -4436,6 +4666,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Plugin'
+      operationId: getTenantPluginsById
     put:
       tags:
       - 插件管理
@@ -4491,6 +4722,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Plugin'
+      operationId: putTenantPluginsById
     delete:
       tags:
       - 插件管理
@@ -4500,6 +4732,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteTenantPluginsById
   /tenant/plugins/{id}/test:
     post:
       tags:
@@ -4525,6 +4758,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+      operationId: postTenantPluginsByIdTest
   /tenant/plugins/{id}/activate:
     post:
       tags:
@@ -4550,6 +4784,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+      operationId: postTenantPluginsByIdActivate
   /tenant/plugins/{id}/deactivate:
     post:
       tags:
@@ -4569,6 +4804,7 @@ paths:
                   message:
                     type: string
                     example: 插件已停用
+      operationId: postTenantPluginsByIdDeactivate
   /tenant/plugins/{id}/sync:
     post:
       tags:
@@ -4583,6 +4819,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PluginSyncLog'
+      operationId: postTenantPluginsByIdSync
   /tenant/plugins/{id}/logs:
     get:
       tags:
@@ -4606,6 +4843,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/PluginSyncLog'
+      operationId: getTenantPluginsByIdLogs
   /tenant/incidents/stats:
     get:
       tags:
@@ -4669,6 +4907,7 @@ paths:
                         type: integer
                         description: 已忽略数
                         example: 2
+      operationId: getTenantIncidentsStats
   /tenant/incidents/search-schema:
     get:
       tags:
@@ -4688,6 +4927,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SearchableField'
+      operationId: getTenantIncidentsSearchSchema
   /tenant/incidents:
     get:
       tags:
@@ -4783,6 +5023,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/Incident'
+      operationId: getTenantIncidents
   /tenant/incidents/{id}:
     get:
       tags:
@@ -4797,6 +5038,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Incident'
+      operationId: getTenantIncidentsById
   /tenant/incidents/{id}/close:
     post:
       tags:
@@ -4817,6 +5059,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CloseIncidentResponse'
+      operationId: postTenantIncidentsByIdClose
   /tenant/incidents/{id}/trigger:
     post:
       tags:
@@ -4831,6 +5074,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FlowInstance'
+      operationId: postTenantIncidentsByIdTrigger
   /tenant/incidents/{id}/dismiss:
     post:
       tags:
@@ -4849,6 +5093,7 @@ paths:
                   message:
                     type: string
                     example: 工单已忽略
+      operationId: postTenantIncidentsByIdDismiss
   /tenant/incidents/{id}/reset-scan:
     post:
       tags:
@@ -4872,6 +5117,7 @@ paths:
                   message:
                     type: string
                     example: 工单扫描状态已重置，将被重新扫描
+      operationId: postTenantIncidentsByIdResetScan
   /tenant/incidents/batch-reset-scan:
     post:
       tags:
@@ -4928,6 +5174,7 @@ paths:
                   message:
                     type: string
                     example: 成功重置 5 条工单的扫描状态
+      operationId: postTenantIncidentsBatchResetScan
   /tenant/cmdb:
     get:
       tags:
@@ -4982,6 +5229,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/CMDBItem'
+      operationId: getTenantCmdb
   /tenant/cmdb/batch-test-connection:
     post:
       tags:
@@ -5027,6 +5275,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ConnectionTestResult'
+      operationId: postTenantCmdbBatchTestConnection
   /tenant/cmdb/{id}/test-connection:
     post:
       tags:
@@ -5059,6 +5308,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConnectionTestResult'
+      operationId: postTenantCmdbByIdTestConnection
   /tenant/cmdb/{id}/maintenance:
     post:
       tags:
@@ -5097,6 +5347,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
+      operationId: postTenantCmdbByIdMaintenance
   /tenant/cmdb/{id}/resume:
     post:
       tags:
@@ -5117,6 +5368,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
+      operationId: postTenantCmdbByIdResume
   /tenant/cmdb/{id}/maintenance-logs:
     get:
       tags:
@@ -5150,6 +5402,7 @@ paths:
                     type: integer
                   page_size:
                     type: integer
+      operationId: getTenantCmdbByIdMaintenanceLogs
   /tenant/cmdb/batch/maintenance:
     post:
       tags:
@@ -5193,6 +5446,7 @@ paths:
                     type: integer
                   failed:
                     type: integer
+      operationId: postTenantCmdbBatchMaintenance
   /tenant/cmdb/batch/resume:
     post:
       tags:
@@ -5228,6 +5482,7 @@ paths:
                     type: integer
                   failed:
                     type: integer
+      operationId: postTenantCmdbBatchResume
   /tenant/cmdb/stats:
     get:
       tags:
@@ -5240,6 +5495,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CMDBStats'
+      operationId: getTenantCmdbStats
   /tenant/cmdb/{id}:
     get:
       tags:
@@ -5254,6 +5510,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CMDBItem'
+      operationId: getTenantCmdbById
   /tenant/secrets-sources:
     get:
       tags:
@@ -5292,6 +5549,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/SecretsSource'
+      operationId: getTenantSecretsSources
     post:
       tags:
       - 密钥管理
@@ -5309,6 +5567,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SecretsSource'
+      operationId: postTenantSecretsSources
   /tenant/secrets-sources/stats:
     get:
       tags:
@@ -5327,6 +5586,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantSecretsSourcesStats
   /tenant/secrets-sources/{id}:
     get:
       tags:
@@ -5341,6 +5601,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SecretsSource'
+      operationId: getTenantSecretsSourcesById
     put:
       tags:
       - 密钥管理
@@ -5360,6 +5621,7 @@ paths:
       responses:
         '200':
           description: 更新成功
+      operationId: putTenantSecretsSourcesById
     delete:
       tags:
       - 密钥管理
@@ -5369,6 +5631,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteTenantSecretsSourcesById
   /tenant/secrets-sources/{id}/test:
     post:
       tags:
@@ -5380,6 +5643,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantSecretsSourcesByIdTest
   /tenant/secrets-sources/{id}/test-query:
     post:
       tags:
@@ -5442,6 +5706,7 @@ paths:
                     type: integer
                   fail_count:
                     type: integer
+      operationId: postTenantSecretsSourcesByIdTestQuery
   /tenant/secrets-sources/{id}/enable:
     post:
       tags:
@@ -5453,6 +5718,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantSecretsSourcesByIdEnable
   /tenant/secrets-sources/{id}/disable:
     post:
       tags:
@@ -5463,6 +5729,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantSecretsSourcesByIdDisable
   /tenant/git-repos:
     get:
       tags:
@@ -5490,6 +5757,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/GitRepository'
+      operationId: getTenantGitRepos
     post:
       tags:
       - Git仓库
@@ -5507,6 +5775,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitRepository'
+      operationId: postTenantGitRepos
   /tenant/git-repos/{id}:
     get:
       tags:
@@ -5521,6 +5790,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitRepository'
+      operationId: getTenantGitReposById
     put:
       tags:
       - Git仓库
@@ -5545,6 +5815,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitRepository'
+      operationId: putTenantGitReposById
     delete:
       tags:
       - Git仓库
@@ -5554,6 +5825,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteTenantGitReposById
   /tenant/git-repos/{id}/sync:
     post:
       tags:
@@ -5564,6 +5836,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantGitReposByIdSync
   /tenant/git-repos/validate:
     post:
       tags:
@@ -5599,6 +5872,7 @@ paths:
       responses:
         '200':
           description: 验证成功
+      operationId: postTenantGitReposValidate
   /tenant/git-repos/stats:
     get:
       tags:
@@ -5617,6 +5891,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantGitReposStats
   /tenant/git-repos/search-schema:
     get:
       tags:
@@ -5638,6 +5913,7 @@ paths:
                         $ref: '#/components/schemas/SearchableField'
         '400':
           description: 验证失败（URL 无效、认证失败等）
+      operationId: getTenantGitReposSearchSchema
   /tenant/git-repos/{id}/commits:
     get:
       tags:
@@ -5666,6 +5942,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/CommitInfo'
+      operationId: getTenantGitReposByIdCommits
   /tenant/git-repos/{id}/files:
     get:
       tags:
@@ -5699,6 +5976,7 @@ paths:
                       - type: array
                         items:
                           type: string
+      operationId: getTenantGitReposByIdFiles
   /tenant/playbooks:
     get:
       tags:
@@ -5729,6 +6007,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedPlaybooks'
+      operationId: getTenantPlaybooks
     post:
       tags:
       - Playbook模板
@@ -5771,6 +6050,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Playbook'
+      operationId: postTenantPlaybooks
   /tenant/playbooks/stats:
     get:
       tags:
@@ -5789,6 +6069,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantPlaybooksStats
   /tenant/playbooks/{id}:
     get:
       tags:
@@ -5803,6 +6084,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Playbook'
+      operationId: getTenantPlaybooksById
     put:
       tags:
       - Playbook模板
@@ -5823,6 +6105,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putTenantPlaybooksById
     delete:
       tags:
       - Playbook模板
@@ -5832,6 +6115,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteTenantPlaybooksById
   /tenant/playbooks/{id}/scan:
     post:
       tags:
@@ -5860,6 +6144,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PlaybookScanLog'
+      operationId: postTenantPlaybooksByIdScan
   /tenant/playbooks/{id}/variables:
     put:
       tags:
@@ -5884,6 +6169,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: putTenantPlaybooksByIdVariables
   /tenant/playbooks/{id}/ready:
     post:
       tags:
@@ -5895,6 +6181,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantPlaybooksByIdReady
   /tenant/playbooks/{id}/offline:
     post:
       tags:
@@ -5906,6 +6193,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantPlaybooksByIdOffline
   /tenant/playbooks/{id}/files:
     get:
       tags:
@@ -5948,6 +6236,7 @@ paths:
                               - file
                               - role
                               - include
+      operationId: getTenantPlaybooksByIdFiles
   /tenant/playbooks/{id}/scan-logs:
     get:
       tags:
@@ -5964,6 +6253,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedPlaybookScanLogs'
+      operationId: getTenantPlaybooksByIdScanLogs
   /tenant/cmdb/search-schema:
     get:
       tags:
@@ -5983,6 +6273,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/SearchableField'
+      operationId: getTenantCmdbSearchSchema
   /tenant/cmdb/ids:
     get:
       tags:
@@ -6034,6 +6325,7 @@ paths:
                             additionalProperties: true
                         total:
                           type: integer
+      operationId: getTenantCmdbIds
   /tenant/git-repos/{id}/reset-status:
     post:
       tags:
@@ -6051,6 +6343,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantGitReposByIdResetStatus
   /tenant/git-repos/{id}/logs:
     get:
       tags:
@@ -6075,6 +6368,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantGitReposByIdLogs
   /tenant/secrets/query:
     post:
       tags:
@@ -6093,6 +6387,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Secret'
+      operationId: postTenantSecretsQuery
   /tenant/audit-logs:
     get:
       tags:
@@ -6101,6 +6396,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: getTenantAuditLogs
   /tenant/audit-logs/stats:
     get:
       tags:
@@ -6119,6 +6415,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantAuditLogsStats
   /tenant/audit-logs/user-ranking:
     get:
       tags:
@@ -6150,6 +6447,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantAuditLogsUserRanking
   /tenant/audit-logs/action-grouping:
     get:
       tags:
@@ -6180,6 +6478,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantAuditLogsActionGrouping
   /tenant/audit-logs/resource-stats:
     get:
       tags:
@@ -6206,6 +6505,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantAuditLogsResourceStats
   /tenant/audit-logs/trend:
     get:
       tags:
@@ -6232,6 +6532,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantAuditLogsTrend
   /tenant/audit-logs/high-risk:
     get:
       tags:
@@ -6255,6 +6556,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantAuditLogsHighRisk
   /tenant/audit-logs/export:
     get:
       tags:
@@ -6267,6 +6569,7 @@ paths:
             text/csv:
               schema:
                 type: string
+      operationId: getTenantAuditLogsExport
   /tenant/blacklist-exemptions:
     get:
       tags:
@@ -6313,6 +6616,7 @@ paths:
                       type: array
                       items:
                         additionalProperties: true
+      operationId: getTenantBlacklistExemptions
     post:
       tags:
       - 黑名单豁免
@@ -6358,6 +6662,7 @@ paths:
                   properties:
                     data:
                       additionalProperties: true
+      operationId: postTenantBlacklistExemptions
   /tenant/blacklist-exemptions/pending:
     get:
       tags:
@@ -6381,6 +6686,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantBlacklistExemptionsPending
   /tenant/blacklist-exemptions/search-schema:
     get:
       tags:
@@ -6401,6 +6707,7 @@ paths:
                       items:
                         type: object
                         additionalProperties: true
+      operationId: getTenantBlacklistExemptionsSearchSchema
   /tenant/command-blacklist:
     get:
       tags:
@@ -6459,6 +6766,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/CommandBlacklist'
+      operationId: getTenantCommandBlacklist
     post:
       tags:
       - 高危指令黑名单
@@ -6476,6 +6784,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommandBlacklist'
+      operationId: postTenantCommandBlacklist
   /tenant/command-blacklist/batch-toggle:
     post:
       tags:
@@ -6511,6 +6820,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: postTenantCommandBlacklistBatchToggle
   /tenant/command-blacklist/search-schema:
     get:
       tags:
@@ -6529,6 +6839,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantCommandBlacklistSearchSchema
   /tenant/command-blacklist/simulate:
     post:
       tags:
@@ -6581,6 +6892,7 @@ paths:
                           type: object
                           additionalProperties:
                             type: integer
+      operationId: postTenantCommandBlacklistSimulate
   /tenant/audit-logs/{id}:
     get:
       tags:
@@ -6601,6 +6913,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantAuditLogsById
   /tenant/command-blacklist/{id}:
     get:
       tags:
@@ -6621,6 +6934,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantCommandBlacklistById
     put:
       tags:
       - 高危指令黑名单
@@ -6647,6 +6961,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: putTenantCommandBlacklistById
     delete:
       tags:
       - 高危指令黑名单
@@ -6656,6 +6971,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: deleteTenantCommandBlacklistById
   /tenant/command-blacklist/{id}/toggle:
     post:
       tags:
@@ -6676,6 +6992,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: postTenantCommandBlacklistByIdToggle
   /tenant/blacklist-exemptions/{id}:
     get:
       tags:
@@ -6696,6 +7013,7 @@ paths:
                     data:
                       type: object
                       additionalProperties: true
+      operationId: getTenantBlacklistExemptionsById
   /tenant/blacklist-exemptions/{id}/approve:
     post:
       tags:
@@ -6706,6 +7024,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantBlacklistExemptionsByIdApprove
   /tenant/blacklist-exemptions/{id}/reject:
     post:
       tags:
@@ -6725,6 +7044,7 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Success'
+      operationId: postTenantBlacklistExemptionsByIdReject
 components:
   securitySchemes:
     BearerAuth:
@@ -6937,6 +7257,31 @@ components:
           format: date-time
         playbook:
           $ref: '#/components/schemas/Playbook'
+    NotificationTriggerConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        channel_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        template_id:
+          type: string
+          format: uuid
+          nullable: true
+    TaskNotificationConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        on_start:
+          $ref: '#/components/schemas/NotificationTriggerConfig'
+        on_success:
+          $ref: '#/components/schemas/NotificationTriggerConfig'
+        on_failure:
+          $ref: '#/components/schemas/NotificationTriggerConfig'
     ExecutionSchedule:
       type: object
       description: 定时任务调度
@@ -7883,6 +8228,48 @@ components:
           - bounced
         count:
           type: integer
+    SiteMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        target_tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        category:
+          type: string
+          enum:
+          - system_update
+          - fault_alert
+          - service_notice
+          - product_news
+          - activity
+          - security
+          - announcement
+        title:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+    SiteMessageWithReadStatus:
+      allOf:
+      - $ref: '#/components/schemas/SiteMessage'
+      - type: object
+        properties:
+          is_read:
+            type: boolean
     Plugin:
       type: object
       properties:
@@ -8892,6 +9279,51 @@ components:
           description: enhanced 模式下的变量定义
           items:
             $ref: '#/components/schemas/PlaybookVariable'
+    CommandBlacklist:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        pattern:
+          type: string
+        match_type:
+          type: string
+          enum:
+          - contains
+          - regex
+          - exact
+        severity:
+          type: string
+          enum:
+          - critical
+          - high
+          - medium
+        category:
+          type: string
+          enum:
+          - filesystem
+          - network
+          - system
+          - database
+        description:
+          type: string
+        is_active:
+          type: boolean
+        is_system:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     Success:
       type: object
       properties:
@@ -8924,6 +9356,11 @@ components:
           type: integer
         page_size:
           type: integer
+    PaginationResponse:
+      $ref: '#/components/schemas/PaginatedResponse'
+    MessageResponse:
+      allOf:
+      - $ref: '#/components/schemas/Success'
     Error:
       type: object
       properties:

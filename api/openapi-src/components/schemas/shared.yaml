@@ -30,6 +30,11 @@ PaginatedResponse:
       type: integer
     page_size:
       type: integer
+PaginationResponse:
+  $ref: '#/components/schemas/PaginatedResponse'
+MessageResponse:
+  allOf:
+  - $ref: '#/components/schemas/Success'
 Error:
   type: object
   properties:

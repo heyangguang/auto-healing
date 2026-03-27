@@ -19,10 +19,8 @@ info:
     name: API Support
     email: support@example.com
 servers:
-- url: http://192.168.31.66:8080/api/v1
-  description: 本地开发环境
-- url: http://192.168.31.66:8080/api/v1
-  description: 生产环境
+- url: /api/v1
+  description: 当前环境 API 前缀
 tags:
 - name: 认证
   description: 用户认证相关接口

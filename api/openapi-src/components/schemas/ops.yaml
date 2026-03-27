@@ -1,1 +1,45 @@
-{}
+CommandBlacklist:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    tenant_id:
+      type: string
+      format: uuid
+      nullable: true
+    name:
+      type: string
+    pattern:
+      type: string
+    match_type:
+      type: string
+      enum:
+      - contains
+      - regex
+      - exact
+    severity:
+      type: string
+      enum:
+      - critical
+      - high
+      - medium
+    category:
+      type: string
+      enum:
+      - filesystem
+      - network
+      - system
+      - database
+    description:
+      type: string
+    is_active:
+      type: boolean
+    is_system:
+      type: boolean
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time

@@ -346,3 +346,45 @@ NotificationStatusCount:
       - bounced
     count:
       type: integer
+SiteMessage:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    tenant_id:
+      type: string
+      format: uuid
+      nullable: true
+    target_tenant_id:
+      type: string
+      format: uuid
+      nullable: true
+    category:
+      type: string
+      enum:
+      - system_update
+      - fault_alert
+      - service_notice
+      - product_news
+      - activity
+      - security
+      - announcement
+    title:
+      type: string
+    content:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+    expires_at:
+      type: string
+      format: date-time
+      nullable: true
+SiteMessageWithReadStatus:
+  allOf:
+  - $ref: '#/components/schemas/SiteMessage'
+  - type: object
+    properties:
+      is_read:
+        type: boolean

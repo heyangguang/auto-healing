@@ -180,10 +180,68 @@ def get_schema_property(document: Dict[str, Any], schema_name: str, property_nam
     return get_schema(document, schema_name).get("properties", {}).get(property_name, {})
 
 
+def collect_bad_refs(document: Dict[str, Any]) -> List[str]:
+    refs: List[tuple[str, Any]] = []
+
+    def walk(node: Any, path: str = "") -> None:
+        if isinstance(node, dict):
+            if "$ref" in node:
+                refs.append((path, node["$ref"]))
+            for key, value in node.items():
+                walk(value, f"{path}/{key}")
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                walk(value, f"{path}/{index}")
+
+    walk(document)
+    bad: List[str] = []
+    for path, ref in refs:
+        if not isinstance(ref, str) or not ref.startswith("#/"):
+            bad.append(f"{path} -> {ref}")
+            continue
+        current: Any = document
+        ok = True
+        for part in ref[2:].split("/"):
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+                continue
+            ok = False
+            break
+        if not ok:
+            bad.append(f"{path} -> {ref}")
+    return bad
+
+
 def validate_openapi(content: str, document: Optional[Dict[str, Any]], errors: List[str]) -> None:
     if document is None:
         return
     validate_route_openapi_sync(document, errors)
+    bad_refs = collect_bad_refs(document)
+    require(errors, not bad_refs, "openapi 存在坏 $ref: " + ", ".join(bad_refs[:12]))
+    operation_ids = []
+    missing_operation_ids = []
+    for path, item in document.get("paths", {}).items():
+        if not isinstance(item, dict):
+            continue
+        for method, operation in item.items():
+            if method.lower() not in {"get", "post", "put", "patch", "delete"}:
+                continue
+            if not isinstance(operation, dict):
+                continue
+            op_id = operation.get("operationId")
+            if not isinstance(op_id, str) or not op_id.strip():
+                missing_operation_ids.append(f"{method.upper()} {path}")
+                continue
+            operation_ids.append(op_id)
+    require(errors, not missing_operation_ids, "openapi 存在缺失 operationId 的操作: " + ", ".join(missing_operation_ids[:12]))
+    require(errors, len(operation_ids) == len(set(operation_ids)), "openapi 存在重复 operationId")
+    servers = document.get("servers", [])
+    require(errors, isinstance(servers, list) and len(servers) == 1, "openapi servers 必须收口为单一稳定入口")
+    if isinstance(servers, list) and servers:
+        server_url = servers[0].get("url")
+        require(errors, server_url == "/api/v1", "openapi server url 必须为 /api/v1")
+    execution_tasks_post = get_operation(document, "/tenant/execution-tasks", "post")
+    require(errors, "responses" in execution_tasks_post, "openapi 的 POST /tenant/execution-tasks 缺少 responses")
     require(errors, "/incidents/{id}/dismiss:" in content, "openapi 缺少 /incidents/{id}/dismiss")
     require(errors, "/incidents/{id}/trigger:" in content, "openapi 缺少 /incidents/{id}/trigger")
     require(errors, "/healing/instances/stats:" in content, "openapi 缺少 /healing/instances/stats")

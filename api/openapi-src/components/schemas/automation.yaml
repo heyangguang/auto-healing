@@ -55,6 +55,31 @@ ExecutionTask:
       format: date-time
     playbook:
       $ref: '#/components/schemas/Playbook'
+NotificationTriggerConfig:
+  type: object
+  properties:
+    enabled:
+      type: boolean
+    channel_ids:
+      type: array
+      items:
+        type: string
+        format: uuid
+    template_id:
+      type: string
+      format: uuid
+      nullable: true
+TaskNotificationConfig:
+  type: object
+  properties:
+    enabled:
+      type: boolean
+    on_start:
+      $ref: '#/components/schemas/NotificationTriggerConfig'
+    on_success:
+      $ref: '#/components/schemas/NotificationTriggerConfig'
+    on_failure:
+      $ref: '#/components/schemas/NotificationTriggerConfig'
 ExecutionSchedule:
   type: object
   description: 定时任务调度

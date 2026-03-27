@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -64,7 +65,42 @@ def build_document() -> Dict[str, Any]:
         raise BuildError("未构建出任何 paths")
     if not document["components"]["schemas"]:
         raise BuildError("未构建出任何 schemas")
+    ensure_operation_ids(document)
     return document
+
+
+def to_pascal_case(value: str) -> str:
+    parts = re.split(r"[^A-Za-z0-9]+", value)
+    return "".join(part[:1].upper() + part[1:] for part in parts if part)
+
+
+def build_operation_id(method: str, path: str) -> str:
+    parts = []
+    for segment in path.strip("/").split("/"):
+        if not segment:
+            continue
+        if segment.startswith("{") and segment.endswith("}"):
+            parts.append("By" + to_pascal_case(segment[1:-1]))
+            continue
+        parts.append(to_pascal_case(segment))
+    return method.lower() + "".join(parts)
+
+
+def ensure_operation_ids(document: Dict[str, Any]) -> None:
+    seen: Dict[str, str] = {}
+    for path, item in document.get("paths", {}).items():
+        if not isinstance(item, dict):
+            continue
+        for method, operation in item.items():
+            if method.lower() not in {"get", "post", "put", "patch", "delete"}:
+                continue
+            if not isinstance(operation, dict):
+                continue
+            operation_id = operation.get("operationId") or build_operation_id(method, path)
+            if operation_id in seen and seen[operation_id] != f"{method.upper()} {path}":
+                raise BuildError(f"operationId 重复: {operation_id} ({seen[operation_id]} vs {method.upper()} {path})")
+            operation["operationId"] = operation_id
+            seen[operation_id] = f"{method.upper()} {path}"
 
 
 def dump_document(document: Dict[str, Any]) -> str:

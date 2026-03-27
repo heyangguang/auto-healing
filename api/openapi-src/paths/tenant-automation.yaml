@@ -117,6 +117,34 @@
                 type: string
                 format: uuid
                 description: Playbook ID（状态必须为 ready 或 outdated）
+              target_hosts:
+                type: string
+                description: 目标主机
+              extra_vars:
+                type: object
+                description: 变量值
+              executor_type:
+                type: string
+                enum:
+                - local
+                - docker
+                default: local
+              notification_config:
+                $ref: '#/components/schemas/TaskNotificationConfig'
+              description:
+                type: string
+              secrets_source_ids:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionTask'
 /tenant/execution-tasks/stats:
   get:
     tags:
