@@ -69,3 +69,37 @@ func TestDictionaryUpsertBatchUpdatesIsActive(t *testing.T) {
 		t.Fatal("saved.IsActive = true, want false after upsert")
 	}
 }
+
+func TestDictionaryUpsertBatchGeneratesIDAndTimestampsForSeedRows(t *testing.T) {
+	db := newSQLiteTestDB(t)
+	createDictionarySchema(t, db)
+
+	repo := &DictionaryRepository{db: db}
+	err := repo.UpsertBatch(context.Background(), []model.Dictionary{{
+		DictType: "incident_status",
+		DictKey:  "open",
+		Label:    "待处理",
+		IsSystem: true,
+		IsActive: true,
+	}})
+	if err != nil {
+		t.Fatalf("UpsertBatch() error = %v", err)
+	}
+
+	items, err := repo.ListByTypes(context.Background(), []string{"incident_status"}, false)
+	if err != nil {
+		t.Fatalf("ListByTypes() error = %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(items))
+	}
+	if items[0].ID == uuid.Nil {
+		t.Fatal("items[0].ID = uuid.Nil, want generated UUID")
+	}
+	if items[0].CreatedAt.IsZero() {
+		t.Fatal("items[0].CreatedAt is zero, want populated timestamp")
+	}
+	if items[0].UpdatedAt.IsZero() {
+		t.Fatal("items[0].UpdatedAt is zero, want populated timestamp")
+	}
+}

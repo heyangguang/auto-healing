@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/company/auto-healing/internal/modules/ops/model"
 	"github.com/google/uuid"
@@ -88,24 +89,39 @@ func (r *DictionaryRepository) UpsertBatch(ctx context.Context, items []model.Di
 func buildDictionaryUpsertPayloads(items []model.Dictionary) []map[string]interface{} {
 	payloads := make([]map[string]interface{}, 0, len(items))
 	for _, item := range items {
+		normalized := normalizeDictionarySeed(item)
 		payloads = append(payloads, map[string]interface{}{
-			"id":         item.ID,
-			"dict_type":  item.DictType,
-			"dict_key":   item.DictKey,
-			"label":      item.Label,
-			"label_en":   item.LabelEn,
-			"color":      item.Color,
-			"tag_color":  item.TagColor,
-			"badge":      item.Badge,
-			"icon":       item.Icon,
-			"bg":         item.Bg,
-			"extra":      item.Extra,
-			"sort_order": item.SortOrder,
-			"is_system":  item.IsSystem,
-			"is_active":  item.IsActive,
-			"created_at": item.CreatedAt,
-			"updated_at": item.UpdatedAt,
+			"id":         normalized.ID,
+			"dict_type":  normalized.DictType,
+			"dict_key":   normalized.DictKey,
+			"label":      normalized.Label,
+			"label_en":   normalized.LabelEn,
+			"color":      normalized.Color,
+			"tag_color":  normalized.TagColor,
+			"badge":      normalized.Badge,
+			"icon":       normalized.Icon,
+			"bg":         normalized.Bg,
+			"extra":      normalized.Extra,
+			"sort_order": normalized.SortOrder,
+			"is_system":  normalized.IsSystem,
+			"is_active":  normalized.IsActive,
+			"created_at": normalized.CreatedAt,
+			"updated_at": normalized.UpdatedAt,
 		})
 	}
 	return payloads
+}
+
+func normalizeDictionarySeed(item model.Dictionary) model.Dictionary {
+	now := time.Now().UTC()
+	if item.ID == uuid.Nil {
+		item.ID = uuid.New()
+	}
+	if item.CreatedAt.IsZero() {
+		item.CreatedAt = now
+	}
+	if item.UpdatedAt.IsZero() {
+		item.UpdatedAt = now
+	}
+	return item
 }
