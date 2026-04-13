@@ -1,0 +1,53 @@
+# 浏览器联调专用配置
+# 使用独立端口与独立数据库/Redis，避免影响其他本地进程。
+
+app:
+  name: Auto-Healing
+  version: 1.0.0
+  url: http://127.0.0.1:18180
+  env: development
+
+server:
+  host: 127.0.0.1
+  port: 18180
+  mode: debug
+
+database:
+  host: 127.0.0.1
+  port: 15432
+  user: postgres
+  password: postgres
+  dbname: auto_healing_browser
+  ssl_mode: disable
+  max_open_conns: 25
+  max_idle_conns: 5
+  max_lifetime_minutes: 5
+
+redis:
+  host: 127.0.0.1
+  port: 16379
+  password: ""
+  db: 0
+
+jwt:
+  secret: browser-e2e-local-secret-20260328
+  access_token_ttl_minutes: 60
+  refresh_token_ttl_hours: 168
+  issuer: auto-healing-browser
+
+log:
+  level: info
+  console:
+    enabled: true
+    format: text
+    color: true
+  file:
+    enabled: true
+    path: ./logs/browser-e2e
+    filename: app.log
+    format: json
+    max_size: 100
+    max_backups: 10
+    max_age: 7
+    compress: false
+  db_level: warn
