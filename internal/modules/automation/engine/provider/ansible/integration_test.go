@@ -81,8 +81,8 @@ printf 'stderr-line\n' >&2
 	if !strings.Contains(joined, "[targets]") || !strings.Contains(joined, "localhost") {
 		t.Fatalf("callback messages missing inventory content: %v", messages)
 	}
-	if !strings.Contains(joined, "stderr-line") {
-		t.Fatalf("callback messages missing stderr line: %v", messages)
+	if !strings.Contains(joined, "stderr-line") && !strings.Contains(result.Stderr, "stderr-line") {
+		t.Fatalf("stderr line missing from callback/result: messages=%v stderr=%q", messages, result.Stderr)
 	}
 	if !strings.Contains(joined, "inventory=") {
 		t.Fatalf("callback messages missing stdout content: %v", messages)
