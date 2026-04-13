@@ -128,7 +128,7 @@ func TestLogoutRouteSupportsLegacyAccessOnly(t *testing.T) {
 		ID     string
 		Action string
 	}
-	if err := db.Table("audit_logs").Select("id, action").Where("username = ?", "legacy-user").Take(&audit).Error; err != nil {
+	if err := db.Table("platform_audit_logs").Select("id, action").Where("username = ?", "legacy-user").Take(&audit).Error; err != nil {
 		t.Fatalf("load logout audit: %v", err)
 	}
 	if audit.ID == "" {

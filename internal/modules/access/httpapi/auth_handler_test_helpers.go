@@ -121,13 +121,14 @@ func newAuthHandlerTestRouterWithJWTService(t *testing.T, db *gorm.DB, jwtSvc *j
 		permissionRepo:    permissionRepo,
 	}
 	tenantHandler := NewTenantHandlerWithDeps(TenantHandlerDeps{
-		TenantRepo:     tenantRepo,
-		RoleRepo:       roleRepo,
-		UserRepo:       userRepo,
-		AuthService:    authHandler.authSvc,
-		InvitationRepo: accessrepo.NewInvitationRepositoryWithDB(db),
-		SettingsRepo:   settingsrepo.NewPlatformSettingsRepositoryWithDB(db),
-		EmailService:   &stubInvitationEmailService{},
+		TenantRepo:        tenantRepo,
+		RoleRepo:          roleRepo,
+		UserRepo:          userRepo,
+		AuthService:       authHandler.authSvc,
+		InvitationRepo:    accessrepo.NewInvitationRepositoryWithDB(db),
+		SettingsRepo:      settingsrepo.NewPlatformSettingsRepositoryWithDB(db),
+		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepositoryWithDB(db),
+		EmailService:      &stubInvitationEmailService{},
 	})
 
 	api := router.Group("/api/v1")

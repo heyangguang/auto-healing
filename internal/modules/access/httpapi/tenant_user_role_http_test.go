@@ -12,6 +12,8 @@ import (
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/jwt"
+	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
@@ -50,6 +52,23 @@ func TestRegisterByInvitationReturnsBadRequestWhenTenantMissing(t *testing.T) {
 	recorder := issueTenantUserRoleJSONRequest(t, router, http.MethodPost, "/api/v1/auth/register", body, nil)
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+
+	platformlifecycle.Cleanup()
+
+	var audit struct {
+		Username string
+		Status   string
+		Action   string
+	}
+	if err := db.Table("platform_audit_logs").
+		Select("username, status, action").
+		Where("resource_type = ?", "auth-register").
+		Take(&audit).Error; err != nil {
+		t.Fatalf("load register audit: %v", err)
+	}
+	if audit.Username != "tenantinvitee" || audit.Status != "failed" || audit.Action != "create" {
+		t.Fatalf("audit = %+v, want failed auth-register audit", audit)
 	}
 }
 
@@ -167,13 +186,14 @@ func newTenantUserRoleHTTPTestRouter(t *testing.T, db *gorm.DB) *gin.Engine {
 	}, testBlacklistStore{})
 	authSvc := authService.NewServiceWithDeps(authService.ServiceDeps{JWTService: jwtSvc, DB: db})
 	tenantHandler := NewTenantHandlerWithDeps(TenantHandlerDeps{
-		TenantRepo:     accessrepo.NewTenantRepositoryWithDB(db),
-		RoleRepo:       accessrepo.NewRoleRepositoryWithDB(db),
-		UserRepo:       accessrepo.NewUserRepositoryWithDB(db),
-		AuthService:    authSvc,
-		InvitationRepo: accessrepo.NewInvitationRepositoryWithDB(db),
-		SettingsRepo:   settingsrepo.NewPlatformSettingsRepositoryWithDB(db),
-		EmailService:   &stubInvitationEmailService{},
+		TenantRepo:        accessrepo.NewTenantRepositoryWithDB(db),
+		RoleRepo:          accessrepo.NewRoleRepositoryWithDB(db),
+		UserRepo:          accessrepo.NewUserRepositoryWithDB(db),
+		AuthService:       authSvc,
+		InvitationRepo:    accessrepo.NewInvitationRepositoryWithDB(db),
+		SettingsRepo:      settingsrepo.NewPlatformSettingsRepositoryWithDB(db),
+		PlatformAuditRepo: auditrepo.NewPlatformAuditLogRepositoryWithDB(db),
+		EmailService:      &stubInvitationEmailService{},
 	})
 	tenantUserHandler := NewTenantUserHandlerWithDeps(TenantUserHandlerDeps{
 		AuthService: authSvc,

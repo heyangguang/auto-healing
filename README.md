@@ -242,9 +242,13 @@ cd ../..
 # Build the server
 go build -o bin/server ./cmd/server
 go build -o bin/init-admin ./cmd/init-admin
+go build -o bin/reset-admin-password ./cmd/reset-admin-password
 
 # Initialize admin account
 ./bin/init-admin
+
+# Reset an existing admin password (optional)
+RESET_ADMIN_PASSWORD='NewStrongPassword123!' ./bin/reset-admin-password
 
 # Start the server
 ./bin/server

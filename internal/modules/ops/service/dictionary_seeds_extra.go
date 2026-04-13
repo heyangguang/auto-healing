@@ -96,6 +96,7 @@ var auditResourceSeedValues = []model.Dictionary{
 	d("audit_resource_tenant", "tenant-command-blacklist", "命令黑名单", "Command Blacklist", "", "", "", "", "", 20),
 	d("audit_resource_tenant", "tenant-blacklist-exemptions", "豁免规则", "Blacklist Exemption", "", "", "", "", "", 21),
 	// auth / common 路由（任何角色都可能触发）
+	d("audit_resource_tenant", "auth-register", "用户注册", "Register", "", "", "", "", "", 22),
 	d("audit_resource_tenant", "auth-logout", "登出", "Logout", "", "", "", "", "", 23),
 	d("audit_resource_tenant", "auth-profile", "个人资料", "Profile", "", "", "", "", "", 24),
 	d("audit_resource_tenant", "auth-password", "密码修改", "Password", "", "", "", "", "", 25),
@@ -129,6 +130,7 @@ var auditResourceSeedValues = []model.Dictionary{
 	d("audit_resource_platform", "command-blacklist", "命令黑名单", "Command Blacklist", "", "", "", "", "", 17),
 	d("audit_resource_platform", "blacklist-exemptions", "豁免规则", "Blacklist Exemption", "", "", "", "", "", 18),
 	d("audit_resource_platform", "common", "通用操作", "Common", "", "", "", "", "", 19),
+	d("audit_resource_platform", "auth-register", "用户注册", "Register", "", "", "", "", "", 20),
 	d("audit_resource_platform", "git-repos", "代码仓库", "Git Repository", "", "", "", "", "", 21),
 	d("audit_resource_platform", "healing-flows", "自愈流程", "Healing Flow", "", "", "", "", "", 22),
 	d("audit_resource_platform", "incidents", "事件工单", "Incident", "", "", "", "", "", 23),

@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
+	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/modules/access/model"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -42,31 +45,56 @@ func (h *TenantHandler) ValidateInvitation(c *gin.Context) {
 
 // RegisterByInvitation 通过邀请注册
 func (h *TenantHandler) RegisterByInvitation(c *gin.Context) {
+	clientIP := middleware.NormalizeIP(c.ClientIP())
+	userAgent := c.Request.UserAgent()
+	startTime := time.Now()
+	auditUsername := ""
+	auditStatus := "failed"
+	auditError := "注册失败"
+	auditStatusCode := http.StatusBadRequest
+	var auditUserID *uuid.UUID
+	defer func() {
+		platformlifecycle.Go(func(rootCtx context.Context) {
+			h.writeRegisterAuditLog(rootCtx, auditUserID, auditUsername, clientIP, userAgent, auditStatus, auditError, startTime, auditStatusCode)
+		})
+	}()
+
 	var req RegisterByInvitationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		auditError = "请求参数错误"
 		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return
 	}
+	auditUsername = req.Username
 
 	inv, ok := h.loadValidInvitation(c, req.Token)
 	if !ok {
+		auditError = "邀请不存在或已过期"
 		return
 	}
 	if err := h.ensureInvitationTargetsValid(c.Request.Context(), inv); err != nil {
+		auditError = err.Error()
 		response.BadRequest(c, err.Error())
 		return
 	}
 
 	user, err := h.authSvc.Register(c.Request.Context(), buildInvitationRegisterRequest(req, inv))
 	if err != nil {
-		response.BadRequest(c, ToBusinessError(err))
+		auditError = ToBusinessError(err)
+		response.BadRequest(c, auditError)
 		return
 	}
+	auditUserID = &user.ID
 
 	if err := h.completeInvitationRegistration(c.Request.Context(), user.ID, inv); err != nil {
+		auditStatusCode = http.StatusInternalServerError
+		auditError = "完成邀请注册失败"
 		respondInternalError(c, "TENANT", "完成邀请注册失败", err)
 		return
 	}
+	auditStatus = "success"
+	auditStatusCode = http.StatusCreated
+	auditError = ""
 	response.Created(c, invitationRegisterResponse{
 		User:    user,
 		Message: "注册成功，请登录",

@@ -10,8 +10,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// writeLoginAuditLog 异步写入登录审计日志
-func (h *AuthHandler) writeLoginAuditLog(parentCtx context.Context, userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, statusCode int, isPlatformAdmin bool, defaultTenantID string) {
+// writeLoginAuditLog 异步写入认证登录审计日志。
+// 所有登录事件统一记录到平台审计，避免未认证阶段的事件混入租户审计。
+func (h *AuthHandler) writeLoginAuditLog(parentCtx context.Context, userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, statusCode int) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Auth("LOGIN").Error("登录审计日志记录失败 (panic): %v", r)
@@ -19,20 +20,16 @@ func (h *AuthHandler) writeLoginAuditLog(parentCtx context.Context, userID *uuid
 	}()
 
 	if userID == nil && username != "" {
-		h.resolveLoginAuditUser(parentCtx, &userID, username, &isPlatformAdmin, &defaultTenantID)
+		h.resolveLoginAuditUser(parentCtx, &userID, username)
 	}
 
 	ctx, cancel := detachedTimeoutContext(parentCtx, 5*time.Second)
 	defer cancel()
 
-	if isPlatformAdmin {
-		h.writePlatformLoginAudit(ctx, userID, username, ipAddress, userAgent, status, errorMsg, createdAt, statusCode)
-		return
-	}
-	h.writeTenantLoginAudit(ctx, userID, username, ipAddress, userAgent, status, errorMsg, createdAt, statusCode, defaultTenantID)
+	h.writePlatformLoginAudit(ctx, userID, username, ipAddress, userAgent, status, errorMsg, createdAt, statusCode)
 }
 
-func (h *AuthHandler) resolveLoginAuditUser(parentCtx context.Context, userID **uuid.UUID, username string, isPlatformAdmin *bool, defaultTenantID *string) {
+func (h *AuthHandler) resolveLoginAuditUser(parentCtx context.Context, userID **uuid.UUID, username string) {
 	ctx, cancel := detachedTimeoutContext(parentCtx, 3*time.Second)
 	defer cancel()
 
@@ -42,7 +39,6 @@ func (h *AuthHandler) resolveLoginAuditUser(parentCtx context.Context, userID **
 	}
 
 	*userID = &user.ID
-	*isPlatformAdmin = user.IsPlatformAdmin
 }
 
 func (h *AuthHandler) writePlatformLoginAudit(ctx context.Context, userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, statusCode int) {
@@ -67,35 +63,9 @@ func (h *AuthHandler) writePlatformLoginAudit(ctx context.Context, userID *uuid.
 	}
 }
 
-func (h *AuthHandler) writeTenantLoginAudit(ctx context.Context, userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, statusCode int, defaultTenantID string) {
-	log := &platformmodel.AuditLog{
-		ID:             uuid.New(),
-		UserID:         userID,
-		Username:       username,
-		IPAddress:      ipAddress,
-		UserAgent:      userAgent,
-		Category:       "login",
-		Action:         "login",
-		ResourceType:   "auth",
-		RequestMethod:  "POST",
-		RequestPath:    "/api/v1/auth/login",
-		ResponseStatus: &statusCode,
-		Status:         status,
-		ErrorMessage:   errorMsg,
-		CreatedAt:      createdAt,
-	}
-	if defaultTenantID != "" {
-		if tenantID, err := uuid.Parse(defaultTenantID); err == nil {
-			log.TenantID = &tenantID
-		}
-	}
-	if err := h.auditRepo.Create(ctx, log); err != nil {
-		logger.Auth("LOGIN").Error("登录审计日志写入失败: %v", err)
-	}
-}
-
-// writeLogoutAuditLog 异步写入登出审计日志
-func (h *AuthHandler) writeLogoutAuditLog(parentCtx context.Context, userIDStr, username, ipAddress, userAgent string, createdAt time.Time, isPlatformAdmin bool, tenantID uuid.UUID) {
+// writeLogoutAuditLog 异步写入认证登出审计日志。
+// 登出属于全局认证事件，统一记录到平台审计。
+func (h *AuthHandler) writeLogoutAuditLog(parentCtx context.Context, userIDStr, username, ipAddress, userAgent string, createdAt time.Time) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Auth("LOGIN").Error("登出审计日志记录失败 (panic): %v", r)
@@ -107,17 +77,9 @@ func (h *AuthHandler) writeLogoutAuditLog(parentCtx context.Context, userIDStr, 
 	ctx, cancel := detachedTimeoutContext(parentCtx, 5*time.Second)
 	defer cancel()
 
-	if isPlatformAdmin {
-		log := buildPlatformLogoutAuditLog(userID, username, ipAddress, userAgent, createdAt, statusCode)
-		if err := h.platformAuditRepo.Create(ctx, log); err != nil {
-			logger.Auth("LOGIN").Error("平台登出审计日志写入失败: %v", err)
-		}
-		return
-	}
-
-	log := buildTenantLogoutAuditLog(userID, username, ipAddress, userAgent, createdAt, statusCode, tenantID)
-	if err := h.auditRepo.Create(ctx, log); err != nil {
-		logger.Auth("LOGIN").Error("登出审计日志写入失败: %v", err)
+	log := buildPlatformLogoutAuditLog(userID, username, ipAddress, userAgent, createdAt, statusCode)
+	if err := h.platformAuditRepo.Create(ctx, log); err != nil {
+		logger.Auth("LOGIN").Error("平台登出审计日志写入失败: %v", err)
 	}
 }
 
@@ -147,26 +109,4 @@ func buildPlatformLogoutAuditLog(userID *uuid.UUID, username, ipAddress, userAge
 		Status:         "success",
 		CreatedAt:      createdAt,
 	}
-}
-
-func buildTenantLogoutAuditLog(userID *uuid.UUID, username, ipAddress, userAgent string, createdAt time.Time, statusCode int, tenantID uuid.UUID) *platformmodel.AuditLog {
-	log := &platformmodel.AuditLog{
-		ID:             uuid.New(),
-		UserID:         userID,
-		Username:       username,
-		IPAddress:      ipAddress,
-		UserAgent:      userAgent,
-		Category:       "login",
-		Action:         "logout",
-		ResourceType:   "auth-logout",
-		RequestMethod:  "POST",
-		RequestPath:    "/api/v1/auth/logout",
-		ResponseStatus: &statusCode,
-		Status:         "success",
-		CreatedAt:      createdAt,
-	}
-	if tenantID != uuid.Nil {
-		log.TenantID = &tenantID
-	}
-	return log
 }

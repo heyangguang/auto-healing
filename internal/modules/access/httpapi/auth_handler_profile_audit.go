@@ -8,22 +8,11 @@ import (
 )
 
 func (h *AuthHandler) loadLoginHistoryItems(c *gin.Context, userID uuid.UUID, limit int) ([]LoginHistoryItem, error) {
-	if middleware.IsPlatformAdmin(c) {
-		logs, err := h.platformAuditRepo.GetUserLoginHistory(c.Request.Context(), userID, limit)
-		if err != nil {
-			return nil, err
-		}
-		return buildPlatformLoginHistoryItems(logs), nil
-	}
-	tenantID, err := h.authTenantIDOrError(c)
+	logs, err := h.platformAuditRepo.GetUserLoginHistory(c.Request.Context(), userID, limit)
 	if err != nil {
 		return nil, err
 	}
-	logs, err := h.auditRepo.GetUserLoginHistory(c.Request.Context(), userID, tenantID, limit)
-	if err != nil {
-		return nil, err
-	}
-	return buildTenantLoginHistoryItems(logs), nil
+	return buildPlatformLoginHistoryItems(logs), nil
 }
 
 func (h *AuthHandler) loadProfileActivityItems(c *gin.Context, userID uuid.UUID, limit int) ([]ProfileActivityItem, error) {
@@ -46,25 +35,6 @@ func (h *AuthHandler) loadProfileActivityItems(c *gin.Context, userID uuid.UUID,
 }
 
 func buildPlatformLoginHistoryItems(logs []platformmodel.PlatformAuditLog) []LoginHistoryItem {
-	items := make([]LoginHistoryItem, 0, len(logs))
-	for _, log := range logs {
-		items = append(items, LoginHistoryItem{
-			ID:           log.ID,
-			Action:       log.Action,
-			IPAddress:    log.IPAddress,
-			UserAgent:    log.UserAgent,
-			Status:       log.Status,
-			ErrorMessage: sanitizeLoginHistoryErrorMessage(log.Status, log.ResponseStatus, log.ErrorMessage),
-			CreatedAt:    log.CreatedAt,
-		})
-	}
-	if items == nil {
-		return []LoginHistoryItem{}
-	}
-	return items
-}
-
-func buildTenantLoginHistoryItems(logs []platformmodel.AuditLog) []LoginHistoryItem {
 	items := make([]LoginHistoryItem, 0, len(logs))
 	for _, log := range logs {
 		items = append(items, LoginHistoryItem{

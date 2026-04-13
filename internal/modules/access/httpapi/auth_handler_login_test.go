@@ -12,6 +12,7 @@ import (
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	"github.com/company/auto-healing/internal/pkg/crypto"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformlifecycle "github.com/company/auto-healing/internal/platform/lifecycle"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -156,6 +157,89 @@ func TestSetupAuthRoutesLoginReturnsUnauthorizedForInvalidCredentials(t *testing
 	}
 	if resp.Message != authService.ErrInvalidCredentials.Error() {
 		t.Fatalf("message = %q, want %q", resp.Message, authService.ErrInvalidCredentials.Error())
+	}
+}
+
+func TestSetupAuthRoutesLoginWritesUnknownUsernameFailureToPlatformAudit(t *testing.T) {
+	db := newAuthHandlerTestDB(t)
+	createAuthHandlerSchema(t, db)
+
+	router, _ := newAuthHandlerTestRouter(t, db)
+	recorder := issueLoginRequest(t, router, "ghost-user", "wrong-password")
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusUnauthorized, recorder.Body.String())
+	}
+
+	platformlifecycle.Cleanup()
+
+	var audit struct {
+		Username string
+		Status   string
+		Action   string
+		UserID   *string
+	}
+	if err := db.Table("platform_audit_logs").
+		Select("username, status, action, user_id").
+		Where("username = ?", "ghost-user").
+		Take(&audit).Error; err != nil {
+		t.Fatalf("load platform audit: %v", err)
+	}
+	if audit.Status != "failed" || audit.Action != "login" {
+		t.Fatalf("audit = %+v, want failed login", audit)
+	}
+	if audit.UserID != nil {
+		t.Fatalf("user_id = %v, want nil for unknown username", *audit.UserID)
+	}
+
+	var tenantAuditCount int64
+	if err := db.Table("audit_logs").Count(&tenantAuditCount).Error; err != nil {
+		t.Fatalf("count tenant audits: %v", err)
+	}
+	if tenantAuditCount != 0 {
+		t.Fatalf("tenant audit count = %d, want 0", tenantAuditCount)
+	}
+}
+
+func TestSetupAuthRoutesLoginWritesTenantUserSuccessToPlatformAudit(t *testing.T) {
+	db := newAuthHandlerTestDB(t)
+	createAuthHandlerSchema(t, db)
+
+	userID := uuid.New()
+	tenantID := uuid.New()
+	insertTenant(t, db, tenantID, "Tenant A", "tenant-a")
+	insertLoginUser(t, db, userID, "login-user", "correct-password")
+	insertTenantMembership(t, db, userID, tenantID)
+
+	router, _ := newAuthHandlerTestRouter(t, db)
+	recorder := issueLoginRequest(t, router, "login-user", "correct-password")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	platformlifecycle.Cleanup()
+
+	var audit struct {
+		Username string
+		Status   string
+		Action   string
+		UserID   string
+	}
+	if err := db.Table("platform_audit_logs").
+		Select("username, status, action, user_id").
+		Where("username = ?", "login-user").
+		Take(&audit).Error; err != nil {
+		t.Fatalf("load platform audit: %v", err)
+	}
+	if audit.Status != "success" || audit.Action != "login" || audit.UserID != userID.String() {
+		t.Fatalf("audit = %+v, want successful platform login audit for %s", audit, userID)
+	}
+
+	var tenantAuditCount int64
+	if err := db.Table("audit_logs").Count(&tenantAuditCount).Error; err != nil {
+		t.Fatalf("count tenant audits: %v", err)
+	}
+	if tenantAuditCount != 0 {
+		t.Fatalf("tenant audit count = %d, want 0", tenantAuditCount)
 	}
 }
 

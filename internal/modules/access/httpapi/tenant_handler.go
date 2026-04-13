@@ -6,39 +6,43 @@ import (
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	authService "github.com/company/auto-healing/internal/modules/access/service/auth"
 	engagementservice "github.com/company/auto-healing/internal/modules/engagement/service"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	settingsrepo "github.com/company/auto-healing/internal/platform/repository/settings"
 )
 
 // TenantHandler 租户处理器
 type TenantHandler struct {
-	repo     *accessrepo.TenantRepository
-	roleRepo *accessrepo.RoleRepository
-	userRepo *accessrepo.UserRepository
-	authSvc  *authService.Service
-	invRepo  *accessrepo.InvitationRepository
-	settings *settingsrepo.PlatformSettingsRepository
-	emailSvc invitationEmailService
+	repo              *accessrepo.TenantRepository
+	roleRepo          *accessrepo.RoleRepository
+	userRepo          *accessrepo.UserRepository
+	authSvc           *authService.Service
+	invRepo           *accessrepo.InvitationRepository
+	settings          *settingsrepo.PlatformSettingsRepository
+	platformAuditRepo *auditrepo.PlatformAuditLogRepository
+	emailSvc          invitationEmailService
 }
 
 type TenantHandlerDeps struct {
-	TenantRepo     *accessrepo.TenantRepository
-	RoleRepo       *accessrepo.RoleRepository
-	UserRepo       *accessrepo.UserRepository
-	AuthService    *authService.Service
-	InvitationRepo *accessrepo.InvitationRepository
-	SettingsRepo   *settingsrepo.PlatformSettingsRepository
-	EmailService   invitationEmailService
+	TenantRepo        *accessrepo.TenantRepository
+	RoleRepo          *accessrepo.RoleRepository
+	UserRepo          *accessrepo.UserRepository
+	AuthService       *authService.Service
+	InvitationRepo    *accessrepo.InvitationRepository
+	SettingsRepo      *settingsrepo.PlatformSettingsRepository
+	PlatformAuditRepo *auditrepo.PlatformAuditLogRepository
+	EmailService      invitationEmailService
 }
 
 func NewTenantHandlerWithDeps(deps TenantHandlerDeps) *TenantHandler {
 	return &TenantHandler{
-		repo:     deps.TenantRepo,
-		roleRepo: deps.RoleRepo,
-		userRepo: deps.UserRepo,
-		authSvc:  deps.AuthService,
-		invRepo:  deps.InvitationRepo,
-		settings: deps.SettingsRepo,
-		emailSvc: deps.EmailService,
+		repo:              deps.TenantRepo,
+		roleRepo:          deps.RoleRepo,
+		userRepo:          deps.UserRepo,
+		authSvc:           deps.AuthService,
+		invRepo:           deps.InvitationRepo,
+		settings:          deps.SettingsRepo,
+		platformAuditRepo: deps.PlatformAuditRepo,
+		emailSvc:          deps.EmailService,
 	}
 }
 

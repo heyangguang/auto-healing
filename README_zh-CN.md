@@ -235,9 +235,13 @@ cd ../..
 # 编译服务
 go build -o bin/server ./cmd/server
 go build -o bin/init-admin ./cmd/init-admin
+go build -o bin/reset-admin-password ./cmd/reset-admin-password
 
 # 初始化管理员账号
 ./bin/init-admin
+
+# 重置已有 admin 密码（可选）
+RESET_ADMIN_PASSWORD='NewStrongPassword123!' ./bin/reset-admin-password
 
 # 启动服务
 ./bin/server
