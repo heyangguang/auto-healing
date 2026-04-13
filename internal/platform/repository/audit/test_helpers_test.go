@@ -26,6 +26,13 @@ func newAuditTestDB(t *testing.T) *gorm.DB {
 		email TEXT,
 		password_hash TEXT
 	)`,
+		`CREATE TABLE user_tenant_roles (
+		id TEXT PRIMARY KEY,
+		user_id TEXT,
+		tenant_id TEXT,
+		role_id TEXT,
+		created_at DATETIME
+	)`,
 		`CREATE TABLE audit_logs (
 		id TEXT PRIMARY KEY,
 		tenant_id TEXT,
@@ -96,6 +103,13 @@ func createAuditUser(t *testing.T, db *gorm.DB, id uuid.UUID, username string) {
 		"hash",
 	).Error; err != nil {
 		t.Fatalf("create audit user: %v", err)
+	}
+}
+
+func mustExecAuditRepoSQL(t *testing.T, db *gorm.DB, sql string, args ...any) {
+	t.Helper()
+	if err := db.Exec(sql, args...).Error; err != nil {
+		t.Fatalf("exec %q: %v", sql, err)
 	}
 }
 

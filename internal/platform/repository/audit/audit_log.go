@@ -30,7 +30,7 @@ func (r *AuditLogRepository) GetByID(ctx context.Context, id uuid.UUID) (*platfo
 	var log platformmodel.AuditLog
 	err := tenantDB(r.db, ctx).Preload("User").First(&log, "id = ?", id).Error
 	if err == gorm.ErrRecordNotFound {
-		return nil, nil
+		return tenantVisibleLoginByID(r.db, ctx, id)
 	}
 	if err != nil {
 		return nil, err
