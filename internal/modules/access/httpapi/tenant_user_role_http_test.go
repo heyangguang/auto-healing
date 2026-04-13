@@ -57,18 +57,27 @@ func TestRegisterByInvitationReturnsBadRequestWhenTenantMissing(t *testing.T) {
 	platformlifecycle.Cleanup()
 
 	var audit struct {
-		Username string
-		Status   string
-		Action   string
+		Username          string
+		Status            string
+		Category          string
+		Action            string
+		ResourceType      string
+		FailureReason     string
+		AuthMethod        string
+		SubjectScope      string
+		SubjectTenantName string
 	}
 	if err := db.Table("platform_audit_logs").
-		Select("username, status, action").
-		Where("resource_type = ?", "auth-register").
+		Select("username, status, category, action, resource_type, failure_reason, auth_method, subject_scope, subject_tenant_name").
+		Where("request_path = ?", "/api/v1/auth/register").
 		Take(&audit).Error; err != nil {
 		t.Fatalf("load register audit: %v", err)
 	}
-	if audit.Username != "tenantinvitee" || audit.Status != "failed" || audit.Action != "create" {
-		t.Fatalf("audit = %+v, want failed auth-register audit", audit)
+	if audit.Username != "tenantinvitee" || audit.Status != "failed" || audit.Category != "auth" || audit.Action != "register" || audit.ResourceType != "auth" {
+		t.Fatalf("audit = %+v, want failed auth register audit", audit)
+	}
+	if audit.FailureReason != authFailureReasonInvitationInvalid || audit.AuthMethod != authMethodInvitationRegister || audit.SubjectScope != authSubjectScopeTenantUser {
+		t.Fatalf("audit metadata = %+v, want invitation_invalid/invitation_register/tenant_user", audit)
 	}
 }
 

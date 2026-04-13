@@ -225,9 +225,39 @@
     tags:
     - 平台审计
     summary: 获取平台审计日志列表
+    description: 返回平台操作审计与全局认证安全事件。category=auth 表示全局认证事件；category=login 为兼容别名，仅返回认证事件中的 login/logout。
     parameters:
     - $ref: '#/components/parameters/Page'
     - $ref: '#/components/parameters/PageSize'
+    - name: category
+      in: query
+      schema:
+        type: string
+        enum:
+        - operation
+        - auth
+        - login
+    - name: action
+      in: query
+      schema:
+        type: string
+        x-dict-type: audit_action
+        x-dict-mode: exact
+    - name: resource_type
+      in: query
+      schema:
+        type: string
+    - name: username
+      in: query
+      schema:
+        type: string
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum:
+        - success
+        - failed
     responses:
       '200':
         description: 成功
@@ -248,6 +278,15 @@
     tags:
     - 平台审计
     summary: 获取平台审计统计
+    parameters:
+    - name: category
+      in: query
+      schema:
+        type: string
+        enum:
+        - operation
+        - auth
+        - login
     responses:
       '200':
         $ref: '#/components/responses/Success'
@@ -256,6 +295,20 @@
     tags:
     - 平台审计
     summary: 获取平台审计趋势
+    parameters:
+    - name: days
+      in: query
+      schema:
+        type: integer
+        default: 30
+    - name: category
+      in: query
+      schema:
+        type: string
+        enum:
+        - operation
+        - auth
+        - login
     responses:
       '200':
         description: 成功

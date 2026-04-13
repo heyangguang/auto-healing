@@ -17,7 +17,7 @@ func TestPlatformAuditGetStatsReturnsDatabaseError(t *testing.T) {
 	}
 
 	repo := NewPlatformAuditLogRepositoryWithDB(db)
-	_, err = repo.GetStats(context.Background())
+	_, err = repo.GetStats(context.Background(), "")
 	if err == nil {
 		t.Fatal("GetStats error = nil, want database error")
 	}

@@ -3,6 +3,7 @@
     tags:
     - 认证
     summary: 用户登录
+    description: 所有登录尝试都会写入平台认证审计，未知用户名失败也会保留尝试用户名与失败原因。
     security: []
     requestBody:
       required: true
@@ -39,6 +40,7 @@
     tags:
     - 认证
     summary: 用户登出
+    description: 登出事件统一记录为平台认证审计（category=auth, action=logout）。
     responses:
       '200':
         $ref: '#/components/responses/Success'
@@ -166,6 +168,7 @@
     tags:
     - 认证
     summary: 获取当前用户登录历史
+    description: 读取当前用户的认证历史，数据源统一来自平台认证审计，不依赖当前租户上下文。
     parameters:
     - name: limit
       in: query
@@ -208,6 +211,7 @@
     tags:
     - 认证
     summary: 通过邀请注册用户
+    description: 邀请注册成功或失败都会记录为平台认证审计事件（category=auth, action=register）。
     requestBody:
       required: true
       content:

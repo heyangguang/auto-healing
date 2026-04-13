@@ -62,7 +62,8 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 func NewWithDeps(deps ModuleDeps) *Module {
 	return &Module{
 		Audit: opshttp.NewAuditHandlerWithDeps(opshttp.AuditHandlerDeps{
-			Repo: deps.AuditRepo,
+			Repo:         deps.AuditRepo,
+			PlatformRepo: deps.PlatformAuditRepo,
 		}),
 		PlatformAudit: opshttp.NewPlatformAuditHandlerWithDeps(opshttp.PlatformAuditHandlerDeps{
 			Repo: deps.PlatformAuditRepo,

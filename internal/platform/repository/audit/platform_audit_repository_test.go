@@ -21,9 +21,9 @@ func TestPlatformAuditRepositoryListStatsAndUserQueries(t *testing.T) {
 		ID:           loginID,
 		UserID:       &userID,
 		Username:     "root",
-		Category:     "login",
+		Category:     "auth",
 		Action:       "login",
-		ResourceType: "session",
+		ResourceType: "auth",
 		RequestPath:  "/api/v1/auth/login",
 		Status:       "success",
 		CreatedAt:    fixedAuditTime(0),
@@ -85,7 +85,7 @@ func TestPlatformAuditRepositoryListStatsAndUserQueries(t *testing.T) {
 		t.Fatalf("List() total=%d len=%d, want 3/3", total, len(logs))
 	}
 
-	stats, err := repo.GetStats(context.Background())
+	stats, err := repo.GetStats(context.Background(), "")
 	if err != nil {
 		t.Fatalf("GetStats() error = %v", err)
 	}
@@ -145,8 +145,96 @@ func TestPlatformAuditRepositoryListStatsAndUserQueries(t *testing.T) {
 func TestPlatformAuditGetTrendSurfacesDialectError(t *testing.T) {
 	db := newAuditTestDB(t)
 	repo := NewPlatformAuditLogRepositoryWithDB(db)
-	_, err := repo.GetTrend(context.Background(), 7)
+	_, err := repo.GetTrend(context.Background(), 7, "")
 	if err == nil {
 		t.Fatal("GetTrend() error = nil, want SQL dialect error")
+	}
+}
+
+func TestPlatformAuditRepositoryListsTenantVisibleAuthLogs(t *testing.T) {
+	db := newAuditTestDB(t)
+	platformRepo := NewPlatformAuditLogRepositoryWithDB(db)
+	tenantID := uuid.New()
+	otherTenantID := uuid.New()
+	userID := uuid.New()
+	otherUserID := uuid.New()
+
+	createAuditUser(t, db, userID, "alice")
+	createAuditUser(t, db, otherUserID, "bob")
+
+	mustExecAuditRepoSQL(t, db, `INSERT INTO user_tenant_roles (id, user_id, tenant_id, role_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+		uuid.NewString(), userID.String(), tenantID.String(), uuid.NewString(), fixedAuditTime(0))
+	mustExecAuditRepoSQL(t, db, `INSERT INTO user_tenant_roles (id, user_id, tenant_id, role_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+		uuid.NewString(), otherUserID.String(), otherTenantID.String(), uuid.NewString(), fixedAuditTime(0))
+
+	loginID := uuid.New()
+	insertPlatformAuditLog(t, db, platformmodel.PlatformAuditLog{
+		ID:                loginID,
+		UserID:            &userID,
+		Username:          "alice",
+		PrincipalUsername: "alice",
+		SubjectScope:      "tenant_user",
+		SubjectTenantID:   &tenantID,
+		SubjectTenantName: "Tenant A",
+		Category:          "auth",
+		Action:            "login",
+		ResourceType:      "auth",
+		RequestPath:       "/api/v1/auth/login",
+		Status:            "success",
+		CreatedAt:         fixedAuditTime(0),
+	})
+	insertPlatformAuditLog(t, db, platformmodel.PlatformAuditLog{
+		ID:                uuid.New(),
+		UserID:            &otherUserID,
+		Username:          "bob",
+		PrincipalUsername: "bob",
+		SubjectScope:      "tenant_user",
+		SubjectTenantID:   &otherTenantID,
+		SubjectTenantName: "Tenant B",
+		Category:          "auth",
+		Action:            "login",
+		ResourceType:      "auth",
+		RequestPath:       "/api/v1/auth/login",
+		Status:            "success",
+		CreatedAt:         fixedAuditTime(0),
+	})
+	insertPlatformAuditLog(t, db, platformmodel.PlatformAuditLog{
+		ID:           uuid.New(),
+		Username:     "ghost-user",
+		Category:     "auth",
+		Action:       "login",
+		ResourceType: "auth",
+		RequestPath:  "/api/v1/auth/login",
+		Status:       "failed",
+		CreatedAt:    fixedAuditTime(0),
+	})
+
+	ctx := WithTenantID(context.Background(), tenantID)
+	logs, total, err := platformRepo.ListTenantVisibleAuthLogs(ctx, &AuditLogListOptions{
+		Page:     1,
+		PageSize: 10,
+		Category: "auth",
+	})
+	if err != nil {
+		t.Fatalf("ListTenantVisibleAuthLogs() error = %v", err)
+	}
+	if total != 1 || len(logs) != 1 || logs[0].ID != loginID {
+		t.Fatalf("ListTenantVisibleAuthLogs() total=%d logs=%#v, want one tenant auth log", total, logs)
+	}
+
+	got, err := platformRepo.GetTenantVisibleAuthLogByID(ctx, loginID)
+	if err != nil {
+		t.Fatalf("GetTenantVisibleAuthLogByID() error = %v", err)
+	}
+	if got == nil || got.ID != loginID {
+		t.Fatalf("GetTenantVisibleAuthLogByID() = %#v, want %s", got, loginID)
+	}
+
+	stats, err := platformRepo.GetTenantVisibleAuthStats(ctx, "auth")
+	if err != nil {
+		t.Fatalf("GetTenantVisibleAuthStats() error = %v", err)
+	}
+	if stats.TotalCount != 1 || stats.SuccessCount != 1 || stats.FailedCount != 0 {
+		t.Fatalf("GetTenantVisibleAuthStats() = %#v", stats)
 	}
 }

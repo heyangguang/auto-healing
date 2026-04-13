@@ -8,16 +8,16 @@ import (
 	"gorm.io/gorm"
 )
 
-func (r *PlatformAuditLogRepository) GetStats(ctx context.Context) (*PlatformAuditStats, error) {
-	totalCount, loginCount, operCount, successCount, failedCount, err := r.platformAuditSummaryCounts(ctx)
+func (r *PlatformAuditLogRepository) GetStats(ctx context.Context, category string) (*PlatformAuditStats, error) {
+	totalCount, loginCount, operCount, successCount, failedCount, err := r.platformAuditSummaryCounts(ctx, category)
 	if err != nil {
 		return nil, err
 	}
-	todayCount, weekCount, err := r.platformAuditPeriodCounts(ctx)
+	todayCount, weekCount, err := r.platformAuditPeriodCounts(ctx, category)
 	if err != nil {
 		return nil, err
 	}
-	actionStats, err := r.platformAuditActionStats(ctx)
+	actionStats, err := r.platformAuditActionStats(ctx, category)
 	if err != nil {
 		return nil, err
 	}
@@ -33,10 +33,10 @@ func (r *PlatformAuditLogRepository) GetStats(ctx context.Context) (*PlatformAud
 	}, nil
 }
 
-func (r *PlatformAuditLogRepository) GetTrend(ctx context.Context, days int) ([]TrendItem, error) {
+func (r *PlatformAuditLogRepository) GetTrend(ctx context.Context, days int, category string) ([]TrendItem, error) {
 	var items []TrendItem
 	since := time.Now().AddDate(0, 0, -days)
-	err := r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}).
+	err := applyPlatformAuditCategoryScope(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}), category).
 		Select("TO_CHAR(created_at, 'YYYY-MM-DD') as date, count(*) as count").
 		Where("created_at >= ?", since).
 		Group("TO_CHAR(created_at, 'YYYY-MM-DD')").
@@ -80,13 +80,15 @@ func (r *PlatformAuditLogRepository) GetActionGrouping(ctx context.Context, acti
 	return items, err
 }
 
-func (r *PlatformAuditLogRepository) platformAuditSummaryCounts(ctx context.Context) (int64, int64, int64, int64, int64, error) {
-	newDB := func() *gorm.DB { return r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}) }
+func (r *PlatformAuditLogRepository) platformAuditSummaryCounts(ctx context.Context, category string) (int64, int64, int64, int64, int64, error) {
+	newDB := func() *gorm.DB {
+		return applyPlatformAuditCategoryScope(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}), category)
+	}
 	totalCount, err := auditCount(newDB())
 	if err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
-	loginCount, err := auditCount(newDB().Where("category = ?", "login"))
+	loginCount, err := auditCount(newDB().Where("category = ?", authCategoryStored))
 	if err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
@@ -105,25 +107,27 @@ func (r *PlatformAuditLogRepository) platformAuditSummaryCounts(ctx context.Cont
 	return totalCount, loginCount, operCount, successCount, failedCount, nil
 }
 
-func (r *PlatformAuditLogRepository) platformAuditPeriodCounts(ctx context.Context) (int64, int64, error) {
+func (r *PlatformAuditLogRepository) platformAuditPeriodCounts(ctx context.Context, category string) (int64, int64, error) {
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	weekStart := todayStart.AddDate(0, 0, -int(now.Weekday()))
 
-	todayCount, err := auditCount(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}).Where("created_at >= ?", todayStart))
+	baseToday := applyPlatformAuditCategoryScope(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}), category)
+	todayCount, err := auditCount(baseToday.Where("created_at >= ?", todayStart))
 	if err != nil {
 		return 0, 0, err
 	}
-	weekCount, err := auditCount(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}).Where("created_at >= ?", weekStart))
+	baseWeek := applyPlatformAuditCategoryScope(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}), category)
+	weekCount, err := auditCount(baseWeek.Where("created_at >= ?", weekStart))
 	if err != nil {
 		return 0, 0, err
 	}
 	return todayCount, weekCount, nil
 }
 
-func (r *PlatformAuditLogRepository) platformAuditActionStats(ctx context.Context) ([]ActionStat, error) {
+func (r *PlatformAuditLogRepository) platformAuditActionStats(ctx context.Context, category string) ([]ActionStat, error) {
 	var actionStats []ActionStat
-	err := r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}).
+	err := applyPlatformAuditCategoryScope(r.db.WithContext(ctx).Model(&platformmodel.PlatformAuditLog{}), category).
 		Select("action, count(*) as count").
 		Group("action").
 		Order("count DESC").

@@ -129,7 +129,7 @@ func (h *PlatformAuditHandler) GetPlatformAuditLog(c *gin.Context) {
 // GetPlatformAuditStats 获取平台审计统计
 // GET /api/v1/platform/audit-logs/stats
 func (h *PlatformAuditHandler) GetPlatformAuditStats(c *gin.Context) {
-	stats, err := h.repo.GetStats(c.Request.Context())
+	stats, err := h.repo.GetStats(c.Request.Context(), c.Query("category"))
 	if err != nil {
 		respondInternalError(c, "AUDIT", "获取平台审计统计失败", err)
 		return
@@ -142,7 +142,7 @@ func (h *PlatformAuditHandler) GetPlatformAuditStats(c *gin.Context) {
 func (h *PlatformAuditHandler) GetPlatformAuditTrend(c *gin.Context) {
 	days := parsePositiveIntQuery(c, "days", 30, 365)
 
-	items, err := h.repo.GetTrend(c.Request.Context(), days)
+	items, err := h.repo.GetTrend(c.Request.Context(), days, c.Query("category"))
 	if err != nil {
 		respondInternalError(c, "AUDIT", "获取平台审计趋势失败", err)
 		return

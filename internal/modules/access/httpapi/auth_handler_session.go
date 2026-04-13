@@ -33,7 +33,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	resp, err := h.authSvc.Login(c.Request.Context(), &req, clientIP)
 	if err != nil {
 		platformlifecycle.Go(func(rootCtx context.Context) {
-			h.writeLoginAuditLog(rootCtx, nil, req.Username, clientIP, userAgent, "failed", loginAuditErrorMessage(err), startTime, loginFailureStatusCode(err))
+			h.writeLoginAuditLog(rootCtx, nil, req.Username, clientIP, userAgent, "failed", err, startTime, loginFailureStatusCode(err), "")
 		})
 		if isLoginUnauthorizedError(err) {
 			response.Unauthorized(c, ToBusinessError(err))
@@ -45,7 +45,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	userID := resp.User.ID
 	platformlifecycle.Go(func(rootCtx context.Context) {
-		h.writeLoginAuditLog(rootCtx, &userID, resp.User.Username, clientIP, userAgent, "success", "", startTime, http.StatusOK)
+		h.writeLoginAuditLog(rootCtx, &userID, resp.User.Username, clientIP, userAgent, "success", nil, startTime, http.StatusOK, resp.CurrentTenantID)
 	})
 	response.Success(c, resp)
 }
@@ -68,6 +68,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	userIDStr := middleware.GetUserID(c)
 	username := middleware.GetUsername(c)
+	isPlatformAdmin := middleware.IsPlatformAdmin(c)
+	tenantID := currentTenantOrNil(c)
 	if err := h.revokeAuthTokens(c, req.RefreshToken, userIDStr); err != nil {
 		if isLogoutClientError(err) {
 			response.BadRequest(c, err.Error())
@@ -77,7 +79,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 	platformlifecycle.Go(func(rootCtx context.Context) {
-		h.writeLogoutAuditLog(rootCtx, userIDStr, username, clientIP, userAgent, startTime)
+		h.writeLogoutAuditLog(rootCtx, userIDStr, username, clientIP, userAgent, startTime, isPlatformAdmin, tenantID)
 	})
 	response.Message(c, "登出成功")
 }

@@ -9,9 +9,6 @@ import (
 )
 
 func (r *AuditLogRepository) List(ctx context.Context, opts *AuditLogListOptions) ([]platformmodel.AuditLog, int64, error) {
-	if opts != nil && opts.Category == "login" {
-		return tenantVisibleLoginList(r.db, ctx, opts)
-	}
 	queryBuilder := applyAuditLogFilters(tenantDB(r.db, ctx).Model(&platformmodel.AuditLog{}), opts)
 	total, err := countWithClone(queryBuilder)
 	if err != nil {

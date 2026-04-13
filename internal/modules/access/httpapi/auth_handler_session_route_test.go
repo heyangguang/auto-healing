@@ -125,16 +125,19 @@ func TestLogoutRouteSupportsLegacyAccessOnly(t *testing.T) {
 	platformlifecycle.Cleanup()
 
 	var audit struct {
-		ID     string
-		Action string
+		ID           string
+		Category     string
+		Action       string
+		ResourceType string
+		AuthMethod   string
 	}
-	if err := db.Table("platform_audit_logs").Select("id, action").Where("username = ?", "legacy-user").Take(&audit).Error; err != nil {
+	if err := db.Table("platform_audit_logs").Select("id, category, action, resource_type, auth_method").Where("username = ?", "legacy-user").Take(&audit).Error; err != nil {
 		t.Fatalf("load logout audit: %v", err)
 	}
 	if audit.ID == "" {
 		t.Fatal("logout audit id = empty, want generated id")
 	}
-	if audit.Action != "logout" {
-		t.Fatalf("logout audit action = %q, want %q", audit.Action, "logout")
+	if audit.Action != "logout" || audit.Category != "auth" || audit.ResourceType != "auth" || audit.AuthMethod != authMethodToken {
+		t.Fatalf("logout audit = %+v, want auth/logout/auth/token", audit)
 	}
 }

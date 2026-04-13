@@ -49,7 +49,8 @@ func TestAuditHandlerStatsEndpoints(t *testing.T) {
 	})
 
 	handler := NewAuditHandlerWithDeps(AuditHandlerDeps{
-		Repo: auditrepo.NewAuditLogRepository(db),
+		Repo:         auditrepo.NewAuditLogRepository(db),
+		PlatformRepo: auditrepo.NewPlatformAuditLogRepositoryWithDB(db),
 	})
 	router := newAuditHandlerStatsRouter(tenantID)
 	router.GET("/stats", handler.GetAuditStats)
@@ -84,12 +85,74 @@ func TestAuditHandlerStatsEndpoints(t *testing.T) {
 	}
 }
 
+func TestAuditHandlerStatsSupportsTenantVisibleAuthCategory(t *testing.T) {
+	db := openAuditHandlerStatsTestDB(t)
+	createAuditHandlerStatsSchema(t, db)
+
+	tenantID := uuid.New()
+	userID := uuid.New()
+	createAuditHandlerUser(t, db, userID, "alice")
+	if err := db.Exec(
+		"INSERT INTO user_tenant_roles (id, user_id, tenant_id, role_id, created_at) VALUES (?, ?, ?, ?, ?)",
+		uuid.NewString(),
+		userID.String(),
+		tenantID.String(),
+		uuid.NewString(),
+		time.Now().UTC(),
+	).Error; err != nil {
+		t.Fatalf("insert tenant membership: %v", err)
+	}
+	if err := db.Exec(
+		`INSERT INTO platform_audit_logs (
+			id, user_id, username, principal_username, subject_scope, subject_tenant_id, subject_tenant_name,
+			auth_method, category, action, resource_type, request_path, response_status, status, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		uuid.NewString(),
+		userID.String(),
+		"alice",
+		"alice",
+		"tenant_user",
+		tenantID.String(),
+		"Tenant A",
+		"password",
+		"auth",
+		"login",
+		"auth",
+		"/api/v1/auth/login",
+		200,
+		"success",
+		time.Now().UTC(),
+	).Error; err != nil {
+		t.Fatalf("insert platform auth log: %v", err)
+	}
+
+	handler := NewAuditHandlerWithDeps(AuditHandlerDeps{
+		Repo:         auditrepo.NewAuditLogRepository(db),
+		PlatformRepo: auditrepo.NewPlatformAuditLogRepositoryWithDB(db),
+	})
+	router := newAuditHandlerStatsRouter(tenantID)
+	router.GET("/stats", handler.GetAuditStats)
+
+	statsResp := issueAuditStatsRequest(t, router, "/stats?category=auth")
+	if statsResp.Code != respPkg.CodeSuccess {
+		t.Fatalf("stats code = %d, want %d", statsResp.Code, respPkg.CodeSuccess)
+	}
+	stats := decodeAuditStatsMap(t, statsResp.Data)
+	if got := int64(stats["total_count"].(float64)); got != 1 {
+		t.Fatalf("stats.total_count = %d, want 1", got)
+	}
+	if got := int64(stats["success_count"].(float64)); got != 1 {
+		t.Fatalf("stats.success_count = %d, want 1", got)
+	}
+}
+
 func TestAuditHandlerTrendSurfacesRepositoryError(t *testing.T) {
 	db := openAuditHandlerStatsTestDB(t)
 	createAuditHandlerStatsSchema(t, db)
 
 	handler := NewAuditHandlerWithDeps(AuditHandlerDeps{
-		Repo: auditrepo.NewAuditLogRepository(db),
+		Repo:         auditrepo.NewAuditLogRepository(db),
+		PlatformRepo: auditrepo.NewPlatformAuditLogRepositoryWithDB(db),
 	})
 	router := newAuditHandlerStatsRouter(uuid.New())
 	router.GET("/trend", handler.GetTrend)
@@ -150,6 +213,39 @@ func createAuditHandlerStatsSchema(t *testing.T, db *gorm.DB) {
 			changes TEXT,
 			status TEXT,
 			error_message TEXT,
+			created_at DATETIME
+		)`,
+		`CREATE TABLE platform_audit_logs (
+			id TEXT PRIMARY KEY,
+			user_id TEXT,
+			username TEXT,
+			principal_username TEXT,
+			subject_scope TEXT,
+			subject_tenant_id TEXT,
+			subject_tenant_name TEXT,
+			failure_reason TEXT,
+			auth_method TEXT,
+			ip_address TEXT,
+			user_agent TEXT,
+			category TEXT,
+			action TEXT,
+			resource_type TEXT,
+			resource_id TEXT,
+			resource_name TEXT,
+			request_method TEXT,
+			request_path TEXT,
+			request_body TEXT,
+			response_status INTEGER,
+			changes TEXT,
+			status TEXT,
+			error_message TEXT,
+			created_at DATETIME
+		)`,
+		`CREATE TABLE user_tenant_roles (
+			id TEXT PRIMARY KEY,
+			user_id TEXT,
+			tenant_id TEXT,
+			role_id TEXT,
 			created_at DATETIME
 		)`,
 	} {

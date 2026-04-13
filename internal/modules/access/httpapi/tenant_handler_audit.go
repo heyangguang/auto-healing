@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (h *TenantHandler) writeRegisterAuditLog(parentCtx context.Context, userID *uuid.UUID, username, ipAddress, userAgent, status, errorMsg string, createdAt time.Time, statusCode int) {
+func (h *TenantHandler) writeRegisterAuditLog(parentCtx context.Context, userID *uuid.UUID, username string, tenantID *uuid.UUID, tenantName, ipAddress, userAgent, status, errorMsg, failureReason string, createdAt time.Time, statusCode int) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Auth("REGISTER").Error("注册审计日志记录失败 (panic): %v", r)
@@ -20,20 +20,26 @@ func (h *TenantHandler) writeRegisterAuditLog(parentCtx context.Context, userID 
 	defer cancel()
 
 	log := &platformmodel.PlatformAuditLog{
-		ID:             uuid.New(),
-		UserID:         userID,
-		Username:       username,
-		IPAddress:      ipAddress,
-		UserAgent:      userAgent,
-		Category:       "operation",
-		Action:         "create",
-		ResourceType:   "auth-register",
-		RequestMethod:  "POST",
-		RequestPath:    "/api/v1/auth/register",
-		ResponseStatus: &statusCode,
-		Status:         status,
-		ErrorMessage:   errorMsg,
-		CreatedAt:      createdAt,
+		ID:                uuid.New(),
+		UserID:            userID,
+		Username:          username,
+		PrincipalUsername: username,
+		SubjectScope:      authSubjectScopeTenantUser,
+		SubjectTenantID:   tenantID,
+		SubjectTenantName: tenantName,
+		FailureReason:     failureReason,
+		AuthMethod:        authMethodInvitationRegister,
+		IPAddress:         ipAddress,
+		UserAgent:         userAgent,
+		Category:          authAuditCategory,
+		Action:            authActionRegister,
+		ResourceType:      authResourceType,
+		RequestMethod:     "POST",
+		RequestPath:       "/api/v1/auth/register",
+		ResponseStatus:    &statusCode,
+		Status:            status,
+		ErrorMessage:      errorMsg,
+		CreatedAt:         createdAt,
 	}
 	if err := h.platformAuditRepo.Create(ctx, log); err != nil {
 		logger.Auth("REGISTER").Error("平台注册审计日志写入失败: %v", err)

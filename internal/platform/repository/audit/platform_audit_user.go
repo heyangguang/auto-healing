@@ -26,8 +26,8 @@ func (r *PlatformAuditLogRepository) GetUserLoginHistory(ctx context.Context, us
 		limit = 10
 	}
 	var logs []platformmodel.PlatformAuditLog
-	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND category = ?", userID, "login").
+	err := applyPlatformAuditCategoryScope(r.db.WithContext(ctx), authCategoryLegacy).
+		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Limit(limit).
 		Find(&logs).Error

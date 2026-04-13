@@ -51,17 +51,21 @@ func (h *TenantHandler) RegisterByInvitation(c *gin.Context) {
 	auditUsername := ""
 	auditStatus := "failed"
 	auditError := "注册失败"
+	auditFailureReason := authFailureReasonSystemError
 	auditStatusCode := http.StatusBadRequest
 	var auditUserID *uuid.UUID
+	var auditTenantID *uuid.UUID
+	auditTenantName := ""
 	defer func() {
 		platformlifecycle.Go(func(rootCtx context.Context) {
-			h.writeRegisterAuditLog(rootCtx, auditUserID, auditUsername, clientIP, userAgent, auditStatus, auditError, startTime, auditStatusCode)
+			h.writeRegisterAuditLog(rootCtx, auditUserID, auditUsername, auditTenantID, auditTenantName, clientIP, userAgent, auditStatus, auditError, auditFailureReason, startTime, auditStatusCode)
 		})
 	}()
 
 	var req RegisterByInvitationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		auditError = "请求参数错误"
+		auditFailureReason = registerRequestFailureReason()
 		response.BadRequest(c, "请求参数错误: "+FormatValidationError(err))
 		return
 	}
@@ -70,17 +74,22 @@ func (h *TenantHandler) RegisterByInvitation(c *gin.Context) {
 	inv, ok := h.loadValidInvitation(c, req.Token)
 	if !ok {
 		auditError = "邀请不存在或已过期"
+		auditFailureReason = invitationFailureReason()
 		return
 	}
+	auditTenantID = &inv.TenantID
 	if err := h.ensureInvitationTargetsValid(c.Request.Context(), inv); err != nil {
 		auditError = err.Error()
+		auditFailureReason = invitationFailureReason()
 		response.BadRequest(c, err.Error())
 		return
 	}
+	auditTenantName = inv.Tenant.Name
 
 	user, err := h.authSvc.Register(c.Request.Context(), buildInvitationRegisterRequest(req, inv))
 	if err != nil {
 		auditError = ToBusinessError(err)
+		auditFailureReason = registerFailureReason(err)
 		response.BadRequest(c, auditError)
 		return
 	}
@@ -89,12 +98,14 @@ func (h *TenantHandler) RegisterByInvitation(c *gin.Context) {
 	if err := h.completeInvitationRegistration(c.Request.Context(), user.ID, inv); err != nil {
 		auditStatusCode = http.StatusInternalServerError
 		auditError = "完成邀请注册失败"
+		auditFailureReason = authFailureReasonSystemError
 		respondInternalError(c, "TENANT", "完成邀请注册失败", err)
 		return
 	}
 	auditStatus = "success"
 	auditStatusCode = http.StatusCreated
 	auditError = ""
+	auditFailureReason = ""
 	response.Created(c, invitationRegisterResponse{
 		User:    user,
 		Message: "注册成功，请登录",

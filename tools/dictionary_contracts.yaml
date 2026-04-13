@@ -493,7 +493,7 @@ dict_types:
         mode: exact
   audit_action:
     go_sources:
-      - literals: [create, update, delete, read, login, logout, execute, sync, test, activate, deactivate, approve, reject, export, scan, assign_role, reset_password, enable, disable, trigger, dismiss, cancel, retry, dry_run, reset_status, send, offline, patch, assign_workspace, maintenance, resume, close, batch_reset_scan, confirm_review, ready, impersonation_enter, impersonation_exit, impersonation_terminate, batch_create, update_variables]
+      - literals: [create, update, delete, read, login, logout, register, execute, sync, test, activate, deactivate, approve, reject, export, scan, assign_role, reset_password, enable, disable, trigger, dismiss, cancel, retry, dry_run, reset_status, send, offline, patch, assign_workspace, maintenance, resume, close, batch_reset_scan, confirm_review, ready, impersonation_enter, impersonation_exit, impersonation_terminate, batch_create, update_variables]
     openapi_targets:
       - kind: parameter
         path: /tenant/audit-logs/action-grouping

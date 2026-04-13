@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/pkg/response"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -12,6 +13,19 @@ func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 	opts, err := buildAuditListOptions(c, page, pageSize)
 	if err != nil {
 		response.BadRequest(c, err.Error())
+		return
+	}
+	if auditrepo.IsAuthCategoryFilter(opts.Category) {
+		logs, total, listErr := h.platformRepo.ListTenantVisibleAuthLogs(c.Request.Context(), opts)
+		if listErr != nil {
+			respondInternalError(c, "AUDIT", "获取认证审计日志列表失败", listErr)
+			return
+		}
+		result := make([]auditLogResponse, len(logs))
+		for i, log := range logs {
+			result[i] = newAuditLogResponseFromPlatformLog(log)
+		}
+		response.List(c, result, total, page, pageSize)
 		return
 	}
 	logs, total, err := h.repo.List(c.Request.Context(), opts)
@@ -32,6 +46,15 @@ func (h *AuditHandler) GetAuditLog(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		response.BadRequest(c, "无效的 ID")
+		return
+	}
+	platformLog, err := h.platformRepo.GetTenantVisibleAuthLogByID(c.Request.Context(), id)
+	if err != nil {
+		respondInternalError(c, "AUDIT", "获取认证审计日志详情失败", err)
+		return
+	}
+	if platformLog != nil {
+		response.Success(c, newAuditLogResponseFromPlatformLog(*platformLog))
 		return
 	}
 	log, err := h.repo.GetByID(c.Request.Context(), id)

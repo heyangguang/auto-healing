@@ -3,7 +3,9 @@
 **Base URL**: `/api/v1/platform/audit-logs`  
 **权限**: `platform:audit:list`（且需要平台管理员）
 
-> 平台审计日志记录平台级别的操作与全局认证安全事件（如登录、登出、邀请注册），与租户级审计日志分开存储。
+> 平台审计日志记录两类数据：
+> 1. 平台级操作审计
+> 2. 全局认证安全事件（`category=auth`），包括登录、登出、邀请注册，以及不存在账号的失败尝试
 
 ---
 
@@ -17,10 +19,10 @@
 |------|------|------|------|
 | `page` | int | ❌ | 页码，默认 1 |
 | `page_size` | int | ❌ | 每页数量，默认 20 |
-| `search` | string | ❌ | 模糊搜索（用户名、资源名称、请求路径） |
-| `category` | string | ❌ | 操作分类：`login` / `user_management` / `tenant_management` / `platform_settings` |
-| `action` | string | ❌ | 操作类型：`create` / `update` / `delete` / `login` / `logout` 等 |
-| `resource_type` | string | ❌ | 资源类型：`user` / `tenant` / `role` / `platform_settings` 等 |
+| `search` | string | ❌ | 模糊搜索（用户名、主体用户名、租户名称、资源名称、请求路径） |
+| `category` | string | ❌ | 分类：`operation` / `auth`。兼容旧值 `login`，等价于只看认证事件中的 `login/logout` |
+| `action` | string | ❌ | 操作类型：平台操作使用 `create/update/delete/...`；认证事件使用 `login/logout/register` |
+| `resource_type` | string | ❌ | 资源类型；认证事件统一为 `auth` |
 | `username` | string | ❌ | 按用户名筛选 |
 | `user_id` | uuid | ❌ | 按用户 ID 筛选 |
 | `status` | string | ❌ | 操作状态：`success` / `failed` |
@@ -40,11 +42,17 @@
         "id": "uuid",
         "user_id": "uuid",
         "username": "admin",
+        "principal_username": "admin",
+        "subject_scope": "platform_admin",
+        "subject_tenant_id": null,
+        "subject_tenant_name": "",
+        "failure_reason": "",
+        "auth_method": "password",
         "ip_address": "192.168.1.1",
         "user_agent": "Mozilla/5.0...",
-        "category": "user_management",
-        "action": "create",
-        "resource_type": "user",
+        "category": "auth",
+        "action": "login",
+        "resource_type": "auth",
         "resource_id": "uuid",
         "resource_name": "zhangsan",
         "request_method": "POST",
@@ -75,6 +83,12 @@
 | `id` | uuid | 日志 ID |
 | `user_id` | uuid | 操作用户 ID |
 | `username` | string | 操作用户名 |
+| `principal_username` | string | 认证主体用户名；未知用户名失败时仍会保留尝试值 |
+| `subject_scope` | string | 主体范围：`platform_admin` / `tenant_user` / `unknown` |
+| `subject_tenant_id` | uuid | 认证主体所属租户 ID，仅 `tenant_user` 场景有值 |
+| `subject_tenant_name` | string | 认证主体所属租户名称，仅 `tenant_user` 场景有值 |
+| `failure_reason` | string | 结构化失败原因，如 `unknown_username` / `invalid_password` / `user_locked` |
+| `auth_method` | string | 认证方式，如 `password` / `token` / `invitation_register` |
 | `ip_address` | string | 客户端 IP |
 | `user_agent` | string | 浏览器 UA |
 | `category` | string | 操作分类 |
@@ -115,6 +129,12 @@
 
 **GET** `/api/v1/platform/audit-logs/stats`
 
+### 查询参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `category` | string | ❌ | `operation` / `auth`；`login` 为兼容别名，仅统计认证事件中的 `login/logout` |
+
 ### 响应
 
 ```json
@@ -147,6 +167,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `days` | int | ❌ | 统计天数，默认 30 |
+| `category` | string | ❌ | `operation` / `auth`；`login` 为兼容别名，仅统计认证事件中的 `login/logout` |
 
 ### 响应
 

@@ -2,11 +2,22 @@ package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/pkg/response"
+	auditrepo "github.com/company/auto-healing/internal/platform/repository/audit"
 	"github.com/gin-gonic/gin"
 )
 
 // GetAuditStats 获取审计统计概览
 func (h *AuditHandler) GetAuditStats(c *gin.Context) {
+	category := c.Query("category")
+	if auditrepo.IsAuthCategoryFilter(category) {
+		stats, err := h.platformRepo.GetTenantVisibleAuthStats(c.Request.Context(), category)
+		if err != nil {
+			respondInternalError(c, "AUDIT", "获取认证审计统计失败", err)
+			return
+		}
+		response.Success(c, stats)
+		return
+	}
 	stats, err := h.repo.GetStats(c.Request.Context())
 	if err != nil {
 		respondInternalError(c, "AUDIT", "获取审计统计失败", err)
@@ -53,6 +64,16 @@ func (h *AuditHandler) GetResourceTypeStats(c *gin.Context) {
 // GetTrend 获取操作趋势
 func (h *AuditHandler) GetTrend(c *gin.Context) {
 	days := parsePositiveIntQuery(c, "days", 30, 365)
+	category := c.Query("category")
+	if auditrepo.IsAuthCategoryFilter(category) {
+		items, err := h.platformRepo.GetTenantVisibleAuthTrend(c.Request.Context(), category, days)
+		if err != nil {
+			respondInternalError(c, "AUDIT", "获取认证审计趋势失败", err)
+			return
+		}
+		response.Success(c, items)
+		return
+	}
 	items, err := h.repo.GetTrend(c.Request.Context(), days)
 	if err != nil {
 		respondInternalError(c, "AUDIT", "获取审计趋势失败", err)

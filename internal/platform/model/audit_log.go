@@ -39,24 +39,30 @@ func (AuditLog) TableName() string {
 
 // PlatformAuditLog 平台级审计日志模型
 type PlatformAuditLog struct {
-	ID             uuid.UUID       `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	UserID         *uuid.UUID      `json:"user_id,omitempty" gorm:"type:uuid"`
-	Username       string          `json:"username,omitempty" gorm:"type:varchar(200)"`
-	IPAddress      string          `json:"ip_address,omitempty" gorm:"type:varchar(45)"`
-	UserAgent      string          `json:"user_agent,omitempty" gorm:"type:text"`
-	Category       string          `json:"category" gorm:"type:varchar(20);not null;default:'operation'"`
-	Action         string          `json:"action" gorm:"type:varchar(100);not null"`
-	ResourceType   string          `json:"resource_type" gorm:"type:varchar(100);not null"`
-	ResourceID     *uuid.UUID      `json:"resource_id,omitempty" gorm:"type:uuid"`
-	ResourceName   string          `json:"resource_name,omitempty" gorm:"type:varchar(200)"`
-	RequestMethod  string          `json:"request_method,omitempty" gorm:"type:varchar(10)"`
-	RequestPath    string          `json:"request_path,omitempty" gorm:"type:varchar(500)"`
-	RequestBody    modeltypes.JSON `json:"request_body,omitempty" gorm:"type:jsonb"`
-	ResponseStatus *int            `json:"response_status,omitempty"`
-	Changes        modeltypes.JSON `json:"changes,omitempty" gorm:"type:jsonb"`
-	Status         string          `json:"status" gorm:"type:varchar(20);not null"`
-	ErrorMessage   string          `json:"error_message,omitempty" gorm:"type:text"`
-	CreatedAt      time.Time       `json:"created_at" gorm:"default:now()"`
+	ID                uuid.UUID       `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	UserID            *uuid.UUID      `json:"user_id,omitempty" gorm:"type:uuid"`
+	Username          string          `json:"username,omitempty" gorm:"type:varchar(200)"`
+	PrincipalUsername string          `json:"principal_username,omitempty" gorm:"type:varchar(200)"`
+	SubjectScope      string          `json:"subject_scope,omitempty" gorm:"type:varchar(40);index"`
+	SubjectTenantID   *uuid.UUID      `json:"subject_tenant_id,omitempty" gorm:"type:uuid;index"`
+	SubjectTenantName string          `json:"subject_tenant_name,omitempty" gorm:"type:varchar(200)"`
+	FailureReason     string          `json:"failure_reason,omitempty" gorm:"type:varchar(100)"`
+	AuthMethod        string          `json:"auth_method,omitempty" gorm:"type:varchar(100)"`
+	IPAddress         string          `json:"ip_address,omitempty" gorm:"type:varchar(45)"`
+	UserAgent         string          `json:"user_agent,omitempty" gorm:"type:text"`
+	Category          string          `json:"category" gorm:"type:varchar(20);not null;default:'operation'"`
+	Action            string          `json:"action" gorm:"type:varchar(100);not null"`
+	ResourceType      string          `json:"resource_type" gorm:"type:varchar(100);not null"`
+	ResourceID        *uuid.UUID      `json:"resource_id,omitempty" gorm:"type:uuid"`
+	ResourceName      string          `json:"resource_name,omitempty" gorm:"type:varchar(200)"`
+	RequestMethod     string          `json:"request_method,omitempty" gorm:"type:varchar(10)"`
+	RequestPath       string          `json:"request_path,omitempty" gorm:"type:varchar(500)"`
+	RequestBody       modeltypes.JSON `json:"request_body,omitempty" gorm:"type:jsonb"`
+	ResponseStatus    *int            `json:"response_status,omitempty"`
+	Changes           modeltypes.JSON `json:"changes,omitempty" gorm:"type:jsonb"`
+	Status            string          `json:"status" gorm:"type:varchar(20);not null"`
+	ErrorMessage      string          `json:"error_message,omitempty" gorm:"type:text"`
+	CreatedAt         time.Time       `json:"created_at" gorm:"default:now()"`
 }
 
 func (PlatformAuditLog) TableName() string {

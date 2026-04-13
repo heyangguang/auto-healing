@@ -52,9 +52,7 @@ func (r *PlatformAuditLogRepository) List(ctx context.Context, opts *PlatformAud
 }
 
 func applyPlatformAuditFilters(db *gorm.DB, opts *PlatformAuditListOptions) *gorm.DB {
-	if opts.Category != "" {
-		db = db.Where("category = ?", opts.Category)
-	}
+	db = applyPlatformAuditCategoryScope(db, opts.Category)
 	if opts.Action != "" {
 		db = db.Where("action = ?", opts.Action)
 	}
@@ -80,9 +78,28 @@ func applyPlatformAuditFilters(db *gorm.DB, opts *PlatformAuditListOptions) *gor
 		db = query.ApplyStringFilter(db, "request_path", opts.RequestPath)
 	}
 	if !opts.Search.IsEmpty() {
-		db = query.ApplyMultiStringFilter(db, []string{"username", "resource_name", "request_path"}, opts.Search)
+		db = query.ApplyMultiStringFilter(db, []string{
+			"username",
+			"principal_username",
+			"subject_tenant_name",
+			"resource_name",
+			"request_path",
+		}, opts.Search)
 	}
 	return db
+}
+
+func applyPlatformAuditCategoryScope(db *gorm.DB, category string) *gorm.DB {
+	switch {
+	case isLegacyLoginCategory(category):
+		return db.Where("category = ?", authCategoryStored).Where("action IN ?", []string{"login", "logout"})
+	case isAuthCategoryFilter(category):
+		return db.Where("category = ?", authCategoryStored)
+	case category != "":
+		return db.Where("category = ?", category)
+	default:
+		return db
+	}
 }
 
 func platformAuditOrderClause(opts *PlatformAuditListOptions) string {

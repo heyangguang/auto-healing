@@ -11,6 +11,7 @@ func auditActionSeeds() []model.Dictionary {
 		d("audit_action", "read", "查看", "Read", "#8c8c8c", "default", "", "", "", 3),
 		d("audit_action", "login", "登录", "Login", "#1890ff", "blue", "", "", "", 4),
 		d("audit_action", "logout", "登出", "Logout", "#8c8c8c", "default", "", "", "", 5),
+		d("audit_action", "register", "注册", "Register", "#52c41a", "green", "", "", "", 40),
 		d("audit_action", "execute", "执行", "Execute", "#722ed1", "purple", "", "", "", 6),
 		d("audit_action", "sync", "同步", "Sync", "#13c2c2", "cyan", "", "", "", 7),
 		d("audit_action", "test", "测试", "Test", "#fa8c16", "orange", "", "", "", 8),

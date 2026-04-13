@@ -230,16 +230,14 @@ func insertAuthAuditLog(t *testing.T, db *gorm.DB, tenantID, userID uuid.UUID, a
 func insertPlatformLoginAudit(t *testing.T, db *gorm.DB, userID uuid.UUID, action string) {
 	t.Helper()
 	now := time.Now().UTC()
-	resourceType := "auth"
 	requestPath := "/api/v1/auth/login"
 	if action == "logout" {
-		resourceType = "auth-logout"
 		requestPath = "/api/v1/auth/logout"
 	}
 	mustExecAuthSQL(t, db, `
 		INSERT INTO platform_audit_logs (
 			id, user_id, username, ip_address, user_agent, category, action, resource_type,
-			request_method, request_path, response_status, status, created_at
-		) VALUES (?, ?, ?, '127.0.0.1', 'test-agent', 'login', ?, ?, 'POST', ?, 200, 'success', ?)
-	`, uuid.NewString(), userID.String(), "tenant-user", action, resourceType, requestPath, now)
+			request_method, request_path, response_status, status, principal_username, subject_scope, auth_method, created_at
+		) VALUES (?, ?, ?, '127.0.0.1', 'test-agent', 'auth', ?, 'auth', 'POST', ?, 200, 'success', ?, 'tenant_user', 'password', ?)
+	`, uuid.NewString(), userID.String(), "tenant-user", action, requestPath, "tenant-user", now)
 }

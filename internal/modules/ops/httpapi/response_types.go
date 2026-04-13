@@ -53,50 +53,62 @@ type commandBlacklistSimulateResponse struct {
 }
 
 type auditLogResponse struct {
-	ID             uuid.UUID         `json:"id"`
-	UserID         *uuid.UUID        `json:"user_id,omitempty"`
-	Username       string            `json:"username,omitempty"`
-	IPAddress      string            `json:"ip_address,omitempty"`
-	UserAgent      string            `json:"user_agent,omitempty"`
-	Category       string            `json:"category"`
-	Action         string            `json:"action"`
-	ResourceType   string            `json:"resource_type"`
-	ResourceID     *uuid.UUID        `json:"resource_id,omitempty"`
-	ResourceName   string            `json:"resource_name,omitempty"`
-	RequestMethod  string            `json:"request_method,omitempty"`
-	RequestPath    string            `json:"request_path,omitempty"`
-	RequestBody    modeltypes.JSON   `json:"request_body,omitempty"`
-	ResponseStatus *int              `json:"response_status,omitempty"`
-	Changes        modeltypes.JSON   `json:"changes,omitempty"`
-	Status         string            `json:"status"`
-	ErrorMessage   string            `json:"error_message,omitempty"`
-	RiskLevel      string            `json:"risk_level"`
-	RiskReason     string            `json:"risk_reason"`
-	CreatedAt      time.Time         `json:"created_at"`
-	User           *accessmodel.User `json:"user,omitempty"`
+	ID                uuid.UUID         `json:"id"`
+	UserID            *uuid.UUID        `json:"user_id,omitempty"`
+	Username          string            `json:"username,omitempty"`
+	PrincipalUsername string            `json:"principal_username,omitempty"`
+	SubjectScope      string            `json:"subject_scope,omitempty"`
+	SubjectTenantID   *uuid.UUID        `json:"subject_tenant_id,omitempty"`
+	SubjectTenantName string            `json:"subject_tenant_name,omitempty"`
+	FailureReason     string            `json:"failure_reason,omitempty"`
+	AuthMethod        string            `json:"auth_method,omitempty"`
+	IPAddress         string            `json:"ip_address,omitempty"`
+	UserAgent         string            `json:"user_agent,omitempty"`
+	Category          string            `json:"category"`
+	Action            string            `json:"action"`
+	ResourceType      string            `json:"resource_type"`
+	ResourceID        *uuid.UUID        `json:"resource_id,omitempty"`
+	ResourceName      string            `json:"resource_name,omitempty"`
+	RequestMethod     string            `json:"request_method,omitempty"`
+	RequestPath       string            `json:"request_path,omitempty"`
+	RequestBody       modeltypes.JSON   `json:"request_body,omitempty"`
+	ResponseStatus    *int              `json:"response_status,omitempty"`
+	Changes           modeltypes.JSON   `json:"changes,omitempty"`
+	Status            string            `json:"status"`
+	ErrorMessage      string            `json:"error_message,omitempty"`
+	RiskLevel         string            `json:"risk_level"`
+	RiskReason        string            `json:"risk_reason"`
+	CreatedAt         time.Time         `json:"created_at"`
+	User              *accessmodel.User `json:"user,omitempty"`
 }
 
 type platformAuditLogResponse struct {
-	ID             uuid.UUID       `json:"id"`
-	UserID         *uuid.UUID      `json:"user_id,omitempty"`
-	Username       string          `json:"username,omitempty"`
-	IPAddress      string          `json:"ip_address,omitempty"`
-	UserAgent      string          `json:"user_agent,omitempty"`
-	Category       string          `json:"category"`
-	Action         string          `json:"action"`
-	ResourceType   string          `json:"resource_type"`
-	ResourceID     *uuid.UUID      `json:"resource_id,omitempty"`
-	ResourceName   string          `json:"resource_name,omitempty"`
-	RequestMethod  string          `json:"request_method,omitempty"`
-	RequestPath    string          `json:"request_path,omitempty"`
-	RequestBody    modeltypes.JSON `json:"request_body,omitempty"`
-	ResponseStatus *int            `json:"response_status,omitempty"`
-	Changes        modeltypes.JSON `json:"changes,omitempty"`
-	Status         string          `json:"status"`
-	ErrorMessage   string          `json:"error_message,omitempty"`
-	RiskLevel      string          `json:"risk_level"`
-	RiskReason     string          `json:"risk_reason"`
-	CreatedAt      time.Time       `json:"created_at"`
+	ID                uuid.UUID       `json:"id"`
+	UserID            *uuid.UUID      `json:"user_id,omitempty"`
+	Username          string          `json:"username,omitempty"`
+	PrincipalUsername string          `json:"principal_username,omitempty"`
+	SubjectScope      string          `json:"subject_scope,omitempty"`
+	SubjectTenantID   *uuid.UUID      `json:"subject_tenant_id,omitempty"`
+	SubjectTenantName string          `json:"subject_tenant_name,omitempty"`
+	FailureReason     string          `json:"failure_reason,omitempty"`
+	AuthMethod        string          `json:"auth_method,omitempty"`
+	IPAddress         string          `json:"ip_address,omitempty"`
+	UserAgent         string          `json:"user_agent,omitempty"`
+	Category          string          `json:"category"`
+	Action            string          `json:"action"`
+	ResourceType      string          `json:"resource_type"`
+	ResourceID        *uuid.UUID      `json:"resource_id,omitempty"`
+	ResourceName      string          `json:"resource_name,omitempty"`
+	RequestMethod     string          `json:"request_method,omitempty"`
+	RequestPath       string          `json:"request_path,omitempty"`
+	RequestBody       modeltypes.JSON `json:"request_body,omitempty"`
+	ResponseStatus    *int            `json:"response_status,omitempty"`
+	Changes           modeltypes.JSON `json:"changes,omitempty"`
+	Status            string          `json:"status"`
+	ErrorMessage      string          `json:"error_message,omitempty"`
+	RiskLevel         string          `json:"risk_level"`
+	RiskReason        string          `json:"risk_reason"`
+	CreatedAt         time.Time       `json:"created_at"`
 }
 
 type highRiskAuditLogResponse struct {
@@ -128,52 +140,92 @@ type platformHighRiskAuditLogResponse struct {
 func newAuditLogResponse(log platformmodel.AuditLog) auditLogResponse {
 	riskLevel, riskReason := auditRiskFields(log.Action, log.ResourceType)
 	return auditLogResponse{
-		ID:             log.ID,
-		UserID:         log.UserID,
-		Username:       log.Username,
-		IPAddress:      log.IPAddress,
-		UserAgent:      log.UserAgent,
-		Category:       log.Category,
-		Action:         log.Action,
-		ResourceType:   log.ResourceType,
-		ResourceID:     log.ResourceID,
-		ResourceName:   log.ResourceName,
-		RequestMethod:  log.RequestMethod,
-		RequestPath:    log.RequestPath,
-		RequestBody:    sanitizeAuditPayload(log.RequestBody),
-		ResponseStatus: log.ResponseStatus,
-		Changes:        sanitizeAuditPayload(log.Changes),
-		Status:         log.Status,
-		ErrorMessage:   log.ErrorMessage,
-		RiskLevel:      riskLevel,
-		RiskReason:     riskReason,
-		CreatedAt:      log.CreatedAt,
-		User:           log.User,
+		ID:                log.ID,
+		UserID:            log.UserID,
+		Username:          log.Username,
+		PrincipalUsername: log.Username,
+		IPAddress:         log.IPAddress,
+		UserAgent:         log.UserAgent,
+		Category:          log.Category,
+		Action:            log.Action,
+		ResourceType:      log.ResourceType,
+		ResourceID:        log.ResourceID,
+		ResourceName:      log.ResourceName,
+		RequestMethod:     log.RequestMethod,
+		RequestPath:       log.RequestPath,
+		RequestBody:       sanitizeAuditPayload(log.RequestBody),
+		ResponseStatus:    log.ResponseStatus,
+		Changes:           sanitizeAuditPayload(log.Changes),
+		Status:            log.Status,
+		ErrorMessage:      log.ErrorMessage,
+		RiskLevel:         riskLevel,
+		RiskReason:        riskReason,
+		CreatedAt:         log.CreatedAt,
+		User:              log.User,
+	}
+}
+
+func newAuditLogResponseFromPlatformLog(log platformmodel.PlatformAuditLog) auditLogResponse {
+	riskLevel := auditrepo.GetRiskLevel(log.Action, log.ResourceType)
+	riskReason := auditrepo.GetRiskReason(log.Action, log.ResourceType)
+	return auditLogResponse{
+		ID:                log.ID,
+		UserID:            log.UserID,
+		Username:          log.Username,
+		PrincipalUsername: log.PrincipalUsername,
+		SubjectScope:      log.SubjectScope,
+		SubjectTenantID:   log.SubjectTenantID,
+		SubjectTenantName: log.SubjectTenantName,
+		FailureReason:     log.FailureReason,
+		AuthMethod:        log.AuthMethod,
+		IPAddress:         log.IPAddress,
+		UserAgent:         log.UserAgent,
+		Category:          log.Category,
+		Action:            log.Action,
+		ResourceType:      log.ResourceType,
+		ResourceID:        log.ResourceID,
+		ResourceName:      log.ResourceName,
+		RequestMethod:     log.RequestMethod,
+		RequestPath:       log.RequestPath,
+		RequestBody:       sanitizeAuditPayload(log.RequestBody),
+		ResponseStatus:    log.ResponseStatus,
+		Changes:           sanitizeAuditPayload(log.Changes),
+		Status:            log.Status,
+		ErrorMessage:      log.ErrorMessage,
+		RiskLevel:         riskLevel,
+		RiskReason:        riskReason,
+		CreatedAt:         log.CreatedAt,
 	}
 }
 
 func newPlatformAuditLogResponse(log platformmodel.PlatformAuditLog) platformAuditLogResponse {
 	return platformAuditLogResponse{
-		ID:             log.ID,
-		UserID:         log.UserID,
-		Username:       log.Username,
-		IPAddress:      log.IPAddress,
-		UserAgent:      log.UserAgent,
-		Category:       log.Category,
-		Action:         log.Action,
-		ResourceType:   log.ResourceType,
-		ResourceID:     log.ResourceID,
-		ResourceName:   log.ResourceName,
-		RequestMethod:  log.RequestMethod,
-		RequestPath:    log.RequestPath,
-		RequestBody:    sanitizeAuditPayload(log.RequestBody),
-		ResponseStatus: log.ResponseStatus,
-		Changes:        sanitizeAuditPayload(log.Changes),
-		Status:         log.Status,
-		ErrorMessage:   log.ErrorMessage,
-		RiskLevel:      auditrepo.GetRiskLevel(log.Action, log.ResourceType),
-		RiskReason:     auditrepo.GetRiskReason(log.Action, log.ResourceType),
-		CreatedAt:      log.CreatedAt,
+		ID:                log.ID,
+		UserID:            log.UserID,
+		Username:          log.Username,
+		PrincipalUsername: log.PrincipalUsername,
+		SubjectScope:      log.SubjectScope,
+		SubjectTenantID:   log.SubjectTenantID,
+		SubjectTenantName: log.SubjectTenantName,
+		FailureReason:     log.FailureReason,
+		AuthMethod:        log.AuthMethod,
+		IPAddress:         log.IPAddress,
+		UserAgent:         log.UserAgent,
+		Category:          log.Category,
+		Action:            log.Action,
+		ResourceType:      log.ResourceType,
+		ResourceID:        log.ResourceID,
+		ResourceName:      log.ResourceName,
+		RequestMethod:     log.RequestMethod,
+		RequestPath:       log.RequestPath,
+		RequestBody:       sanitizeAuditPayload(log.RequestBody),
+		ResponseStatus:    log.ResponseStatus,
+		Changes:           sanitizeAuditPayload(log.Changes),
+		Status:            log.Status,
+		ErrorMessage:      log.ErrorMessage,
+		RiskLevel:         auditrepo.GetRiskLevel(log.Action, log.ResourceType),
+		RiskReason:        auditrepo.GetRiskReason(log.Action, log.ResourceType),
+		CreatedAt:         log.CreatedAt,
 	}
 }
 

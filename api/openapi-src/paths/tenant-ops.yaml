@@ -21,6 +21,16 @@
     tags:
     - 审计日志
     summary: 获取租户审计日志列表
+    description: 默认返回当前租户内操作审计；当 category=auth 时返回当前租户成员的认证安全事件投影。category=login 为兼容别名，仅返回 auth 中的 login/logout。
+    parameters:
+    - name: category
+      in: query
+      schema:
+        type: string
+        enum:
+        - operation
+        - auth
+        - login
     responses:
       '200':
         $ref: '#/components/responses/Success'
@@ -29,6 +39,15 @@
     tags:
     - 审计日志
     summary: 获取审计统计概览
+    parameters:
+    - name: category
+      in: query
+      schema:
+        type: string
+        enum:
+        - operation
+        - auth
+        - login
     responses:
       '200':
         description: 成功
@@ -142,6 +161,14 @@
       schema:
         type: integer
         default: 30
+    - name: category
+      in: query
+      schema:
+        type: string
+        enum:
+        - operation
+        - auth
+        - login
     responses:
       '200':
         description: 成功

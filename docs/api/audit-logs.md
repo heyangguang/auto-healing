@@ -3,7 +3,8 @@
 **Base URL**: `/api/v1/audit-logs`  
 **权限**: `audit:list`（导出接口除外，导出需要 `audit:export`）
 
-> 租户审计日志仅记录当前租户上下文内的操作行为；认证入口产生的全局安全事件（如登录、登出、邀请注册）统一记录到平台审计日志。
+> 租户审计日志默认记录当前租户上下文内的操作行为。
+> 当 `category=auth` 时，接口会返回“当前租户成员”的认证安全事件投影，数据源来自平台认证审计，而不是租户审计表。
 
 ---
 
@@ -18,7 +19,7 @@
 | `page` | int | ❌ | 页码，默认 1 |
 | `page_size` | int | ❌ | 每页数量，默认 20 |
 | `search` | string | ❌ | 模糊搜索（用户名、资源名称、请求路径） |
-| `category` | string | ❌ | 操作分类 |
+| `category` | string | ❌ | 分类：`operation` / `auth`。兼容旧值 `login`，等价于当前租户成员的 `login/logout` |
 | `action` | string | ❌ | 操作类型（见下方枚举） |
 | `resource_type` | string | ❌ | 资源类型（见下方枚举） |
 | `username` | string | ❌ | 按用户名筛选 |
@@ -43,6 +44,12 @@
         "id": "uuid",
         "user_id": "uuid",
         "username": "zhangsan",
+        "principal_username": "zhangsan",
+        "subject_scope": "tenant_user",
+        "subject_tenant_id": "uuid",
+        "subject_tenant_name": "Default Tenant",
+        "failure_reason": "",
+        "auth_method": "password",
         "ip_address": "192.168.1.100",
         "user_agent": "Mozilla/5.0...",
         "category": "resource_operation",
@@ -93,6 +100,12 @@
 ## 3. 获取审计统计概览
 
 **GET** `/api/v1/audit-logs/stats`
+
+### 查询参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `category` | string | ❌ | `operation` / `auth`；`login` 为兼容别名，仅统计认证事件中的 `login/logout` |
 
 ### 响应
 
@@ -184,6 +197,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `days` | int | ❌ | 统计天数，默认 30 |
+| `category` | string | ❌ | `operation` / `auth`；`login` 为兼容别名，仅统计认证事件中的 `login/logout` |
 
 ---
 
@@ -249,6 +263,7 @@
 |----|------|
 | `login` | 登录 |
 | `logout` | 登出 |
+| `register` | 邀请注册 |
 | `create` | 创建 |
 | `update` | 更新 |
 | `delete` | 删除 |

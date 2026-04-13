@@ -173,19 +173,31 @@ func TestSetupAuthRoutesLoginWritesUnknownUsernameFailureToPlatformAudit(t *test
 	platformlifecycle.Cleanup()
 
 	var audit struct {
-		Username string
-		Status   string
-		Action   string
-		UserID   *string
+		Username          string
+		PrincipalUsername string
+		Category          string
+		Status            string
+		Action            string
+		ResourceType      string
+		SubjectScope      string
+		FailureReason     string
+		AuthMethod        string
+		UserID            *string
 	}
 	if err := db.Table("platform_audit_logs").
-		Select("username, status, action, user_id").
+		Select("username, principal_username, category, status, action, resource_type, subject_scope, failure_reason, auth_method, user_id").
 		Where("username = ?", "ghost-user").
 		Take(&audit).Error; err != nil {
 		t.Fatalf("load platform audit: %v", err)
 	}
-	if audit.Status != "failed" || audit.Action != "login" {
+	if audit.Status != "failed" || audit.Action != "login" || audit.Category != "auth" || audit.ResourceType != "auth" {
 		t.Fatalf("audit = %+v, want failed login", audit)
+	}
+	if audit.PrincipalUsername != "ghost-user" || audit.SubjectScope != authSubjectScopeUnknown {
+		t.Fatalf("audit principal/scope = %+v, want unknown ghost-user", audit)
+	}
+	if audit.FailureReason != authFailureReasonUnknownUsername || audit.AuthMethod != authMethodPassword {
+		t.Fatalf("audit failure/method = %+v, want unknown_username/password", audit)
 	}
 	if audit.UserID != nil {
 		t.Fatalf("user_id = %v, want nil for unknown username", *audit.UserID)
@@ -219,19 +231,32 @@ func TestSetupAuthRoutesLoginWritesTenantUserSuccessToPlatformAudit(t *testing.T
 	platformlifecycle.Cleanup()
 
 	var audit struct {
-		Username string
-		Status   string
-		Action   string
-		UserID   string
+		Username          string
+		PrincipalUsername string
+		Category          string
+		Status            string
+		Action            string
+		ResourceType      string
+		SubjectScope      string
+		SubjectTenantID   string
+		SubjectTenantName string
+		AuthMethod        string
+		UserID            string
 	}
 	if err := db.Table("platform_audit_logs").
-		Select("username, status, action, user_id").
+		Select("username, principal_username, category, status, action, resource_type, subject_scope, subject_tenant_id, subject_tenant_name, auth_method, user_id").
 		Where("username = ?", "login-user").
 		Take(&audit).Error; err != nil {
 		t.Fatalf("load platform audit: %v", err)
 	}
-	if audit.Status != "success" || audit.Action != "login" || audit.UserID != userID.String() {
+	if audit.Status != "success" || audit.Action != "login" || audit.Category != "auth" || audit.ResourceType != "auth" || audit.UserID != userID.String() {
 		t.Fatalf("audit = %+v, want successful platform login audit for %s", audit, userID)
+	}
+	if audit.PrincipalUsername != "login-user" || audit.SubjectScope != authSubjectScopeTenantUser {
+		t.Fatalf("audit principal/scope = %+v, want tenant_user login-user", audit)
+	}
+	if audit.SubjectTenantID != tenantID.String() || audit.SubjectTenantName != "Tenant A" || audit.AuthMethod != authMethodPassword {
+		t.Fatalf("audit tenant/method = %+v, want tenant A/password", audit)
 	}
 
 	var tenantAuditCount int64

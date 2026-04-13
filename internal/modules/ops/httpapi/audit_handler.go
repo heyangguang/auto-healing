@@ -16,15 +16,17 @@ import (
 
 // AuditHandler 审计日志处理器
 type AuditHandler struct {
-	repo *auditrepo.AuditLogRepository
+	repo         *auditrepo.AuditLogRepository
+	platformRepo *auditrepo.PlatformAuditLogRepository
 }
 
 type AuditHandlerDeps struct {
-	Repo *auditrepo.AuditLogRepository
+	Repo         *auditrepo.AuditLogRepository
+	PlatformRepo *auditrepo.PlatformAuditLogRepository
 }
 
 func NewAuditHandlerWithDeps(deps AuditHandlerDeps) *AuditHandler {
-	return &AuditHandler{repo: deps.Repo}
+	return &AuditHandler{repo: deps.Repo, platformRepo: deps.PlatformRepo}
 }
 
 func buildAuditListOptions(c *gin.Context, page, pageSize int) (*auditrepo.AuditLogListOptions, error) {
