@@ -54,17 +54,17 @@ type TriggerItem struct {
 
 func (r *DashboardRepository) GetHealingSection(ctx context.Context, permissions []string) (*HealingSection, error) {
 	section := &HealingSection{}
-	db := r.tenantDB(ctx)
+	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
 	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	if repoHasPermission(permissions, "healing:flows:view") {
-		if err := countModel(db, &projection.HealingFlow{}, &section.FlowsTotal); err != nil {
+		if err := countModel(newDB(), &projection.HealingFlow{}, &section.FlowsTotal); err != nil {
 			return nil, err
 		}
-		if err := countModel(db.Where("is_active = ?", true), &projection.HealingFlow{}, &section.FlowsActive); err != nil {
+		if err := countModel(newDB().Where("is_active = ?", true), &projection.HealingFlow{}, &section.FlowsActive); err != nil {
 			return nil, err
 		}
 		flowTop, err := listTopHealingFlows(r.db.WithContext(ctx), tenantID)
@@ -74,53 +74,53 @@ func (r *DashboardRepository) GetHealingSection(ctx context.Context, permissions
 		section.FlowTop10 = flowTop
 	}
 	if repoHasPermission(permissions, "healing:rules:view") {
-		if err := countModel(db, &projection.HealingRule{}, &section.RulesTotal); err != nil {
+		if err := countModel(newDB(), &projection.HealingRule{}, &section.RulesTotal); err != nil {
 			return nil, err
 		}
-		if err := countModel(db.Where("is_active = ?", true), &projection.HealingRule{}, &section.RulesActive); err != nil {
+		if err := countModel(newDB().Where("is_active = ?", true), &projection.HealingRule{}, &section.RulesActive); err != nil {
 			return nil, err
 		}
-		if err := scanStatusCounts(db, &projection.HealingRule{}, "trigger_mode", &section.RulesByTriggerMode); err != nil {
+		if err := scanStatusCounts(newDB(), &projection.HealingRule{}, "trigger_mode", &section.RulesByTriggerMode); err != nil {
 			return nil, err
 		}
 	}
 	if repoHasPermission(permissions, "healing:instances:view") {
-		if err := countModel(db, &projection.FlowInstance{}, &section.InstancesTotal); err != nil {
+		if err := countModel(newDB(), &projection.FlowInstance{}, &section.InstancesTotal); err != nil {
 			return nil, err
 		}
-		if err := countModel(db.Where("status = ?", "running"), &projection.FlowInstance{}, &section.InstancesRunning); err != nil {
+		if err := countModel(newDB().Where("status = ?", "running"), &projection.FlowInstance{}, &section.InstancesRunning); err != nil {
 			return nil, err
 		}
-		if err := scanStatusCounts(db, &projection.FlowInstance{}, "status", &section.InstancesByStatus); err != nil {
+		if err := scanStatusCounts(newDB(), &projection.FlowInstance{}, "status", &section.InstancesByStatus); err != nil {
 			return nil, err
 		}
-		if err := scanTrendPoints(db, &projection.FlowInstance{}, "created_at", time.Now().AddDate(0, 0, -7), &section.InstanceTrend7d); err != nil {
+		if err := scanTrendPoints(newDB(), &projection.FlowInstance{}, "created_at", time.Now().AddDate(0, 0, -7), &section.InstanceTrend7d); err != nil {
 			return nil, err
 		}
-		recent, err := listRecentInstances(db.Order("created_at DESC").Limit(10))
+		recent, err := listRecentInstances(newDB().Order("created_at DESC").Limit(10))
 		if err != nil {
 			return nil, err
 		}
 		section.RecentInstances = recent
 	}
 	if repoHasPermission(permissions, "healing:approvals:view") {
-		if err := countModel(db.Where("status = ?", "pending"), &projection.ApprovalTask{}, &section.PendingApprovals); err != nil {
+		if err := countModel(newDB().Where("status = ?", "pending"), &projection.ApprovalTask{}, &section.PendingApprovals); err != nil {
 			return nil, err
 		}
-		if err := scanStatusCounts(db, &projection.ApprovalTask{}, "status", &section.ApprovalsByStatus); err != nil {
+		if err := scanStatusCounts(newDB(), &projection.ApprovalTask{}, "status", &section.ApprovalsByStatus); err != nil {
 			return nil, err
 		}
-		approvals, err := listPendingApprovals(db.Where("status = ?", "pending").Order("created_at DESC").Limit(10))
+		approvals, err := listPendingApprovals(newDB().Where("status = ?", "pending").Order("created_at DESC").Limit(10))
 		if err != nil {
 			return nil, err
 		}
 		section.PendingApprovalList = approvals
 	}
 	if repoHasPermission(permissions, "healing:trigger:view") {
-		if err := countModel(pendingTriggerQuery(db), &projection.Incident{}, &section.PendingTriggers); err != nil {
+		if err := countModel(pendingTriggerQuery(newDB()), &projection.Incident{}, &section.PendingTriggers); err != nil {
 			return nil, err
 		}
-		triggers, err := listPendingTriggers(pendingTriggerQuery(db).Order("created_at DESC").Limit(10))
+		triggers, err := listPendingTriggers(pendingTriggerQuery(newDB()).Order("created_at DESC").Limit(10))
 		if err != nil {
 			return nil, err
 		}
