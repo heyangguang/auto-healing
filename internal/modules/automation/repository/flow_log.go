@@ -22,6 +22,9 @@ func (r *FlowLogRepository) Create(ctx context.Context, log *model.FlowExecution
 	if err := FillTenantID(ctx, &log.TenantID); err != nil {
 		return err
 	}
+	if log.ID == uuid.Nil {
+		log.ID = uuid.New()
+	}
 	return r.db.WithContext(ctx).Create(log).Error
 }
 

@@ -22,6 +22,7 @@ func (s *Scheduler) Start() {
 	s.mu.Unlock()
 
 	logger.Sched("HEAL").Info("调度器启动，间隔: %v", s.interval)
+	s.reconcileStuckInstances(lifecycle.ctx)
 	s.recoverOrphans(lifecycle.ctx)
 	lifecycle.Go(s.run)
 }

@@ -212,6 +212,26 @@ func (r *ApprovalTaskRepository) GetByFlowInstanceAndNode(ctx context.Context, f
 	return &task, err
 }
 
+type ResolvedApprovalFlowInstance struct {
+	FlowInstanceID uuid.UUID
+	TenantID       *uuid.UUID
+}
+
+func (r *ApprovalTaskRepository) ListResolvedWaitingFlowInstances(ctx context.Context, staleThreshold time.Duration) ([]ResolvedApprovalFlowInstance, error) {
+	var rows []ResolvedApprovalFlowInstance
+	cutoff := time.Now().Add(-staleThreshold)
+	err := r.db.WithContext(ctx).
+		Table("approval_tasks").
+		Select("approval_tasks.flow_instance_id, flow_instances.tenant_id").
+		Joins("JOIN flow_instances ON flow_instances.id = approval_tasks.flow_instance_id").
+		Where("flow_instances.status = ?", model.FlowInstanceStatusWaitingApproval).
+		Where("approval_tasks.status IN ?", []string{model.ApprovalTaskStatusApproved, model.ApprovalTaskStatusRejected}).
+		Where("approval_tasks.updated_at < ?", cutoff).
+		Group("approval_tasks.flow_instance_id, flow_instances.tenant_id").
+		Scan(&rows).Error
+	return rows, err
+}
+
 // =============================================================================
 // FlowLogRepository - 流程执行日志仓库
 // =============================================================================

@@ -76,8 +76,7 @@ func (s *Scheduler) TriggerManual(ctx context.Context, incidentID string, ruleID
 
 // recoverOrphanedInstances 恢复服务重启前遗留的 running/pending 实例
 func (s *Scheduler) recoverOrphanedInstances(ctx context.Context) {
-	staleThreshold := 30 * time.Minute
-	instances, err := s.instanceRepo.ListStaleRunning(ctx, staleThreshold)
+	instances, err := s.instanceRepo.ListStaleRunning(ctx, orphanFailThreshold)
 	if err != nil {
 		logger.Sched("HEAL").Error("查询停滞实例失败: %v", err)
 		return
@@ -88,18 +87,24 @@ func (s *Scheduler) recoverOrphanedInstances(ctx context.Context) {
 
 	logger.Sched("HEAL").Warn("发现 %d 个停滞的实例，开始恢复...", len(instances))
 	for _, instance := range instances {
-		s.recoverOrphanedInstance(ctx, instance, staleThreshold)
+		s.recoverOrphanedInstance(ctx, instance, orphanFailThreshold)
 	}
 }
 
 func (s *Scheduler) recoverOrphanedInstance(ctx context.Context, instance model.FlowInstance, staleThreshold time.Duration) {
-	errMsg := fmt.Sprintf("服务重启恢复: 实例已停滞超过 %v (上次更新: %s)", staleThreshold, instance.UpdatedAt.Format("2006-01-02 15:04:05"))
-	instanceCtx := ctx
+	recoveryCtx := ctx
 	if instance.TenantID != nil {
-		instanceCtx = platformrepo.WithTenantID(ctx, *instance.TenantID)
+		recoveryCtx = platformrepo.WithTenantID(ctx, *instance.TenantID)
 	}
+	attempt, err := s.executor.RecoverInstance(recoveryCtx, instance.ID, model.FlowRecoveryTriggerScheduler)
+	if err == nil && attempt != nil && attempt.Status == model.FlowRecoveryStatusSuccess {
+		logger.Sched("HEAL").Info("已恢复孤儿实例 %s (%s) -> %s", instance.ID.String()[:8], instance.FlowName, attempt.RecoveryAction)
+		return
+	}
+
+	errMsg := fmt.Sprintf("服务重启恢复: 实例已停滞超过 %v (上次更新: %s)", staleThreshold, instance.UpdatedAt.Format("2006-01-02 15:04:05"))
 	updated, err := s.instanceRepo.UpdateStatusWithIncidentSync(
-		instanceCtx,
+		recoveryCtx,
 		instance.ID,
 		[]string{model.FlowInstanceStatusRunning, model.FlowInstanceStatusPending},
 		model.FlowInstanceStatusFailed,

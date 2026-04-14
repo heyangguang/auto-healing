@@ -22,6 +22,7 @@ type FlowExecutor struct {
 	approvalRepo    *automationrepo.ApprovalTaskRepository
 	flowRepo        *automationrepo.HealingFlowRepository
 	flowLogRepo     *automationrepo.FlowLogRepository
+	recoveryRepo    *automationrepo.FlowRecoveryAttemptRepository
 	cmdbRepo        *cmdbrepo.CMDBItemRepository
 	gitRepoRepo     *integrationrepo.GitRepositoryRepository
 	executionRepo   *automationrepo.ExecutionRepository
@@ -41,6 +42,7 @@ type FlowExecutorDeps struct {
 	ApprovalRepo    *automationrepo.ApprovalTaskRepository
 	FlowRepo        *automationrepo.HealingFlowRepository
 	FlowLogRepo     *automationrepo.FlowLogRepository
+	RecoveryRepo    *automationrepo.FlowRecoveryAttemptRepository
 	CMDBRepo        *cmdbrepo.CMDBItemRepository
 	GitRepoRepo     *integrationrepo.GitRepositoryRepository
 	ExecutionRepo   *automationrepo.ExecutionRepository
@@ -63,6 +65,8 @@ func NewFlowExecutorWithDeps(deps FlowExecutorDeps) *FlowExecutor {
 		panic("automation flow executor requires flow repo")
 	case deps.FlowLogRepo == nil:
 		panic("automation flow executor requires flow log repo")
+	case deps.RecoveryRepo == nil:
+		panic("automation flow executor requires recovery repo")
 	case deps.CMDBRepo == nil:
 		panic("automation flow executor requires cmdb repo")
 	case deps.GitRepoRepo == nil:
@@ -90,6 +94,7 @@ func NewFlowExecutorWithDeps(deps FlowExecutorDeps) *FlowExecutor {
 		approvalRepo:    deps.ApprovalRepo,
 		flowRepo:        deps.FlowRepo,
 		flowLogRepo:     deps.FlowLogRepo,
+		recoveryRepo:    deps.RecoveryRepo,
 		cmdbRepo:        deps.CMDBRepo,
 		gitRepoRepo:     deps.GitRepoRepo,
 		executionRepo:   deps.ExecutionRepo,

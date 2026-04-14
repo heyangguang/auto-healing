@@ -16,6 +16,7 @@ import (
 // scan 扫描未处理的工单
 func (s *Scheduler) scan(ctx context.Context) {
 	s.processExpiredApprovals(ctx)
+	s.reconcileStuckInstances(ctx)
 
 	incidents, err := s.incidentRepo.ListUnscanned(ctx, 100)
 	if err != nil {

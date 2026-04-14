@@ -99,6 +99,16 @@ func (r *FlowInstanceRepository) ListStaleRunning(ctx context.Context, staleThre
 	return instances, err
 }
 
+func (r *FlowInstanceRepository) ListStaleByStatuses(ctx context.Context, statuses []string, staleThreshold time.Duration) ([]model.FlowInstance, error) {
+	var instances []model.FlowInstance
+	cutoff := time.Now().Add(-staleThreshold)
+	err := r.db.WithContext(ctx).
+		Where("status IN ?", statuses).
+		Where("updated_at < ?", cutoff).
+		Find(&instances).Error
+	return instances, err
+}
+
 // UpdateCurrentNodeAndStates 更新当前节点和节点状态
 func (r *FlowInstanceRepository) UpdateCurrentNodeAndStates(ctx context.Context, id uuid.UUID, currentNodeID string, nodeStates model.JSON) error {
 	return TenantDB(r.db, ctx).Model(&model.FlowInstance{}).Where("id = ?", id).Updates(map[string]interface{}{

@@ -32,6 +32,7 @@ type ModuleDeps struct {
 	RuleRepo         *automationrepo.HealingRuleRepository
 	InstanceRepo     *automationrepo.FlowInstanceRepository
 	ApprovalRepo     *automationrepo.ApprovalTaskRepository
+	RecoveryRepo     *automationrepo.FlowRecoveryAttemptRepository
 	ScheduleRepo     *automationrepo.ScheduleRepository
 	IncidentRepo     *incidentrepo.IncidentRepository
 	NotificationRepo *engagementrepo.NotificationRepository
@@ -47,6 +48,7 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 	ruleRepo := automationrepo.NewHealingRuleRepositoryWithDB(db)
 	instanceRepo := automationrepo.NewFlowInstanceRepositoryWithDB(db)
 	approvalRepo := automationrepo.NewApprovalTaskRepositoryWithDB(db)
+	recoveryRepo := automationrepo.NewFlowRecoveryAttemptRepositoryWithDB(db)
 	scheduleRepo := automationrepo.NewScheduleRepositoryWithDB(db)
 	incidentRepo := incidentrepo.NewIncidentRepositoryWithDB(db)
 	notificationRepo := engagementrepo.NewNotificationRepository(db)
@@ -79,6 +81,7 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 		RuleRepo:         ruleRepo,
 		InstanceRepo:     instanceRepo,
 		ApprovalRepo:     approvalRepo,
+		RecoveryRepo:     recoveryRepo,
 		ScheduleRepo:     scheduleRepo,
 		IncidentRepo:     incidentRepo,
 		NotificationRepo: notificationRepo,
