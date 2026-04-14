@@ -55,12 +55,8 @@ func (e *FlowExecutor) hostSourceValue(instance *model.FlowInstance, sourceField
 	if instance.Context == nil {
 		return ""
 	}
-	incident, ok := instance.Context["incident"].(map[string]interface{})
-	if !ok {
-		return ""
-	}
 
-	current := nestedValue(incident, sourceField)
+	current := resolveFlowContextSourceValue(instance.Context, sourceField)
 	if current == nil {
 		return ""
 	}

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/company/auto-healing/internal/modules/automation/model"
-	platformmodel "github.com/company/auto-healing/internal/platform/model"
 )
 
 // 辅助方法
@@ -153,7 +152,7 @@ func (e *DryRunExecutor) extractHosts(flowContext map[string]interface{}, config
 	}
 
 	// 从上下文中获取值
-	value := e.getNestedValue(flowContext, sourceField)
+	value := resolveFlowContextSourceValue(flowContext, sourceField)
 	if value == nil {
 		return []string{}
 	}
@@ -175,62 +174,13 @@ func (e *DryRunExecutor) extractHosts(flowContext map[string]interface{}, config
 	return hosts
 }
 
-func (e *DryRunExecutor) getNestedValue(data map[string]interface{}, path string) interface{} {
-	parts := strings.Split(path, ".")
-	current := data
-	for i, part := range parts {
-		if current == nil {
-			return nil
-		}
-		val, ok := current[part]
-		if !ok {
-			return nil
-		}
-		if i == len(parts)-1 {
-			return val
-		}
-		current, ok = val.(map[string]interface{})
-		if !ok {
-			// 尝试从 incident 结构体中获取
-			if incident, ok := val.(*platformmodel.Incident); ok && len(parts) > i+1 {
-				return e.getIncidentField(incident, parts[i+1])
-			}
-			return nil
-		}
-	}
-	return nil
-}
-
-func (e *DryRunExecutor) getIncidentField(incident *platformmodel.Incident, field string) interface{} {
-	switch field {
-	case "affected_ci":
-		return incident.AffectedCI
-	case "affected_service":
-		return incident.AffectedService
-	case "title":
-		return incident.Title
-	case "description":
-		return incident.Description
-	case "severity":
-		return incident.Severity
-	case "priority":
-		return incident.Priority
-	case "status":
-		return incident.Status
-	case "category":
-		return incident.Category
-	default:
-		if incident.RawData != nil {
-			return incident.RawData[field]
-		}
-		return nil
-	}
-}
-
 func (e *DryRunExecutor) getHostsFromContext(flowContext map[string]interface{}, key string) []string {
 	val, ok := flowContext[key]
 	if !ok {
 		return []string{}
+	}
+	if hosts := collectExecutionHosts(val); len(hosts) > 0 {
+		return hosts
 	}
 	switch v := val.(type) {
 	case []string:
