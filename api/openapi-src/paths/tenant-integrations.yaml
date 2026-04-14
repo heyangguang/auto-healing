@@ -537,6 +537,79 @@
               type: array
               items:
                 $ref: '#/components/schemas/IncidentWritebackLog'
+/tenant/incident-solution-templates:
+  get:
+    tags:
+    - 工单管理
+    summary: 获取解决方案模板列表
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/IncidentSolutionTemplate'
+  post:
+    tags:
+    - 工单管理
+    summary: 创建解决方案模板
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/IncidentSolutionTemplateCreate'
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentSolutionTemplate'
+/tenant/incident-solution-templates/{id}:
+  get:
+    tags:
+    - 工单管理
+    summary: 获取解决方案模板详情
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentSolutionTemplate'
+  put:
+    tags:
+    - 工单管理
+    summary: 更新解决方案模板
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/IncidentSolutionTemplateUpdate'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentSolutionTemplate'
+  delete:
+    tags:
+    - 工单管理
+    summary: 删除解决方案模板
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 删除成功
 /tenant/incidents/{id}/trigger:
   post:
     tags:

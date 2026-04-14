@@ -114,6 +114,13 @@
 - 当用户在工单页面手动关闭工单，或自愈流程启用了“成功后自动关单”时，系统会调用该地址
 - URL 支持变量：`{external_id}`
 
+工单关闭协议：
+
+- `close_status` 由 AHS 定义为“关闭后的生命周期状态”，如 `resolved` / `closed`
+- `close_code` 由 AHS 定义为“关闭原因码”，如 `auto_healed` / `manual_fixed` / `not_reproducible`
+- `resolution` 表达最终结论，`work_notes` 表达处理动作、执行结果与验证结果
+- 适配器必须负责把这些字段映射到对端系统；如果对端不支持某字段，必须在适配器文档中显式说明
+
 ```json
 {
   "name": "iTop 资产适配器",
@@ -141,6 +148,40 @@
 | `id` | uuid | 插件 ID |
 
 ---
+
+## 3A. 解决方案模板
+
+用于管理工单关闭/回写时使用的“解决方案模板”。模板可以被 Flow 的 `close_policy.solution_template_id` 引用，也可以在工单手动关闭时指定。
+
+### 获取模板列表
+
+**GET** `/api/v1/incident-solution-templates`
+
+**权限**: `plugin:list`
+
+### 创建模板
+
+**POST** `/api/v1/incident-solution-templates`
+
+**权限**: `plugin:create`
+
+请求体字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | ✅ | 模板名称 |
+| `description` | string | ❌ | 模板描述 |
+| `resolution_template` | string | ✅ | 解决结论模板 |
+| `work_notes_template` | string | ✅ | 回写过程模板 |
+| `default_close_code` | string | ❌ | 默认关闭原因码 |
+| `default_close_status` | string | ❌ | 默认关闭状态，默认 `resolved` |
+
+模板变量说明：
+
+- 系统自动提供 `incident.*`、`system.*`、`operator.*`
+- 自动关单场景通常还会提供 `flow.*`、`execution.*`
+- 手动关单场景可通过 `template_vars` 补充变量
+- 模板变量写法为 `{{ incident.title }}`、`{{ execution.run_id }}` 这类点路径
 
 ## 4. 更新插件
 

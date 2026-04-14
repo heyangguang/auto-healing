@@ -392,18 +392,26 @@ CloseIncidentRequest:
   properties:
     resolution:
       type: string
-      description: 解决方案描述
+      description: 解决结论；若配置 solution_template_id 且未显式填写，则由模板渲染生成
     work_notes:
       type: string
-      description: 工作备注
+      description: 处理过程与验证结果；若配置 solution_template_id 且未显式填写，则由模板渲染生成
     close_code:
       type: string
-      description: 关闭代码
+      description: 关闭原因码，如 auto_healed / manual_fixed / not_reproducible
     close_status:
       type: string
+      description: 关闭后的生命周期状态
       enum:
       - resolved
       - closed
+    solution_template_id:
+      type: string
+      format: uuid
+      description: 解决方案模板 ID
+    template_vars:
+      type: object
+      description: 模板变量，用于注入运行事实或手工补充信息
 CloseIncidentResponse:
   type: object
   properties:
@@ -416,6 +424,64 @@ CloseIncidentResponse:
     writeback_log_id:
       type: string
       format: uuid
+IncidentSolutionTemplate:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    description:
+      type: string
+    resolution_template:
+      type: string
+    work_notes_template:
+      type: string
+    default_close_code:
+      type: string
+    default_close_status:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+IncidentSolutionTemplateCreate:
+  type: object
+  required:
+  - name
+  - resolution_template
+  - work_notes_template
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    resolution_template:
+      type: string
+    work_notes_template:
+      type: string
+    default_close_code:
+      type: string
+    default_close_status:
+      type: string
+IncidentSolutionTemplateUpdate:
+  type: object
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    resolution_template:
+      type: string
+    work_notes_template:
+      type: string
+    default_close_code:
+      type: string
+    default_close_status:
+      type: string
 IncidentWritebackLog:
   type: object
   properties:

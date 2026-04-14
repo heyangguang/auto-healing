@@ -342,6 +342,8 @@ HealingFlow:
     auto_close_source_incident:
       type: boolean
       description: 流程成功完成后自动关闭源工单
+    close_policy:
+      $ref: '#/components/schemas/FlowClosePolicy'
     created_by:
       type: string
       format: uuid
@@ -369,6 +371,8 @@ HealingFlowCreate:
       type: boolean
     auto_close_source_incident:
       type: boolean
+    close_policy:
+      $ref: '#/components/schemas/FlowClosePolicy'
 HealingFlowUpdate:
   type: object
   properties:
@@ -388,6 +392,32 @@ HealingFlowUpdate:
       type: boolean
     auto_close_source_incident:
       type: boolean
+    close_policy:
+      $ref: '#/components/schemas/FlowClosePolicy'
+FlowClosePolicy:
+  type: object
+  properties:
+    enabled:
+      type: boolean
+      description: 是否启用新版自动关单策略
+    trigger_on:
+      type: string
+      description: 触发时机，当前仅支持 flow_success
+      enum:
+      - flow_success
+    solution_template_id:
+      type: string
+      format: uuid
+      description: 解决方案模板 ID
+    default_close_status:
+      type: string
+      description: 默认关闭状态
+      enum:
+      - resolved
+      - closed
+    default_close_code:
+      type: string
+      description: 默认关闭原因码
 FlowNode:
   type: object
   description: 流程节点

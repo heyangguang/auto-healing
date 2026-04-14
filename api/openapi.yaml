@@ -5155,6 +5155,84 @@ paths:
                 items:
                   $ref: '#/components/schemas/IncidentWritebackLog'
       operationId: getTenantIncidentsByIdWritebackLogs
+  /tenant/incident-solution-templates:
+    get:
+      tags:
+      - 工单管理
+      summary: 获取解决方案模板列表
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IncidentSolutionTemplate'
+      operationId: getTenantIncidentSolutionTemplates
+    post:
+      tags:
+      - 工单管理
+      summary: 创建解决方案模板
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentSolutionTemplateCreate'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentSolutionTemplate'
+      operationId: postTenantIncidentSolutionTemplates
+  /tenant/incident-solution-templates/{id}:
+    get:
+      tags:
+      - 工单管理
+      summary: 获取解决方案模板详情
+      parameters:
+      - $ref: '#/components/parameters/ID'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentSolutionTemplate'
+      operationId: getTenantIncidentSolutionTemplatesById
+    put:
+      tags:
+      - 工单管理
+      summary: 更新解决方案模板
+      parameters:
+      - $ref: '#/components/parameters/ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentSolutionTemplateUpdate'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentSolutionTemplate'
+      operationId: putTenantIncidentSolutionTemplatesById
+    delete:
+      tags:
+      - 工单管理
+      summary: 删除解决方案模板
+      parameters:
+      - $ref: '#/components/parameters/ID'
+      responses:
+        '200':
+          description: 删除成功
+      operationId: deleteTenantIncidentSolutionTemplatesById
   /tenant/incidents/{id}/trigger:
     post:
       tags:
@@ -7847,6 +7925,8 @@ components:
         auto_close_source_incident:
           type: boolean
           description: 流程成功完成后自动关闭源工单
+        close_policy:
+          $ref: '#/components/schemas/FlowClosePolicy'
         created_by:
           type: string
           format: uuid
@@ -7874,6 +7954,8 @@ components:
           type: boolean
         auto_close_source_incident:
           type: boolean
+        close_policy:
+          $ref: '#/components/schemas/FlowClosePolicy'
     HealingFlowUpdate:
       type: object
       properties:
@@ -7893,6 +7975,32 @@ components:
           type: boolean
         auto_close_source_incident:
           type: boolean
+        close_policy:
+          $ref: '#/components/schemas/FlowClosePolicy'
+    FlowClosePolicy:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: 是否启用新版自动关单策略
+        trigger_on:
+          type: string
+          description: 触发时机，当前仅支持 flow_success
+          enum:
+          - flow_success
+        solution_template_id:
+          type: string
+          format: uuid
+          description: 解决方案模板 ID
+        default_close_status:
+          type: string
+          description: 默认关闭状态
+          enum:
+          - resolved
+          - closed
+        default_close_code:
+          type: string
+          description: 默认关闭原因码
     FlowNode:
       type: object
       description: 流程节点
@@ -9693,18 +9801,26 @@ components:
       properties:
         resolution:
           type: string
-          description: 解决方案描述
+          description: 解决结论；若配置 solution_template_id 且未显式填写，则由模板渲染生成
         work_notes:
           type: string
-          description: 工作备注
+          description: 处理过程与验证结果；若配置 solution_template_id 且未显式填写，则由模板渲染生成
         close_code:
           type: string
-          description: 关闭代码
+          description: 关闭原因码，如 auto_healed / manual_fixed / not_reproducible
         close_status:
           type: string
+          description: 关闭后的生命周期状态
           enum:
           - resolved
           - closed
+        solution_template_id:
+          type: string
+          format: uuid
+          description: 解决方案模板 ID
+        template_vars:
+          type: object
+          description: 模板变量，用于注入运行事实或手工补充信息
     CloseIncidentResponse:
       type: object
       properties:
@@ -9717,6 +9833,64 @@ components:
         writeback_log_id:
           type: string
           format: uuid
+    IncidentSolutionTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        resolution_template:
+          type: string
+        work_notes_template:
+          type: string
+        default_close_code:
+          type: string
+        default_close_status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    IncidentSolutionTemplateCreate:
+      type: object
+      required:
+      - name
+      - resolution_template
+      - work_notes_template
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        resolution_template:
+          type: string
+        work_notes_template:
+          type: string
+        default_close_code:
+          type: string
+        default_close_status:
+          type: string
+    IncidentSolutionTemplateUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        resolution_template:
+          type: string
+        work_notes_template:
+          type: string
+        default_close_code:
+          type: string
+        default_close_status:
+          type: string
     IncidentWritebackLog:
       type: object
       properties:

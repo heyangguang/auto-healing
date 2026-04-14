@@ -78,10 +78,19 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `resolution` | string | ✅ | 解决方案描述 |
-| `work_notes` | string | ❌ | 工作备注 |
-| `close_code` | string | ❌ | 关闭代码（如 `resolved` / `not_reproducible`） |
+| `resolution` | string | ❌ | 解决结论；若传入 `solution_template_id` 且未显式填写，则由模板渲染生成 |
+| `work_notes` | string | ❌ | 处理过程与验证说明；若传入 `solution_template_id` 且未显式填写，则由模板渲染生成 |
+| `close_code` | string | ❌ | 关闭原因码，如 `auto_healed` / `manual_fixed` / `not_reproducible` |
 | `close_status` | string | ❌ | 关闭后状态，默认 `resolved` |
+| `solution_template_id` | uuid | ❌ | 解决方案模板 ID；用于根据模板自动生成回写内容 |
+| `template_vars` | object | ❌ | 模板变量；与 `solution_template_id` 配合使用，注入运行事实或手工补充信息 |
+
+说明：
+
+- `close_status` 表示工单生命周期状态，例如 `resolved` / `closed`
+- `close_code` 表示关闭原因码，由 AHS 定义标准语义，适配器负责映射到对端系统
+- 当 `solution_template_id` 存在时，系统会自动注入 `incident.*`、`system.*`、`operator.*` 等基础变量，并与 `template_vars` 一起渲染模板
+- 若模板引用了不存在的变量，关闭请求会显式失败，不会静默降级
 
 ### 响应字段
 
