@@ -177,8 +177,9 @@ class ITopClient:
 
         if status not in ("resolved", "closed"):
             close_fields = dict(self.config.close_fields)
-            if resolution:
-                close_fields.setdefault("solution", resolution)
+            solution_text = merge_solution_text(resolution, work_notes)
+            if solution_text:
+                close_fields.setdefault("solution", solution_text)
             if work_notes:
                 close_fields.setdefault("public_log", work_notes)
             self.apply_incident_stimulus(
@@ -194,6 +195,23 @@ class ITopClient:
             self.apply_incident_stimulus(external_id, self.config.final_close_stimulus, comment)
             incident = self.get_incident_by_ref(external_id)
         return incident
+
+
+def merge_solution_text(resolution: str, work_notes: str) -> str:
+    resolution = resolution.strip()
+    work_notes = work_notes.strip()
+    if resolution and work_notes:
+        if work_notes.startswith(resolution):
+            return work_notes
+        return f"{resolution}\n\n{work_notes}"
+    return resolution or work_notes
+
+
+def build_close_comment(resolution: str, work_notes: str) -> str:
+    comment = resolution.strip() or work_notes.strip() or "Closed by Auto-Healing adapter"
+    if len(comment) <= 240:
+        return comment
+    return comment[:237] + "..."
 
 
 def iter_objects(response: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
@@ -367,7 +385,7 @@ class AdapterHandler(BaseHTTPRequestHandler):
             target_status = str(request_body.get("close_status") or "resolved").strip().lower() or "resolved"
             resolution = str(request_body.get("resolution") or "").strip()
             work_notes = str(request_body.get("work_notes") or "").strip()
-            comment = str(request_body.get("work_notes") or request_body.get("resolution") or "Closed by Auto-Healing adapter").strip()
+            comment = build_close_comment(resolution, work_notes)
             result = self.client.close_incident(
                 external_id,
                 target_status=target_status,
