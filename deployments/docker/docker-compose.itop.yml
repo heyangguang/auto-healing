@@ -1,0 +1,74 @@
+services:
+  itop:
+    image: elestio/itop:${ITOP_IMAGE_TAG:-latest}
+    container_name: auto-healing-itop
+    restart: unless-stopped
+    environment:
+      ADMIN_EMAIL: ${ITOP_ADMIN_EMAIL:-ops@example.com}
+      ADMIN_PASSWORD: ${ITOP_ADMIN_PASSWORD:-change-me}
+      TZ: Asia/Shanghai
+    ports:
+      - "${ITOP_HTTP_PORT:-18084}:80"
+    volumes:
+      - itop_conf:/var/www/html/conf
+      - itop_data:/var/www/html/data
+      - itop_log:/var/www/html/log
+      - itop_extensions:/var/www/html/extensions
+      - itop_db_data:/var/lib/mysql
+      - ./itop-ticket-lab.html:/var/www/html/extensions/itop-ticket-lab.html:ro
+      - ./itop-cmdb-lab.html:/var/www/html/extensions/itop-cmdb-lab.html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(@file_get_contents(\"http://127.0.0.1/\")===false?1:0);'"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+    networks:
+      - itop-lab
+
+  itop-adapter:
+    image: python:3.11-alpine
+    container_name: auto-healing-itop-adapter
+    restart: unless-stopped
+    depends_on:
+      itop:
+        condition: service_started
+    working_dir: /app
+    command: ["python3", "/app/tools/itop_adapter.py"]
+    environment:
+      ADAPTER_HOST: 0.0.0.0
+      ADAPTER_PORT: 18085
+      ITOP_BASE_URL: http://itop
+      ITOP_REST_PATH: /webservices/rest.php
+      ITOP_REST_VERSION: ${ITOP_REST_VERSION:-1.3}
+      ITOP_AUTH_USER: ${ITOP_AUTH_USER:-admin}
+      ITOP_AUTH_PWD: ${ITOP_AUTH_PWD:?set ITOP_AUTH_PWD}
+      ITOP_TICKET_CLASS: ${ITOP_TICKET_CLASS:-UserRequest}
+      ITOP_TICKET_OQL: ${ITOP_TICKET_OQL:-SELECT UserRequest}
+      ITOP_CLOSE_STIMULUS: ${ITOP_CLOSE_STIMULUS:-ev_resolve}
+      ITOP_CLOSE_FIELDS_JSON: ${ITOP_CLOSE_FIELDS_JSON:-{}}
+      ITOP_LIST_EXCLUDE_STATUSES: ${ITOP_LIST_EXCLUDE_STATUSES:-closed}
+      ITOP_CMDB_CLASSES: ${ITOP_CMDB_CLASSES:-Server,VirtualMachine,NetworkDevice,ApplicationSolution}
+      ITOP_CMDB_OQLS_JSON: ${ITOP_CMDB_OQLS_JSON:-{}}
+      ITOP_CMDB_ENVIRONMENT: ${ITOP_CMDB_ENVIRONMENT:-production}
+    ports:
+      - "${ITOP_ADAPTER_PORT:-18085}:18085"
+    volumes:
+      - ../../tools:/app/tools:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:18085/health | grep -q 'ok'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - itop-lab
+
+volumes:
+  itop_conf:
+  itop_data:
+  itop_log:
+  itop_extensions:
+  itop_db_data:
+
+networks:
+  itop-lab:
+    driver: bridge

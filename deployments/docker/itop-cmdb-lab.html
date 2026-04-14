@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iTop CMDB 主机模拟器</title>
+  <style>
+    :root { --bg:#f4f7fb; --card:#fff; --line:#dbe3ee; --text:#17212b; --muted:#667085; --brand:#0f6dff; --brand-deep:#0a4eb8; --ok:#166534; --err:#b42318; }
+    * { box-sizing:border-box; } body { margin:0; padding:24px; font:14px/1.5 "Segoe UI","PingFang SC",sans-serif; background:linear-gradient(180deg,#f8fbff 0%,var(--bg) 100%); color:var(--text); }
+    .wrap { max-width:1180px; margin:0 auto; } .hero { margin-bottom:18px; } .hero h1 { margin:0 0 8px; font-size:30px; } .hero p { margin:0; color:var(--muted); }
+    .grid { display:grid; grid-template-columns:minmax(0,1.8fr) minmax(320px,1fr); gap:16px; } .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:0 16px 40px rgba(15,109,255,.06); }
+    .tip,.status,.preview,.result { border-radius:12px; padding:12px 14px; } .tip { margin-bottom:16px; background:#eef5ff; color:#174ea6; } .status { display:none; margin-top:14px; } .status.show { display:block; } .status.info { background:#eef5ff; color:#174ea6; } .status.success { background:#eef8f1; color:var(--ok); } .status.error { background:#fff1f2; color:var(--err); }
+    .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 16px; } .field { display:flex; flex-direction:column; gap:6px; } .field.full { grid-column:1/-1; } label { font-weight:600; }
+    input,select,textarea { width:100%; padding:11px 12px; border-radius:12px; border:1px solid var(--line); background:#fff; color:var(--text); } textarea { min-height:120px; resize:vertical; }
+    input:focus,select:focus,textarea:focus { outline:2px solid rgba(15,109,255,.14); border-color:var(--brand); }
+    .preview,.result { border:1px solid var(--line); background:#f9fbfd; white-space:pre-wrap; word-break:break-word; } .result.empty { color:var(--muted); }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; } button { border:0; border-radius:12px; padding:11px 15px; background:var(--brand); color:#fff; font-weight:600; cursor:pointer; } button:hover { background:var(--brand-deep); } button.secondary { background:#ecf2f8; color:var(--text); } button.secondary:hover { background:#dce7f2; }
+    @media (max-width:980px) { .grid,.form-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>iTop CMDB 主机模拟器</h1>
+      <p>这个页面直接运行在 iTop 里，并直接调用 iTop 自己的 REST `core/create` 创建 `Server` 资产。目标是让 Auto-Healing 同步后能把主机的核心资产字段完整显示出来。</p>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="tip">先填一组 iTop REST 凭据，再点“加载基础选项”。页面会从 iTop 实时拉组织、位置、品牌、型号、操作系统这些选项，不用手填 ID。</div>
+        <div class="form-grid">
+          <div class="field"><label for="username">iTop 用户名</label><input id="username" value="admin"></div>
+          <div class="field"><label for="password">iTop 密码</label><input id="password" type="password" value="admin"></div>
+        </div>
+        <div class="actions">
+          <button id="loadBtn" type="button" class="secondary">加载基础选项</button>
+          <button id="presetBtn" type="button" class="secondary">填充示例主机</button>
+        </div>
+
+        <h2>主机信息</h2>
+        <div class="form-grid">
+          <div class="field"><label for="hostname">主机名</label><input id="hostname" value="cmdb-lab-host-01"></div>
+          <div class="field"><label for="ipAddress">管理 IP</label><input id="ipAddress" value="10.66.20.31"></div>
+          <div class="field"><label for="serialNumber">序列号</label><input id="serialNumber" value="LAB-CMDB-0001"></div>
+          <div class="field"><label for="status">状态</label><select id="status"><option value="production" selected>production</option><option value="implementation">implementation</option><option value="stock">stock</option></select></div>
+          <div class="field"><label for="cpu">CPU</label><input id="cpu" value="8 vCPU"></div>
+          <div class="field"><label for="memory">内存</label><input id="memory" value="32 GB"></div>
+          <div class="field"><label for="storageSystemName">存储系统名</label><input id="storageSystemName" value="lab-storage-01"></div>
+          <div class="field"><label for="diskName">逻辑卷名</label><input id="diskName" value="lv-data-01"></div>
+          <div class="field"><label for="diskSize">磁盘容量</label><input id="diskSize" value="512 GB"></div>
+          <div class="field"><label for="raidLevel">RAID 级别</label><input id="raidLevel" value="RAID-10"></div>
+          <div class="field"><label for="organization">组织</label><select id="organization"></select></div>
+          <div class="field"><label for="location">位置</label><select id="location"></select></div>
+          <div class="field"><label for="brand">品牌</label><select id="brand"></select></div>
+          <div class="field"><label for="model">型号</label><select id="model"></select></div>
+          <div class="field"><label for="osFamily">操作系统族</label><select id="osFamily"></select></div>
+          <div class="field"><label for="osVersion">操作系统版本</label><select id="osVersion"></select></div>
+          <div class="field full"><label for="description">资产描述</label><textarea id="description">Created by iTop CMDB host lab for Auto-Healing sync.</textarea></div>
+        </div>
+        <div class="actions">
+          <button id="refreshPreviewBtn" type="button" class="secondary">刷新预览</button>
+          <button id="createBtn" type="button">创建 CMDB 主机</button>
+        </div>
+        <div id="statusBox" class="status info"></div>
+      </div>
+
+      <div class="card">
+        <h2>预览</h2>
+        <div class="field full"><label>提交给 iTop 的关键字段</label><div id="previewBox" class="preview"></div></div>
+        <div class="field full"><label>最近创建结果</label><div id="resultBox" class="result empty">还没有创建记录。</div></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const el = (id) => document.getElementById(id);
+    let brands = [];
+    let models = [];
+    let families = [];
+    let versions = [];
+    const selectIds = ['organization', 'location', 'brand', 'model', 'osFamily', 'osVersion'];
+
+    function basicAuth(user, password) {
+      return "Basic " + btoa(`${user}:${password}`);
+    }
+
+    async function itopCall(payload) {
+      const response = await fetch('/webservices/rest.php?version=1.3', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': basicAuth(el('username').value.trim(), el('password').value)
+        },
+        body: new URLSearchParams({ json_data: JSON.stringify(payload) }).toString()
+      });
+      const text = await response.text();
+      const data = JSON.parse(text);
+      if (!response.ok || data.code !== 0) throw new Error(data.message || text || `请求失败 (${response.status})`);
+      return data;
+    }
+
+    function objectFields(data) {
+      return Object.values(data.objects || {}).map((item) => item.fields || {});
+    }
+
+    function fillSelect(id, items, labelKey) {
+      const select = el(id);
+      select.innerHTML = items.map((item) => `<option value="${item.id}">${item.id} - ${item[labelKey]}</option>`).join('');
+    }
+
+    function setSelectPlaceholder(id, text) {
+      el(id).innerHTML = `<option value="">${text}</option>`;
+    }
+
+    function setAllSelectPlaceholders(text) {
+      selectIds.forEach((id) => setSelectPlaceholder(id, text));
+    }
+
+    function filterModels() {
+      const brandId = el('brand').value;
+      fillSelect('model', models.filter((item) => !brandId || item.brand_id === brandId), 'name');
+    }
+
+    function filterVersions() {
+      const familyId = el('osFamily').value;
+      fillSelect('osVersion', versions.filter((item) => !familyId || item.osfamily_id === familyId), 'name');
+    }
+
+    function buildServerPayload() {
+      return {
+        operation: 'core/create',
+        class: 'Server',
+        comment: 'Created by iTop CMDB host lab',
+        fields: {
+          name: el('hostname').value.trim(),
+          org_id: String(el('organization').value),
+          location_id: String(el('location').value || '0'),
+          brand_id: String(el('brand').value || '0'),
+          model_id: String(el('model').value || '0'),
+          status: el('status').value,
+          osfamily_id: String(el('osFamily').value || '0'),
+          osversion_id: String(el('osVersion').value || '0'),
+          managementip: el('ipAddress').value.trim(),
+          serialnumber: el('serialNumber').value.trim(),
+          cpu: el('cpu').value.trim(),
+          ram: el('memory').value.trim(),
+          description: el('description').value.trim()
+        },
+        output_fields: 'id,name,status,managementip,serialnumber,cpu,ram,friendlyname'
+      };
+    }
+
+    function refreshPreview() {
+      el('previewBox').textContent = JSON.stringify({
+        server: buildServerPayload().fields,
+        storage_system: {
+          name: el('storageSystemName').value.trim() || `${el('hostname').value.trim()}-storage`
+        },
+        logical_volume: {
+          name: el('diskName').value.trim() || `lv-${el('hostname').value.trim()}`,
+          size: el('diskSize').value.trim(),
+          raid_level: el('raidLevel').value.trim()
+        }
+      }, null, 2);
+    }
+
+    function setStatus(type, text) {
+      const box = el('statusBox');
+      box.className = `status show ${type}`;
+      box.textContent = text;
+    }
+
+    function firstFields(payload) {
+      return Object.values(payload.objects || {})[0]?.fields || {};
+    }
+
+    async function loadOptions() {
+      setStatus('info', '正在从 iTop 加载基础选项...');
+      setAllSelectPlaceholders('加载中...');
+      const [orgData, locationData, brandData, modelData, familyData, versionData] = await Promise.all([
+        itopCall({ operation: 'core/get', class: 'Organization', key: 'SELECT Organization', output_fields: 'id,name' }),
+        itopCall({ operation: 'core/get', class: 'Location', key: 'SELECT Location', output_fields: 'id,name' }),
+        itopCall({ operation: 'core/get', class: 'Brand', key: 'SELECT Brand', output_fields: 'id,name' }),
+        itopCall({ operation: 'core/get', class: 'Model', key: 'SELECT Model', output_fields: 'id,name,brand_id' }),
+        itopCall({ operation: 'core/get', class: 'OSFamily', key: 'SELECT OSFamily', output_fields: 'id,name' }),
+        itopCall({ operation: 'core/get', class: 'OSVersion', key: 'SELECT OSVersion', output_fields: 'id,name,osfamily_id' })
+      ]);
+      brands = objectFields(brandData);
+      models = objectFields(modelData);
+      families = objectFields(familyData);
+      versions = objectFields(versionData);
+      fillSelect('organization', objectFields(orgData), 'name');
+      fillSelect('location', objectFields(locationData), 'name');
+      fillSelect('brand', brands, 'name');
+      fillSelect('osFamily', families, 'name');
+      filterModels();
+      filterVersions();
+      el('organization').value = '3';
+      el('location').value = '1';
+      el('brand').value = '8';
+      el('osFamily').value = '12';
+      filterModels();
+      filterVersions();
+      el('model').value = '10';
+      el('osVersion').value = '14';
+      refreshPreview();
+      setStatus('success', '基础选项加载完成，可以直接创建主机。');
+    }
+
+    async function ensureStorageSystem() {
+      const storageName = el('storageSystemName').value.trim() || `${el('hostname').value.trim()}-storage`;
+      const query = await itopCall({
+        operation: 'core/get',
+        class: 'StorageSystem',
+        key: `SELECT StorageSystem WHERE name = \"${storageName.replaceAll('\"', '\\\"')}\"`,
+        output_fields: 'id,name'
+      });
+      const existing = firstFields(query);
+      if (existing.id) {
+        return existing;
+      }
+      const created = await itopCall({
+        operation: 'core/create',
+        class: 'StorageSystem',
+        comment: 'Created by iTop CMDB host lab',
+        fields: {
+          name: storageName,
+          org_id: String(el('organization').value),
+          status: el('status').value,
+          location_id: String(el('location').value || '0'),
+          brand_id: String(el('brand').value || '0'),
+          model_id: String(el('model').value || '0'),
+          managementip: el('ipAddress').value.trim()
+        },
+        output_fields: 'id,name,friendlyname'
+      });
+      return firstFields(created);
+    }
+
+    async function createLogicalVolume(storageSystemId, serverId) {
+      const now = Date.now().toString().slice(-6);
+      const created = await itopCall({
+        operation: 'core/create',
+        class: 'LogicalVolume',
+        comment: 'Created by iTop CMDB host lab',
+        fields: {
+          name: el('diskName').value.trim() || `lv-${el('hostname').value.trim()}`,
+          lun_id: `LUN-${now}`,
+          description: `Attached to ${el('hostname').value.trim()}`,
+          raid_level: el('raidLevel').value.trim(),
+          size: el('diskSize').value.trim(),
+          storagesystem_id: String(storageSystemId)
+        },
+        output_fields: 'id,name,size,storagesystem_name'
+      });
+      const volume = firstFields(created);
+      await itopCall({
+        operation: 'core/create',
+        class: 'lnkServerToVolume',
+        comment: 'Linked by iTop CMDB host lab',
+        fields: {
+          volume_id: String(volume.id),
+          server_id: String(serverId),
+          size_used: el('diskSize').value.trim()
+        },
+        output_fields: 'id,volume_name,server_name,size_used'
+      });
+      return volume;
+    }
+
+    function applyPreset() {
+      const stamp = Date.now().toString().slice(-5);
+      el('hostname').value = `cmdb-lab-host-${stamp}`;
+      el('ipAddress').value = `10.66.${stamp.slice(0, 2)}.${stamp.slice(2, 5)}`;
+      el('serialNumber').value = `LAB-CMDB-${stamp}`;
+      el('cpu').value = '8 vCPU';
+      el('memory').value = '32 GB';
+      el('storageSystemName').value = `storage-${stamp}`;
+      el('diskName').value = `lv-${stamp}`;
+      el('diskSize').value = '512 GB';
+      el('raidLevel').value = 'RAID-10';
+      el('description').value = `Created by iTop CMDB host lab at ${new Date().toLocaleString('zh-CN')}.`;
+      refreshPreview();
+    }
+
+    async function createServer() {
+      if (!el('hostname').value.trim()) return setStatus('error', '主机名不能为空。');
+      setStatus('info', '正在调用 iTop REST 创建 CMDB 主机...');
+      const payload = await itopCall(buildServerPayload());
+      const fields = firstFields(payload);
+      const storage = await ensureStorageSystem();
+      const volume = await createLogicalVolume(storage.id, fields.id);
+      el('resultBox').classList.remove('empty');
+      el('resultBox').textContent = [
+        `资产 ID: ${fields.id || '-'}`,
+        `主机名: ${fields.name || el('hostname').value.trim()}`,
+        `状态: ${fields.status || '-'}`,
+        `管理 IP: ${fields.managementip || '-'}`,
+        `序列号: ${fields.serialnumber || '-'}`,
+        `CPU: ${fields.cpu || '-'}`,
+        `内存: ${fields.ram || '-'}`,
+        `逻辑卷: ${volume.name || '-'}`,
+        `磁盘容量: ${volume.size || el('diskSize').value.trim() || '-'}`,
+        `存储系统: ${storage.name || '-'}`,
+        '',
+        '接下来回到 Auto-Healing 里执行 CMDB 插件同步，就能看到这台主机。'
+      ].join('\n');
+      setStatus('success', `CMDB 主机已在 iTop 中创建成功：${fields.name || el('hostname').value.trim()}`);
+    }
+
+    el('brand').addEventListener('change', () => { filterModels(); refreshPreview(); });
+    el('osFamily').addEventListener('change', () => { filterVersions(); refreshPreview(); });
+    ['hostname','ipAddress','serialNumber','status','cpu','memory','description','organization','location','model','osVersion','storageSystemName','diskName','diskSize','raidLevel']
+      .forEach((id) => el(id).addEventListener('input', refreshPreview));
+    ['organization','location','status','model','osVersion'].forEach((id) => el(id).addEventListener('change', refreshPreview));
+      el('loadBtn').addEventListener('click', () => loadOptions().catch((error) => setStatus('error', error.message)));
+      el('presetBtn').addEventListener('click', applyPreset);
+      el('refreshPreviewBtn').addEventListener('click', refreshPreview);
+      el('createBtn').addEventListener('click', () => createServer().catch((error) => setStatus('error', error.message)));
+      setAllSelectPlaceholders('正在自动加载...');
+      applyPreset();
+      loadOptions().catch((error) => {
+        setAllSelectPlaceholders('加载失败，请点“加载基础选项”重试');
+        setStatus('error', error.message);
+      });
+  </script>
+</body>
+</html>

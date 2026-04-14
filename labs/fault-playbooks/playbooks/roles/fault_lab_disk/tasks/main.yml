@@ -1,0 +1,34 @@
+---
+- name: Reset disk fault
+  ansible.builtin.command: "{{ lab_script_path | default('/opt/auto-healing-fault-lab/auto_healing_fault_lab.sh') }} reset disk_full"
+  register: fault_lab_disk_reset
+  failed_when: false
+  changed_when: "'recovered' in (fault_lab_disk_reset.stdout | default(''))"
+
+- name: Flush filesystem buffers
+  ansible.builtin.command: sync
+  changed_when: false
+
+- name: Capture disk usage after recovery
+  ansible.builtin.command: "df -h {{ disk_probe_path | default('/') }}"
+  register: fault_lab_disk_df_after
+  changed_when: false
+
+- name: Check disk fill file after recovery
+  ansible.builtin.stat:
+    path: "{{ disk_fill_file | default('/opt/auto-healing-fault-lab/disk-fill.bin') }}"
+  register: fault_lab_disk_fill_after
+
+- name: Write disk recovery snapshot
+  ansible.builtin.copy:
+    dest: "{{ fault_lab_suite_dir }}/20-disk-recovery.txt"
+    mode: '0644'
+    content: |
+      [disk_reset]
+      {{ fault_lab_disk_reset.stdout | default('') | trim }}
+
+      [disk_after]
+      {{ fault_lab_disk_df_after.stdout | trim }}
+
+      [disk_fill_file_after]
+      {{ (fault_lab_disk_fill_after.stat.exists | ternary('present', 'absent')) }}

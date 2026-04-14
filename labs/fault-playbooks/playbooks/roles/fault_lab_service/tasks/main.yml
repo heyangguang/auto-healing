@@ -1,0 +1,35 @@
+---
+- name: Attempt script-level service reset
+  ansible.builtin.command: "{{ lab_script_path | default('/opt/auto-healing-fault-lab/auto_healing_fault_lab.sh') }} reset service_down"
+  register: fault_lab_service_reset
+  failed_when: false
+  changed_when: "'recovered' in (fault_lab_service_reset.stdout | default(''))"
+
+- name: Start and enable lab service
+  ansible.builtin.systemd:
+    name: "{{ lab_service_name | default('auto-healing-lab-http.service') }}"
+    enabled: true
+    state: started
+
+- name: Wait for lab service port
+  ansible.builtin.wait_for:
+    port: "{{ lab_service_port | default(19081) }}"
+    host: 127.0.0.1
+    timeout: 20
+
+- name: Capture service logs after recovery
+  ansible.builtin.command: "journalctl -u {{ lab_service_name | default('auto-healing-lab-http.service') }} -n {{ max_diagnose_log_lines | default(40) }} --no-pager"
+  register: fault_lab_service_logs_after
+  failed_when: false
+  changed_when: false
+
+- name: Write service recovery snapshot
+  ansible.builtin.copy:
+    dest: "{{ fault_lab_suite_dir }}/20-service-recovery.txt"
+    mode: '0644'
+    content: |
+      [service_reset]
+      {{ fault_lab_service_reset.stdout | default('') | trim }}
+
+      [service_logs_after]
+      {{ fault_lab_service_logs_after.stdout | default('') | trim }}

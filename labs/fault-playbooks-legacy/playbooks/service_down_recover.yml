@@ -1,0 +1,5 @@
+---
+- import_playbook: fault_recovery_suite.yml
+  vars:
+    fault_type: service_down
+    recovery_workflow_name: service_down_recover

@@ -1,0 +1,30 @@
+services:
+  gitea:
+    image: gitea/gitea:1.22.6
+    container_name: auto-healing-gitea
+    restart: unless-stopped
+    environment:
+      USER_UID: 1000
+      USER_GID: 1000
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__security__SECRET_KEY: "${GITEA_SECRET_KEY:-auto-healing-gitea-secret}"
+      GITEA__security__INTERNAL_TOKEN: "${GITEA_INTERNAL_TOKEN:-auto-healing-gitea-internal}"
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__server__DOMAIN: 127.0.0.1
+      GITEA__server__ROOT_URL: "http://127.0.0.1:${GITEA_HTTP_PORT:-13000}/"
+      GITEA__server__HTTP_PORT: 3000
+      GITEA__server__START_SSH_SERVER: "false"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__service__REQUIRE_SIGNIN_VIEW: "false"
+    ports:
+      - "${GITEA_HTTP_PORT:-13000}:3000"
+    volumes:
+      - gitea_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/healthz | grep -q 'pass'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  gitea_data:

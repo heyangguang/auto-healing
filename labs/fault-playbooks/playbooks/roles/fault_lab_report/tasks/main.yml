@@ -1,0 +1,31 @@
+---
+- name: Write recovery report
+  ansible.builtin.copy:
+    dest: "{{ fault_lab_suite_dir }}/99-recovery-report.txt"
+    mode: '0644'
+    content: |
+      [workflow]
+      {{ recovery_workflow_name | default('fault_recovery_suite') }}
+
+      [fault]
+      {{ fault_type }}
+
+      [host]
+      {{ inventory_hostname }}
+
+      [status_before]
+      {{ fault_lab_status_before.stdout | trim }}
+
+      [summary]
+      {% for line in fault_lab_summary_lines | default([]) %}
+      {{ line }}
+      {% endfor %}
+
+      [status_after]
+      {{ fault_lab_status_after.stdout | trim }}
+
+- name: Write latest report pointer
+  ansible.builtin.copy:
+    dest: "{{ recovery_report_dir | default('/opt/auto-healing-fault-lab/reports') }}/latest-{{ recovery_workflow_name | default('fault_recovery_suite') }}-{{ fault_type }}-{{ inventory_hostname }}.txt"
+    mode: '0644'
+    content: "{{ fault_lab_suite_dir }}/99-recovery-report.txt"

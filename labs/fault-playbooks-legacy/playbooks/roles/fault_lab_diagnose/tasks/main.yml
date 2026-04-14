@@ -1,0 +1,12 @@
+---
+- name: Collect service diagnostics
+  ansible.builtin.include_tasks: service_down.yml
+  when: fault_type == 'service_down'
+
+- name: Collect CPU diagnostics
+  ansible.builtin.include_tasks: cpu_high.yml
+  when: fault_type == 'cpu_high'
+
+- name: Collect disk diagnostics
+  ansible.builtin.include_tasks: disk_full.yml
+  when: fault_type == 'disk_full'

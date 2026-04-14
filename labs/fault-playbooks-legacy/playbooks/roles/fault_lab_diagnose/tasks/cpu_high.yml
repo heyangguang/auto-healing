@@ -1,0 +1,29 @@
+---
+- name: Capture load average before recovery
+  ansible.builtin.command: cat /proc/loadavg
+  register: fault_lab_cpu_load_before
+  changed_when: false
+
+- name: Capture top CPU processes before recovery
+  ansible.builtin.shell: "ps -eo pid,ppid,pcpu,pmem,comm,args --sort=-pcpu | head -n {{ (cpu_top_sample_size | default(8) | int) + 1 }}"
+  register: fault_lab_cpu_top_before
+  changed_when: false
+
+- name: Check CPU fault state file
+  ansible.builtin.stat:
+    path: "{{ cpu_state_file | default('/opt/auto-healing-fault-lab/state/cpu_high.pids') }}"
+  register: fault_lab_cpu_state_before
+
+- name: Write CPU diagnostics snapshot
+  ansible.builtin.copy:
+    dest: "{{ fault_lab_suite_dir }}/10-cpu-diagnose.txt"
+    mode: '0644'
+    content: |
+      [loadavg_before]
+      {{ fault_lab_cpu_load_before.stdout | trim }}
+
+      [cpu_state_file]
+      {{ (fault_lab_cpu_state_before.stat.exists | ternary('present', 'absent')) }}
+
+      [top_cpu_before]
+      {{ fault_lab_cpu_top_before.stdout | trim }}

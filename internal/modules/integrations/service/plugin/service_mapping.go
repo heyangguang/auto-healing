@@ -6,6 +6,12 @@ import (
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 )
 
+var supportedTimeLayouts = []string{
+	time.RFC3339,
+	"2006-01-02 15:04:05",
+	"2006-01-02",
+}
+
 // RawIncident 原始工单数据
 type RawIncident struct {
 	ExternalID      string
@@ -69,6 +75,8 @@ func (s *Service) mapToIncidents(rawData []map[string]interface{}, fieldMapping 
 			AffectedService: getStringField(data, incidentMapping, "affected_service", "affected_service"),
 			Assignee:        getStringField(data, incidentMapping, "assignee", "assignee"),
 			Reporter:        getStringField(data, incidentMapping, "reporter", "reporter"),
+			SourceCreatedAt: getTimeField(data, incidentMapping, "source_created_at", "source_created_at"),
+			SourceUpdatedAt: getTimeField(data, incidentMapping, "source_updated_at", "source_updated_at"),
 			RawData:         data,
 		})
 	}
@@ -100,6 +108,18 @@ func (s *Service) mapToCMDBItems(rawData []map[string]interface{}, fieldMapping 
 			Model:        getStringField(data, cmdbMapping, "model", "model"),
 			SerialNumber: getStringField(data, cmdbMapping, "serial_number", "serial_number"),
 			Department:   getStringField(data, cmdbMapping, "department", "department"),
+			SourceCreatedAt: getTimeField(
+				data,
+				cmdbMapping,
+				"source_created_at",
+				"source_created_at",
+			),
+			SourceUpdatedAt: getTimeField(
+				data,
+				cmdbMapping,
+				"source_updated_at",
+				"source_updated_at",
+			),
 			RawData:      data,
 		})
 	}
@@ -132,4 +152,18 @@ func getStringField(data map[string]interface{}, mapping map[string]string, fiel
 		}
 	}
 	return ""
+}
+
+func getTimeField(data map[string]interface{}, mapping map[string]string, fieldName, defaultField string) time.Time {
+	return parseTimeValue(getStringField(data, mapping, fieldName, defaultField))
+}
+
+func parseTimeValue(raw string) time.Time {
+	for _, layout := range supportedTimeLayouts {
+		parsed, err := time.Parse(layout, raw)
+		if err == nil {
+			return parsed
+		}
+	}
+	return time.Time{}
 }

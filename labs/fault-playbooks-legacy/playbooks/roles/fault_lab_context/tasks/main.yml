@@ -1,0 +1,64 @@
+---
+- name: Validate fault type
+  ansible.builtin.assert:
+    that:
+      - fault_type in ['service_down', 'cpu_high', 'disk_full']
+    fail_msg: "不支持的 fault_type: {{ fault_type | default('') }}"
+
+- name: Generate suite timestamp
+  ansible.builtin.command: "date +%Y%m%d-%H%M%S"
+  register: fault_lab_ts
+  changed_when: false
+
+- name: Initialize suite paths
+  ansible.builtin.set_fact:
+    fault_lab_report_name: "{{ recovery_workflow_name | default('fault_recovery_suite') }}-{{ fault_type }}-{{ inventory_hostname }}-{{ fault_lab_ts.stdout }}"
+    fault_lab_suite_dir: "{{ recovery_report_dir | default('/opt/auto-healing-fault-lab/reports') }}/{{ recovery_workflow_name | default('fault_recovery_suite') }}-{{ fault_type }}-{{ inventory_hostname }}-{{ fault_lab_ts.stdout }}"
+    fault_lab_summary_lines:
+      - "workflow={{ recovery_workflow_name | default('fault_recovery_suite') }}"
+      - "fault_type={{ fault_type }}"
+      - "host={{ inventory_hostname }}"
+      - "started_at={{ fault_lab_ts.stdout }}"
+
+- name: Ensure suite report directory exists
+  ansible.builtin.file:
+    path: "{{ fault_lab_suite_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Capture fault status before recovery
+  ansible.builtin.command: "{{ lab_script_path | default('/opt/auto-healing-fault-lab/auto_healing_fault_lab.sh') }} status all"
+  register: fault_lab_status_before
+  changed_when: false
+
+- name: Capture uptime snapshot
+  ansible.builtin.command: uptime
+  register: fault_lab_uptime
+  changed_when: false
+
+- name: Capture memory snapshot
+  ansible.builtin.command: free -m
+  register: fault_lab_memory
+  changed_when: false
+
+- name: Capture disk snapshot
+  ansible.builtin.command: "df -h {{ disk_probe_path | default('/') }}"
+  register: fault_lab_disk_snapshot
+  changed_when: false
+
+- name: Write precheck snapshot
+  ansible.builtin.copy:
+    dest: "{{ fault_lab_suite_dir }}/00-precheck.txt"
+    mode: '0644'
+    content: |
+      [status_before]
+      {{ fault_lab_status_before.stdout | trim }}
+
+      [uptime]
+      {{ fault_lab_uptime.stdout | trim }}
+
+      [memory]
+      {{ fault_lab_memory.stdout | trim }}
+
+      [disk]
+      {{ fault_lab_disk_snapshot.stdout | trim }}

@@ -1,0 +1,115 @@
+exposure_mode: scoped
+
+variables:
+  - name: fault_type
+    type: select
+    required: true
+    description: 选择要恢复的故障类型
+    enum:
+      - service_down
+      - cpu_high
+      - disk_full
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+  - name: lab_script_path
+    type: string
+    required: true
+    default: /opt/auto-healing-fault-lab/auto_healing_fault_lab.sh
+    description: 远端故障实验脚本路径
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/service_down_recover.yml
+      - playbooks/cpu_high_reset.yml
+      - playbooks/disk_full_reset.yml
+  - name: lab_service_name
+    type: string
+    required: true
+    default: auto-healing-lab-http.service
+    description: 测试服务 systemd 名称
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/service_down_recover.yml
+  - name: lab_service_port
+    type: integer
+    required: true
+    default: 19081
+    description: 测试服务端口
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/service_down_recover.yml
+  - name: service_health_url
+    type: string
+    required: true
+    default: http://127.0.0.1:19081
+    description: 服务恢复后的健康检查地址
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/service_down_recover.yml
+  - name: cpu_state_file
+    type: string
+    required: true
+    default: /opt/auto-healing-fault-lab/state/cpu_high.pids
+    description: CPU 故障状态文件
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/cpu_high_reset.yml
+  - name: cpu_top_sample_size
+    type: integer
+    required: true
+    default: 8
+    description: CPU 诊断时保留的高占用进程条数
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/cpu_high_reset.yml
+  - name: cpu_recovery_pause_seconds
+    type: integer
+    required: true
+    default: 3
+    description: CPU 恢复后等待系统回稳的秒数
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/cpu_high_reset.yml
+  - name: disk_fill_file
+    type: string
+    required: true
+    default: /opt/auto-healing-fault-lab/disk-fill.bin
+    description: 磁盘故障填充文件
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/disk_full_reset.yml
+  - name: disk_probe_path
+    type: string
+    required: true
+    default: /
+    description: 磁盘校验时使用的挂载点
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/disk_full_reset.yml
+  - name: disk_safe_usage_percent
+    type: integer
+    required: true
+    default: 85
+    description: 恢复后磁盘使用率必须低于该阈值
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/disk_full_reset.yml
+  - name: recovery_report_dir
+    type: string
+    required: true
+    default: /opt/auto-healing-fault-lab/reports
+    description: 恢复报告输出目录
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/service_down_recover.yml
+      - playbooks/cpu_high_reset.yml
+      - playbooks/disk_full_reset.yml
+  - name: max_diagnose_log_lines
+    type: integer
+    required: true
+    default: 40
+    description: 诊断日志最多保留的行数
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/service_down_recover.yml
+      - playbooks/cpu_high_reset.yml
+      - playbooks/disk_full_reset.yml

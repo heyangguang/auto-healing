@@ -1,0 +1,28 @@
+---
+- name: Capture service-specific status after recovery
+  ansible.builtin.command: "{{ lab_script_path | default('/opt/auto-healing-fault-lab/auto_healing_fault_lab.sh') }} status service_down"
+  register: fault_lab_service_fault_status
+  changed_when: false
+
+- name: Read systemd active status
+  ansible.builtin.command: "systemctl is-active {{ lab_service_name | default('auto-healing-lab-http.service') }}"
+  register: fault_lab_service_status
+  changed_when: false
+
+- name: Read lab service response
+  ansible.builtin.uri:
+    url: "{{ service_health_url | default('http://127.0.0.1:19081') }}"
+    return_content: true
+  register: fault_lab_service_http
+
+- name: Assert service recovery succeeded
+  ansible.builtin.assert:
+    that:
+      - "'service_down=healthy' in fault_lab_service_fault_status.stdout"
+      - fault_lab_service_status.stdout == 'active'
+      - "'auto-healing-lab-http: ok' in fault_lab_service_http.content"
+    fail_msg: "测试服务恢复失败"
+
+- name: Append service summary
+  ansible.builtin.set_fact:
+    fault_lab_summary_lines: "{{ fault_lab_summary_lines + ['service_fault_status=' + (fault_lab_service_fault_status.stdout | trim), 'service_status=' + (fault_lab_service_status.stdout | trim), 'service_http=' + (fault_lab_service_http.content | trim)] }}"

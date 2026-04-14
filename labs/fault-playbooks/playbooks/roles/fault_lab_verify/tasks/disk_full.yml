@@ -1,0 +1,22 @@
+---
+- name: Capture disk-specific status after recovery
+  ansible.builtin.command: "{{ lab_script_path | default('/opt/auto-healing-fault-lab/auto_healing_fault_lab.sh') }} status disk_full"
+  register: fault_lab_disk_fault_status
+  changed_when: false
+
+- name: Read disk usage percent after recovery
+  ansible.builtin.shell: "df -P {{ disk_probe_path | default('/') }} | tail -1 | awk '{print $5}' | tr -d '%'"
+  register: fault_lab_disk_usage
+  changed_when: false
+
+- name: Assert disk recovery succeeded
+  ansible.builtin.assert:
+    that:
+      - "'disk_full=healthy' in fault_lab_disk_fault_status.stdout"
+      - not fault_lab_disk_fill_after.stat.exists
+      - (fault_lab_disk_usage.stdout | int) < (disk_safe_usage_percent | default(85) | int)
+    fail_msg: "磁盘占用仍高于阈值"
+
+- name: Append disk summary
+  ansible.builtin.set_fact:
+    fault_lab_summary_lines: "{{ fault_lab_summary_lines + ['disk_fault_status=' + (fault_lab_disk_fault_status.stdout | trim), 'disk_usage=' + (fault_lab_disk_usage.stdout | trim) + '%', 'disk_fill_file=' + ((fault_lab_disk_fill_after.stat.exists | ternary('present', 'absent')))] }}"

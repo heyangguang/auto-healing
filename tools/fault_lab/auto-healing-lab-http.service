@@ -1,0 +1,15 @@
+[Unit]
+Description=Auto-Healing Fault Lab HTTP Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/auto-healing-fault-lab/www
+ExecStart=/usr/bin/env python3 -m http.server 19081 --bind 0.0.0.0
+Restart=always
+RestartSec=3
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

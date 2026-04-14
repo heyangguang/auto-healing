@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>iTop 告警故障工单模拟器</title>
+  <style>
+    :root {
+      --bg: #f3f7fb;
+      --card: #ffffff;
+      --line: #d8e1ec;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --brand: #0f6dff;
+      --brand-deep: #0a4eb8;
+      --ok: #166534;
+      --warn: #b45309;
+      --err: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.5 "Segoe UI", "PingFang SC", sans-serif;
+      background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+      color: var(--text);
+      padding: 24px;
+    }
+    .wrap { max-width: 1240px; margin: 0 auto; }
+    .hero { margin-bottom: 18px; }
+    .hero h1 { margin: 0 0 8px; font-size: 30px; }
+    .hero p { margin: 0; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(320px, 1fr); gap: 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 16px 40px rgba(15, 109, 255, 0.06);
+    }
+    .section-title { margin: 0 0 14px; font-size: 18px; }
+    .tip {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #eef5ff;
+      color: #174ea6;
+    }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field.full { grid-column: 1 / -1; }
+    label { font-weight: 600; }
+    input, select, textarea {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid rgba(15, 109, 255, 0.14);
+      border-color: var(--brand);
+    }
+    textarea { min-height: 160px; resize: vertical; }
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 11px 15px;
+      background: var(--brand);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: var(--brand-deep); }
+    button.secondary { background: #ecf2f8; color: var(--text); }
+    button.secondary:hover { background: #dce7f2; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .preview, .result {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: #f9fbfd;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .result.empty { color: var(--muted); }
+    .status {
+      display: none;
+      margin-top: 14px;
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .status.show { display: block; }
+    .status.info { background: #eef5ff; color: #174ea6; }
+    .status.success { background: #eef8f1; color: var(--ok); }
+    .status.warn { background: #fff6e8; color: var(--warn); }
+    .status.error { background: #fff1f2; color: var(--err); }
+    @media (max-width: 980px) {
+      .grid, .form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>iTop 告警故障工单模拟器</h1>
+      <p>这个页面直接运行在 iTop 里，并直接调用 iTop 自己的 REST `core/create` 创建告警型故障工单。目标是让 Auto-Healing 同步后能把关键告警值显示出来。</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2 class="section-title">连接信息</h2>
+        <div class="tip">如果当前浏览器里已经登录了 iTop，页面本身依然建议填一组 REST 用户名/密码。默认本地联调可用 `admin / admin`。</div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="username">iTop 用户名</label>
+            <input id="username" value="admin" />
+          </div>
+          <div class="field">
+            <label for="password">iTop 密码</label>
+            <input id="password" type="password" value="admin" />
+          </div>
+          <div class="field">
+            <label for="organizationId">组织 ID</label>
+            <input id="organizationId" type="number" min="1" value="2" />
+          </div>
+          <div class="field">
+            <label for="callerId">报障人 ID</label>
+            <input id="callerId" type="number" min="1" value="1" />
+          </div>
+          <div class="field">
+            <label for="catalogServiceId">iTop 服务目录</label>
+            <select id="catalogServiceId">
+              <option value="1">1 - Computers and peripherals</option>
+              <option value="2" selected>2 - Software</option>
+              <option value="3">3 - Telecom and connectivity</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="subcategoryId">iTop 服务子类</label>
+            <select id="subcategoryId">
+              <option value="15" selected>15 - Troubleshooting (Software)</option>
+              <option value="16">16 - Troubleshooting (Computers and peripherals)</option>
+              <option value="4">4 - Network Troubleshooting</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="agentId">指派人</label>
+            <select id="agentId">
+              <option value="33" selected>33 - Aznavour Charles</option>
+              <option value="27">27 - Brassens Georges</option>
+              <option value="11">11 - Cocteau Jean</option>
+              <option value="31">31 - Colucci Michel</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="functionalCiId">影响 CI</label>
+            <select id="functionalCiId">
+              <option value="1" selected>1 - Server1</option>
+              <option value="18">18 - ESX1</option>
+            </select>
+          </div>
+        </div>
+
+        <h2 class="section-title" style="margin-top:24px;">告警上下文</h2>
+        <div class="form-grid">
+          <div class="field">
+            <label for="alertName">告警名称</label>
+            <select id="alertName">
+              <option value="cpu_usage_high">cpu_usage_high</option>
+              <option value="disk_space_low">disk_space_low</option>
+              <option value="memory_usage_high">memory_usage_high</option>
+              <option value="service_health_check_failed" selected>service_health_check_failed</option>
+              <option value="http_latency_high">http_latency_high</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="severity">严重级别</label>
+            <select id="severity">
+              <option value="critical">critical</option>
+              <option value="high" selected>high</option>
+              <option value="medium">medium</option>
+              <option value="low">low</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="hostname">主机</label>
+            <select id="hostname">
+              <option value="app-01">app-01</option>
+              <option value="app-02">app-02</option>
+              <option value="db-01">db-01</option>
+              <option value="db-02">db-02</option>
+              <option value="cache-01">cache-01</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="service">服务</label>
+            <select id="service">
+              <option value="api-gateway" selected>api-gateway</option>
+              <option value="nginx">nginx</option>
+              <option value="postgres">postgres</option>
+              <option value="redis">redis</option>
+              <option value="worker">worker</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="alertDomain">告警域</label>
+            <select id="alertDomain">
+              <option value="application" selected>应用</option>
+              <option value="database">数据库</option>
+              <option value="network">网络</option>
+              <option value="hardware">硬件</option>
+              <option value="storage">存储</option>
+              <option value="security">安全</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="environment">环境</label>
+            <select id="environment">
+              <option value="production" selected>production</option>
+              <option value="staging">staging</option>
+              <option value="testing">testing</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="metric">监控指标</label>
+            <input id="metric" value="probe_success" />
+          </div>
+          <div class="field">
+            <label for="currentValue">当前值</label>
+            <input id="currentValue" value="0" />
+          </div>
+          <div class="field">
+            <label for="threshold">阈值</label>
+            <input id="threshold" value="1" />
+          </div>
+          <div class="field">
+            <label for="duration">持续时长</label>
+            <input id="duration" value="8m" />
+          </div>
+          <div class="field">
+            <label for="sourceSystem">来源系统</label>
+            <input id="sourceSystem" value="prometheus" />
+          </div>
+          <div class="field">
+            <label for="fingerprint">告警指纹</label>
+            <input id="fingerprint" value="api-gateway:app-01:service_health_check_failed" />
+          </div>
+          <div class="field">
+            <label for="summary">告警摘要</label>
+            <input id="summary" value="api-gateway 健康检查连续失败" />
+          </div>
+          <div class="field full">
+            <label for="title">工单标题（AHS 会直接显示）</label>
+            <input id="title" />
+          </div>
+          <div class="field full">
+            <label for="details">工单详情（AHS 详情抽屉会直接显示）</label>
+            <textarea id="details"></textarea>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="regenerateBtn" type="button" class="secondary">按告警上下文重新生成标题和详情</button>
+          <button id="createBtn" type="button">创建告警故障工单</button>
+        </div>
+        <div id="statusBox" class="status info"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">预览</h2>
+        <div class="field full">
+          <label>建议标题</label>
+          <div id="previewTitle" class="preview"></div>
+        </div>
+        <div class="field full">
+          <label>建议详情</label>
+          <div id="previewDetails" class="preview"></div>
+        </div>
+        <div class="field full">
+          <label>最近创建结果</label>
+          <div id="resultBox" class="result empty">还没有创建记录。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const el = (id) => document.getElementById(id);
+
+    function severityImpact(severity) {
+      return { critical: '1', high: '2', medium: '3', low: '3' }[severity] || '3';
+    }
+
+    function severityUrgency(severity) {
+      return { critical: '1', high: '2', medium: '3', low: '4' }[severity] || '3';
+    }
+
+    function buildSuggestedTitle() {
+      return [`[${el('severity').value}]`, el('alertName').value, 'on', el('hostname').value, '|', el('summary').value || el('metric').value]
+        .filter(Boolean)
+        .join(' ');
+    }
+
+    function buildSuggestedDetails() {
+      return [
+        '告警故障工单',
+        `告警名称: ${el('alertName').value}`,
+        `来源系统: ${el('sourceSystem').value}`,
+        `环境: ${el('environment').value}`,
+        `主机: ${el('hostname').value}`,
+        `服务: ${el('service').value}`,
+        `严重级别: ${el('severity').value}`,
+        `告警域: ${el('alertDomain').value}`,
+        `监控指标: ${el('metric').value}`,
+        `当前值: ${el('currentValue').value}`,
+        `阈值: ${el('threshold').value}`,
+        `持续时长: ${el('duration').value}`,
+        `告警指纹: ${el('fingerprint').value}`,
+        '',
+        `告警摘要: ${el('summary').value || '-'}`,
+        '',
+        '处置建议:',
+        '请确认服务可用性、最近变更、实例健康状态以及上下游依赖。'
+      ].join('\n');
+    }
+
+    function refreshPreview() {
+      const title = buildSuggestedTitle();
+      const details = buildSuggestedDetails();
+      el('previewTitle').textContent = title || '-';
+      el('previewDetails').textContent = details || '-';
+      if (!el('title').value) el('title').value = title;
+      if (!el('details').value) el('details').value = details;
+    }
+
+    function regenerate() {
+      el('title').value = buildSuggestedTitle();
+      el('details').value = buildSuggestedDetails();
+      refreshPreview();
+    }
+
+    function setStatus(type, text) {
+      const box = el('statusBox');
+      box.className = `status show ${type}`;
+      box.textContent = text;
+    }
+
+    function basicAuth(user, password) {
+      return 'Basic ' + btoa(`${user}:${password}`);
+    }
+
+    function buildPayload() {
+      return {
+        operation: 'core/create',
+        class: 'UserRequest',
+        comment: 'Created by iTop alert incident lab',
+        fields: {
+          org_id: String(el('organizationId').value),
+          caller_id: String(el('callerId').value),
+          service_id: String(el('catalogServiceId').value),
+          servicesubcategory_id: String(el('subcategoryId').value),
+          agent_id: String(el('agentId').value),
+          functionalcis_list: [
+            { functionalci_id: String(el('functionalCiId').value) }
+          ],
+          request_type: 'incident',
+          origin: 'monitoring',
+          impact: severityImpact(el('severity').value),
+          urgency: severityUrgency(el('severity').value),
+          title: el('title').value.trim(),
+          description: el('details').value.trim()
+        },
+        output_fields: 'ref,title,status,request_type,impact,urgency,priority,origin,caller_name,org_name'
+      };
+    }
+
+    async function createTicket() {
+      const username = el('username').value.trim();
+      const password = el('password').value;
+      if (!username || !password) {
+        setStatus('error', '请先输入 iTop REST 用户名和密码。');
+        return;
+      }
+      if (!el('title').value.trim() || !el('details').value.trim()) {
+        setStatus('error', '标题和详情不能为空。');
+        return;
+      }
+
+      setStatus('info', '正在调用 iTop REST 创建告警故障工单...');
+      const form = new URLSearchParams();
+      form.set('json_data', JSON.stringify(buildPayload()));
+
+      const response = await fetch('/webservices/rest.php?version=1.3', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': basicAuth(username, password)
+        },
+        body: form.toString()
+      });
+      const text = await response.text();
+      let payload;
+      try {
+        payload = JSON.parse(text);
+      } catch (error) {
+        setStatus('error', `iTop 返回了非 JSON 响应: ${text}`);
+        return;
+      }
+      if (!response.ok || payload.code !== 0) {
+        setStatus('error', payload.message || text || `创建失败 (${response.status})`);
+        return;
+      }
+
+      const objects = payload.objects || {};
+      const first = Object.values(objects)[0];
+      const fields = first && first.fields ? first.fields : {};
+      const ref = fields.ref || '(未返回 ref)';
+      const title = fields.title || el('title').value.trim();
+      const status = fields.status || '-';
+
+      el('resultBox').classList.remove('empty');
+      el('resultBox').textContent = [
+        `外部工单号: ${ref}`,
+        `标题: ${title}`,
+        `状态: ${status}`,
+        `需求类型: ${fields.request_type || '-'}`,
+        `影响等级: ${fields.impact || '-'}`,
+        `紧急度: ${fields.urgency || '-'}`,
+        `优先级: ${fields.priority || '-'}`,
+        `来源: ${fields.origin || '-'}`,
+        '',
+        '接下来回到 Auto-Healing 里执行插件同步，就能看到这条告警故障工单。'
+      ].join('\n');
+      setStatus('success', `告警故障工单已在 iTop 中创建成功：${ref}`);
+    }
+
+    document.querySelectorAll('input,select,textarea').forEach((node) => {
+      node.addEventListener('change', refreshPreview);
+      node.addEventListener('input', refreshPreview);
+    });
+    el('regenerateBtn').addEventListener('click', regenerate);
+    el('createBtn').addEventListener('click', () => createTicket().catch((error) => setStatus('error', error.message)));
+
+    regenerate();
+  </script>
+</body>
+</html>

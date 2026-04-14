@@ -1,0 +1,23 @@
+services:
+  openbao:
+    image: quay.io/openbao/openbao:${OPENBAO_IMAGE_TAG:-latest}
+    container_name: auto-healing-openbao
+    restart: unless-stopped
+    command:
+      - bao
+      - server
+      - -dev
+      - -dev-listen-address=0.0.0.0:8200
+      - -dev-root-token-id=${OPENBAO_ROOT_TOKEN:-root}
+    environment:
+      BAO_ADDR: http://127.0.0.1:8200
+      BAO_DEV_ROOT_TOKEN_ID: ${OPENBAO_ROOT_TOKEN:-root}
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "${OPENBAO_HTTP_PORT:-18200}:8200"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8200/v1/sys/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12

@@ -1,0 +1,34 @@
+---
+- name: Reset CPU fault
+  ansible.builtin.command: "{{ lab_script_path | default('/opt/auto-healing-fault-lab/auto_healing_fault_lab.sh') }} reset cpu_high"
+  register: fault_lab_cpu_reset
+  failed_when: false
+  changed_when: "'recovered' in (fault_lab_cpu_reset.stdout | default(''))"
+
+- name: Pause after CPU reset
+  ansible.builtin.pause:
+    seconds: "{{ cpu_recovery_pause_seconds | default(3) | int }}"
+
+- name: Capture load average after recovery
+  ansible.builtin.command: cat /proc/loadavg
+  register: fault_lab_cpu_load_after
+  changed_when: false
+
+- name: Capture top CPU processes after recovery
+  ansible.builtin.shell: "ps -eo pid,ppid,pcpu,pmem,comm,args --sort=-pcpu | head -n {{ (cpu_top_sample_size | default(8) | int) + 1 }}"
+  register: fault_lab_cpu_top_after
+  changed_when: false
+
+- name: Write CPU recovery snapshot
+  ansible.builtin.copy:
+    dest: "{{ fault_lab_suite_dir }}/20-cpu-recovery.txt"
+    mode: '0644'
+    content: |
+      [cpu_reset]
+      {{ fault_lab_cpu_reset.stdout | default('') | trim }}
+
+      [loadavg_after]
+      {{ fault_lab_cpu_load_after.stdout | trim }}
+
+      [top_cpu_after]
+      {{ fault_lab_cpu_top_after.stdout | trim }}

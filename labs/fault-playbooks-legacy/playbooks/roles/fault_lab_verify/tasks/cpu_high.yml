@@ -1,0 +1,21 @@
+---
+- name: Capture CPU-specific status after recovery
+  ansible.builtin.command: "{{ lab_script_path | default('/opt/auto-healing-fault-lab/auto_healing_fault_lab.sh') }} status cpu_high"
+  register: fault_lab_cpu_fault_status
+  changed_when: false
+
+- name: Check CPU fault state file after recovery
+  ansible.builtin.stat:
+    path: "{{ cpu_state_file | default('/opt/auto-healing-fault-lab/state/cpu_high.pids') }}"
+  register: fault_lab_cpu_state_after
+
+- name: Assert CPU recovery succeeded
+  ansible.builtin.assert:
+    that:
+      - "'cpu_high=healthy' in fault_lab_cpu_fault_status.stdout"
+      - not fault_lab_cpu_state_after.stat.exists
+    fail_msg: "CPU 高负载故障未恢复"
+
+- name: Append CPU summary
+  ansible.builtin.set_fact:
+    fault_lab_summary_lines: "{{ fault_lab_summary_lines + ['cpu_fault_status=' + (fault_lab_cpu_fault_status.stdout | trim), 'cpu_state_file=' + ((fault_lab_cpu_state_after.stat.exists | ternary('present', 'absent'))), 'cpu_load_after=' + (fault_lab_cpu_load_after.stdout | trim)] }}"

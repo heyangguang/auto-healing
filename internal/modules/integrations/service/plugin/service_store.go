@@ -26,6 +26,8 @@ func (s *Service) saveIncident(ctx context.Context, pluginID uuid.UUID, pluginNa
 		AffectedService:  raw.AffectedService,
 		Assignee:         raw.Assignee,
 		Reporter:         raw.Reporter,
+		SourceCreatedAt:  optionalTime(raw.SourceCreatedAt),
+		SourceUpdatedAt:  optionalTime(raw.SourceUpdatedAt),
 		HealingStatus:    "pending",
 		RawData:          raw.RawData,
 	}

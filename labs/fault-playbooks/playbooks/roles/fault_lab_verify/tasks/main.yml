@@ -1,0 +1,17 @@
+---
+- name: Verify service recovery
+  ansible.builtin.include_tasks: service_down.yml
+  when: fault_type == 'service_down'
+
+- name: Verify CPU recovery
+  ansible.builtin.include_tasks: cpu_high.yml
+  when: fault_type == 'cpu_high'
+
+- name: Verify disk recovery
+  ansible.builtin.include_tasks: disk_full.yml
+  when: fault_type == 'disk_full'
+
+- name: Capture full fault status after recovery
+  ansible.builtin.command: "{{ lab_script_path | default('/opt/auto-healing-fault-lab/auto_healing_fault_lab.sh') }} status all"
+  register: fault_lab_status_after
+  changed_when: false

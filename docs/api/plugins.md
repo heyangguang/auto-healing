@@ -90,6 +90,38 @@
 }
 ```
 
+适配器模式示例：
+
+```json
+{
+  "name": "iTop 工单适配器",
+  "type": "itsm",
+  "config": {
+    "url": "http://127.0.0.1:18085/api/incidents",
+    "auth_type": "none",
+    "close_incident_url": "http://127.0.0.1:18085/api/incidents/{external_id}/close",
+    "close_incident_method": "POST"
+  },
+  "field_mapping": {},
+  "sync_enabled": false,
+  "sync_interval_minutes": 5
+}
+```
+
+```json
+{
+  "name": "iTop 资产适配器",
+  "type": "cmdb",
+  "config": {
+    "url": "http://127.0.0.1:18085/api/cmdb-items",
+    "auth_type": "none"
+  },
+  "field_mapping": {},
+  "sync_enabled": false,
+  "sync_interval_minutes": 5
+}
+```
+
 ---
 
 ## 3. 获取插件详情

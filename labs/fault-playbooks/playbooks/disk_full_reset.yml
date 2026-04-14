@@ -1,0 +1,5 @@
+---
+- import_playbook: fault_recovery_suite.yml
+  vars:
+    fault_type: disk_full
+    recovery_workflow_name: disk_full_reset

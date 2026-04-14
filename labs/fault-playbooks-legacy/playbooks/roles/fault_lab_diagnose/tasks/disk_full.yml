@@ -1,0 +1,29 @@
+---
+- name: Capture disk usage before recovery
+  ansible.builtin.command: "df -h {{ disk_probe_path | default('/') }}"
+  register: fault_lab_disk_df_before
+  changed_when: false
+
+- name: Check disk fill file before recovery
+  ansible.builtin.stat:
+    path: "{{ disk_fill_file | default('/opt/auto-healing-fault-lab/disk-fill.bin') }}"
+  register: fault_lab_disk_fill_before
+
+- name: Capture largest fault-lab files before recovery
+  ansible.builtin.shell: "du -xh /opt/auto-healing-fault-lab | sort -h | tail -n {{ max_diagnose_log_lines | default(40) | int }}"
+  register: fault_lab_disk_du_before
+  changed_when: false
+
+- name: Write disk diagnostics snapshot
+  ansible.builtin.copy:
+    dest: "{{ fault_lab_suite_dir }}/10-disk-diagnose.txt"
+    mode: '0644'
+    content: |
+      [disk_before]
+      {{ fault_lab_disk_df_before.stdout | trim }}
+
+      [disk_fill_file]
+      {{ (fault_lab_disk_fill_before.stat.exists | ternary('present', 'absent')) }}
+
+      [largest_fault_lab_paths]
+      {{ fault_lab_disk_du_before.stdout | trim }}

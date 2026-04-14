@@ -1,0 +1,47 @@
+---
+- name: Fault recovery suite workflow
+  hosts: all
+  become: true
+  gather_facts: false
+  vars:
+    recovery_workflow_name: "{{ recovery_workflow_name | default('fault_recovery_suite') }}"
+  pre_tasks:
+    - name: Initialize fault lab context
+      ansible.builtin.include_role:
+        name: fault_lab_context
+      tags: [context, diagnose, recover, verify, report]
+
+    - name: Collect scenario diagnostics
+      ansible.builtin.include_role:
+        name: fault_lab_diagnose
+      tags: [diagnose]
+
+  tasks:
+    - name: Run service recovery branch
+      ansible.builtin.include_role:
+        name: fault_lab_service
+      when: fault_type == 'service_down'
+      tags: [recover, service]
+
+    - name: Run CPU recovery branch
+      ansible.builtin.include_role:
+        name: fault_lab_cpu
+      when: fault_type == 'cpu_high'
+      tags: [recover, cpu]
+
+    - name: Run disk recovery branch
+      ansible.builtin.include_role:
+        name: fault_lab_disk
+      when: fault_type == 'disk_full'
+      tags: [recover, disk]
+
+  post_tasks:
+    - name: Verify recovered state
+      ansible.builtin.include_role:
+        name: fault_lab_verify
+      tags: [verify]
+
+    - name: Write recovery report
+      ansible.builtin.include_role:
+        name: fault_lab_report
+      tags: [report]

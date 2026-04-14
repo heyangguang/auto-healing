@@ -1,0 +1,32 @@
+---
+- name: Capture lab service active state before recovery
+  ansible.builtin.command: "systemctl is-active {{ lab_service_name | default('auto-healing-lab-http.service') }}"
+  register: fault_lab_service_active_before
+  failed_when: false
+  changed_when: false
+
+- name: Capture lab service unit details before recovery
+  ansible.builtin.command: "systemctl status {{ lab_service_name | default('auto-healing-lab-http.service') }} --no-pager"
+  register: fault_lab_service_unit_before
+  failed_when: false
+  changed_when: false
+
+- name: Capture recent lab service logs before recovery
+  ansible.builtin.command: "journalctl -u {{ lab_service_name | default('auto-healing-lab-http.service') }} -n {{ max_diagnose_log_lines | default(40) }} --no-pager"
+  register: fault_lab_service_logs_before
+  failed_when: false
+  changed_when: false
+
+- name: Write service diagnostics snapshot
+  ansible.builtin.copy:
+    dest: "{{ fault_lab_suite_dir }}/10-service-diagnose.txt"
+    mode: '0644'
+    content: |
+      [service_active_before]
+      {{ fault_lab_service_active_before.stdout | default('unknown') | trim }}
+
+      [service_unit_before]
+      {{ fault_lab_service_unit_before.stdout | default('') | trim }}
+
+      [service_logs_before]
+      {{ fault_lab_service_logs_before.stdout | default('') | trim }}

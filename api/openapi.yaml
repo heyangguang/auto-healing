@@ -4621,7 +4621,10 @@ paths:
                   type: object
                   description: 连接配置
                   example:
-                    url: https://itsm.example.com/api/incidents
+                    url: https://adapter.example.com/api/incidents
+                    auth_type: none
+                    close_incident_url: https://adapter.example.com/api/incidents/{external_id}/close
+                    close_incident_method: POST
                 field_mapping:
                   type: object
                   description: 字段映射规则
