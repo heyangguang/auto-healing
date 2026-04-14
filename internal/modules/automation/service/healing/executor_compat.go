@@ -8,6 +8,7 @@ import (
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/modules/automation/service/execution"
 	notificationSvc "github.com/company/auto-healing/internal/modules/engagement/service/notification"
+	integrationmodel "github.com/company/auto-healing/internal/modules/integrations/model"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	pluginservice "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
@@ -25,10 +26,11 @@ func DefaultFlowExecutorRuntimeDeps() FlowExecutorDeps {
 
 func DefaultFlowExecutorDepsWithDB(db *gorm.DB, executionSvc *execution.Service, notificationService *notificationSvc.Service) FlowExecutorDeps {
 	incidentCloser := pluginservice.NewIncidentServiceWithDeps(pluginservice.IncidentServiceDeps{
-		IncidentRepo:     incidentrepo.NewIncidentRepositoryWithDB(db),
-		WritebackLogRepo: incidentrepo.NewIncidentWritebackLogRepositoryWithDB(db),
-		PluginRepo:       integrationrepo.NewPluginRepositoryWithDB(db),
-		HTTPClient:       pluginservice.NewHTTPClient(),
+		IncidentRepo:         incidentrepo.NewIncidentRepositoryWithDB(db),
+		WritebackLogRepo:     incidentrepo.NewIncidentWritebackLogRepositoryWithDB(db),
+		PluginRepo:           integrationrepo.NewPluginRepositoryWithDB(db),
+		SolutionTemplateRepo: integrationrepo.NewIncidentSolutionTemplateRepositoryWithDB(db),
+		HTTPClient:           pluginservice.NewHTTPClient(),
 	})
 	return FlowExecutorDeps{
 		InstanceRepo:    automationrepo.NewFlowInstanceRepositoryWithDB(db),
@@ -72,16 +74,18 @@ type incidentCloserAdapter struct {
 
 func (a *incidentCloserAdapter) CloseIncident(ctx context.Context, params IncidentCloseParams) (*IncidentCloseResult, error) {
 	result, err := a.svc.CloseIncident(ctx, pluginservice.CloseIncidentParams{
-		IncidentID:     params.IncidentID,
-		Resolution:     params.Resolution,
-		WorkNotes:      params.WorkNotes,
-		CloseCode:      params.CloseCode,
-		CloseStatus:    params.CloseStatus,
-		TriggerSource:  params.TriggerSource,
-		OperatorUserID: params.OperatorUserID,
-		OperatorName:   params.OperatorName,
-		FlowInstanceID: params.FlowInstanceID,
-		ExecutionRunID: params.ExecutionRunID,
+		IncidentID:         params.IncidentID,
+		Resolution:         params.Resolution,
+		WorkNotes:          params.WorkNotes,
+		CloseCode:          params.CloseCode,
+		CloseStatus:        params.CloseStatus,
+		TriggerSource:      params.TriggerSource,
+		OperatorUserID:     params.OperatorUserID,
+		OperatorName:       params.OperatorName,
+		FlowInstanceID:     params.FlowInstanceID,
+		ExecutionRunID:     params.ExecutionRunID,
+		SolutionTemplateID: params.SolutionTemplateID,
+		TemplateVars:       integrationmodel.JSON(params.TemplateVars),
 	})
 	if err != nil {
 		return nil, err

@@ -113,16 +113,18 @@ type IncidentCloser interface {
 }
 
 type IncidentCloseParams struct {
-	IncidentID     uuid.UUID
-	Resolution     string
-	WorkNotes      string
-	CloseCode      string
-	CloseStatus    string
-	TriggerSource  string
-	OperatorUserID *uuid.UUID
-	OperatorName   string
-	FlowInstanceID *uuid.UUID
-	ExecutionRunID *uuid.UUID
+	IncidentID         uuid.UUID
+	Resolution         string
+	WorkNotes          string
+	CloseCode          string
+	CloseStatus        string
+	TriggerSource      string
+	OperatorUserID     *uuid.UUID
+	OperatorName       string
+	FlowInstanceID     *uuid.UUID
+	ExecutionRunID     *uuid.UUID
+	SolutionTemplateID *uuid.UUID
+	TemplateVars       map[string]any
 }
 
 type IncidentCloseResult struct {

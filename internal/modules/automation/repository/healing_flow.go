@@ -196,6 +196,15 @@ func (r *HealingFlowRepository) CountFlowsUsingTemplate(ctx context.Context, tem
 	return count, err
 }
 
+// CountFlowsUsingCloseTemplate 统计使用指定工单关闭模板的流程数量。
+func (r *HealingFlowRepository) CountFlowsUsingCloseTemplate(ctx context.Context, templateID string) (int64, error) {
+	var count int64
+	err := TenantDB(r.db, ctx).Model(&model.HealingFlow{}).
+		Where("close_policy ->> 'solution_template_id' = ?", templateID).
+		Count(&count).Error
+	return count, err
+}
+
 // GetStats 获取自愈流程统计信息
 func (r *HealingFlowRepository) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})

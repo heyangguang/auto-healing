@@ -112,7 +112,8 @@ func createHealingHandlerSchema(t *testing.T, db *gorm.DB) {
 			tenant_id TEXT,
 			name TEXT,
 			nodes TEXT,
-			edges TEXT
+			edges TEXT,
+			close_policy TEXT
 		);
 	`)
 	mustExecHandlerSQL(t, db, `

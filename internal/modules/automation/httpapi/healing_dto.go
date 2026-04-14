@@ -18,6 +18,7 @@ type CreateFlowRequest struct {
 	Edges                   json.RawMessage `json:"edges"`
 	IsActive                *bool           `json:"is_active"`
 	AutoCloseSourceIncident *bool           `json:"auto_close_source_incident"`
+	ClosePolicy             json.RawMessage `json:"close_policy"`
 }
 
 // ToModel 转换为模型
@@ -45,6 +46,12 @@ func (r *CreateFlowRequest) ToModel() *model.HealingFlow {
 	if r.AutoCloseSourceIncident != nil {
 		flow.AutoCloseSourceIncident = *r.AutoCloseSourceIncident
 	}
+	if r.ClosePolicy != nil {
+		var policy model.JSON
+		if err := json.Unmarshal(r.ClosePolicy, &policy); err == nil {
+			flow.ClosePolicy = policy
+		}
+	}
 	return flow
 }
 
@@ -56,6 +63,7 @@ type UpdateFlowRequest struct {
 	Edges                   json.RawMessage `json:"edges"`
 	IsActive                *bool           `json:"is_active"`
 	AutoCloseSourceIncident *bool           `json:"auto_close_source_incident"`
+	ClosePolicy             json.RawMessage `json:"close_policy"`
 }
 
 // ApplyTo 应用更新到模型
@@ -83,6 +91,12 @@ func (r *UpdateFlowRequest) ApplyTo(flow *model.HealingFlow) {
 	}
 	if r.AutoCloseSourceIncident != nil {
 		flow.AutoCloseSourceIncident = *r.AutoCloseSourceIncident
+	}
+	if r.ClosePolicy != nil {
+		var policy model.JSON
+		if err := json.Unmarshal(r.ClosePolicy, &policy); err == nil {
+			flow.ClosePolicy = policy
+		}
 	}
 }
 

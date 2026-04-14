@@ -32,7 +32,8 @@ func TestMarkInstanceWaitingApprovalUsesExistingWaitingState(t *testing.T) {
 			id TEXT PRIMARY KEY NOT NULL,
 			name TEXT,
 			nodes TEXT,
-			edges TEXT
+			edges TEXT,
+			close_policy TEXT
 		);
 	`)
 

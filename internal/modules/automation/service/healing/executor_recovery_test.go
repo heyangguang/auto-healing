@@ -22,6 +22,7 @@ func TestRecoverInstanceResumesCompletedExecutionNode(t *testing.T) {
 			edges TEXT,
 			is_active BOOLEAN,
 			auto_close_source_incident BOOLEAN,
+			close_policy TEXT,
 			created_at DATETIME,
 			updated_at DATETIME
 		);
@@ -141,6 +142,7 @@ func TestRecoverInstanceResumesApprovedApprovalNode(t *testing.T) {
 			edges TEXT,
 			is_active BOOLEAN,
 			auto_close_source_incident BOOLEAN,
+			close_policy TEXT,
 			created_at DATETIME,
 			updated_at DATETIME
 		);
