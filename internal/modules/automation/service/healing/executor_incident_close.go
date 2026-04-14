@@ -23,6 +23,13 @@ func (e *FlowExecutor) tryAutoCloseSourceIncident(ctx context.Context, instance 
 	if instance.IncidentID == nil || (!useLegacy && !policy.Enabled) {
 		return
 	}
+	if !autoCloseAllowedByExecutionResult(instance) {
+		e.logNode(ctx, instance.ID, "", "system", model.LogLevelWarn, "自动关单已跳过", map[string]interface{}{
+			"incident_id": instance.IncidentID.String(),
+			"reason":      "execution_result_not_success",
+		})
+		return
+	}
 	params, closeErr := e.buildAutoCloseIncidentParams(instance, flow, policy, useLegacy)
 	if closeErr != nil {
 		e.logNode(ctx, instance.ID, "", "system", model.LogLevelWarn, "自动关单配置无效", map[string]interface{}{
@@ -46,6 +53,23 @@ func (e *FlowExecutor) tryAutoCloseSourceIncident(ctx context.Context, instance 
 		"source_updated":   result.SourceUpdated,
 		"writeback_log_id": uuidString(result.WritebackLogID),
 	})
+}
+
+func autoCloseAllowedByExecutionResult(instance *model.FlowInstance) bool {
+	if instance == nil || instance.Context == nil {
+		return true
+	}
+	result, ok := instance.Context["execution_result"].(map[string]interface{})
+	if !ok {
+		return true
+	}
+	status, _ := result["status"].(string)
+	switch status {
+	case "", "completed", "success":
+		return true
+	default:
+		return false
+	}
 }
 
 func (e *FlowExecutor) buildAutoCloseIncidentParams(instance *model.FlowInstance, flow *model.HealingFlow, policy flowClosePolicy, useLegacy bool) (IncidentCloseParams, error) {
