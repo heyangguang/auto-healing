@@ -1524,18 +1524,25 @@
     tags:
     - Playbook模板
     summary: 扫描 Playbook 变量
-    description: '递归扫描 Playbook 及其引用的所有文件，智能推断变量类型。
+    description: '递归扫描入口 Playbook 及其依赖文件，智能推断变量类型。
 
 
       类型推断优先级：
 
-      1. 增强模式 (.auto-healing.yml)
+      1. 增强模式 (.auto-healing.yml / .auto-healing.yaml)
 
       2. Jinja2 default 表达式
 
       3. 变量名启发式
 
       4. 默认 string
+
+
+      增强模式支持：
+
+      - `exposure_mode: scoped`
+
+      - `variables[].playbooks` 指定变量仅暴露给特定入口文件
 
       '
     parameters:
@@ -1597,8 +1604,8 @@
   get:
     tags:
     - Playbook模板
-    summary: 获取文件列表
-    description: 获取 Playbook 扫描过的所有文件列表
+    summary: 获取 Playbook 依赖文件列表
+    description: 获取 Playbook 的入口文件与扫描到的依赖文件列表
     parameters:
     - $ref: '#/components/parameters/ID'
     responses:
@@ -1612,29 +1619,32 @@
                 code:
                   type: integer
                 data:
-                  type: object
-                  properties:
-                    files:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          path:
-                            type: string
-                            description: 文件路径
-                          type:
-                            type: string
-                            description: 文件类型
-                            enum:
-                            - entry
-                            - task
-                            - vars
-                            - defaults
-                            - handlers
-                            - template
-                            - file
-                            - role
-                            - include
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      path:
+                        type: string
+                        description: 文件路径
+                      type:
+                        type: string
+                        description: 文件类型
+                        enum:
+                        - playbook
+                        - task
+                        - vars
+                        - defaults
+                        - handlers
+                        - template
+                        - file
+                        - role
+                        - include
+                      relation:
+                        type: string
+                        description: 文件与当前入口的关系
+                        enum:
+                        - entry
+                        - dependency
 /tenant/playbooks/{id}/scan-logs:
   get:
     tags:

@@ -1,9 +1,12 @@
 package playbook
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -29,6 +32,7 @@ type VariableSource struct {
 // VariableScanner 变量扫描器（完全递归）
 type VariableScanner struct {
 	basePath     string
+	scannedState map[string]bool
 	scannedFiles map[string]bool
 	variables    map[string]*ScannedVariable
 	err          error
@@ -36,13 +40,29 @@ type VariableScanner struct {
 
 // ScanFile 扫描文件（递归）
 func (vs *VariableScanner) ScanFile(filePath string) error {
+	return vs.scanFileWithContext(filePath, map[string]any{})
+}
+
+func (vs *VariableScanner) scanFileWithContext(filePath string, currentVars map[string]any) error {
+	if vs.scannedState == nil {
+		vs.scannedState = make(map[string]bool)
+	}
+	if vs.scannedFiles == nil {
+		vs.scannedFiles = make(map[string]bool)
+	}
+	if vs.variables == nil {
+		vs.variables = make(map[string]*ScannedVariable)
+	}
+
 	resolvedPath, err := resolveExistingRepoPath(vs.basePath, filePath)
 	if err != nil {
 		return err
 	}
-	if vs.scannedFiles[resolvedPath] {
+	scanKey := buildScanStateKey(resolvedPath, currentVars)
+	if vs.scannedState[scanKey] {
 		return nil
 	}
+	vs.scannedState[scanKey] = true
 	vs.scannedFiles[resolvedPath] = true
 
 	content, err := os.ReadFile(resolvedPath)
@@ -58,8 +78,26 @@ func (vs *VariableScanner) ScanFile(filePath string) error {
 
 	vs.scanYAMLStructure(data, resolvedPath)
 	vs.scanVariableReferences(string(content), resolvedPath)
-	vs.scanIncludes(data, resolvedPath)
+	vs.scanIncludes(data, resolvedPath, currentVars)
 	return vs.err
+}
+
+func buildScanStateKey(path string, currentVars map[string]any) string {
+	if len(currentVars) == 0 {
+		return path
+	}
+	keys := make([]string, 0, len(currentVars))
+	for key := range currentVars {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys)+1)
+	parts = append(parts, path)
+	for _, key := range keys {
+		parts = append(parts, key+"="+fmt.Sprint(currentVars[key]))
+	}
+	return strings.Join(parts, "|")
 }
 
 func (vs *VariableScanner) scanYAMLStructure(data interface{}, filePath string) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
@@ -167,8 +168,9 @@ func (s *Service) SetOffline(ctx context.Context, id uuid.UUID) error {
 
 // ScannedFile 扫描过的文件信息
 type ScannedFile struct {
-	Path string `json:"path"`
-	Type string `json:"type"`
+	Path     string `json:"path"`
+	Type     string `json:"type"`
+	Relation string `json:"relation"`
 }
 
 // GetFiles 获取 Playbook 扫描过的文件列表
@@ -183,37 +185,62 @@ func (s *Service) GetFiles(ctx context.Context, id uuid.UUID) ([]ScannedFile, er
 		return nil, err
 	}
 	if len(logs) == 0 {
-		return []ScannedFile{{Path: playbook.FilePath, Type: "entry"}}, nil
+		return []ScannedFile{{Path: playbook.FilePath, Type: "playbook", Relation: "entry"}}, nil
 	}
 
-	fileMap := map[string]string{playbook.FilePath: "entry"}
+	fileMap := map[string]ScannedFile{
+		playbook.FilePath: {Path: playbook.FilePath, Type: "playbook", Relation: "entry"},
+	}
 	appendScannedFiles(fileMap, logs[0], playbook.FilePath)
 
 	files := make([]ScannedFile, 0, len(fileMap))
-	for path, typ := range fileMap {
-		files = append(files, ScannedFile{Path: path, Type: typ})
+	for _, file := range fileMap {
+		files = append(files, file)
 	}
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].Relation != files[j].Relation {
+			return files[i].Relation == "entry"
+		}
+		return files[i].Path < files[j].Path
+	})
 	return files, nil
 }
 
-func appendScannedFiles(fileMap map[string]string, log model.PlaybookScanLog, playbookPath string) {
+func appendScannedFiles(fileMap map[string]ScannedFile, log model.PlaybookScanLog, playbookPath string) {
 	if log.Details == nil {
 		return
 	}
-	files, ok := log.Details["files"].([]interface{})
-	if !ok {
+	files := extractScannedFilePaths(log.Details["files"])
+	if len(files) == 0 {
 		return
 	}
-
-	for _, item := range files {
-		filePath, ok := item.(string)
-		if !ok {
-			continue
-		}
+	for _, filePath := range files {
 		relPath := toRelativeScanPath(filePath, playbookPath)
 		if relPath != "" && relPath != playbookPath {
-			fileMap[relPath] = inferFileType(relPath)
+			fileMap[relPath] = ScannedFile{
+				Path:     relPath,
+				Type:     inferFileType(relPath),
+				Relation: "dependency",
+			}
 		}
+	}
+}
+
+func extractScannedFilePaths(raw any) []string {
+	switch value := raw.(type) {
+	case []string:
+		return value
+	case []interface{}:
+		result := make([]string, 0, len(value))
+		for _, item := range value {
+			filePath, ok := item.(string)
+			if ok {
+				result = append(result, filePath)
+			}
+		}
+		return result
+	default:
+		return nil
 	}
 }
 

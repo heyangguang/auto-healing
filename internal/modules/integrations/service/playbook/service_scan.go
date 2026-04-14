@@ -21,9 +21,9 @@ func (s *Service) ScanVariables(ctx context.Context, playbookID uuid.UUID, trigg
 		return nil, err
 	}
 
-	enhancedVars := s.parseEnhancedConfig(gitRepo.LocalPath)
-	scannedVars := buildScannedVariables(scanner, enhancedVars)
-	logEntry, mergedVars, err := s.persistScanOutcome(ctx, playbook, scanner, triggerType, scannedVars)
+	enhancedConfig := s.parseEnhancedConfig(gitRepo.LocalPath, playbook.FilePath)
+	scannedVars := buildScannedVariables(scanner, enhancedConfig)
+	logEntry, mergedVars, err := s.persistScanOutcome(ctx, playbook, scanner, triggerType, scannedVars, enhancedConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +47,7 @@ func (s *Service) loadPlaybookWithRepository(ctx context.Context, playbookID uui
 func (s *Service) scanPlaybookFiles(repoPath, playbookPath string) (*VariableScanner, error) {
 	scanner := &VariableScanner{
 		basePath:     repoPath,
+		scannedState: make(map[string]bool),
 		scannedFiles: make(map[string]bool),
 		variables:    make(map[string]*ScannedVariable),
 	}
@@ -60,15 +61,37 @@ func (s *Service) scanPlaybookFiles(repoPath, playbookPath string) (*VariableSca
 	return scanner, nil
 }
 
-func buildScannedVariables(scanner *VariableScanner, enhancedVars map[string]*EnhancedVariable) model.JSONArray {
-	scannedVars := make(model.JSONArray, 0, len(scanner.variables)+len(enhancedVars))
-	for _, variable := range scanner.variables {
-		scannedVars = append(scannedVars, buildVariableData(variable, enhancedVars[variable.Name]))
+func buildScannedVariables(scanner *VariableScanner, enhancedConfig ParsedEnhancedConfig) model.JSONArray {
+	if enhancedConfig.ExposureMode == "scoped" {
+		return buildScopedVariables(scanner, enhancedConfig.Variables)
 	}
-	for name, enhanced := range enhancedVars {
+
+	scannedVars := make(model.JSONArray, 0, len(scanner.variables)+len(enhancedConfig.Variables))
+	for _, variable := range scanner.variables {
+		scannedVars = append(scannedVars, buildVariableData(variable, enhancedConfig.Variables[variable.Name]))
+	}
+	for name, enhanced := range enhancedConfig.Variables {
 		if _, exists := scanner.variables[name]; !exists {
 			scannedVars = append(scannedVars, buildEnhancedOnlyVariable(name, enhanced))
 		}
+	}
+	return scannedVars
+}
+
+func buildScopedVariables(scanner *VariableScanner, enhancedVars map[string]*EnhancedVariable) model.JSONArray {
+	scannedVars := make(model.JSONArray, 0, len(enhancedVars))
+	for _, variable := range scanner.variables {
+		enhanced, exists := enhancedVars[variable.Name]
+		if !exists {
+			continue
+		}
+		scannedVars = append(scannedVars, buildVariableData(variable, enhanced))
+	}
+	for name, enhanced := range enhancedVars {
+		if _, exists := scanner.variables[name]; exists {
+			continue
+		}
+		scannedVars = append(scannedVars, buildEnhancedOnlyVariable(name, enhanced))
 	}
 	return scannedVars
 }
@@ -117,10 +140,13 @@ func applyEnhancedOverrides(data map[string]any, enhanced *EnhancedVariable) {
 	if enhanced.Pattern != "" {
 		data["pattern"] = enhanced.Pattern
 	}
+	if len(enhanced.Playbooks) > 0 {
+		data["playbooks"] = enhanced.Playbooks
+	}
 }
 
 func buildEnhancedOnlyVariable(name string, enhanced *EnhancedVariable) map[string]any {
-	return map[string]any{
+	data := map[string]any{
 		"name":        name,
 		"type":        enhanced.Type,
 		"required":    enhanced.Required,
@@ -134,9 +160,13 @@ func buildEnhancedOnlyVariable(name string, enhanced *EnhancedVariable) map[stri
 		"source_line": 0,
 		"in_code":     false,
 	}
+	if len(enhanced.Playbooks) > 0 {
+		data["playbooks"] = enhanced.Playbooks
+	}
+	return data
 }
 
-func (s *Service) persistScanOutcome(ctx context.Context, playbook *model.Playbook, scanner *VariableScanner, triggerType string, scannedVars model.JSONArray) (*model.PlaybookScanLog, model.JSONArray, error) {
+func (s *Service) persistScanOutcome(ctx context.Context, playbook *model.Playbook, scanner *VariableScanner, triggerType string, scannedVars model.JSONArray, enhancedConfig ParsedEnhancedConfig) (*model.PlaybookScanLog, model.JSONArray, error) {
 	nextStatus := ""
 	if playbook.Status == "pending" {
 		nextStatus = "scanned"

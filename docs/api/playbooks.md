@@ -114,7 +114,22 @@
 
 **权限**: `playbook:update`
 
-从 Playbook 文件中提取变量定义。
+从入口 Playbook 递归扫描变量定义，并跟踪其依赖文件。
+
+扫描顺序说明：
+
+1. 入口文件本身
+2. `import_playbook` / `include_tasks` / `import_tasks`
+3. `roles` / `include_role` / `import_role`
+4. `vars_files` / `template` 等依赖
+5. 仓库根目录的 `.auto-healing.yml` 或 `.auto-healing.yaml`
+
+增强配置说明：
+
+- `.auto-healing.yml` 可为变量补充类型、描述、默认值、枚举等信息
+- 支持 `exposure_mode: scoped`
+- 当 `exposure_mode=scoped` 时，可用 `variables[].playbooks` 指定变量只暴露给哪些入口文件
+- 未命中的增强变量不会暴露到该入口 Playbook 的可填写参数里
 
 ---
 
@@ -158,6 +173,41 @@
 | `default` | string | 默认值 |
 | `options` | []string | 可选值列表（`select` 类型时使用） |
 
+### `.auto-healing.yml` 示例
+
+```yaml
+exposure_mode: scoped
+
+variables:
+  - name: lab_script_path
+    type: string
+    required: true
+    default: /opt/auto-healing-fault-lab/auto_healing_fault_lab.sh
+    description: 远端故障实验脚本路径
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+      - playbooks/service_down_recover.yml
+
+  - name: fault_type
+    type: select
+    required: true
+    enum:
+      - service_down
+      - cpu_high
+      - disk_full
+    playbooks:
+      - playbooks/fault_recovery_suite.yml
+```
+
+字段说明：
+
+- `exposure_mode=scoped`
+  只暴露增强配置中明确声明且命中当前入口文件的变量
+- `variables[].playbooks`
+  入口文件白名单，使用仓库内相对路径
+- 不写 `playbooks`
+  默认对所有入口文件可见
+
 ---
 
 ## 9. 设置为 Ready 状态
@@ -180,13 +230,50 @@
 
 ---
 
-## 11. 获取仓库文件列表
+## 11. 获取 Playbook 依赖文件列表
 
 **GET** `/api/v1/playbooks/:id/files`
 
 **权限**: `playbook:list`
 
-获取该 Playbook 所在仓库中所有可用的 Playbook 文件路径。
+获取该 Playbook 扫描到的入口文件和依赖文件。
+
+返回规则：
+
+- `relation=entry` 表示当前 Playbook 的入口文件
+- `relation=dependency` 表示递归扫描到的依赖文件
+- `type` 用于区分文件类型，例如 `playbook`、`task`、`template`、`include`
+
+这可以帮助用户明确看到：
+
+- 哪个文件是主入口
+- 这个 Playbook 实际依赖了哪些 task/role/include 文件
+
+### 响应示例
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": [
+    {
+      "path": "playbooks/service_down_recover.yml",
+      "type": "playbook",
+      "relation": "entry"
+    },
+    {
+      "path": "playbooks/fault_recovery_suite.yml",
+      "type": "include",
+      "relation": "dependency"
+    },
+    {
+      "path": "playbooks/roles/fault_lab_service/tasks/main.yml",
+      "type": "task",
+      "relation": "dependency"
+    }
+  ]
+}
+```
 
 ---
 

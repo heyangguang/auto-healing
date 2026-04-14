@@ -4,8 +4,7 @@ import "github.com/company/auto-healing/internal/modules/integrations/model"
 
 func (s *Service) mergeVariables(userVars, scannedVars model.JSONArray) model.JSONArray {
 	userVarMap := indexVariablesByName(userVars)
-	scannedNameSet := buildVariableNameSet(scannedVars)
-	result := make(model.JSONArray, 0, len(userVarMap)+len(scannedVars))
+	result := make(model.JSONArray, 0, len(scannedVars))
 
 	for _, variable := range scannedVars {
 		vm, ok := variable.(map[string]any)
@@ -14,13 +13,6 @@ func (s *Service) mergeVariables(userVars, scannedVars model.JSONArray) model.JS
 		}
 		name, _ := vm["name"].(string)
 		result = append(result, mergeVariable(name, vm, userVarMap[name]))
-	}
-
-	for name, userVar := range userVarMap {
-		if !scannedNameSet[name] {
-			userVar["in_code"] = false
-			result = append(result, userVar)
-		}
 	}
 	return result
 }

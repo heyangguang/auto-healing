@@ -23,34 +23,44 @@ type EnhancedVariable struct {
 	Min         *float64 `yaml:"min"`
 	Max         *float64 `yaml:"max"`
 	Pattern     string   `yaml:"pattern"`
+	Playbooks   []string `yaml:"playbooks"`
 }
 
 // EnhancedConfig .auto-healing.yml 文件结构
 type EnhancedConfig struct {
-	Variables []EnhancedVariable `yaml:"variables"`
+	ExposureMode string             `yaml:"exposure_mode"`
+	Variables    []EnhancedVariable `yaml:"variables"`
 }
 
-func (s *Service) parseEnhancedConfig(repoPath string) map[string]*EnhancedVariable {
+type ParsedEnhancedConfig struct {
+	ExposureMode string
+	Variables    map[string]*EnhancedVariable
+}
+
+func (s *Service) parseEnhancedConfig(repoPath, playbookPath string) ParsedEnhancedConfig {
 	configPath := findEnhancedConfigPath(repoPath)
 	if configPath == "" {
-		return map[string]*EnhancedVariable{}
+		return ParsedEnhancedConfig{Variables: map[string]*EnhancedVariable{}}
 	}
 
 	content, err := os.ReadFile(configPath)
 	if err != nil {
 		logger.Sync_("PLAYBOOK").Warn("读取增强配置文件失败: %v", err)
-		return map[string]*EnhancedVariable{}
+		return ParsedEnhancedConfig{Variables: map[string]*EnhancedVariable{}}
 	}
 
 	var config EnhancedConfig
 	if err := yaml.Unmarshal(content, &config); err != nil {
 		logger.Sync_("PLAYBOOK").Warn("解析增强配置文件失败: %v", err)
-		return map[string]*EnhancedVariable{}
+		return ParsedEnhancedConfig{Variables: map[string]*EnhancedVariable{}}
 	}
 
-	result := normalizeEnhancedVariables(config.Variables)
+	result := normalizeEnhancedVariables(config.Variables, playbookPath)
 	logger.Sync_("PLAYBOOK").Info("从 %s 加载了 %d 个增强模式变量定义", filepath.Base(configPath), len(result))
-	return result
+	return ParsedEnhancedConfig{
+		ExposureMode: config.ExposureMode,
+		Variables:    result,
+	}
 }
 
 func findEnhancedConfigPath(repoPath string) string {
@@ -67,11 +77,14 @@ func findEnhancedConfigPath(repoPath string) string {
 	return ""
 }
 
-func normalizeEnhancedVariables(variables []EnhancedVariable) map[string]*EnhancedVariable {
+func normalizeEnhancedVariables(variables []EnhancedVariable, playbookPath string) map[string]*EnhancedVariable {
 	result := make(map[string]*EnhancedVariable, len(variables))
 	for i := range variables {
 		variable := &variables[i]
 		if variable.Name == "" {
+			continue
+		}
+		if !matchesEnhancedVariableScope(variable, playbookPath) {
 			continue
 		}
 		if variable.Type == "" {
@@ -80,6 +93,18 @@ func normalizeEnhancedVariables(variables []EnhancedVariable) map[string]*Enhanc
 		result[variable.Name] = variable
 	}
 	return result
+}
+
+func matchesEnhancedVariableScope(variable *EnhancedVariable, playbookPath string) bool {
+	if len(variable.Playbooks) == 0 {
+		return true
+	}
+	for _, candidate := range variable.Playbooks {
+		if candidate == playbookPath {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) notifyRelatedTasks(ctx context.Context, playbookID uuid.UUID, newVariables model.JSONArray) {
