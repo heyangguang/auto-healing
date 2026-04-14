@@ -92,6 +92,11 @@
 
 **权限**: `dashboard:view`
 
+返回当前用户可见的系统工作区。
+
+- 有 `dashboard:workspace:manage` 权限的管理员：返回当前租户全部系统工作区。
+- 普通用户：只返回当前用户有权看到的系统工作区（含默认系统工作区）。
+
 ---
 
 ## 6. 更新系统工作区
@@ -99,6 +104,13 @@
 **PUT** `/api/v1/dashboard/workspaces/:id`
 
 **权限**: `dashboard:workspace:manage`
+
+仅允许更新白名单字段：`name`、`description`、`config`。
+
+业务约束：
+
+- 默认系统工作区不能删除。
+- `is_default`、`is_readonly` 等保护字段由后端控制，前端传入会被拒绝。
 
 ---
 
@@ -114,9 +126,9 @@
 
 **GET** `/api/v1/dashboard/roles/:roleId/workspaces`
 
-**权限**: `dashboard:view`
+**权限**: `dashboard:workspace:manage`
 
-获取指定角色被分配的工作区列表。
+获取指定角色当前生效的工作区列表，默认系统工作区由后端自动包含。
 
 ---
 

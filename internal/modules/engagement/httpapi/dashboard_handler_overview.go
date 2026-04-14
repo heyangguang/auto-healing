@@ -87,9 +87,9 @@ func (h *DashboardHandler) GetConfig(c *gin.Context) {
 		respondInternalError(c, "DASHBOARD", "failed to get config", err)
 		return
 	}
-	roleWorkspaces, err := h.wsRepo.GetWorkspacesByUserRoles(c.Request.Context(), uid)
+	roleWorkspaces, err := h.listVisibleSystemWorkspaces(c, uid)
 	if err != nil {
-		respondInternalError(c, "DASHBOARD", "failed to get role workspaces", err)
+		respondInternalError(c, "DASHBOARD", "failed to get visible workspaces", err)
 		return
 	}
 

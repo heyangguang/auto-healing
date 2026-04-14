@@ -507,7 +507,7 @@
   get:
     tags:
     - Dashboard
-    summary: 获取系统工作区列表
+    summary: 获取当前用户可见的系统工作区列表
     responses:
       '200':
         description: 成功
@@ -521,8 +521,7 @@
                   data:
                     type: array
                     items:
-                      type: object
-                      additionalProperties: true
+                      $ref: '#/components/schemas/DashboardSystemWorkspace'
   post:
     tags:
     - Dashboard
@@ -533,6 +532,7 @@
         application/json:
           schema:
             type: object
+            additionalProperties: false
             required:
             - name
             - config
@@ -554,8 +554,7 @@
               - type: object
                 properties:
                   data:
-                    type: object
-                    additionalProperties: true
+                    $ref: '#/components/schemas/DashboardSystemWorkspace'
 /tenant/site-messages:
   get:
     tags:
@@ -689,7 +688,15 @@
         application/json:
           schema:
             type: object
-            additionalProperties: true
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              config:
+                type: object
+                additionalProperties: true
     responses:
       '200':
         description: 成功
@@ -701,8 +708,7 @@
               - type: object
                 properties:
                   data:
-                    type: object
-                    additionalProperties: true
+                    $ref: '#/components/schemas/DashboardSystemWorkspace'
   delete:
     tags:
     - Dashboard

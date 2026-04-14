@@ -4334,7 +4334,7 @@ paths:
     get:
       tags:
       - Dashboard
-      summary: 获取系统工作区列表
+      summary: 获取当前用户可见的系统工作区列表
       responses:
         '200':
           description: 成功
@@ -4348,8 +4348,7 @@ paths:
                     data:
                       type: array
                       items:
-                        type: object
-                        additionalProperties: true
+                        $ref: '#/components/schemas/DashboardSystemWorkspace'
       operationId: getTenantDashboardWorkspaces
     post:
       tags:
@@ -4361,6 +4360,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               required:
               - name
               - config
@@ -4382,8 +4382,7 @@ paths:
                 - type: object
                   properties:
                     data:
-                      type: object
-                      additionalProperties: true
+                      $ref: '#/components/schemas/DashboardSystemWorkspace'
       operationId: postTenantDashboardWorkspaces
   /tenant/site-messages:
     get:
@@ -4523,7 +4522,15 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: true
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                config:
+                  type: object
+                  additionalProperties: true
       responses:
         '200':
           description: 成功
@@ -4535,8 +4542,7 @@ paths:
                 - type: object
                   properties:
                     data:
-                      type: object
-                      additionalProperties: true
+                      $ref: '#/components/schemas/DashboardSystemWorkspace'
       operationId: putTenantDashboardWorkspacesById
     delete:
       tags:

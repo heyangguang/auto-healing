@@ -186,6 +186,7 @@ func createWorkspaceSchema(t *testing.T, db *gorm.DB) {
 			description TEXT,
 			config TEXT NOT NULL DEFAULT '{}',
 			is_default BOOLEAN NOT NULL DEFAULT FALSE,
+			is_readonly BOOLEAN NOT NULL DEFAULT FALSE,
 			created_by TEXT,
 			created_at DATETIME,
 			updated_at DATETIME

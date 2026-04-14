@@ -138,7 +138,7 @@ func buildSystemWorkspaceList(workspaces []model.SystemWorkspace) []dashboardSys
 			Description: workspace.Description,
 			Config:      workspace.Config,
 			IsSystem:    true,
-			IsReadonly:  true,
+			IsReadonly:  workspace.IsReadonly,
 			IsDefault:   workspace.IsDefault,
 		})
 	}

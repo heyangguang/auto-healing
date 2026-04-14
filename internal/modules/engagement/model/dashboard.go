@@ -68,6 +68,7 @@ type SystemWorkspace struct {
 	Description string     `json:"description,omitempty" gorm:"type:text;default:''"`
 	Config      JSON       `json:"config" gorm:"type:jsonb;not null;default:'{}'"`
 	IsDefault   bool       `json:"is_default" gorm:"not null;default:false"`
+	IsReadonly  bool       `json:"is_readonly" gorm:"not null;default:false"`
 	CreatedBy   *uuid.UUID `json:"created_by,omitempty" gorm:"type:uuid"`
 	CreatedAt   time.Time  `json:"created_at" gorm:"default:now()"`
 	UpdatedAt   time.Time  `json:"updated_at" gorm:"default:now()"`

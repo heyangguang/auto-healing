@@ -14,7 +14,7 @@ func (r Registrar) RegisterTenantRoutes(tenant *gin.RouterGroup) {
 	dashboard.GET("/workspaces", middleware.RequirePermission("dashboard:view"), r.deps.Dashboard.ListSystemWorkspaces)
 	dashboard.PUT("/workspaces/:id", middleware.RequirePermission("dashboard:workspace:manage"), r.deps.Dashboard.UpdateSystemWorkspace)
 	dashboard.DELETE("/workspaces/:id", middleware.RequirePermission("dashboard:workspace:manage"), r.deps.Dashboard.DeleteSystemWorkspace)
-	dashboard.GET("/roles/:roleId/workspaces", middleware.RequirePermission("dashboard:view"), r.deps.Dashboard.GetRoleWorkspaces)
+	dashboard.GET("/roles/:roleId/workspaces", middleware.RequirePermission("dashboard:workspace:manage"), r.deps.Dashboard.GetRoleWorkspaces)
 	dashboard.PUT("/roles/:roleId/workspaces", middleware.RequirePermission("dashboard:workspace:manage"), r.deps.Dashboard.AssignRoleWorkspaces)
 
 	channels := tenant.Group("/channels")

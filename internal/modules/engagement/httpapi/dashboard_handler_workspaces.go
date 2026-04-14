@@ -2,10 +2,12 @@ package httpapi
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/company/auto-healing/internal/middleware"
 	accessrepo "github.com/company/auto-healing/internal/modules/access/repository"
 	"github.com/company/auto-healing/internal/modules/engagement/model"
+	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
@@ -14,6 +16,9 @@ import (
 
 // CreateSystemWorkspace 创建系统工作区
 func (h *DashboardHandler) CreateSystemWorkspace(c *gin.Context) {
+	if !requireDashboardWorkspaceManage(c) {
+		return
+	}
 	uid, ok := currentUserID(c)
 	if !ok {
 		response.Unauthorized(c, "user not authenticated")
@@ -25,7 +30,11 @@ func (h *DashboardHandler) CreateSystemWorkspace(c *gin.Context) {
 		Description string     `json:"description"`
 		Config      model.JSON `json:"config" binding:"required"`
 	}
-	if !parseDashboardBody(c, &body, "invalid request") {
+	if !parseDashboardStrictBody(c, &body, "invalid request") {
+		return
+	}
+	if strings.TrimSpace(body.Name) == "" || body.Config == nil {
+		response.BadRequest(c, "invalid request: name and config are required")
 		return
 	}
 
@@ -54,10 +63,12 @@ func (h *DashboardHandler) CreateSystemWorkspace(c *gin.Context) {
 
 // ListSystemWorkspaces 获取所有系统工作区
 func (h *DashboardHandler) ListSystemWorkspaces(c *gin.Context) {
-	if !requireDashboardWorkspaceManage(c) {
+	uid, ok := currentUserID(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
 		return
 	}
-	workspaces, err := h.wsRepo.List(c.Request.Context())
+	workspaces, err := h.listVisibleSystemWorkspaces(c, uid)
 	if err != nil {
 		respondInternalError(c, "DASHBOARD", "failed to list workspaces", err)
 		return
@@ -67,6 +78,9 @@ func (h *DashboardHandler) ListSystemWorkspaces(c *gin.Context) {
 
 // UpdateSystemWorkspace 更新系统工作区
 func (h *DashboardHandler) UpdateSystemWorkspace(c *gin.Context) {
+	if !requireDashboardWorkspaceManage(c) {
+		return
+	}
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		response.BadRequest(c, "invalid workspace ID")
@@ -87,7 +101,7 @@ func (h *DashboardHandler) UpdateSystemWorkspace(c *gin.Context) {
 		Description *string    `json:"description"`
 		Config      model.JSON `json:"config"`
 	}
-	if !parseDashboardBody(c, &body, "invalid request") {
+	if !parseDashboardStrictBody(c, &body, "invalid request") {
 		return
 	}
 	if body.Name != nil {
@@ -100,7 +114,7 @@ func (h *DashboardHandler) UpdateSystemWorkspace(c *gin.Context) {
 		existing.Config = body.Config
 	}
 	if err := h.wsRepo.Update(c.Request.Context(), existing); err != nil {
-		respondInternalError(c, "DASHBOARD", "failed to update workspace", err)
+		writeWorkspaceMutationError(c, err, "failed to update workspace")
 		return
 	}
 	response.Success(c, existing)
@@ -108,13 +122,16 @@ func (h *DashboardHandler) UpdateSystemWorkspace(c *gin.Context) {
 
 // DeleteSystemWorkspace 删除系统工作区
 func (h *DashboardHandler) DeleteSystemWorkspace(c *gin.Context) {
+	if !requireDashboardWorkspaceManage(c) {
+		return
+	}
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		response.BadRequest(c, "invalid workspace ID")
 		return
 	}
 	if err := h.wsRepo.Delete(c.Request.Context(), id); err != nil {
-		respondInternalError(c, "DASHBOARD", "failed to delete workspace", err)
+		writeWorkspaceMutationError(c, err, "failed to delete workspace")
 		return
 	}
 	response.Message(c, "workspace deleted")
@@ -122,6 +139,9 @@ func (h *DashboardHandler) DeleteSystemWorkspace(c *gin.Context) {
 
 // AssignRoleWorkspaces 为角色分配工作区
 func (h *DashboardHandler) AssignRoleWorkspaces(c *gin.Context) {
+	if !requireDashboardWorkspaceManage(c) {
+		return
+	}
 	roleID, err := uuid.Parse(c.Param("roleId"))
 	if err != nil {
 		response.BadRequest(c, "invalid role ID")
@@ -133,14 +153,18 @@ func (h *DashboardHandler) AssignRoleWorkspaces(c *gin.Context) {
 	}
 
 	var body struct {
-		WorkspaceIDs []string `json:"workspace_ids" binding:"required"`
+		WorkspaceIDs *[]string `json:"workspace_ids"`
 	}
-	if !parseDashboardBody(c, &body, "invalid request") {
+	if !parseDashboardStrictBody(c, &body, "invalid request") {
+		return
+	}
+	if body.WorkspaceIDs == nil {
+		response.BadRequest(c, "invalid request: workspace_ids is required")
 		return
 	}
 
-	ids := make([]uuid.UUID, 0, len(body.WorkspaceIDs))
-	for _, rawID := range body.WorkspaceIDs {
+	ids := make([]uuid.UUID, 0, len(*body.WorkspaceIDs))
+	for _, rawID := range *body.WorkspaceIDs {
 		workspaceID, err := uuid.Parse(rawID)
 		if err != nil {
 			response.BadRequest(c, "invalid workspace ID: "+rawID)
@@ -149,7 +173,7 @@ func (h *DashboardHandler) AssignRoleWorkspaces(c *gin.Context) {
 		ids = append(ids, workspaceID)
 	}
 	if err := h.wsRepo.AssignToRole(c.Request.Context(), roleID, ids); err != nil {
-		respondInternalError(c, "DASHBOARD", "failed to assign workspaces", err)
+		writeWorkspaceMutationError(c, err, "failed to assign workspaces")
 		return
 	}
 	response.Message(c, "workspaces assigned")
@@ -178,11 +202,22 @@ func (h *DashboardHandler) GetRoleWorkspaces(c *gin.Context) {
 }
 
 func requireDashboardWorkspaceManage(c *gin.Context) bool {
-	if middleware.HasPermission(middleware.GetPermissions(c), "dashboard:workspace:manage") {
+	if canManageDashboardWorkspaces(c) {
 		return true
 	}
 	response.Forbidden(c, "dashboard workspace manage permission required")
 	return false
+}
+
+func canManageDashboardWorkspaces(c *gin.Context) bool {
+	return middleware.HasPermission(middleware.GetPermissions(c), "dashboard:workspace:manage")
+}
+
+func (h *DashboardHandler) listVisibleSystemWorkspaces(c *gin.Context, uid uuid.UUID) ([]model.SystemWorkspace, error) {
+	if canManageDashboardWorkspaces(c) {
+		return h.wsRepo.List(c.Request.Context())
+	}
+	return h.wsRepo.GetWorkspacesByUserRoles(c.Request.Context(), uid)
 }
 
 func (h *DashboardHandler) filterTenantRoleIDs(c *gin.Context, roleIDs []uuid.UUID) ([]uuid.UUID, error) {
@@ -216,4 +251,22 @@ func writeDashboardRoleScopeError(c *gin.Context, err error) {
 		return
 	}
 	respondInternalError(c, "DASHBOARD", "failed to validate role scope", err)
+}
+
+func writeWorkspaceMutationError(c *gin.Context, err error, internalMessage string) {
+	if errors.Is(err, engagementrepo.ErrSystemWorkspaceNotFound) {
+		response.NotFound(c, "workspace not found in current tenant")
+		return
+	}
+	if errors.Is(err, engagementrepo.ErrDefaultSystemWorkspaceProtected) {
+		response.Conflict(c, err.Error())
+		return
+	}
+
+	var scopeErr *engagementrepo.WorkspaceScopeError
+	if errors.As(err, &scopeErr) {
+		response.BadRequest(c, scopeErr.Error())
+		return
+	}
+	respondInternalError(c, "DASHBOARD", internalMessage, err)
 }

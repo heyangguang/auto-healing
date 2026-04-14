@@ -3,6 +3,8 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"strings"
 
 	"github.com/company/auto-healing/internal/middleware"
@@ -142,6 +144,20 @@ func dashboardUnauthorizedSections(sections []string, permissions []string) []st
 func parseDashboardBody(c *gin.Context, target interface{}, badRequestMsg string) bool {
 	if err := c.ShouldBindJSON(target); err != nil {
 		response.BadRequest(c, badRequestMsg+": "+err.Error())
+		return false
+	}
+	return true
+}
+
+func parseDashboardStrictBody(c *gin.Context, target interface{}, badRequestMsg string) bool {
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		response.BadRequest(c, badRequestMsg+": "+err.Error())
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		response.BadRequest(c, badRequestMsg+": request body must contain a single JSON object")
 		return false
 	}
 	return true
