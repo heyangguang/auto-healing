@@ -1,0 +1,8 @@
+ALTER TABLE incident_solution_templates
+    ADD COLUMN IF NOT EXISTS problem_template TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS solution_template TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS verification_template TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS conclusion_template TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS steps_render_mode VARCHAR(30) NOT NULL DEFAULT 'summary',
+    ADD COLUMN IF NOT EXISTS steps_max_count INTEGER NOT NULL DEFAULT 6,
+    ADD COLUMN IF NOT EXISTS step_output_max_length INTEGER NOT NULL DEFAULT 240;

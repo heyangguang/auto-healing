@@ -75,16 +75,44 @@ func validateSolutionTemplate(template *integrationmodel.IncidentSolutionTemplat
 	template.Description = strings.TrimSpace(template.Description)
 	template.ResolutionTemplate = strings.TrimSpace(template.ResolutionTemplate)
 	template.WorkNotesTemplate = strings.TrimSpace(template.WorkNotesTemplate)
+	template.ProblemTemplate = strings.TrimSpace(template.ProblemTemplate)
+	template.SolutionTemplate = strings.TrimSpace(template.SolutionTemplate)
+	template.VerificationTemplate = strings.TrimSpace(template.VerificationTemplate)
+	template.ConclusionTemplate = strings.TrimSpace(template.ConclusionTemplate)
+	template.StepsRenderMode = strings.TrimSpace(template.StepsRenderMode)
 	template.DefaultCloseCode = strings.TrimSpace(template.DefaultCloseCode)
 	template.DefaultCloseStatus = strings.TrimSpace(template.DefaultCloseStatus)
 	if template.Name == "" {
 		return fmt.Errorf("模板名称不能为空")
 	}
-	if template.ResolutionTemplate == "" {
-		return fmt.Errorf("resolution_template 不能为空")
-	}
-	if template.WorkNotesTemplate == "" {
-		return fmt.Errorf("work_notes_template 不能为空")
+	segmented := template.UsesStructuredSections()
+	switch {
+	case segmented:
+		if template.SolutionTemplate == "" {
+			return fmt.Errorf("solution_template 不能为空")
+		}
+		if template.ConclusionTemplate == "" {
+			return fmt.Errorf("conclusion_template 不能为空")
+		}
+		if template.StepsRenderMode == "" {
+			template.StepsRenderMode = "summary"
+		}
+		if template.StepsMaxCount <= 0 {
+			template.StepsMaxCount = 6
+		}
+		if template.StepOutputMaxLength <= 0 {
+			template.StepOutputMaxLength = 240
+		}
+		if template.ResolutionTemplate == "" {
+			template.ResolutionTemplate = template.ConclusionTemplate
+		}
+		if template.WorkNotesTemplate == "" {
+			template.WorkNotesTemplate = template.SolutionTemplate
+		}
+	case template.ResolutionTemplate == "":
+		return fmt.Errorf("resolution_template 或分段式模板字段至少配置一种")
+	case template.WorkNotesTemplate == "":
+		return fmt.Errorf("work_notes_template 或分段式模板字段至少配置一种")
 	}
 	if template.DefaultCloseStatus == "" {
 		template.DefaultCloseStatus = "resolved"

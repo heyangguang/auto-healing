@@ -59,6 +59,9 @@ func renderSolutionTemplate(template *integrationmodel.IncidentSolutionTemplate,
 	if template == nil {
 		return nil, fmt.Errorf("解决方案模板不能为空")
 	}
+	if template.UsesStructuredSections() {
+		return renderStructuredSolutionTemplate(template, context)
+	}
 	resolution, err := renderTemplate(template.ResolutionTemplate, context)
 	if err != nil {
 		return nil, fmt.Errorf("渲染 resolution_template 失败: %w", err)
@@ -85,9 +88,21 @@ func buildSolutionTemplateContext(incident *platformmodel.Incident, params Close
 		"operator": map[string]any{
 			"name": params.OperatorName,
 		},
-		"input": map[string]any{},
+		"input":        map[string]any{},
+		"close_code":   params.CloseCode,
+		"close_status": defaultCloseStatus(params.CloseStatus),
 	}
 	mergeTemplateVars(context, params.TemplateVars)
+	if _, exists := context["steps_text"]; !exists {
+		context["steps_text"] = ""
+	}
+	if len(templateContextSteps(context)) > 0 {
+		context["steps_text"] = renderStepsText(context, &integrationmodel.IncidentSolutionTemplate{
+			StepsRenderMode:     "summary",
+			StepsMaxCount:       len(templateContextSteps(context)),
+			StepOutputMaxLength: 240,
+		})
+	}
 	return context
 }
 

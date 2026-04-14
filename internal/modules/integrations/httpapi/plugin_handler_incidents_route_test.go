@@ -95,6 +95,13 @@ CREATE TABLE incident_solution_templates (
 	tenant_id TEXT,
 	name TEXT,
 	description TEXT,
+	problem_template TEXT,
+	solution_template TEXT,
+	verification_template TEXT,
+	conclusion_template TEXT,
+	steps_render_mode TEXT,
+	steps_max_count INTEGER,
+	step_output_max_length INTEGER,
 	resolution_template TEXT,
 	work_notes_template TEXT,
 	default_close_code TEXT,
@@ -218,9 +225,10 @@ func TestCloseIncidentWithSolutionTemplateRendersRequestPayload(t *testing.T) {
 	insertHandlerIncident(t, db, tenantID, pluginID, incidentID, "INC-201", "open", "pending", &now)
 	if err := db.Exec(`
 		INSERT INTO incident_solution_templates (
-			id, tenant_id, name, description, resolution_template, work_notes_template,
+			id, tenant_id, name, description, problem_template, solution_template, verification_template, conclusion_template,
+			steps_render_mode, steps_max_count, step_output_max_length, resolution_template, work_notes_template,
 			default_close_code, default_close_status, created_at, updated_at
-		) VALUES (?, ?, 'tmpl', 'demo', ?, ?, 'auto_healed', 'resolved', ?, ?)
+		) VALUES (?, ?, 'tmpl', 'demo', '', '', '', '', 'summary', 6, 240, ?, ?, 'auto_healed', 'resolved', ?, ?)
 	`, templateID.String(), tenantID.String(), `处理完成：{{ incident.title }}`, `run={{ execution.run_id }}`, now, now).Error; err != nil {
 		t.Fatalf("insert template: %v", err)
 	}

@@ -201,9 +201,9 @@ def merge_solution_text(resolution: str, work_notes: str) -> str:
     resolution = resolution.strip()
     work_notes = work_notes.strip()
     if resolution and work_notes:
-        if work_notes.startswith(resolution):
+        if resolution in work_notes:
             return work_notes
-        return f"{resolution}\n\n{work_notes}"
+        return f"{work_notes}\n\n最终结论：\n{resolution}"
     return resolution or work_notes
 
 

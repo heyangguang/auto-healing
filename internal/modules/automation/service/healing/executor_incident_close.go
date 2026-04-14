@@ -30,7 +30,7 @@ func (e *FlowExecutor) tryAutoCloseSourceIncident(ctx context.Context, instance 
 		})
 		return
 	}
-	params, closeErr := e.buildAutoCloseIncidentParams(instance, flow, policy, useLegacy)
+	params, closeErr := e.buildAutoCloseIncidentParams(ctx, instance, flow, policy, useLegacy)
 	if closeErr != nil {
 		e.logNode(ctx, instance.ID, "", "system", model.LogLevelWarn, "自动关单配置无效", map[string]interface{}{
 			"incident_id": instance.IncidentID.String(),
@@ -72,7 +72,7 @@ func autoCloseAllowedByExecutionResult(instance *model.FlowInstance) bool {
 	}
 }
 
-func (e *FlowExecutor) buildAutoCloseIncidentParams(instance *model.FlowInstance, flow *model.HealingFlow, policy flowClosePolicy, useLegacy bool) (IncidentCloseParams, error) {
+func (e *FlowExecutor) buildAutoCloseIncidentParams(ctx context.Context, instance *model.FlowInstance, flow *model.HealingFlow, policy flowClosePolicy, useLegacy bool) (IncidentCloseParams, error) {
 	params := IncidentCloseParams{
 		IncidentID:     *instance.IncidentID,
 		TriggerSource:  platformmodel.IncidentWritebackTriggerFlowAutoClose,
@@ -96,7 +96,7 @@ func (e *FlowExecutor) buildAutoCloseIncidentParams(instance *model.FlowInstance
 	params.SolutionTemplateID = policy.SolutionTemplateID
 	params.CloseStatus = policy.DefaultCloseStatus
 	params.CloseCode = policy.DefaultCloseCode
-	params.TemplateVars = buildAutoCloseTemplateVars(instance, flow)
+	params.TemplateVars = e.buildAutoCloseTemplateVars(ctx, instance, flow)
 	return params, nil
 }
 
@@ -118,17 +118,6 @@ func (e *FlowExecutor) resolveAutoCloseFlow(ctx context.Context, instance *model
 	return flow, flowClosePolicy{}, flow.AutoCloseSourceIncident, nil
 }
 
-func buildAutoCloseTemplateVars(instance *model.FlowInstance, flow *model.HealingFlow) map[string]any {
-	return map[string]any{
-		"flow": map[string]any{
-			"id":          flow.ID.String(),
-			"name":        flow.Name,
-			"instance_id": instance.ID.String(),
-		},
-		"execution": buildAutoCloseExecutionContext(instance),
-	}
-}
-
 func buildAutoCloseExecutionContext(instance *model.FlowInstance) map[string]any {
 	execution := map[string]any{
 		"status":       "",
@@ -137,6 +126,8 @@ func buildAutoCloseExecutionContext(instance *model.FlowInstance) map[string]any
 		"target_hosts": "",
 		"task_id":      "",
 		"stats":        map[string]any{},
+		"stdout":       "",
+		"stderr":       "",
 	}
 	if instance == nil || instance.Context == nil {
 		return execution
@@ -157,12 +148,24 @@ func buildAutoCloseExecutionContext(instance *model.FlowInstance) map[string]any
 	if targetHosts, ok := result["target_hosts"]; ok {
 		execution["target_hosts"] = targetHosts
 	}
+	if stdout, ok := result["stdout"]; ok {
+		execution["stdout"] = stdout
+	}
+	if stderr, ok := result["stderr"]; ok {
+		execution["stderr"] = stderr
+	}
 	if run, ok := result["run"].(map[string]interface{}); ok {
 		if runID, ok := run["run_id"]; ok {
 			execution["run_id"] = runID
 		}
 		if stats, ok := run["stats"]; ok {
 			execution["stats"] = stats
+		}
+		if stdout, ok := run["stdout"]; ok && execution["stdout"] == "" {
+			execution["stdout"] = stdout
+		}
+		if stderr, ok := run["stderr"]; ok && execution["stderr"] == "" {
+			execution["stderr"] = stderr
 		}
 	}
 	return execution

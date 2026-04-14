@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,6 +100,13 @@ var incidentServiceSchemaStatements = []string{
 		tenant_id TEXT,
 		name TEXT,
 		description TEXT,
+		problem_template TEXT,
+		solution_template TEXT,
+		verification_template TEXT,
+		conclusion_template TEXT,
+		steps_render_mode TEXT,
+		steps_max_count INTEGER,
+		step_output_max_length INTEGER,
 		resolution_template TEXT,
 		work_notes_template TEXT,
 		default_close_code TEXT,
@@ -278,6 +286,65 @@ func TestCloseIncidentIntegrationRendersSolutionTemplate(t *testing.T) {
 	}
 }
 
+func TestCloseIncidentIntegrationRendersStructuredSolutionTemplate(t *testing.T) {
+	db := newIncidentServiceIntegrationDB(t)
+	createIncidentServiceIntegrationSchema(t, db)
+	bindIncidentServiceIntegrationDB(t, db)
+
+	closeRequest := make(chan map[string]any, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode close request: %v", err)
+		}
+		closeRequest <- payload
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tenantID := uuid.New()
+	pluginID := uuid.New()
+	incidentID := uuid.New()
+	templateID := uuid.New()
+	insertIncidentServicePlugin(t, db, tenantID, pluginID, server.URL)
+	insertIncidentServiceIncident(t, db, incidentID, tenantID, pluginID)
+	insertStructuredIncidentSolutionTemplate(t, db, tenantID, templateID)
+
+	svc := NewIncidentServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+	_, err := svc.CloseIncident(ctx, CloseIncidentParams{
+		IncidentID:         incidentID,
+		SolutionTemplateID: &templateID,
+		TemplateVars: model.JSON{
+			"flow": map[string]any{"name": "服务恢复流程"},
+			"execution": map[string]any{
+				"run_id":  "run-structured",
+				"status":  "completed",
+				"message": "执行成功",
+			},
+			"steps": []map[string]any{
+				{"title": "提取工单主机", "summary": "提取工单主机，识别 1 台主机：app-1", "status": "completed"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CloseIncident() error = %v", err)
+	}
+
+	req := waitIncidentServiceCloseRequest(t, closeRequest)
+	if req["resolution"] != "AHS 已完成自动修复：service integration" {
+		t.Fatalf("resolution = %#v", req["resolution"])
+	}
+	workNotes, _ := req["work_notes"].(string)
+	if !strings.Contains(workNotes, "问题说明：") {
+		t.Fatalf("work_notes missing problem section: %#v", workNotes)
+	}
+	if !strings.Contains(workNotes, "执行步骤：\n1. 提取工单主机") {
+		t.Fatalf("work_notes missing rendered steps: %#v", workNotes)
+	}
+}
+
 func newIncidentServiceIntegrationDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
@@ -343,14 +410,37 @@ func insertIncidentSolutionTemplate(t *testing.T, db *gorm.DB, tenantID, templat
 	now := time.Now().UTC()
 	mustExecIncidentServiceSQL(t, db, `
 		INSERT INTO incident_solution_templates (
-			id, tenant_id, name, description, resolution_template, work_notes_template,
+			id, tenant_id, name, description, problem_template, solution_template, verification_template, conclusion_template,
+			steps_render_mode, steps_max_count, step_output_max_length, resolution_template, work_notes_template,
 			default_close_code, default_close_status, created_at, updated_at
-		) VALUES (?, ?, 'tmpl', 'demo', ?, ?, 'auto_healed', 'resolved', ?, ?)
+		) VALUES (?, ?, 'tmpl', 'demo', '', '', '', '', 'summary', 6, 240, ?, ?, 'auto_healed', 'resolved', ?, ?)
 	`,
 		templateID.String(),
 		tenantID.String(),
 		`AHS 已完成处理：{{ incident.title }}`,
 		`流程={{ flow.name }}；run={{ execution.run_id }}；结果={{ execution.message }}`,
+		now,
+		now,
+	)
+}
+
+func insertStructuredIncidentSolutionTemplate(t *testing.T, db *gorm.DB, tenantID, templateID uuid.UUID) {
+	t.Helper()
+
+	now := time.Now().UTC()
+	mustExecIncidentServiceSQL(t, db, `
+		INSERT INTO incident_solution_templates (
+			id, tenant_id, name, description, problem_template, solution_template, verification_template, conclusion_template,
+			steps_render_mode, steps_max_count, step_output_max_length, resolution_template, work_notes_template,
+			default_close_code, default_close_status, created_at, updated_at
+		) VALUES (?, ?, 'structured-tmpl', 'demo', ?, ?, ?, ?, 'summary', 6, 240, '', '', 'auto_healed', 'resolved', ?, ?)
+	`,
+		templateID.String(),
+		tenantID.String(),
+		`故障工单：{{ incident.title }}`,
+		`AHS 按标准方案执行流程 {{ flow.name }}`,
+		`执行状态：{{ execution.status }}`,
+		`AHS 已完成自动修复：{{ incident.title }}`,
 		now,
 		now,
 	)
