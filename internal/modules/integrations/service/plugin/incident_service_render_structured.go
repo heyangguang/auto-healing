@@ -93,7 +93,7 @@ func renderStepsText(context map[string]any, template *integrationmodel.Incident
 		line := fmt.Sprintf("%d. %s", index+1, stepSummary(step))
 		if mode == "detailed" {
 			if detail := stepDetail(step, template.StepOutputMaxLength); detail != "" {
-				line += "\n   " + detail
+				line += "\n" + indentLines(detail, "   ")
 			}
 		}
 		lines = append(lines, line)
@@ -151,10 +151,36 @@ func stepDetail(step map[string]any, maxLen int) string {
 		if text == "" || text == "<nil>" {
 			continue
 		}
-		if len(text) <= maxLen {
-			return text
-		}
-		return text[:maxLen] + "..."
+		return normalizeRenderedDetail(text, maxLen)
 	}
 	return ""
+}
+
+func normalizeRenderedDetail(text string, maxLen int) string {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	normalized := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || line == "<nil>" {
+			continue
+		}
+		if len(line) > maxLen {
+			line = line[:maxLen] + "..."
+		}
+		normalized = append(normalized, line)
+	}
+	return strings.Join(normalized, "\n")
+}
+
+func indentLines(text, prefix string) string {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	indented := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		indented = append(indented, prefix+line)
+	}
+	return strings.Join(indented, "\n")
 }

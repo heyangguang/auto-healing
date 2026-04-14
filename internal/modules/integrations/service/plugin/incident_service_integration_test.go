@@ -310,6 +310,7 @@ func TestCloseIncidentIntegrationRendersStructuredSolutionTemplate(t *testing.T)
 	insertIncidentServicePlugin(t, db, tenantID, pluginID, server.URL)
 	insertIncidentServiceIncident(t, db, incidentID, tenantID, pluginID)
 	insertStructuredIncidentSolutionTemplate(t, db, tenantID, templateID)
+	mustExecIncidentServiceSQL(t, db, `UPDATE incident_solution_templates SET steps_render_mode = 'detailed' WHERE id = ?`, templateID.String())
 
 	svc := NewIncidentServiceWithDB(db)
 	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
@@ -342,6 +343,82 @@ func TestCloseIncidentIntegrationRendersStructuredSolutionTemplate(t *testing.T)
 	}
 	if !strings.Contains(workNotes, "执行步骤：\n1. 提取工单主机") {
 		t.Fatalf("work_notes missing rendered steps: %#v", workNotes)
+	}
+}
+
+func TestCloseIncidentIntegrationKeepsFullStructuredStepDetail(t *testing.T) {
+	db := newIncidentServiceIntegrationDB(t)
+	bindIncidentServiceIntegrationDB(t, db)
+	createIncidentServiceIntegrationSchema(t, db)
+
+	closeRequest := make(chan map[string]any, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		payload := map[string]any{}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		closeRequest <- payload
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tenantID := uuid.New()
+	pluginID := uuid.New()
+	incidentID := uuid.New()
+	templateID := uuid.New()
+	insertIncidentServicePlugin(t, db, tenantID, pluginID, server.URL)
+	insertIncidentServiceIncident(t, db, incidentID, tenantID, pluginID)
+	insertStructuredIncidentSolutionTemplate(t, db, tenantID, templateID)
+	mustExecIncidentServiceSQL(t, db, `UPDATE incident_solution_templates SET steps_render_mode = 'detailed' WHERE id = ?`, templateID.String())
+
+	svc := NewIncidentServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+	_, err := svc.CloseIncident(ctx, CloseIncidentParams{
+		IncidentID:         incidentID,
+		SolutionTemplateID: &templateID,
+		TemplateVars: model.JSON{
+			"flow": map[string]any{"name": "服务恢复流程"},
+			"execution": map[string]any{
+				"status":  "completed",
+				"message": "执行成功",
+				"run_id":  "run-full-detail",
+			},
+			"steps": []map[string]any{
+				{
+					"title":   "执行服务恢复",
+					"summary": "执行成功",
+					"status":  "completed",
+					"detail": strings.Join([]string{
+						"- task 1：成功",
+						"- task 2：成功",
+						"- task 3：成功",
+						"- task 4：成功",
+						"- task 5：成功",
+						"- task 6：成功",
+						"- task 7：成功",
+						"- task 8：成功",
+						"- task 9：成功",
+						"- task 10：成功",
+						"- task 11：成功",
+						"- task 12：成功",
+						"- task 13：成功",
+					}, "\n"),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CloseIncident() error = %v", err)
+	}
+
+	req := waitIncidentServiceCloseRequest(t, closeRequest)
+	workNotes, _ := req["work_notes"].(string)
+	if strings.Contains(workNotes, "其余输出已省略") {
+		t.Fatalf("work_notes should keep full detail: %#v", workNotes)
+	}
+	if !strings.Contains(workNotes, "   - task 13：成功") {
+		t.Fatalf("work_notes missing indented final detail: %#v", workNotes)
 	}
 }
 

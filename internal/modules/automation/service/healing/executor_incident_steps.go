@@ -153,6 +153,7 @@ func autoCloseStepSummary(node model.FlowNode, state map[string]any) (string, st
 				detail = strings.TrimSpace(stringValue(run["stdout"]))
 			}
 		}
+		detail = autoCloseExecutionTaskDetail(detail)
 		return fmt.Sprintf("%s（run=%s）", message, runID), detail
 	case model.NodeTypeApproval:
 		title := strings.TrimSpace(stringValue(state["title"]))
