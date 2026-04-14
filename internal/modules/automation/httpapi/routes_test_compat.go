@@ -24,7 +24,9 @@ func registerTenantHealingInstanceRoutes(instances *gin.RouterGroup, healing *He
 	instances.GET("", middleware.RequirePermission("healing:instances:view"), healing.ListInstances)
 	instances.GET("/stats", middleware.RequirePermission("healing:instances:view"), healing.GetInstanceStats)
 	instances.GET("/:id", middleware.RequirePermission("healing:instances:view"), healing.GetInstance)
+	instances.GET("/:id/recovery-logs", middleware.RequirePermission("healing:instances:view"), healing.ListInstanceRecoveryAttempts)
 	instances.POST("/:id/cancel", middleware.RequirePermission("healing:flows:update"), healing.CancelInstance)
+	instances.POST("/:id/recover", middleware.RequirePermission("healing:flows:update"), healing.RecoverInstance)
 	instances.POST("/:id/retry", middleware.RequirePermission("healing:flows:update"), healing.RetryInstance)
 	instances.GET("/:id/events", middleware.RequirePermission("healing:instances:view"), healing.InstanceEvents)
 }

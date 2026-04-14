@@ -433,7 +433,9 @@ X-Tenant-ID: <tenant_uuid>
 | GET | `/api/v1/healing/instances` | 流程实例列表 |
 | GET | `/api/v1/healing/instances/stats` | 统计 |
 | GET | `/api/v1/healing/instances/:id` | 实例详情 |
+| GET | `/api/v1/healing/instances/:id/recovery-logs` | 实例恢复记录 |
 | POST | `/api/v1/healing/instances/:id/cancel` | 取消实例 |
+| POST | `/api/v1/healing/instances/:id/recover` | 手动恢复实例 |
 | POST | `/api/v1/healing/instances/:id/retry` | 重试实例 |
 | GET | `/api/v1/healing/instances/:id/events` | 实例事件流（SSE） |
 | GET | `/api/v1/healing/approvals` | 审批任务列表 |

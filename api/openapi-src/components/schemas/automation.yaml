@@ -604,6 +604,52 @@ FlowInstance:
     created_at:
       type: string
       format: date-time
+FlowRecoveryAttempt:
+  type: object
+  description: 流程实例恢复尝试
+  properties:
+    id:
+      type: string
+      format: uuid
+    flow_instance_id:
+      type: string
+      format: uuid
+    trigger_source:
+      type: string
+      enum:
+      - manual
+      - scheduler
+    current_node_id:
+      type: string
+    current_node_type:
+      type: string
+    detect_reason:
+      type: string
+    recovery_action:
+      type: string
+    status:
+      type: string
+      enum:
+      - started
+      - success
+      - failed
+      - skipped
+    details:
+      type: object
+      additionalProperties: true
+    error_message:
+      type: string
+      nullable: true
+    started_at:
+      type: string
+      format: date-time
+    finished_at:
+      type: string
+      format: date-time
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
 ApprovalTask:
   type: object
   description: 审批任务

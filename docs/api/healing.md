@@ -366,7 +366,38 @@
 
 ---
 
-### 23. 实例事件 SSE 流
+### 23. 手动恢复实例
+
+**POST** `/api/v1/healing/instances/:id/recover`
+
+**权限**: `healing:flows:update`
+
+对卡住或异常中断的流程实例执行一次恢复尝试。系统会根据当前节点状态决定继续推进、补做收口，或安全地重跑当前节点。
+
+---
+
+### 24. 获取实例恢复记录
+
+**GET** `/api/v1/healing/instances/:id/recovery-logs`
+
+**权限**: `healing:instances:view`
+
+返回该实例的恢复尝试记录，便于排查为什么卡住、恢复器采取了什么动作、以及恢复是否成功。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `trigger_source` | string | 触发来源：`manual` / `scheduler` |
+| `current_node_id` | string | 恢复时识别到的当前节点 |
+| `current_node_type` | string | 当前节点类型 |
+| `detect_reason` | string | 判定需要恢复的原因 |
+| `recovery_action` | string | 执行的恢复动作 |
+| `status` | string | `started` / `success` / `failed` / `skipped` |
+| `details` | object | 结构化恢复细节 |
+| `error_message` | string | 恢复失败原因 |
+
+---
+
+### 25. 实例事件 SSE 流
 
 **GET** `/api/v1/healing/instances/:id/events`
 

@@ -75,7 +75,9 @@ func (r Registrar) RegisterTenantRoutes(tenant *gin.RouterGroup) {
 	instances.GET("", middleware.RequirePermission("healing:instances:view"), r.deps.Healing.ListInstances)
 	instances.GET("/stats", middleware.RequirePermission("healing:instances:view"), r.deps.Healing.GetInstanceStats)
 	instances.GET("/:id", middleware.RequirePermission("healing:instances:view"), r.deps.Healing.GetInstance)
+	instances.GET("/:id/recovery-logs", middleware.RequirePermission("healing:instances:view"), r.deps.Healing.ListInstanceRecoveryAttempts)
 	instances.POST("/:id/cancel", middleware.RequirePermission("healing:flows:update"), r.deps.Healing.CancelInstance)
+	instances.POST("/:id/recover", middleware.RequirePermission("healing:flows:update"), r.deps.Healing.RecoverInstance)
 	instances.POST("/:id/retry", middleware.RequirePermission("healing:flows:update"), r.deps.Healing.RetryInstance)
 	instances.GET("/:id/events", middleware.RequirePermission("healing:instances:view"), r.deps.Healing.InstanceEvents)
 

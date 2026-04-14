@@ -3247,6 +3247,23 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
       operationId: postTenantHealingInstancesByIdCancel
+  /tenant/healing/instances/{id}/recover:
+    post:
+      tags:
+      - 流程实例
+      summary: 手动恢复流程实例
+      description: 对卡住或异常中断的流程实例触发一次恢复尝试。
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+      operationId: postTenantHealingInstancesByIdRecover
   /tenant/healing/instances/{id}/retry:
     post:
       tags:
@@ -3273,6 +3290,33 @@ paths:
         '200':
           $ref: '#/components/responses/Success'
       operationId: postTenantHealingInstancesByIdRetry
+  /tenant/healing/instances/{id}/recovery-logs:
+    get:
+      tags:
+      - 流程实例
+      summary: 获取实例恢复记录
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/Success'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/FlowRecoveryAttempt'
+      operationId: getTenantHealingInstancesByIdRecoveryLogs
   /tenant/healing/instances/{id}/events:
     get:
       tags:
@@ -8059,6 +8103,52 @@ components:
           format: date-time
           nullable: true
         completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    FlowRecoveryAttempt:
+      type: object
+      description: 流程实例恢复尝试
+      properties:
+        id:
+          type: string
+          format: uuid
+        flow_instance_id:
+          type: string
+          format: uuid
+        trigger_source:
+          type: string
+          enum:
+          - manual
+          - scheduler
+        current_node_id:
+          type: string
+        current_node_type:
+          type: string
+        detect_reason:
+          type: string
+        recovery_action:
+          type: string
+        status:
+          type: string
+          enum:
+          - started
+          - success
+          - failed
+          - skipped
+        details:
+          type: object
+          additionalProperties: true
+        error_message:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
           type: string
           format: date-time
           nullable: true

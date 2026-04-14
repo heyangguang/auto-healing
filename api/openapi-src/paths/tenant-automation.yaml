@@ -1321,6 +1321,22 @@
     responses:
       '200':
         $ref: '#/components/responses/Success'
+/tenant/healing/instances/{id}/recover:
+  post:
+    tags:
+    - 流程实例
+    summary: 手动恢复流程实例
+    description: 对卡住或异常中断的流程实例触发一次恢复尝试。
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        $ref: '#/components/responses/Success'
 /tenant/healing/instances/{id}/retry:
   post:
     tags:
@@ -1346,6 +1362,32 @@
     responses:
       '200':
         $ref: '#/components/responses/Success'
+/tenant/healing/instances/{id}/recovery-logs:
+  get:
+    tags:
+    - 流程实例
+    summary: 获取实例恢复记录
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FlowRecoveryAttempt'
 /tenant/healing/instances/{id}/events:
   get:
     tags:

@@ -45,6 +45,21 @@ func (h *HealingHandler) GetInstance(c *gin.Context) {
 	response.Success(c, instance)
 }
 
+// ListInstanceRecoveryAttempts 获取实例恢复记录
+func (h *HealingHandler) ListInstanceRecoveryAttempts(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "无效的实例ID")
+		return
+	}
+	attempts, err := h.executor.ListRecoveryAttempts(c.Request.Context(), id)
+	if err != nil {
+		response.InternalError(c, "获取实例恢复记录失败")
+		return
+	}
+	response.Success(c, attempts)
+}
+
 // CancelInstance 取消流程实例
 func (h *HealingHandler) CancelInstance(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
@@ -132,6 +147,30 @@ func (h *HealingHandler) RetryInstance(c *gin.Context) {
 	})
 
 	response.Message(c, "流程实例正在重试")
+}
+
+// RecoverInstance 手动触发实例恢复
+func (h *HealingHandler) RecoverInstance(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "无效的实例ID")
+		return
+	}
+	instance, err := h.instanceRepo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		response.NotFound(c, "流程实例不存在")
+		return
+	}
+	h.executor.Go(func(rootCtx context.Context) {
+		ctx := rootCtx
+		if instance.TenantID != nil {
+			ctx = platformrepo.WithTenantID(ctx, *instance.TenantID)
+		}
+		if _, err := h.executor.RecoverInstance(ctx, id, model.FlowRecoveryTriggerManual); err != nil {
+			logger.Exec("RECOVER").Error("手动恢复实例失败: %v", err)
+		}
+	})
+	response.Message(c, "流程实例正在恢复")
 }
 
 // InstanceEvents 获取流程实例事件流 (SSE)
