@@ -153,6 +153,19 @@
 
 用于管理工单关闭/回写时使用的“解决方案模板”。模板可以被 Flow 的 `close_policy.solution_template_id` 引用，也可以在工单手动关闭时指定。
 
+新版模板采用“静态方案 + 动态步骤”模型：
+
+- `problem_template`：问题说明
+- `solution_template`：标准解决方案说明
+- `verification_template`：验证结果说明
+- `conclusion_template`：最终结论
+- `steps_render_mode`：执行步骤渲染模式，由系统根据真实运行过程自动生成
+
+兼容说明：
+
+- `resolution_template` / `work_notes_template` 仍保留，用于兼容旧模板
+- 若配置了新版分段字段，系统会优先使用新版字段渲染
+
 ### 获取模板列表
 
 **GET** `/api/v1/incident-solution-templates`
@@ -171,17 +184,30 @@
 |------|------|------|------|
 | `name` | string | ✅ | 模板名称 |
 | `description` | string | ❌ | 模板描述 |
-| `resolution_template` | string | ✅ | 解决结论模板 |
-| `work_notes_template` | string | ✅ | 回写过程模板 |
+| `problem_template` | string | ❌ | 问题说明模板 |
+| `solution_template` | string | ❌ | 解决方案模板；描述标准处理方案 |
+| `verification_template` | string | ❌ | 验证结果模板 |
+| `conclusion_template` | string | ❌ | 最终结论模板 |
+| `steps_render_mode` | string | ❌ | 步骤渲染模式：`summary` / `detailed` |
+| `steps_max_count` | int | ❌ | 最多展示的步骤数量 |
+| `step_output_max_length` | int | ❌ | 单步输出摘要最大长度 |
+| `resolution_template` | string | ❌ | 兼容旧模型的结论模板 |
+| `work_notes_template` | string | ❌ | 兼容旧模型的过程模板 |
 | `default_close_code` | string | ❌ | 默认关闭原因码 |
 | `default_close_status` | string | ❌ | 默认关闭状态，默认 `resolved` |
 
 模板变量说明：
 
 - 系统自动提供 `incident.*`、`system.*`、`operator.*`
-- 自动关单场景通常还会提供 `flow.*`、`execution.*`
+- 自动关单场景通常还会提供 `flow.*`、`execution.*`、`steps`、`steps_text`
 - 手动关单场景可通过 `template_vars` 补充变量
 - 模板变量写法为 `{{ incident.title }}`、`{{ execution.run_id }}` 这类点路径
+
+回写渲染规则：
+
+- `resolution` 用于承载最终结论
+- `work_notes` 用于承载“问题说明 / 解决方案 / 执行步骤 / 验证结果”等完整结构
+- 适配器需要负责把完整结构映射到对端系统的可见字段；若对端仅支持单个“解决方案”字段，应优先保证完整结构可见
 
 ## 4. 更新插件
 

@@ -90,6 +90,7 @@
 - `close_status` 表示工单生命周期状态，例如 `resolved` / `closed`
 - `close_code` 表示关闭原因码，由 AHS 定义标准语义，适配器负责映射到对端系统
 - 当 `solution_template_id` 存在时，系统会自动注入 `incident.*`、`system.*`、`operator.*` 等基础变量，并与 `template_vars` 一起渲染模板
+- 自动关单场景还会注入 `flow.*`、`execution.*`、`steps`、`steps_text`
 - 若模板引用了不存在的变量，关闭请求会显式失败，不会静默降级
 
 ### 响应字段
