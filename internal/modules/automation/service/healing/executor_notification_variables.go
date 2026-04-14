@@ -34,7 +34,7 @@ func addNotificationTimeVariables(variables map[string]interface{}, now time.Tim
 
 func addNotificationFlowVariables(variables map[string]interface{}, instance *model.FlowInstance) {
 	variables["flow_instance_id"] = instance.ID
-	variables["flow_status"] = instance.Status
+	variables["flow_status"] = derivedNotificationFlowStatus(instance)
 }
 
 func addNotificationSystemVariables(variables map[string]interface{}) {
@@ -74,6 +74,7 @@ func (e *FlowExecutor) addNotificationExecutionVariables(variables map[string]in
 		"run_id":           instance.ID.String(),
 		"status":           "",
 		"status_emoji":     "❓",
+		"message":          "",
 		"exit_code":        "",
 		"triggered_by":     "workflow",
 		"trigger_type":     "workflow",
@@ -86,32 +87,35 @@ func (e *FlowExecutor) addNotificationExecutionVariables(variables map[string]in
 	}
 	if includeExecutionResult && instance.Context != nil {
 		if result, ok := instance.Context["execution_result"].(map[string]interface{}); ok {
-			fillNotificationExecutionMap(variables, executionMap, result)
+			fillNotificationExecutionMap(variables, executionMap, instance, result)
 		}
 	}
 	variables["execution"] = executionMap
 }
 
-func fillNotificationExecutionMap(variables map[string]interface{}, executionMap map[string]interface{}, result map[string]interface{}) {
-	executionMap["status"] = result["status"]
-	executionMap["exit_code"] = result["exit_code"]
-	executionMap["stdout"] = result["stdout"]
-	executionMap["stderr"] = result["stderr"]
+func fillNotificationExecutionMap(variables map[string]interface{}, executionMap map[string]interface{}, instance *model.FlowInstance, result map[string]interface{}) {
+	executionMap["run_id"] = notificationExecutionRunID(instance, result)
+	executionMap["status"] = notificationExecutionStatus(result)
+	executionMap["message"] = notificationExecutionMessage(result)
+	executionMap["exit_code"] = notificationExecutionExitCode(result)
+	executionMap["stdout"] = notificationExecutionStdout(result)
+	executionMap["stderr"] = notificationExecutionStderr(result)
 	fillNotificationDuration(executionMap, result["duration_ms"])
 	executionMap["started_at"] = result["started_at"]
 	executionMap["completed_at"] = result["finished_at"]
-	executionMap["status_emoji"] = executionStatusEmoji(fmt.Sprintf("%v", result["status"]))
+	executionMap["status_emoji"] = executionStatusEmoji(fmt.Sprintf("%v", executionMap["status"]))
 
-	variables["execution_status"] = result["status"]
-	variables["execution_message"] = result["message"]
-	variables["execution_exit_code"] = result["exit_code"]
-	variables["execution_stdout"] = result["stdout"]
-	variables["execution_stderr"] = result["stderr"]
+	variables["execution_status"] = executionMap["status"]
+	variables["execution_message"] = executionMap["message"]
+	variables["execution_exit_code"] = executionMap["exit_code"]
+	variables["execution_stdout"] = executionMap["stdout"]
+	variables["execution_stderr"] = executionMap["stderr"]
 	variables["execution_duration_ms"] = result["duration_ms"]
 	variables["execution_playbook_path"] = result["playbook_path"]
 	variables["execution_status_emoji"] = executionMap["status_emoji"]
+	variables["execution_run_id"] = executionMap["run_id"]
 
-	if statsRaw, ok := result["stats"]; ok && statsRaw != nil {
+	if statsRaw := notificationExecutionStats(result); statsRaw != nil {
 		variables["stats"] = buildNotificationStatsMap(statsRaw)
 	}
 	for key, value := range result {
@@ -179,6 +183,24 @@ func buildNotificationStatsMap(statsRaw interface{}) map[string]interface{} {
 		if total > 0 {
 			statsMap["success_rate"] = fmt.Sprintf("%.0f%%", float64(stats["ok"]+stats["changed"])/float64(total)*100)
 		}
+	case model.JSON:
+		statsMap["ok"] = stats["ok"]
+		statsMap["changed"] = stats["changed"]
+		statsMap["failed"] = stats["failed"]
+		statsMap["unreachable"] = stats["unreachable"]
+		statsMap["skipped"] = stats["skipped"]
+		statsMap["rescued"] = stats["rescued"]
+		statsMap["ignored"] = stats["ignored"]
+		okCount := toFloat(stats["ok"])
+		changedCount := toFloat(stats["changed"])
+		failedCount := toFloat(stats["failed"])
+		unreachableCount := toFloat(stats["unreachable"])
+		skippedCount := toFloat(stats["skipped"])
+		total := okCount + changedCount + failedCount + unreachableCount + skippedCount
+		statsMap["total"] = int(total)
+		if total > 0 {
+			statsMap["success_rate"] = fmt.Sprintf("%.0f%%", (okCount+changedCount)/total*100)
+		}
 	case map[string]interface{}:
 		statsMap["ok"] = stats["ok"]
 		statsMap["changed"] = stats["changed"]
@@ -235,19 +257,8 @@ func addNotificationRepositoryVariables(variables map[string]interface{}, instan
 
 func addNotificationErrorVariables(variables map[string]interface{}, instance *model.FlowInstance) {
 	errorMap := map[string]interface{}{"message": "", "host": ""}
-	if instance.Context != nil {
-		if execResult, ok := instance.Context["execution_result"].(map[string]interface{}); ok {
-			status := fmt.Sprintf("%v", execResult["status"])
-			if (status == "failed" || status == "timeout") && execResult["stderr"] != nil {
-				if stderr, ok := execResult["stderr"].(string); ok && stderr != "" {
-					if len(stderr) > 500 {
-						stderr = stderr[:500] + "..."
-					}
-					errorMap["message"] = stderr
-				}
-			}
-		}
-	}
+	errorMap["message"] = notificationErrorMessage(instance)
+	errorMap["host"] = notificationErrorHost(instance)
 	variables["error"] = errorMap
 }
 

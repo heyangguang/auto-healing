@@ -216,6 +216,8 @@ func summarizeExecutionOutcome(run *model.ExecutionRun) executionOutcome {
 			"status":    run.Status,
 			"exit_code": run.ExitCode,
 			"stats":     run.Stats,
+			"stdout":    run.Stdout,
+			"stderr":    run.Stderr,
 		},
 	}
 
@@ -246,6 +248,24 @@ func (e *FlowExecutor) recordExecutionOutcome(ctx context.Context, instance *mod
 	}
 	if outcome.Run != nil {
 		executionResult["run"] = outcome.Run
+		if runID, ok := outcome.Run["run_id"]; ok {
+			executionResult["run_id"] = runID
+		}
+		if exitCode, ok := outcome.Run["exit_code"]; ok {
+			executionResult["exit_code"] = exitCode
+		}
+		if stats, ok := outcome.Run["stats"]; ok {
+			executionResult["stats"] = stats
+		}
+		if stdout, ok := outcome.Run["stdout"]; ok {
+			executionResult["stdout"] = stdout
+		}
+		if stderr, ok := outcome.Run["stderr"]; ok {
+			executionResult["stderr"] = stderr
+			if message, ok := stderr.(string); ok && message != "" {
+				executionResult["error_message"] = message
+			}
+		}
 	}
 
 	instance.NodeStates[node.ID] = executionResult
