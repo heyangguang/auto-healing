@@ -41,6 +41,71 @@ func TestDingTalkBuildMessageSupportsMarkdownAndText(t *testing.T) {
 	}
 }
 
+func TestDingTalkBuildPayloadUsesWeComMarkdownShape(t *testing.T) {
+	provider := NewDingTalkProvider()
+	payload := provider.buildPayload(&SendRequest{
+		Subject: "标题",
+		Body:    "# 正文",
+		Format:  "markdown",
+	}, &DingTalkConfig{
+		WebhookURL: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test",
+	})
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(jsonData, &raw); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if raw["msgtype"] != "markdown" {
+		t.Fatalf("msgtype = %#v, want markdown", raw["msgtype"])
+	}
+
+	markdown, ok := raw["markdown"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("markdown payload = %#v, want object", raw["markdown"])
+	}
+	if markdown["content"] != "# 正文" {
+		t.Fatalf("markdown content = %#v, want body", markdown["content"])
+	}
+	if _, exists := markdown["text"]; exists {
+		t.Fatalf("markdown payload = %#v, want no text field", markdown)
+	}
+	if _, exists := markdown["title"]; exists {
+		t.Fatalf("markdown payload = %#v, want no title field", markdown)
+	}
+}
+
+func TestDingTalkBuildPayloadUsesWeComTextShape(t *testing.T) {
+	provider := NewDingTalkProvider()
+	payload := provider.buildPayload(&SendRequest{
+		Subject: "主题",
+		Body:    "正文",
+	}, &DingTalkConfig{
+		WebhookURL: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test",
+	})
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(jsonData, &raw); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	text, ok := raw["text"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("text payload = %#v, want object", raw["text"])
+	}
+	if text["content"] != "主题\n\n正文" {
+		t.Fatalf("text content = %#v, want merged subject and body", text["content"])
+	}
+}
+
 func TestDingTalkBuildSignedURL(t *testing.T) {
 	provider := NewDingTalkProvider()
 

@@ -62,6 +62,10 @@ func toNotificationRun(run *model.ExecutionRun) *engagementmodel.ExecutionRun {
 		StartedAt:   run.StartedAt,
 		CompletedAt: run.CompletedAt,
 		CreatedAt:   run.CreatedAt,
+		RuntimeTargetHosts:      run.RuntimeTargetHosts,
+		RuntimeSecretsSourceIDs: engagementmodel.StringArray(run.RuntimeSecretsSourceIDs),
+		RuntimeExtraVars:        engagementmodel.JSON(run.RuntimeExtraVars),
+		RuntimeSkipNotification: run.RuntimeSkipNotification,
 	}
 }
 

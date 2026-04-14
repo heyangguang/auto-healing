@@ -27,28 +27,6 @@ type DingTalkConfig struct {
 	AtAll      bool     `json:"at_all"`     // @ 所有人
 }
 
-// DingTalkMessage 钉钉消息格式
-type DingTalkMessage struct {
-	MsgType  string            `json:"msgtype"`
-	Markdown *DingTalkMarkdown `json:"markdown,omitempty"`
-	Text     *DingTalkText     `json:"text,omitempty"`
-	At       *DingTalkAt       `json:"at,omitempty"`
-}
-
-type DingTalkMarkdown struct {
-	Title string `json:"title"`
-	Text  string `json:"text"`
-}
-
-type DingTalkText struct {
-	Content string `json:"content"`
-}
-
-type DingTalkAt struct {
-	AtMobiles []string `json:"atMobiles,omitempty"`
-	IsAtAll   bool     `json:"isAtAll"`
-}
-
 // NewDingTalkProvider 创建钉钉提供者
 func NewDingTalkProvider() *DingTalkProvider {
 	return &DingTalkProvider{
@@ -70,9 +48,8 @@ func (p *DingTalkProvider) Send(ctx context.Context, req *SendRequest) (*SendRes
 		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
 	}
 
-	// 构建消息
-	msg := p.buildMessage(req, config)
-	jsonData, err := json.Marshal(msg)
+	payload := p.buildPayload(req, config)
+	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
 	}
@@ -121,14 +98,9 @@ func (p *DingTalkProvider) Test(ctx context.Context, configMap map[string]interf
 		return err
 	}
 
-	// 发送测试消息
-	testMsg := &DingTalkMessage{
-		MsgType: "text",
-		Text: &DingTalkText{
-			Content: "Auto-Healing 通知测试 - " + time.Now().Format("2006-01-02 15:04:05"),
-		},
-	}
-	jsonData, _ := json.Marshal(testMsg)
+	jsonData, _ := json.Marshal(p.buildPayload(&SendRequest{
+		Body: "Auto-Healing 通知测试 - " + time.Now().Format("2006-01-02 15:04:05"),
+	}, config))
 
 	requestURL, err := p.buildSignedURL(config)
 	if err != nil {
@@ -159,41 +131,6 @@ func (p *DingTalkProvider) Test(ctx context.Context, configMap map[string]interf
 	errmsg, _ := result["errmsg"].(string)
 	return fmt.Errorf("测试失败: %s (errcode: %.0f)", errmsg, errcode)
 }
-
-// buildMessage 构建钉钉消息
-func (p *DingTalkProvider) buildMessage(req *SendRequest, config *DingTalkConfig) *DingTalkMessage {
-	msg := &DingTalkMessage{
-		At: &DingTalkAt{
-			AtMobiles: config.AtMobiles,
-			IsAtAll:   config.AtAll,
-		},
-	}
-
-	// 根据格式选择消息类型
-	if req.Format == "markdown" {
-		msg.MsgType = "markdown"
-		title := req.Subject
-		if title == "" {
-			title = "Auto-Healing 通知"
-		}
-		msg.Markdown = &DingTalkMarkdown{
-			Title: title,
-			Text:  req.Body,
-		}
-	} else {
-		msg.MsgType = "text"
-		content := req.Body
-		if req.Subject != "" {
-			content = req.Subject + "\n\n" + content
-		}
-		msg.Text = &DingTalkText{
-			Content: content,
-		}
-	}
-
-	return msg
-}
-
 // buildSignedURL 构建签名 URL
 func (p *DingTalkProvider) buildSignedURL(config *DingTalkConfig) (string, error) {
 	if config.Secret == "" {

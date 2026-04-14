@@ -45,7 +45,7 @@ func (b *VariableBuilder) BuildFromExecution(run *projection.ExecutionRun, task 
 		"date":       now.Format(dateLayout),
 		"time":       now.Format(clockLayout),
 		"execution":  b.buildExecutionVariables(run),
-		"task":       b.buildTaskVariables(task),
+		"task":       b.buildTaskVariables(run, task),
 		"playbook":   playbookVars,
 		"repository": repositoryVars,
 		"stats":      b.parseStats(run.Stats),

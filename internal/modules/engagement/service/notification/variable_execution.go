@@ -25,15 +25,29 @@ func (b *VariableBuilder) buildExecutionVariables(run *projection.ExecutionRun) 
 	}
 }
 
-func (b *VariableBuilder) buildTaskVariables(task *projection.ExecutionTask) map[string]interface{} {
-	hosts := splitTargetHosts(task.TargetHosts)
+func (b *VariableBuilder) buildTaskVariables(
+	run *projection.ExecutionRun,
+	task *projection.ExecutionTask,
+) map[string]interface{} {
+	targetHosts := effectiveTargetHosts(run, task)
+	hosts := splitTargetHosts(targetHosts)
 	return map[string]interface{}{
 		"id":            task.ID.String(),
 		"name":          task.Name,
-		"target_hosts":  task.TargetHosts,
+		"target_hosts":  targetHosts,
 		"host_count":    len(hosts),
 		"executor_type": task.ExecutorType,
 	}
+}
+
+func effectiveTargetHosts(
+	run *projection.ExecutionRun,
+	task *projection.ExecutionTask,
+) string {
+	if run != nil && strings.TrimSpace(run.RuntimeTargetHosts) != "" {
+		return run.RuntimeTargetHosts
+	}
+	return task.TargetHosts
 }
 
 func (b *VariableBuilder) buildPlaybookVariables(task *projection.ExecutionTask) (map[string]interface{}, map[string]interface{}) {

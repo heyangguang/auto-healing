@@ -87,6 +87,10 @@
 }
 ```
 
+> 兼容说明：当 `webhook_url` 指向企业微信机器人地址
+> `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?...` 时，系统会自动按企业微信兼容格式发送消息。
+> `text` 与 `markdown` 两种模板格式都可直接使用，无需切换渠道类型。
+
 **Email 配置**:
 ```json
 {

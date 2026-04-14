@@ -25,6 +25,7 @@ func TestVariableBuilderBuildFromExecution(t *testing.T) {
 		CompletedAt: &completedAt,
 		Stdout:      strings.Repeat("x", executionOutputMaxLen+10),
 		Stderr:      "playbook failed",
+		RuntimeTargetHosts: "app-2",
 		Stats: model.JSON{
 			"ok":         float64(1),
 			"changed":    float64(1),
@@ -67,8 +68,11 @@ func TestVariableBuilderBuildFromExecution(t *testing.T) {
 	if execution["duration"] != "2m 5s" {
 		t.Fatalf("duration = %v, 期望 2m 5s", execution["duration"])
 	}
-	if taskVars["host_count"] != 2 {
-		t.Fatalf("host_count = %v, 期望 2", taskVars["host_count"])
+	if taskVars["host_count"] != 1 {
+		t.Fatalf("host_count = %v, 期望 1", taskVars["host_count"])
+	}
+	if taskVars["target_hosts"] != "app-2" {
+		t.Fatalf("target_hosts = %v, 期望 app-2", taskVars["target_hosts"])
 	}
 	if repoVars["playbook"] != "playbooks/deploy.yml" {
 		t.Fatalf("repository.playbook = %v, 期望 playbooks/deploy.yml", repoVars["playbook"])
