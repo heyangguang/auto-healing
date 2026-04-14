@@ -1,0 +1,2 @@
+ALTER TABLE healing_flows
+ADD COLUMN IF NOT EXISTS auto_close_source_incident BOOLEAN NOT NULL DEFAULT FALSE;

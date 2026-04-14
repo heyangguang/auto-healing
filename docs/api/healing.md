@@ -61,6 +61,7 @@
 | `nodes` | array | ❌ | 节点定义（JSON） |
 | `edges` | array | ❌ | 边定义（JSON） |
 | `is_active` | bool | ❌ | 是否激活，默认 true |
+| `auto_close_source_incident` | bool | ❌ | 流程成功完成后是否自动关闭源工单，默认 false；启用后会调用插件配置的 `close_incident_url` 并落回写日志 |
 
 ---
 
@@ -85,6 +86,15 @@
 **PUT** `/api/v1/healing/flows/:id`
 
 **权限**: `healing:flows:update`
+
+支持更新字段：
+
+- `name`
+- `description`
+- `nodes`
+- `edges`
+- `is_active`
+- `auto_close_source_incident`
 
 ---
 

@@ -12,11 +12,12 @@ import (
 
 // CreateFlowRequest 创建自愈流程请求
 type CreateFlowRequest struct {
-	Name        string          `json:"name" binding:"required"`
-	Description string          `json:"description"`
-	Nodes       json.RawMessage `json:"nodes"`
-	Edges       json.RawMessage `json:"edges"`
-	IsActive    *bool           `json:"is_active"`
+	Name                    string          `json:"name" binding:"required"`
+	Description             string          `json:"description"`
+	Nodes                   json.RawMessage `json:"nodes"`
+	Edges                   json.RawMessage `json:"edges"`
+	IsActive                *bool           `json:"is_active"`
+	AutoCloseSourceIncident *bool           `json:"auto_close_source_incident"`
 }
 
 // ToModel 转换为模型
@@ -41,16 +42,20 @@ func (r *CreateFlowRequest) ToModel() *model.HealingFlow {
 	if r.IsActive != nil {
 		flow.IsActive = *r.IsActive
 	}
+	if r.AutoCloseSourceIncident != nil {
+		flow.AutoCloseSourceIncident = *r.AutoCloseSourceIncident
+	}
 	return flow
 }
 
 // UpdateFlowRequest 更新自愈流程请求
 type UpdateFlowRequest struct {
-	Name        *string         `json:"name"`
-	Description *string         `json:"description"`
-	Nodes       json.RawMessage `json:"nodes"`
-	Edges       json.RawMessage `json:"edges"`
-	IsActive    *bool           `json:"is_active"`
+	Name                    *string         `json:"name"`
+	Description             *string         `json:"description"`
+	Nodes                   json.RawMessage `json:"nodes"`
+	Edges                   json.RawMessage `json:"edges"`
+	IsActive                *bool           `json:"is_active"`
+	AutoCloseSourceIncident *bool           `json:"auto_close_source_incident"`
 }
 
 // ApplyTo 应用更新到模型
@@ -75,6 +80,9 @@ func (r *UpdateFlowRequest) ApplyTo(flow *model.HealingFlow) {
 	}
 	if r.IsActive != nil {
 		flow.IsActive = *r.IsActive
+	}
+	if r.AutoCloseSourceIncident != nil {
+		flow.AutoCloseSourceIncident = *r.AutoCloseSourceIncident
 	}
 }
 

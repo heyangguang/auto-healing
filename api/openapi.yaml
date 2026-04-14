@@ -7800,6 +7800,9 @@ components:
             $ref: '#/components/schemas/FlowEdge'
         is_active:
           type: boolean
+        auto_close_source_incident:
+          type: boolean
+          description: 流程成功完成后自动关闭源工单
         created_by:
           type: string
           format: uuid
@@ -7825,6 +7828,8 @@ components:
             $ref: '#/components/schemas/FlowEdge'
         is_active:
           type: boolean
+        auto_close_source_incident:
+          type: boolean
     HealingFlowUpdate:
       type: object
       properties:
@@ -7841,6 +7846,8 @@ components:
           items:
             $ref: '#/components/schemas/FlowEdge'
         is_active:
+          type: boolean
+        auto_close_source_incident:
           type: boolean
     FlowNode:
       type: object

@@ -1,6 +1,7 @@
 package healing
 
 import (
+	"context"
 	"strconv"
 	"sync"
 
@@ -12,6 +13,7 @@ import (
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
+	"github.com/google/uuid"
 )
 
 // FlowExecutor 流程执行器
@@ -24,6 +26,7 @@ type FlowExecutor struct {
 	gitRepoRepo     *integrationrepo.GitRepositoryRepository
 	executionRepo   *automationrepo.ExecutionRepository
 	incidentRepo    *incidentrepo.IncidentRepository
+	incidentCloser  IncidentCloser
 	executionSvc    *execution.Service
 	notificationSvc *notificationSvc.Service
 	ansibleExecutor ansible.Executor
@@ -42,6 +45,7 @@ type FlowExecutorDeps struct {
 	GitRepoRepo     *integrationrepo.GitRepositoryRepository
 	ExecutionRepo   *automationrepo.ExecutionRepository
 	IncidentRepo    *incidentrepo.IncidentRepository
+	IncidentCloser  IncidentCloser
 	ExecutionSvc    *execution.Service
 	NotificationSvc *notificationSvc.Service
 	AnsibleExecutor ansible.Executor
@@ -67,6 +71,8 @@ func NewFlowExecutorWithDeps(deps FlowExecutorDeps) *FlowExecutor {
 		panic("automation flow executor requires execution repo")
 	case deps.IncidentRepo == nil:
 		panic("automation flow executor requires incident repo")
+	case deps.IncidentCloser == nil:
+		panic("automation flow executor requires incident closer")
 	case deps.ExecutionSvc == nil:
 		panic("automation flow executor requires execution service")
 	case deps.NotificationSvc == nil:
@@ -88,12 +94,36 @@ func NewFlowExecutorWithDeps(deps FlowExecutorDeps) *FlowExecutor {
 		gitRepoRepo:     deps.GitRepoRepo,
 		executionRepo:   deps.ExecutionRepo,
 		incidentRepo:    deps.IncidentRepo,
+		incidentCloser:  deps.IncidentCloser,
 		executionSvc:    deps.ExecutionSvc,
 		notificationSvc: deps.NotificationSvc,
 		ansibleExecutor: deps.AnsibleExecutor,
 		eventBus:        deps.EventBus,
 		lifecycle:       deps.Lifecycle,
 	}
+}
+
+type IncidentCloser interface {
+	CloseIncident(ctx context.Context, params IncidentCloseParams) (*IncidentCloseResult, error)
+}
+
+type IncidentCloseParams struct {
+	IncidentID     uuid.UUID
+	Resolution     string
+	WorkNotes      string
+	CloseCode      string
+	CloseStatus    string
+	TriggerSource  string
+	OperatorUserID *uuid.UUID
+	OperatorName   string
+	FlowInstanceID *uuid.UUID
+	ExecutionRunID *uuid.UUID
+}
+
+type IncidentCloseResult struct {
+	LocalStatus    string
+	SourceUpdated  bool
+	WritebackLogID *uuid.UUID
 }
 
 // toFloat 将 interface{} 转换为 float64

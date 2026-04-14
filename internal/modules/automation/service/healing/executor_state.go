@@ -62,6 +62,7 @@ func (e *FlowExecutor) complete(ctx context.Context, instance *model.FlowInstanc
 		logger.Exec("FLOW").Warn("[%s] 流程实例已进入终态，跳过完成状态覆盖", instance.ID.String()[:8])
 		return nil
 	}
+	e.tryAutoCloseSourceIncident(ctx, instance)
 
 	logger.Exec("FLOW").Info("[%s] 流程实例完成", instance.ID.String()[:8])
 	e.eventBus.PublishFlowComplete(instance.ID, true, model.FlowInstanceStatusCompleted, "流程执行完成")
