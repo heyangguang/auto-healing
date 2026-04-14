@@ -521,6 +521,22 @@
           application/json:
             schema:
               $ref: '#/components/schemas/CloseIncidentResponse'
+/tenant/incidents/{id}/writeback-logs:
+  get:
+    tags:
+    - 工单管理
+    summary: 获取工单回写日志
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 成功
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/IncidentWritebackLog'
 /tenant/incidents/{id}/trigger:
   post:
     tags:

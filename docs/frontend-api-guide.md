@@ -290,6 +290,7 @@ X-Tenant-ID: <tenant_uuid>
 | GET | `/api/v1/incidents/stats` | 统计 |
 | GET | `/api/v1/incidents/:id` | 事件详情 |
 | POST | `/api/v1/incidents/:id/close` | 关闭工单 |
+| GET | `/api/v1/incidents/:id/writeback-logs` | 查看工单回写日志 |
 | POST | `/api/v1/incidents/:id/trigger` | 手动触发自愈 |
 | POST | `/api/v1/incidents/:id/reset-scan` | 重置扫描 |
 | POST | `/api/v1/incidents/batch-reset-scan` | 批量重置扫描 |

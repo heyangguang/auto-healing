@@ -102,11 +102,17 @@
     "close_incident_url": "http://127.0.0.1:18085/api/incidents/{external_id}/close",
     "close_incident_method": "POST"
   },
-  "field_mapping": {},
+ "field_mapping": {},
   "sync_enabled": false,
   "sync_interval_minutes": 5
 }
 ```
+
+说明：
+
+- `close_incident_url` 用于关闭源工单的回写接口
+- 当用户在工单页面手动关闭工单，或自愈流程启用了“成功后自动关单”时，系统会调用该地址
+- URL 支持变量：`{external_id}`
 
 ```json
 {

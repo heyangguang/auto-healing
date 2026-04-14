@@ -64,6 +64,31 @@ CREATE TABLE incidents (
 	updated_at DATETIME
 );`
 
+const handlerIncidentWritebackLogSchema = `
+CREATE TABLE incident_writeback_logs (
+	id TEXT PRIMARY KEY NOT NULL,
+	tenant_id TEXT,
+	incident_id TEXT NOT NULL,
+	plugin_id TEXT,
+	external_id TEXT,
+	action TEXT,
+	trigger_source TEXT,
+	status TEXT,
+	request_method TEXT,
+	request_url TEXT,
+	request_payload TEXT,
+	response_status_code INTEGER,
+	response_body TEXT,
+	error_message TEXT,
+	operator_user_id TEXT,
+	operator_name TEXT,
+	flow_instance_id TEXT,
+	execution_run_id TEXT,
+	started_at DATETIME,
+	finished_at DATETIME,
+	created_at DATETIME
+);`
+
 func TestGetIncidentAPIUses404ForMissingIncident(t *testing.T) {
 	router, _, _ := newIncidentRouteTestHarness(t, []string{"plugin:list"}, handlerIncidentPluginSchema, handlerIncidentSchema)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tenant/incidents/"+uuid.NewString(), nil)
@@ -85,7 +110,7 @@ func TestResetIncidentScanAPIUses404ForMissingIncident(t *testing.T) {
 }
 
 func TestCloseIncidentAPIUses500ForRepositoryFailure(t *testing.T) {
-	router, _, _ := newIncidentRouteTestHarness(t, []string{"plugin:sync"}, handlerIncidentPluginSchema)
+	router, _, _ := newIncidentRouteTestHarness(t, []string{"plugin:sync"}, handlerIncidentPluginSchema, handlerIncidentWritebackLogSchema)
 	req := newIncidentJSONRequest(t, http.MethodPost, "/api/v1/tenant/incidents/"+uuid.NewString()+"/close", CloseIncidentRequest{})
 
 	recorder := httptest.NewRecorder()
@@ -95,7 +120,7 @@ func TestCloseIncidentAPIUses500ForRepositoryFailure(t *testing.T) {
 }
 
 func TestCloseIncidentEndToEndUpdatesSourceAndLocalState(t *testing.T) {
-	router, db, tenantID := newIncidentRouteTestHarness(t, []string{"plugin:sync"}, handlerIncidentPluginSchema, handlerIncidentSchema)
+	router, db, tenantID := newIncidentRouteTestHarness(t, []string{"plugin:sync"}, handlerIncidentPluginSchema, handlerIncidentSchema, handlerIncidentWritebackLogSchema)
 	pluginID := uuid.New()
 	incidentID := uuid.New()
 	now := time.Now().UTC()
@@ -153,5 +178,49 @@ func TestCloseIncidentEndToEndUpdatesSourceAndLocalState(t *testing.T) {
 	}
 	if healingStatus != "healed" {
 		t.Fatalf("incident healing_status = %q, want healed", healingStatus)
+	}
+}
+
+func TestListIncidentWritebackLogsReturnsIncidentScopedLogs(t *testing.T) {
+	router, db, tenantID := newIncidentRouteTestHarness(t, []string{"plugin:list"}, handlerIncidentSchema, handlerIncidentWritebackLogSchema)
+	incidentID := uuid.New()
+	otherIncidentID := uuid.New()
+	now := time.Now().UTC()
+
+	if err := db.Exec(`
+		INSERT INTO incidents (id, tenant_id, external_id, title, raw_data, created_at, updated_at)
+		VALUES (?, ?, 'INC-1', 'one', '{}', ?, ?), (?, ?, 'INC-2', 'two', '{}', ?, ?)
+	`, incidentID.String(), tenantID.String(), now, now, otherIncidentID.String(), tenantID.String(), now, now).Error; err != nil {
+		t.Fatalf("insert incidents: %v", err)
+	}
+	if err := db.Exec(`
+		INSERT INTO incident_writeback_logs (id, tenant_id, incident_id, external_id, action, trigger_source, status, created_at)
+		VALUES (?, ?, ?, 'INC-1', 'close', 'manual_close', 'success', ?), (?, ?, ?, 'INC-2', 'close', 'manual_close', 'failed', ?)
+	`, uuid.NewString(), tenantID.String(), incidentID.String(), now, uuid.NewString(), tenantID.String(), otherIncidentID.String(), now).Error; err != nil {
+		t.Fatalf("insert writeback logs: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tenant/incidents/"+incidentID.String()+"/writeback-logs", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	payload := decodeIncidentSuccessResponse(t, recorder)
+	items, ok := payload.Data.([]any)
+	if !ok {
+		t.Fatalf("data type = %T, want []any", payload.Data)
+	}
+	if len(items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(items))
+	}
+	logItem, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("item type = %T, want map[string]any", items[0])
+	}
+	if logItem["external_id"] != "INC-1" {
+		t.Fatalf("external_id = %#v, want INC-1", logItem["external_id"])
 	}
 }

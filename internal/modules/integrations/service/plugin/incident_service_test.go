@@ -38,12 +38,12 @@ func TestWriteBackIncidentCloseIgnoresMissingPlugin(t *testing.T) {
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	incident := &platformmodel.Incident{PluginID: &pluginID}
 
-	sourceUpdated, err := svc.writeBackIncidentClose(ctx, uuid.New(), incident, "", "", "", "resolved")
+	req, err := svc.buildIncidentWritebackRequest(ctx, incident, CloseIncidentParams{CloseStatus: "resolved"})
 	if err != nil {
-		t.Fatalf("writeBackIncidentClose() unexpected error: %v", err)
+		t.Fatalf("buildIncidentWritebackRequest() unexpected error: %v", err)
 	}
-	if sourceUpdated {
-		t.Fatal("writeBackIncidentClose() should not report source updated when plugin is missing")
+	if req != nil {
+		t.Fatal("buildIncidentWritebackRequest() should return nil when plugin is missing")
 	}
 }
 
@@ -59,12 +59,12 @@ func TestWriteBackIncidentCloseReturnsPluginLookupError(t *testing.T) {
 	ctx := platformrepo.WithTenantID(context.Background(), uuid.New())
 	incident := &platformmodel.Incident{PluginID: &pluginID}
 
-	_, err := svc.writeBackIncidentClose(ctx, uuid.New(), incident, "", "", "", "resolved")
+	_, err := svc.buildIncidentWritebackRequest(ctx, incident, CloseIncidentParams{CloseStatus: "resolved"})
 	if err == nil {
-		t.Fatal("writeBackIncidentClose() expected plugin lookup error")
+		t.Fatal("buildIncidentWritebackRequest() expected plugin lookup error")
 	}
 	if errors.Is(err, integrationrepo.ErrPluginNotFound) {
-		t.Fatalf("writeBackIncidentClose() should wrap unexpected lookup failures, got %v", err)
+		t.Fatalf("buildIncidentWritebackRequest() should wrap unexpected lookup failures, got %v", err)
 	}
 }
 

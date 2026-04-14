@@ -52,7 +52,9 @@ class AdapterConfig:
         self.auth_pwd = env("ITOP_AUTH_PWD")
         self.ticket_class = optional_env("ITOP_TICKET_CLASS", "UserRequest") or "UserRequest"
         self.ticket_oql = optional_env("ITOP_TICKET_OQL", "SELECT UserRequest") or "SELECT UserRequest"
+        self.assign_stimulus = optional_env("ITOP_ASSIGN_STIMULUS", "ev_assign") or "ev_assign"
         self.close_stimulus = optional_env("ITOP_CLOSE_STIMULUS", "ev_resolve") or "ev_resolve"
+        self.final_close_stimulus = optional_env("ITOP_FINAL_CLOSE_STIMULUS", "ev_close") or "ev_close"
         self.close_fields = parse_json_env("ITOP_CLOSE_FIELDS_JSON")
         self.excluded_statuses = tuple(split_csv(optional_env("ITOP_LIST_EXCLUDE_STATUSES", "closed")))
         self.cmdb_classes = split_csv(optional_env("ITOP_CMDB_CLASSES", "Server,VirtualMachine,NetworkDevice,ApplicationSolution"))
@@ -112,6 +114,18 @@ class ITopClient:
             incidents.append(normalized)
         return incidents
 
+    def get_incident_by_ref(self, external_id: str) -> Dict[str, Any]:
+        response = self._call({
+            "operation": "core/get",
+            "class": self.config.ticket_class,
+            "key": {"ref": external_id},
+            "output_fields": "ref,title,description,status,request_type,impact,urgency,priority,origin,start_date,last_update,functionalcis_list,service_name,servicesubcategory_name,agent_name,team_name,caller_name,org_name,friendlyname",
+        })
+        incidents = [normalize_incident(item) for item in iter_objects(response)]
+        if not incidents:
+            raise ITopError(f"incident not found: {external_id}")
+        return incidents[0]
+
     def get_cmdb_items(self, classes: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
         for class_name in classes or self.config.cmdb_classes:
@@ -126,16 +140,60 @@ class ITopClient:
                 items.append(normalize_cmdb_item(class_name, item, self.config.cmdb_environment))
         return items
 
-    def close_incident(self, external_id: str) -> Dict[str, Any]:
+    def apply_incident_stimulus(
+        self,
+        external_id: str,
+        stimulus: str,
+        comment: str,
+        fields: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         return self._call({
             "operation": "core/apply_stimulus",
-            "comment": "Closed by Auto-Healing adapter",
+            "comment": comment,
             "class": self.config.ticket_class,
             "key": {"ref": external_id},
-            "stimulus": self.config.close_stimulus,
+            "stimulus": stimulus,
             "output_fields": "ref,title,status,friendlyname",
-            "fields": self.config.close_fields,
+            "fields": fields or {},
         })
+
+    def close_incident(
+        self,
+        external_id: str,
+        target_status: str = "resolved",
+        comment: str = "Closed by Auto-Healing adapter",
+        resolution: str = "",
+        work_notes: str = "",
+    ) -> Dict[str, Any]:
+        incident = self.get_incident_by_ref(external_id)
+        status = incident.get("status", "").strip().lower()
+        if status == "closed":
+            return incident
+
+        if status == "new":
+            self.apply_incident_stimulus(external_id, self.config.assign_stimulus, comment)
+            incident = self.get_incident_by_ref(external_id)
+            status = incident.get("status", "").strip().lower()
+
+        if status not in ("resolved", "closed"):
+            close_fields = dict(self.config.close_fields)
+            if resolution:
+                close_fields.setdefault("solution", resolution)
+            if work_notes:
+                close_fields.setdefault("public_log", work_notes)
+            self.apply_incident_stimulus(
+                external_id,
+                self.config.close_stimulus,
+                comment,
+                close_fields,
+            )
+            incident = self.get_incident_by_ref(external_id)
+            status = incident.get("status", "").strip().lower()
+
+        if target_status == "closed" and status != "closed":
+            self.apply_incident_stimulus(external_id, self.config.final_close_stimulus, comment)
+            incident = self.get_incident_by_ref(external_id)
+        return incident
 
 
 def iter_objects(response: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
@@ -302,7 +360,21 @@ class AdapterHandler(BaseHTTPRequestHandler):
             self._json(400, {"code": 400, "message": "missing external_id"})
             return
         try:
-            result = self.client.close_incident(external_id)
+            content_length = int(self.headers.get("Content-Length", "0") or "0")
+            request_body = {}
+            if content_length > 0:
+                request_body = json.loads(self.rfile.read(content_length).decode("utf-8"))
+            target_status = str(request_body.get("close_status") or "resolved").strip().lower() or "resolved"
+            resolution = str(request_body.get("resolution") or "").strip()
+            work_notes = str(request_body.get("work_notes") or "").strip()
+            comment = str(request_body.get("work_notes") or request_body.get("resolution") or "Closed by Auto-Healing adapter").strip()
+            result = self.client.close_incident(
+                external_id,
+                target_status=target_status,
+                comment=comment,
+                resolution=resolution,
+                work_notes=work_notes,
+            )
             self._json(200, {"message": "incident close stimulus applied", "external_id": external_id, "itop": result})
         except ITopError as exc:
             self._json(502, {"code": 502, "message": str(exc), "external_id": external_id})

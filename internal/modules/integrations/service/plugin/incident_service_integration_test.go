@@ -13,6 +13,7 @@ import (
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/google/uuid"
@@ -70,6 +71,29 @@ var incidentServiceSchemaStatements = []string{
 		created_at DATETIME,
 		updated_at DATETIME
 	);`,
+	`CREATE TABLE incident_writeback_logs (
+		id TEXT PRIMARY KEY NOT NULL,
+		tenant_id TEXT,
+		incident_id TEXT NOT NULL,
+		plugin_id TEXT,
+		external_id TEXT,
+		action TEXT,
+		trigger_source TEXT,
+		status TEXT,
+		request_method TEXT,
+		request_url TEXT,
+		request_payload TEXT,
+		response_status_code INTEGER,
+		response_body TEXT,
+		error_message TEXT,
+		operator_user_id TEXT,
+		operator_name TEXT,
+		flow_instance_id TEXT,
+		execution_run_id TEXT,
+		started_at DATETIME,
+		finished_at DATETIME,
+		created_at DATETIME
+	);`,
 }
 
 func TestCloseIncidentIntegrationUpdatesSourceAndLocalState(t *testing.T) {
@@ -100,7 +124,15 @@ func TestCloseIncidentIntegrationUpdatesSourceAndLocalState(t *testing.T) {
 
 	svc := NewIncidentServiceWithDB(db)
 	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
-	resp, err := svc.CloseIncident(ctx, incidentID, "done", "integration", "auto", "closed")
+	resp, err := svc.CloseIncident(ctx, CloseIncidentParams{
+		IncidentID:    incidentID,
+		Resolution:    "done",
+		WorkNotes:     "integration",
+		CloseCode:     "auto",
+		CloseStatus:   "closed",
+		TriggerSource: platformmodel.IncidentWritebackTriggerManualClose,
+		OperatorName:  "tester",
+	})
 	if err != nil {
 		t.Fatalf("CloseIncident() error = %v", err)
 	}
@@ -123,6 +155,23 @@ func TestCloseIncidentIntegrationUpdatesSourceAndLocalState(t *testing.T) {
 	if incident.HealingStatus != "healed" {
 		t.Fatalf("healing_status = %q, want healed", incident.HealingStatus)
 	}
+	var logRow struct {
+		Status        string
+		RequestMethod string
+		RequestURL    string
+	}
+	if err := db.Raw(`SELECT status, request_method, request_url FROM incident_writeback_logs WHERE incident_id = ?`, incidentID.String()).Scan(&logRow).Error; err != nil {
+		t.Fatalf("query writeback log: %v", err)
+	}
+	if logRow.Status != platformmodel.IncidentWritebackStatusSuccess {
+		t.Fatalf("writeback status = %q, want success", logRow.Status)
+	}
+	if logRow.RequestMethod != "POST" {
+		t.Fatalf("request_method = %q, want POST", logRow.RequestMethod)
+	}
+	if logRow.RequestURL != server.URL+"/integration-close/INC-9000" {
+		t.Fatalf("request_url = %q, want %q", logRow.RequestURL, server.URL+"/integration-close/INC-9000")
+	}
 }
 
 func TestCloseIncidentIntegrationKeepsLocalStateWhenPluginLookupFails(t *testing.T) {
@@ -138,7 +187,15 @@ func TestCloseIncidentIntegrationKeepsLocalStateWhenPluginLookupFails(t *testing
 
 	svc := NewIncidentServiceWithDB(db)
 	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
-	if _, err := svc.CloseIncident(ctx, incidentID, "done", "integration", "auto", "closed"); err == nil {
+	if _, err := svc.CloseIncident(ctx, CloseIncidentParams{
+		IncidentID:    incidentID,
+		Resolution:    "done",
+		WorkNotes:     "integration",
+		CloseCode:     "auto",
+		CloseStatus:   "closed",
+		TriggerSource: platformmodel.IncidentWritebackTriggerManualClose,
+		OperatorName:  "tester",
+	}); err == nil {
 		t.Fatal("CloseIncident() expected plugin lookup error")
 	}
 

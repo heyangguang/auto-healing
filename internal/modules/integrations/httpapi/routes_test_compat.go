@@ -16,6 +16,7 @@ func registerTenantIncidentRoutes(incidents *gin.RouterGroup, plugin *PluginHand
 	incidents.GET("", middleware.RequirePermission("plugin:list"), plugin.ListIncidents)
 	incidents.POST("/batch-reset-scan", middleware.RequirePermission("plugin:sync"), plugin.BatchResetIncidentScan)
 	incidents.GET("/:id", middleware.RequirePermission("plugin:list"), plugin.GetIncident)
+	incidents.GET("/:id/writeback-logs", middleware.RequirePermission("plugin:list"), plugin.ListIncidentWritebackLogs)
 	incidents.POST("/:id/reset-scan", middleware.RequirePermission("plugin:sync"), plugin.ResetIncidentScan)
 	incidents.POST("/:id/close", middleware.RequirePermission("plugin:sync"), plugin.CloseIncident)
 	incidents.POST("/:id/trigger", middleware.RequirePermission("healing:trigger:execute"), healing.TriggerIncidentManually)

@@ -81,11 +81,42 @@
 | `resolution` | string | ✅ | 解决方案描述 |
 | `work_notes` | string | ❌ | 工作备注 |
 | `close_code` | string | ❌ | 关闭代码（如 `resolved` / `not_reproducible`） |
-| `close_status` | string | ❌ | 关闭后状态，默认 `closed` |
+| `close_status` | string | ❌ | 关闭后状态，默认 `resolved` |
+
+### 响应字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `message` | string | 结果消息 |
+| `local_status` | string | 本地工单状态 |
+| `source_updated` | bool | 是否已回写到源系统 |
+| `writeback_log_id` | uuid | 本次回写日志 ID（如有） |
 
 ---
 
-## 5. 重置工单扫描状态
+## 5. 获取工单回写日志
+
+**GET** `/api/v1/incidents/:id/writeback-logs`
+
+**权限**: `plugin:list`
+
+返回当前工单的源系统回写记录，包括手动关单回写和流程自动关单回写。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `action` | string | 回写动作，如 `close` |
+| `trigger_source` | string | 触发来源，如 `manual_close` / `flow_auto_close` |
+| `status` | string | `pending` / `success` / `failed` / `skipped` |
+| `request_method` | string | 请求方法 |
+| `request_url` | string | 实际调用地址 |
+| `request_payload` | object | 请求体 |
+| `response_status_code` | int | 响应状态码 |
+| `response_body` | string | 响应正文 |
+| `error_message` | string | 错误信息 |
+
+---
+
+## 6. 重置工单扫描状态
 
 **POST** `/api/v1/incidents/:id/reset-scan`
 
@@ -95,7 +126,7 @@
 
 ---
 
-## 6. 批量重置工单扫描状态
+## 7. 批量重置工单扫描状态
 
 **POST** `/api/v1/incidents/batch-reset-scan`
 
@@ -110,7 +141,7 @@
 
 ---
 
-## 7. 手动触发工单自愈
+## 8. 手动触发工单自愈
 
 **POST** `/api/v1/incidents/:id/trigger`
 
@@ -120,7 +151,7 @@
 
 ---
 
-## 8. 忽略待触发工单
+## 9. 忽略待触发工单
 
 **POST** `/api/v1/incidents/:id/dismiss`
 

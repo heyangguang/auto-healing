@@ -40,6 +40,7 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 	pluginSyncLogRepo := integrationrepo.NewPluginSyncLogRepositoryWithDB(db)
 	cmdbRepo := cmdbrepo.NewCMDBItemRepositoryWithDB(db)
 	incidentRepo := incidentrepo.NewIncidentRepositoryWithDB(db)
+	writebackLogRepo := incidentrepo.NewIncidentWritebackLogRepositoryWithDB(db)
 	httpClient := plugin.NewHTTPClient()
 	pluginService := plugin.NewServiceWithDeps(plugin.ServiceDeps{
 		PluginRepo:   pluginRepo,
@@ -51,9 +52,10 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 	return ModuleDeps{
 		PluginService: pluginService,
 		IncidentService: plugin.NewIncidentServiceWithDeps(plugin.IncidentServiceDeps{
-			IncidentRepo: incidentRepo,
-			PluginRepo:   pluginRepo,
-			HTTPClient:   httpClient,
+			IncidentRepo:     incidentRepo,
+			WritebackLogRepo: writebackLogRepo,
+			PluginRepo:       pluginRepo,
+			HTTPClient:       httpClient,
 		}),
 		CMDBService: plugin.NewCMDBServiceWithDeps(plugin.CMDBServiceDeps{
 			CMDBRepo: cmdbRepo,

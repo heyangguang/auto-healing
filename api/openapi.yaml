@@ -5094,6 +5094,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/CloseIncidentResponse'
       operationId: postTenantIncidentsByIdClose
+  /tenant/incidents/{id}/writeback-logs:
+    get:
+      tags:
+      - 工单管理
+      summary: 获取工单回写日志
+      parameters:
+      - $ref: '#/components/parameters/ID'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IncidentWritebackLog'
+      operationId: getTenantIncidentsByIdWritebackLogs
   /tenant/incidents/{id}/trigger:
     post:
       tags:
@@ -9600,6 +9617,75 @@ components:
           type: string
         source_updated:
           type: boolean
+        writeback_log_id:
+          type: string
+          format: uuid
+    IncidentWritebackLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        incident_id:
+          type: string
+          format: uuid
+        plugin_id:
+          type: string
+          format: uuid
+          nullable: true
+        external_id:
+          type: string
+        action:
+          type: string
+          enum:
+          - close
+          - update
+        trigger_source:
+          type: string
+        status:
+          type: string
+          enum:
+          - pending
+          - success
+          - failed
+          - skipped
+        request_method:
+          type: string
+        request_url:
+          type: string
+        request_payload:
+          type: object
+        response_status_code:
+          type: integer
+          nullable: true
+        response_body:
+          type: string
+        error_message:
+          type: string
+        operator_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        operator_name:
+          type: string
+        flow_instance_id:
+          type: string
+          format: uuid
+          nullable: true
+        execution_run_id:
+          type: string
+          format: uuid
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
     SecretsSource:
       type: object
       properties:

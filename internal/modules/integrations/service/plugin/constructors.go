@@ -20,9 +20,10 @@ func DefaultServiceDepsWithDB(db *gorm.DB) ServiceDeps {
 
 func DefaultIncidentServiceDepsWithDB(db *gorm.DB) IncidentServiceDeps {
 	return IncidentServiceDeps{
-		IncidentRepo: incidentrepo.NewIncidentRepositoryWithDB(db),
-		PluginRepo:   integrationrepo.NewPluginRepositoryWithDB(db),
-		HTTPClient:   NewHTTPClient(),
+		IncidentRepo:     incidentrepo.NewIncidentRepositoryWithDB(db),
+		WritebackLogRepo: incidentrepo.NewIncidentWritebackLogRepositoryWithDB(db),
+		PluginRepo:       integrationrepo.NewPluginRepositoryWithDB(db),
+		HTTPClient:       NewHTTPClient(),
 	}
 }
 

@@ -19,6 +19,13 @@ type HTTPClient struct {
 	client *http.Client
 }
 
+type IncidentWritebackHTTPResult struct {
+	RequestMethod string
+	RequestURL    string
+	ResponseBody  string
+	StatusCode    int
+}
+
 // NewHTTPClient 创建 HTTP 客户端
 func NewHTTPClient() *HTTPClient {
 	return &HTTPClient{
@@ -137,37 +144,50 @@ func (c *HTTPClient) doJSONRequest(req *http.Request, action string) ([]byte, er
 }
 
 // CloseIncident 关闭工单
-func (c *HTTPClient) CloseIncident(ctx context.Context, config model.JSON, closeData map[string]interface{}) error {
-	closeURL, ok := config["close_incident_url"].(string)
-	if !ok || closeURL == "" {
-		return fmt.Errorf("未配置关闭工单接口 (close_incident_url)")
-	}
-
-	if externalID, ok := closeData["external_id"].(string); ok {
-		closeURL = strings.ReplaceAll(closeURL, "{external_id}", externalID)
-	}
-
+func (c *HTTPClient) CloseIncident(
+	ctx context.Context,
+	config model.JSON,
+	closeURL string,
+	method string,
+	closeData map[string]interface{},
+) (*IncidentWritebackHTTPResult, error) {
 	jsonBody, err := json.Marshal(closeData)
 	if err != nil {
-		return fmt.Errorf("序列化请求体失败: %w", err)
-	}
-
-	method := "POST"
-	if m, ok := config["close_incident_method"].(string); ok && m != "" {
-		method = strings.ToUpper(m)
+		return nil, fmt.Errorf("序列化请求体失败: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, closeURL, strings.NewReader(string(jsonBody)))
 	if err != nil {
-		return fmt.Errorf("创建请求失败: %w", err)
+		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
-
 	if err := c.addAuth(req, config); err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	_, err = c.doJSONRequest(req, "关闭工单")
-	return err
+	return c.doIncidentWritebackRequest(req)
+}
+
+func (c *HTTPClient) doIncidentWritebackRequest(req *http.Request) (*IncidentWritebackHTTPResult, error) {
+	result := &IncidentWritebackHTTPResult{
+		RequestMethod: req.Method,
+		RequestURL:    req.URL.String(),
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return result, fmt.Errorf("关闭工单失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return result, fmt.Errorf("读取响应失败: %w", readErr)
+	}
+	result.StatusCode = resp.StatusCode
+	result.ResponseBody = string(body)
+	if resp.StatusCode >= 400 {
+		return result, fmt.Errorf("关闭工单返回错误状态码 %d: %s", resp.StatusCode, result.ResponseBody)
+	}
+	return result, nil
 }
 
 // addAuth 添加认证信息

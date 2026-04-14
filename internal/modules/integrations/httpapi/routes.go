@@ -26,6 +26,7 @@ func (r Registrar) RegisterTenantRoutes(tenant *gin.RouterGroup) {
 	incidents.GET("", middleware.RequirePermission("plugin:list"), r.deps.Plugin.ListIncidents)
 	incidents.POST("/batch-reset-scan", middleware.RequirePermission("plugin:sync"), r.deps.Plugin.BatchResetIncidentScan)
 	incidents.GET("/:id", middleware.RequirePermission("plugin:list"), r.deps.Plugin.GetIncident)
+	incidents.GET("/:id/writeback-logs", middleware.RequirePermission("plugin:list"), r.deps.Plugin.ListIncidentWritebackLogs)
 	incidents.POST("/:id/reset-scan", middleware.RequirePermission("plugin:sync"), r.deps.Plugin.ResetIncidentScan)
 	incidents.POST("/:id/close", middleware.RequirePermission("plugin:sync"), r.deps.Plugin.CloseIncident)
 

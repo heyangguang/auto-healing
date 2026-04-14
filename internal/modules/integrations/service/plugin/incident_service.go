@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
-	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/query"
 	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
@@ -18,21 +17,25 @@ var ErrBatchResetScanScopeRequired = errors.New("批量重置必须提供 ids �
 
 // IncidentService 工单服务
 type IncidentService struct {
-	incidentRepo *incidentrepo.IncidentRepository
-	pluginRepo   *integrationrepo.PluginRepository
-	httpClient   *HTTPClient
+	incidentRepo     *incidentrepo.IncidentRepository
+	writebackLogRepo *incidentrepo.IncidentWritebackLogRepository
+	pluginRepo       *integrationrepo.PluginRepository
+	httpClient       *HTTPClient
 }
 
 type IncidentServiceDeps struct {
-	IncidentRepo *incidentrepo.IncidentRepository
-	PluginRepo   *integrationrepo.PluginRepository
-	HTTPClient   *HTTPClient
+	IncidentRepo     *incidentrepo.IncidentRepository
+	WritebackLogRepo *incidentrepo.IncidentWritebackLogRepository
+	PluginRepo       *integrationrepo.PluginRepository
+	HTTPClient       *HTTPClient
 }
 
 func NewIncidentServiceWithDeps(deps IncidentServiceDeps) *IncidentService {
 	switch {
 	case deps.IncidentRepo == nil:
 		panic("integrations incident service requires incident repo")
+	case deps.WritebackLogRepo == nil:
+		panic("integrations incident service requires incident writeback log repo")
 	case deps.PluginRepo == nil:
 		panic("integrations incident service requires plugin repo")
 	}
@@ -40,9 +43,10 @@ func NewIncidentServiceWithDeps(deps IncidentServiceDeps) *IncidentService {
 		deps.HTTPClient = NewHTTPClient()
 	}
 	return &IncidentService{
-		incidentRepo: deps.IncidentRepo,
-		pluginRepo:   deps.PluginRepo,
-		httpClient:   deps.HTTPClient,
+		incidentRepo:     deps.IncidentRepo,
+		writebackLogRepo: deps.WritebackLogRepo,
+		pluginRepo:       deps.PluginRepo,
+		httpClient:       deps.HTTPClient,
 	}
 }
 
@@ -58,76 +62,6 @@ func (s *IncidentService) ListIncidents(ctx context.Context, page, pageSize int,
 
 func (s *IncidentService) GetStats(ctx context.Context) (*incidentrepo.IncidentStats, error) {
 	return s.incidentRepo.GetStats(ctx)
-}
-
-// CloseIncidentResponse 关闭工单响应
-type CloseIncidentResponse struct {
-	Message       string `json:"message"`
-	LocalStatus   string `json:"local_status"`
-	SourceUpdated bool   `json:"source_updated"`
-}
-
-// CloseIncident 关闭工单
-func (s *IncidentService) CloseIncident(ctx context.Context, id uuid.UUID, resolution, workNotes, closeCode, closeStatus string) (*CloseIncidentResponse, error) {
-	incident, err := s.incidentRepo.GetByID(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("获取工单失败: %w", err)
-	}
-	if closeStatus == "" {
-		closeStatus = "resolved"
-	}
-
-	sourceUpdated, err := s.writeBackIncidentClose(ctx, id, incident, resolution, workNotes, closeCode, closeStatus)
-	if err != nil {
-		return nil, err
-	}
-	incident.Status = closeStatus
-	incident.HealingStatus = "healed"
-	if err := s.incidentRepo.Update(ctx, incident); err != nil {
-		return nil, fmt.Errorf("更新本地工单状态失败: %w", err)
-	}
-
-	return &CloseIncidentResponse{
-		Message:       "工单已关闭",
-		LocalStatus:   "healed",
-		SourceUpdated: sourceUpdated,
-	}, nil
-}
-
-func (s *IncidentService) writeBackIncidentClose(ctx context.Context, id uuid.UUID, incident *platformmodel.Incident, resolution, workNotes, closeCode, closeStatus string) (bool, error) {
-	if incident.PluginID == nil {
-		return false, nil
-	}
-	plugin, err := s.pluginRepo.GetByID(ctx, *incident.PluginID)
-	if err != nil {
-		if errors.Is(err, integrationrepo.ErrPluginNotFound) {
-			return false, nil
-		}
-		return false, fmt.Errorf("获取来源插件失败: %w", err)
-	}
-	if plugin == nil {
-		return false, nil
-	}
-
-	closeURL, ok := plugin.Config["close_incident_url"].(string)
-	if !ok || closeURL == "" {
-		return false, nil
-	}
-
-	req := map[string]any{
-		"external_id":  incident.ExternalID,
-		"resolution":   resolution,
-		"work_notes":   workNotes,
-		"close_code":   closeCode,
-		"close_status": closeStatus,
-	}
-	if err := s.httpClient.CloseIncident(ctx, plugin.Config, req); err != nil {
-		logger.Sync_("PLUGIN").Warn("回写工单到源系统失败: incident_id=%s, external_id=%s, error=%s", id, incident.ExternalID, err.Error())
-		return false, fmt.Errorf("回写工单到源系统失败: %w", err)
-	}
-
-	logger.Sync_("PLUGIN").Info("成功回写工单到源系统: incident_id=%s, external_id=%s", id, incident.ExternalID)
-	return true, nil
 }
 
 // ResetScan 重置工单扫描状态

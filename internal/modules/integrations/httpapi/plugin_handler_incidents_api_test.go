@@ -77,6 +77,29 @@ var pluginIncidentSchemaStatements = []string{
 		created_at DATETIME,
 		updated_at DATETIME
 	);`,
+	`CREATE TABLE incident_writeback_logs (
+		id TEXT PRIMARY KEY NOT NULL,
+		tenant_id TEXT,
+		incident_id TEXT NOT NULL,
+		plugin_id TEXT,
+		external_id TEXT,
+		action TEXT,
+		trigger_source TEXT,
+		status TEXT,
+		request_method TEXT,
+		request_url TEXT,
+		request_payload TEXT,
+		response_status_code INTEGER,
+		response_body TEXT,
+		error_message TEXT,
+		operator_user_id TEXT,
+		operator_name TEXT,
+		flow_instance_id TEXT,
+		execution_run_id TEXT,
+		started_at DATETIME,
+		finished_at DATETIME,
+		created_at DATETIME
+	);`,
 }
 
 type pluginIncidentRow struct {

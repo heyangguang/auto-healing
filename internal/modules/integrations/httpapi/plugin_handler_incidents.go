@@ -3,9 +3,11 @@ package httpapi
 import (
 	"errors"
 
+	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/query"
 	"github.com/company/auto-healing/internal/pkg/response"
+	platformmodel "github.com/company/auto-healing/internal/platform/model"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -89,12 +91,37 @@ func (h *PluginHandler) CloseIncident(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.incidentSvc.CloseIncident(c.Request.Context(), id, req.Resolution, req.WorkNotes, req.CloseCode, req.GetCloseStatus())
+	userID := parseIncidentOperatorID(c)
+	resp, err := h.incidentSvc.CloseIncident(c.Request.Context(), plugin.CloseIncidentParams{
+		IncidentID:     id,
+		Resolution:     req.Resolution,
+		WorkNotes:      req.WorkNotes,
+		CloseCode:      req.CloseCode,
+		CloseStatus:    req.GetCloseStatus(),
+		TriggerSource:  platformmodel.IncidentWritebackTriggerManualClose,
+		OperatorUserID: userID,
+		OperatorName:   middleware.GetUsername(c),
+	})
 	if err != nil {
 		respondPluginIncidentError(c, "关闭工单失败", err)
 		return
 	}
 	response.Success(c, resp)
+}
+
+func (h *PluginHandler) ListIncidentWritebackLogs(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "无效的工单ID")
+		return
+	}
+
+	logs, err := h.incidentSvc.ListWritebackLogs(c.Request.Context(), id)
+	if err != nil {
+		respondPluginIncidentError(c, "获取工单回写日志失败", err)
+		return
+	}
+	response.Success(c, logs)
 }
 
 // ResetIncidentScan 重置工单扫描状态
@@ -138,4 +165,16 @@ func respondPluginIncidentError(c *gin.Context, publicMsg string, err error) {
 		return
 	}
 	respondInternalError(c, "PLUGIN", publicMsg, err)
+}
+
+func parseIncidentOperatorID(c *gin.Context) *uuid.UUID {
+	rawUserID := middleware.GetUserID(c)
+	if rawUserID == "" {
+		return nil
+	}
+	userID, err := uuid.Parse(rawUserID)
+	if err != nil {
+		return nil
+	}
+	return &userID
 }
