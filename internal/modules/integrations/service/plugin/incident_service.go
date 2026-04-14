@@ -20,14 +20,16 @@ type IncidentService struct {
 	incidentRepo     *incidentrepo.IncidentRepository
 	writebackLogRepo *incidentrepo.IncidentWritebackLogRepository
 	pluginRepo       *integrationrepo.PluginRepository
+	solutionRepo     *integrationrepo.IncidentSolutionTemplateRepository
 	httpClient       *HTTPClient
 }
 
 type IncidentServiceDeps struct {
-	IncidentRepo     *incidentrepo.IncidentRepository
-	WritebackLogRepo *incidentrepo.IncidentWritebackLogRepository
-	PluginRepo       *integrationrepo.PluginRepository
-	HTTPClient       *HTTPClient
+	IncidentRepo         *incidentrepo.IncidentRepository
+	WritebackLogRepo     *incidentrepo.IncidentWritebackLogRepository
+	PluginRepo           *integrationrepo.PluginRepository
+	SolutionTemplateRepo *integrationrepo.IncidentSolutionTemplateRepository
+	HTTPClient           *HTTPClient
 }
 
 func NewIncidentServiceWithDeps(deps IncidentServiceDeps) *IncidentService {
@@ -38,6 +40,8 @@ func NewIncidentServiceWithDeps(deps IncidentServiceDeps) *IncidentService {
 		panic("integrations incident service requires incident writeback log repo")
 	case deps.PluginRepo == nil:
 		panic("integrations incident service requires plugin repo")
+	case deps.SolutionTemplateRepo == nil:
+		panic("integrations incident service requires incident solution template repo")
 	}
 	if deps.HTTPClient == nil {
 		deps.HTTPClient = NewHTTPClient()
@@ -46,6 +50,7 @@ func NewIncidentServiceWithDeps(deps IncidentServiceDeps) *IncidentService {
 		incidentRepo:     deps.IncidentRepo,
 		writebackLogRepo: deps.WritebackLogRepo,
 		pluginRepo:       deps.PluginRepo,
+		solutionRepo:     deps.SolutionTemplateRepo,
 		httpClient:       deps.HTTPClient,
 	}
 }

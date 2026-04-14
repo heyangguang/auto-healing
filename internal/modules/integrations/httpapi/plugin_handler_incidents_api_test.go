@@ -12,6 +12,8 @@ import (
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	pluginservice "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
@@ -199,6 +201,10 @@ func newPluginIncidentHandlerTestHandler(t *testing.T, db *gorm.DB) *PluginHandl
 	handler := NewPluginHandlerWithDeps(PluginHandlerDeps{
 		PluginService:   pluginservice.NewServiceWithDB(db),
 		IncidentService: pluginservice.NewIncidentServiceWithDB(db),
+		SolutionTemplateService: pluginservice.NewSolutionTemplateServiceWithDeps(pluginservice.SolutionTemplateServiceDeps{
+			Repo:     integrationrepo.NewIncidentSolutionTemplateRepositoryWithDB(db),
+			FlowRepo: automationrepo.NewHealingFlowRepositoryWithDB(db),
+		}),
 	})
 	t.Cleanup(handler.Shutdown)
 	return handler

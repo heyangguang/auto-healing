@@ -28,14 +28,16 @@ var incidentSearchSchema = []SearchableField{
 
 // PluginHandler 插件处理器
 type PluginHandler struct {
-	pluginSvc   *plugin.Service
-	incidentSvc *plugin.IncidentService
+	pluginSvc           *plugin.Service
+	incidentSvc         *plugin.IncidentService
+	solutionTemplateSvc *plugin.SolutionTemplateService
 }
 
 type PluginHandlerDeps struct {
-	PluginService   *plugin.Service
-	IncidentService *plugin.IncidentService
-	IncidentRepo    *incidentrepo.IncidentRepository
+	PluginService           *plugin.Service
+	IncidentService         *plugin.IncidentService
+	SolutionTemplateService *plugin.SolutionTemplateService
+	IncidentRepo            *incidentrepo.IncidentRepository
 }
 
 func NewPluginHandlerWithDeps(deps PluginHandlerDeps) *PluginHandler {
@@ -44,10 +46,13 @@ func NewPluginHandlerWithDeps(deps PluginHandlerDeps) *PluginHandler {
 		panic("integrations plugin handler requires plugin service")
 	case deps.IncidentService == nil:
 		panic("integrations plugin handler requires incident service")
+	case deps.SolutionTemplateService == nil:
+		panic("integrations plugin handler requires solution template service")
 	}
 	return &PluginHandler{
-		pluginSvc:   deps.PluginService,
-		incidentSvc: deps.IncidentService,
+		pluginSvc:           deps.PluginService,
+		incidentSvc:         deps.IncidentService,
+		solutionTemplateSvc: deps.SolutionTemplateService,
 	}
 }
 

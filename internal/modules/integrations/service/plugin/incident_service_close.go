@@ -16,16 +16,18 @@ import (
 )
 
 type CloseIncidentParams struct {
-	IncidentID     uuid.UUID
-	Resolution     string
-	WorkNotes      string
-	CloseCode      string
-	CloseStatus    string
-	TriggerSource  string
-	OperatorUserID *uuid.UUID
-	OperatorName   string
-	FlowInstanceID *uuid.UUID
-	ExecutionRunID *uuid.UUID
+	IncidentID         uuid.UUID
+	Resolution         string
+	WorkNotes          string
+	CloseCode          string
+	CloseStatus        string
+	TriggerSource      string
+	OperatorUserID     *uuid.UUID
+	OperatorName       string
+	FlowInstanceID     *uuid.UUID
+	ExecutionRunID     *uuid.UUID
+	SolutionTemplateID *uuid.UUID
+	TemplateVars       model.JSON
 }
 
 type CloseIncidentResponse struct {
@@ -50,7 +52,10 @@ func (s *IncidentService) CloseIncident(ctx context.Context, params CloseInciden
 		return nil, fmt.Errorf("获取工单失败: %w", err)
 	}
 
-	params = normalizeCloseIncidentParams(params)
+	params, err = s.resolveCloseIncidentParams(ctx, incident, params)
+	if err != nil {
+		return nil, err
+	}
 	writebackReq, buildErr := s.buildIncidentWritebackRequest(ctx, incident, params)
 	logEntry, err := s.createWritebackLog(ctx, incident, params, writebackReq, buildErr)
 	if err != nil {
@@ -81,12 +86,13 @@ func (s *IncidentService) CloseIncident(ctx context.Context, params CloseInciden
 }
 
 func normalizeCloseIncidentParams(params CloseIncidentParams) CloseIncidentParams {
-	if params.CloseStatus == "" {
-		params.CloseStatus = "resolved"
-	}
 	if params.TriggerSource == "" {
 		params.TriggerSource = platformmodel.IncidentWritebackTriggerManualClose
 	}
+	params.Resolution = strings.TrimSpace(params.Resolution)
+	params.WorkNotes = strings.TrimSpace(params.WorkNotes)
+	params.CloseCode = strings.TrimSpace(params.CloseCode)
+	params.CloseStatus = defaultCloseStatus(params.CloseStatus)
 	params.OperatorName = strings.TrimSpace(params.OperatorName)
 	return params
 }

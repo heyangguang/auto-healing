@@ -94,6 +94,18 @@ var incidentServiceSchemaStatements = []string{
 		finished_at DATETIME,
 		created_at DATETIME
 	);`,
+	`CREATE TABLE incident_solution_templates (
+		id TEXT PRIMARY KEY NOT NULL,
+		tenant_id TEXT,
+		name TEXT,
+		description TEXT,
+		resolution_template TEXT,
+		work_notes_template TEXT,
+		default_close_code TEXT,
+		default_close_status TEXT,
+		created_at DATETIME,
+		updated_at DATETIME
+	);`,
 }
 
 func TestCloseIncidentIntegrationUpdatesSourceAndLocalState(t *testing.T) {
@@ -208,6 +220,64 @@ func TestCloseIncidentIntegrationKeepsLocalStateWhenPluginLookupFails(t *testing
 	}
 }
 
+func TestCloseIncidentIntegrationRendersSolutionTemplate(t *testing.T) {
+	db := newIncidentServiceIntegrationDB(t)
+	createIncidentServiceIntegrationSchema(t, db)
+	bindIncidentServiceIntegrationDB(t, db)
+
+	closeRequest := make(chan map[string]any, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode close request: %v", err)
+		}
+		closeRequest <- payload
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tenantID := uuid.New()
+	pluginID := uuid.New()
+	incidentID := uuid.New()
+	templateID := uuid.New()
+	insertIncidentServicePlugin(t, db, tenantID, pluginID, server.URL)
+	insertIncidentServiceIncident(t, db, incidentID, tenantID, pluginID)
+	insertIncidentSolutionTemplate(t, db, tenantID, templateID)
+
+	svc := NewIncidentServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+	_, err := svc.CloseIncident(ctx, CloseIncidentParams{
+		IncidentID:         incidentID,
+		SolutionTemplateID: &templateID,
+		TemplateVars: model.JSON{
+			"flow": map[string]any{"name": "服务恢复流程"},
+			"execution": map[string]any{
+				"run_id":  "run-1",
+				"status":  "success",
+				"message": "执行完成",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CloseIncident() error = %v", err)
+	}
+
+	req := waitIncidentServiceCloseRequest(t, closeRequest)
+	if req["resolution"] != "AHS 已完成处理：service integration" {
+		t.Fatalf("resolution = %#v", req["resolution"])
+	}
+	if req["work_notes"] != "流程=服务恢复流程；run=run-1；结果=执行完成" {
+		t.Fatalf("work_notes = %#v", req["work_notes"])
+	}
+	if req["close_code"] != "auto_healed" {
+		t.Fatalf("close_code = %#v", req["close_code"])
+	}
+	if req["close_status"] != "resolved" {
+		t.Fatalf("close_status = %#v", req["close_status"])
+	}
+}
+
 func newIncidentServiceIntegrationDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
@@ -265,6 +335,25 @@ func insertIncidentServiceIncident(t *testing.T, db *gorm.DB, incidentID, tenant
 			healing_status, scanned, created_at, updated_at
 		) VALUES (?, ?, ?, 'itsm-plugin', 'INC-9000', 'service integration', 'open', ?, 'pending', 0, ?, ?)
 	`, incidentID.String(), tenantID.String(), pluginID.String(), rawData, now, now)
+}
+
+func insertIncidentSolutionTemplate(t *testing.T, db *gorm.DB, tenantID, templateID uuid.UUID) {
+	t.Helper()
+
+	now := time.Now().UTC()
+	mustExecIncidentServiceSQL(t, db, `
+		INSERT INTO incident_solution_templates (
+			id, tenant_id, name, description, resolution_template, work_notes_template,
+			default_close_code, default_close_status, created_at, updated_at
+		) VALUES (?, ?, 'tmpl', 'demo', ?, ?, 'auto_healed', 'resolved', ?, ?)
+	`,
+		templateID.String(),
+		tenantID.String(),
+		`AHS 已完成处理：{{ incident.title }}`,
+		`流程={{ flow.name }}；run={{ execution.run_id }}；结果={{ execution.message }}`,
+		now,
+		now,
+	)
 }
 
 func waitIncidentServiceCloseRequest(t *testing.T, closeRequest <-chan map[string]any) map[string]any {

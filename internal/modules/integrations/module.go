@@ -24,12 +24,13 @@ type Module struct {
 }
 
 type ModuleDeps struct {
-	PluginService   *plugin.Service
-	IncidentService *plugin.IncidentService
-	CMDBService     *plugin.CMDBService
-	GitService      *gitSvc.Service
-	PlaybookService *playbook.Service
-	SecretService   *secretsSvc.Service
+	PluginService           *plugin.Service
+	IncidentService         *plugin.IncidentService
+	SolutionTemplateService *plugin.SolutionTemplateService
+	CMDBService             *plugin.CMDBService
+	GitService              *gitSvc.Service
+	PlaybookService         *playbook.Service
+	SecretService           *secretsSvc.Service
 }
 
 func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
@@ -38,6 +39,7 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 	executionRepo := automationrepo.NewExecutionRepositoryWithDB(db)
 	pluginRepo := integrationrepo.NewPluginRepositoryWithDB(db)
 	pluginSyncLogRepo := integrationrepo.NewPluginSyncLogRepositoryWithDB(db)
+	solutionTemplateRepo := integrationrepo.NewIncidentSolutionTemplateRepositoryWithDB(db)
 	cmdbRepo := cmdbrepo.NewCMDBItemRepositoryWithDB(db)
 	incidentRepo := incidentrepo.NewIncidentRepositoryWithDB(db)
 	writebackLogRepo := incidentrepo.NewIncidentWritebackLogRepositoryWithDB(db)
@@ -52,10 +54,15 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 	return ModuleDeps{
 		PluginService: pluginService,
 		IncidentService: plugin.NewIncidentServiceWithDeps(plugin.IncidentServiceDeps{
-			IncidentRepo:     incidentRepo,
-			WritebackLogRepo: writebackLogRepo,
-			PluginRepo:       pluginRepo,
-			HTTPClient:       httpClient,
+			IncidentRepo:         incidentRepo,
+			WritebackLogRepo:     writebackLogRepo,
+			PluginRepo:           pluginRepo,
+			SolutionTemplateRepo: solutionTemplateRepo,
+			HTTPClient:           httpClient,
+		}),
+		SolutionTemplateService: plugin.NewSolutionTemplateServiceWithDeps(plugin.SolutionTemplateServiceDeps{
+			Repo:     solutionTemplateRepo,
+			FlowRepo: automationrepo.NewHealingFlowRepositoryWithDB(db),
 		}),
 		CMDBService: plugin.NewCMDBServiceWithDeps(plugin.CMDBServiceDeps{
 			CMDBRepo: cmdbRepo,
@@ -85,8 +92,9 @@ func NewWithDB(db *gorm.DB) *Module {
 func NewWithDeps(deps ModuleDeps) *Module {
 	module := &Module{
 		Plugin: integrationhttp.NewPluginHandlerWithDeps(integrationhttp.PluginHandlerDeps{
-			PluginService:   deps.PluginService,
-			IncidentService: deps.IncidentService,
+			PluginService:           deps.PluginService,
+			IncidentService:         deps.IncidentService,
+			SolutionTemplateService: deps.SolutionTemplateService,
 		}),
 		CMDB: integrationhttp.NewCMDBHandlerWithDeps(integrationhttp.CMDBHandlerDeps{
 			Service:       deps.CMDBService,

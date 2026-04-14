@@ -20,6 +20,13 @@ func (r Registrar) RegisterTenantRoutes(tenant *gin.RouterGroup) {
 	plugins.POST("/:id/sync", middleware.RequirePermission("plugin:sync"), r.deps.Plugin.SyncPlugin)
 	plugins.GET("/:id/logs", middleware.RequirePermission("plugin:list"), r.deps.Plugin.GetPluginSyncLogs)
 
+	solutionTemplates := tenant.Group("/incident-solution-templates")
+	solutionTemplates.GET("", middleware.RequirePermission("plugin:list"), r.deps.Plugin.ListSolutionTemplates)
+	solutionTemplates.POST("", middleware.RequirePermission("plugin:create"), r.deps.Plugin.CreateSolutionTemplate)
+	solutionTemplates.GET("/:id", middleware.RequirePermission("plugin:list"), r.deps.Plugin.GetSolutionTemplate)
+	solutionTemplates.PUT("/:id", middleware.RequirePermission("plugin:update"), r.deps.Plugin.UpdateSolutionTemplate)
+	solutionTemplates.DELETE("/:id", middleware.RequirePermission("plugin:delete"), r.deps.Plugin.DeleteSolutionTemplate)
+
 	incidents := tenant.Group("/incidents")
 	incidents.GET("/stats", middleware.RequirePermission("plugin:list"), r.deps.Plugin.GetIncidentStats)
 	incidents.GET("/search-schema", middleware.RequirePermission("plugin:list"), r.deps.Plugin.GetIncidentSearchSchema)

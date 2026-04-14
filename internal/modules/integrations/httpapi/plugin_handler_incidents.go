@@ -93,14 +93,16 @@ func (h *PluginHandler) CloseIncident(c *gin.Context) {
 
 	userID := parseIncidentOperatorID(c)
 	resp, err := h.incidentSvc.CloseIncident(c.Request.Context(), plugin.CloseIncidentParams{
-		IncidentID:     id,
-		Resolution:     req.Resolution,
-		WorkNotes:      req.WorkNotes,
-		CloseCode:      req.CloseCode,
-		CloseStatus:    req.GetCloseStatus(),
-		TriggerSource:  platformmodel.IncidentWritebackTriggerManualClose,
-		OperatorUserID: userID,
-		OperatorName:   middleware.GetUsername(c),
+		IncidentID:         id,
+		Resolution:         req.Resolution,
+		WorkNotes:          req.WorkNotes,
+		CloseCode:          req.CloseCode,
+		CloseStatus:        req.GetCloseStatus(),
+		TriggerSource:      platformmodel.IncidentWritebackTriggerManualClose,
+		OperatorUserID:     userID,
+		OperatorName:       middleware.GetUsername(c),
+		SolutionTemplateID: req.SolutionTemplateID,
+		TemplateVars:       req.TemplateVars,
 	})
 	if err != nil {
 		respondPluginIncidentError(c, "关闭工单失败", err)

@@ -12,7 +12,9 @@ import (
 	"github.com/company/auto-healing/internal/config"
 	"github.com/company/auto-healing/internal/database"
 	"github.com/company/auto-healing/internal/middleware"
+	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	"github.com/company/auto-healing/internal/modules/integrations/model"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	pluginservice "github.com/company/auto-healing/internal/modules/integrations/service/plugin"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/company/auto-healing/internal/pkg/response"
@@ -35,6 +37,10 @@ func newIncidentRouteTestHarness(t *testing.T, permissions []string, schemas ...
 	pluginHandler := NewPluginHandlerWithDeps(PluginHandlerDeps{
 		PluginService:   pluginservice.NewServiceWithDB(db),
 		IncidentService: pluginservice.NewIncidentServiceWithDB(db),
+		SolutionTemplateService: pluginservice.NewSolutionTemplateServiceWithDeps(pluginservice.SolutionTemplateServiceDeps{
+			Repo:     integrationrepo.NewIncidentSolutionTemplateRepositoryWithDB(db),
+			FlowRepo: automationrepo.NewHealingFlowRepositoryWithDB(db),
+		}),
 	})
 	t.Cleanup(pluginHandler.Shutdown)
 	router := gin.New()

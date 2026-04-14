@@ -89,6 +89,20 @@ CREATE TABLE incident_writeback_logs (
 	created_at DATETIME
 );`
 
+const handlerIncidentSolutionTemplateSchema = `
+CREATE TABLE incident_solution_templates (
+	id TEXT PRIMARY KEY NOT NULL,
+	tenant_id TEXT,
+	name TEXT,
+	description TEXT,
+	resolution_template TEXT,
+	work_notes_template TEXT,
+	default_close_code TEXT,
+	default_close_status TEXT,
+	created_at DATETIME,
+	updated_at DATETIME
+);`
+
 func TestGetIncidentAPIUses404ForMissingIncident(t *testing.T) {
 	router, _, _ := newIncidentRouteTestHarness(t, []string{"plugin:list"}, handlerIncidentPluginSchema, handlerIncidentSchema)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tenant/incidents/"+uuid.NewString(), nil)
@@ -178,6 +192,56 @@ func TestCloseIncidentEndToEndUpdatesSourceAndLocalState(t *testing.T) {
 	}
 	if healingStatus != "healed" {
 		t.Fatalf("incident healing_status = %q, want healed", healingStatus)
+	}
+}
+
+func TestCloseIncidentWithSolutionTemplateRendersRequestPayload(t *testing.T) {
+	router, db, tenantID := newIncidentRouteTestHarness(t, []string{"plugin:sync"}, handlerIncidentPluginSchema, handlerIncidentSchema, handlerIncidentWritebackLogSchema, handlerIncidentSolutionTemplateSchema)
+	pluginID := uuid.New()
+	incidentID := uuid.New()
+	templateID := uuid.New()
+	now := time.Now().UTC()
+	var gotPayload map[string]any
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Fatalf("decode close payload: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(source.Close)
+
+	insertHandlerIncidentPlugin(t, db, tenantID, pluginID, model.JSON{
+		"auth_type":          "none",
+		"close_incident_url": source.URL + "/incidents/{external_id}/close",
+	})
+	insertHandlerIncident(t, db, tenantID, pluginID, incidentID, "INC-201", "open", "pending", &now)
+	if err := db.Exec(`
+		INSERT INTO incident_solution_templates (
+			id, tenant_id, name, description, resolution_template, work_notes_template,
+			default_close_code, default_close_status, created_at, updated_at
+		) VALUES (?, ?, 'tmpl', 'demo', ?, ?, 'auto_healed', 'resolved', ?, ?)
+	`, templateID.String(), tenantID.String(), `处理完成：{{ incident.title }}`, `run={{ execution.run_id }}`, now, now).Error; err != nil {
+		t.Fatalf("insert template: %v", err)
+	}
+
+	req := newIncidentJSONRequest(t, http.MethodPost, "/api/v1/tenant/incidents/"+incidentID.String()+"/close", CloseIncidentRequest{
+		SolutionTemplateID: &templateID,
+		TemplateVars: model.JSON{
+			"execution": map[string]any{"run_id": "run-201"},
+		},
+	})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if gotPayload["resolution"] != "处理完成：incident-title" {
+		t.Fatalf("resolution = %#v", gotPayload["resolution"])
+	}
+	if gotPayload["work_notes"] != "run=run-201" {
+		t.Fatalf("work_notes = %#v", gotPayload["work_notes"])
 	}
 }
 

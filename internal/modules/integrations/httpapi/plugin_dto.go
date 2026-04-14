@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"github.com/company/auto-healing/internal/modules/integrations/model"
+	"github.com/google/uuid"
 )
 
 // ==================== Plugin DTO ====================
@@ -98,10 +99,12 @@ func (r *UpdatePluginRequest) ApplyTo(plugin *model.Plugin) {
 
 // CloseIncidentRequest 关闭工单请求
 type CloseIncidentRequest struct {
-	Resolution  string `json:"resolution"`
-	WorkNotes   string `json:"work_notes"`
-	CloseCode   string `json:"close_code"`
-	CloseStatus string `json:"close_status"`
+	Resolution         string     `json:"resolution"`
+	WorkNotes          string     `json:"work_notes"`
+	CloseCode          string     `json:"close_code"`
+	CloseStatus        string     `json:"close_status"`
+	SolutionTemplateID *uuid.UUID `json:"solution_template_id"`
+	TemplateVars       model.JSON `json:"template_vars"`
 }
 
 // GetCloseStatus 获取关闭状态（默认 resolved）
