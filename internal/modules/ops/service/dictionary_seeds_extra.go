@@ -87,6 +87,7 @@ var auditResourceSeedValues = []model.Dictionary{
 	d("audit_resource_tenant", "tenant-channels", "通知渠道", "Channel", "", "", "", "", "", 11),
 	d("audit_resource_tenant", "tenant-templates", "通知模板", "Template", "", "", "", "", "", 12),
 	d("audit_resource_tenant", "tenant-notifications", "通知记录", "Notification", "", "", "", "", "", 13),
+	d("audit_resource_tenant", "tenant-incident-solution-templates", "解决方案模板", "Solution Template", "", "", "", "", "", 32),
 	// /tenant/healing/flows|rules|instances|approvals|pending 都产出 "tenant-healing"
 	d("audit_resource_tenant", "tenant-healing", "自愈管理", "Healing", "", "", "", "", "", 14),
 	d("audit_resource_tenant", "tenant-incidents", "事件工单", "Incident", "", "", "", "", "", 15),
@@ -151,6 +152,7 @@ var auditResourceSeedValues = []model.Dictionary{
 	d("audit_resource_platform", "tenant-channels", "通知渠道", "Channel", "", "", "", "", "", 41),
 	d("audit_resource_platform", "tenant-templates", "通知模板", "Template", "", "", "", "", "", 42),
 	d("audit_resource_platform", "tenant-notifications", "通知记录", "Notification", "", "", "", "", "", 43),
+	d("audit_resource_platform", "tenant-incident-solution-templates", "解决方案模板", "Solution Template", "", "", "", "", "", 52),
 	d("audit_resource_platform", "tenant-healing", "自愈管理", "Healing", "", "", "", "", "", 44),
 	d("audit_resource_platform", "tenant-incidents", "事件工单", "Incident", "", "", "", "", "", 45),
 	d("audit_resource_platform", "tenant-dashboard", "监控面板", "Dashboard", "", "", "", "", "", 46),
