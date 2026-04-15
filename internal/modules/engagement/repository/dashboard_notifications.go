@@ -30,37 +30,37 @@ type NotifLogItem struct {
 
 func (r *DashboardRepository) GetNotificationSection(ctx context.Context) (*NotificationSection, error) {
 	section := &NotificationSection{}
-	db := r.tenantDB(ctx)
+	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
 
-	if err := countModel(db, &model.NotificationChannel{}, &section.ChannelsTotal); err != nil {
+	if err := countModel(newDB(), &model.NotificationChannel{}, &section.ChannelsTotal); err != nil {
 		return nil, err
 	}
-	if err := countModel(db, &model.NotificationTemplate{}, &section.TemplatesTotal); err != nil {
+	if err := countModel(newDB(), &model.NotificationTemplate{}, &section.TemplatesTotal); err != nil {
 		return nil, err
 	}
-	if err := countModel(db, &model.NotificationLog{}, &section.LogsTotal); err != nil {
+	if err := countModel(newDB(), &model.NotificationLog{}, &section.LogsTotal); err != nil {
 		return nil, err
 	}
-	rate, err := calculateDeliveryRate(db, section.LogsTotal)
+	rate, err := calculateDeliveryRate(newDB(), section.LogsTotal)
 	if err != nil {
 		return nil, err
 	}
 	section.DeliveryRate = rate
-	if err := scanStatusCounts(db, &model.NotificationChannel{}, "type", &section.ByChannelType); err != nil {
+	if err := scanStatusCounts(newDB(), &model.NotificationChannel{}, "type", &section.ByChannelType); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &model.NotificationLog{}, "status", &section.ByLogStatus); err != nil {
+	if err := scanStatusCounts(newDB(), &model.NotificationLog{}, "status", &section.ByLogStatus); err != nil {
 		return nil, err
 	}
-	if err := scanTrendPoints(db, &model.NotificationLog{}, "created_at", time.Now().AddDate(0, 0, -7), &section.Trend7d); err != nil {
+	if err := scanTrendPoints(newDB(), &model.NotificationLog{}, "created_at", time.Now().AddDate(0, 0, -7), &section.Trend7d); err != nil {
 		return nil, err
 	}
-	recentLogs, err := listNotificationLogs(db.Order("created_at DESC").Limit(10))
+	recentLogs, err := listNotificationLogs(newDB().Order("created_at DESC").Limit(10))
 	if err != nil {
 		return nil, err
 	}
 	section.RecentLogs = recentLogs
-	failedLogs, err := listNotificationLogs(db.Where("status = ?", "failed").Order("created_at DESC").Limit(10))
+	failedLogs, err := listNotificationLogs(newDB().Where("status = ?", "failed").Order("created_at DESC").Limit(10))
 	if err != nil {
 		return nil, err
 	}

@@ -52,41 +52,66 @@ type LoginItem struct {
 }
 
 func (r *DashboardRepository) GetUsersSection(ctx context.Context) (*UsersSection, error) {
-	section := &UsersSection{}
 	tenantID, err := platformrepo.RequireTenantID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	db := r.db.WithContext(ctx)
+	section := &UsersSection{}
 
-	if err := countModel(db.Table("users").
-		Joins("JOIN user_tenant_roles utr ON utr.user_id = users.id").
-		Where("utr.tenant_id = ?", tenantID).
-		Distinct("users.id"), &model.User{}, &section.Total); err != nil {
+	total, err := countTenantUsers(db, tenantID, "")
+	if err != nil {
 		return nil, err
 	}
-	if err := countModel(db.Table("users").
-		Joins("JOIN user_tenant_roles utr ON utr.user_id = users.id").
-		Where("utr.tenant_id = ? AND users.status = ?", tenantID, "active").
-		Distinct("users.id"), &model.User{}, &section.Active); err != nil {
+	section.Total = total
+
+	active, err := countTenantUsers(db, tenantID, "active")
+	if err != nil {
 		return nil, err
 	}
+	section.Active = active
+
 	if err := countModel(db.Model(&model.Role{}).
 		Where("scope = ?", "tenant").
 		Where("tenant_id IS NULL OR tenant_id = ?", tenantID), &model.Role{}, &section.RolesTotal); err != nil {
 		return nil, err
 	}
-	recentLogins, err := listRecentLogins(db.Table("users").
-		Joins("JOIN user_tenant_roles utr ON utr.user_id = users.id").
-		Where("utr.tenant_id = ? AND users.last_login_at IS NOT NULL", tenantID).
-		Distinct("users.id").
-		Order("users.last_login_at DESC").
-		Limit(10))
+	recentLogins, err := listRecentLogins(recentTenantLoginsQuery(db, tenantID))
 	if err != nil {
 		return nil, err
 	}
 	section.RecentLogins = recentLogins
 	return section, nil
+}
+
+func countTenantUsers(db *gorm.DB, tenantID uuid.UUID, status string) (int64, error) {
+	query := tenantUsersQuery(db, tenantID)
+	if status != "" {
+		query = query.Where("users.status = ?", status)
+	}
+
+	var count int64
+	err := query.Count(&count).Error
+	return count, err
+}
+
+func recentTenantLoginsQuery(db *gorm.DB, tenantID uuid.UUID) *gorm.DB {
+	return tenantUsersQuery(db, tenantID).
+		Where("users.last_login_at IS NOT NULL").
+		Order("users.last_login_at DESC").
+		Limit(10)
+}
+
+func tenantUsersQuery(db *gorm.DB, tenantID uuid.UUID) *gorm.DB {
+	return db.Model(&model.User{}).
+		Where("EXISTS (?)", tenantUserMembershipSubquery(db, tenantID))
+}
+
+func tenantUserMembershipSubquery(db *gorm.DB, tenantID uuid.UUID) *gorm.DB {
+	return db.Session(&gorm.Session{NewDB: true}).
+		Table("user_tenant_roles AS utr").
+		Select("1").
+		Where("utr.user_id = users.id AND utr.tenant_id = ?", tenantID)
 }
 
 func listRecentLogins(query *gorm.DB) ([]LoginItem, error) {

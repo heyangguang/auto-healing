@@ -50,48 +50,48 @@ func (r *DashboardRepository) GetCMDBSection(ctx context.Context) (*CMDBSection,
 		ByDepartment:   []StatusCount{},
 		ByManufacturer: []StatusCount{},
 	}
-	db := r.tenantDB(ctx)
+	newDB := func() *gorm.DB { return r.tenantDB(ctx) }
 
-	if err := countModel(db, &projection.CMDBItem{}, &section.Total); err != nil {
+	if err := countModel(newDB(), &projection.CMDBItem{}, &section.Total); err != nil {
 		return nil, err
 	}
-	if err := countModel(db.Where("status = ?", "active"), &projection.CMDBItem{}, &section.Active); err != nil {
+	if err := countModel(newDB().Where("status = ?", "active"), &projection.CMDBItem{}, &section.Active); err != nil {
 		return nil, err
 	}
-	if err := countModel(db.Where("status = ?", "maintenance"), &projection.CMDBItem{}, &section.Maintenance); err != nil {
+	if err := countModel(newDB().Where("status = ?", "maintenance"), &projection.CMDBItem{}, &section.Maintenance); err != nil {
 		return nil, err
 	}
-	if err := countModel(db.Where("status = ?", "offline"), &projection.CMDBItem{}, &section.Offline); err != nil {
+	if err := countModel(newDB().Where("status = ?", "offline"), &projection.CMDBItem{}, &section.Offline); err != nil {
 		return nil, err
 	}
 	if section.Total > 0 {
 		section.ActiveRate = float64(section.Active) / float64(section.Total) * 100
 	}
 
-	if err := scanStatusCounts(db, &projection.CMDBItem{}, "status", &section.ByStatus); err != nil {
+	if err := scanStatusCounts(newDB(), &projection.CMDBItem{}, "status", &section.ByStatus); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &projection.CMDBItem{}, "environment", &section.ByEnvironment); err != nil {
+	if err := scanStatusCounts(newDB(), &projection.CMDBItem{}, "environment", &section.ByEnvironment); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &projection.CMDBItem{}, "type", &section.ByType); err != nil {
+	if err := scanStatusCounts(newDB(), &projection.CMDBItem{}, "type", &section.ByType); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &projection.CMDBItem{}, "os", &section.ByOS); err != nil {
+	if err := scanStatusCounts(newDB(), &projection.CMDBItem{}, "os", &section.ByOS); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &projection.CMDBItem{}, "department", &section.ByDepartment); err != nil {
+	if err := scanStatusCounts(newDB(), &projection.CMDBItem{}, "department", &section.ByDepartment); err != nil {
 		return nil, err
 	}
-	if err := scanStatusCounts(db, &projection.CMDBItem{}, "manufacturer", &section.ByManufacturer); err != nil {
+	if err := scanStatusCounts(newDB(), &projection.CMDBItem{}, "manufacturer", &section.ByManufacturer); err != nil {
 		return nil, err
 	}
-	recent, err := listRecentMaintenance(db.Order("created_at DESC").Limit(10))
+	recent, err := listRecentMaintenance(newDB().Order("created_at DESC").Limit(10))
 	if err != nil {
 		return nil, err
 	}
 	section.RecentMaintenance = recent
-	offline, err := listOfflineAssets(db.Where("status = ?", "offline").Order("updated_at DESC").Limit(10))
+	offline, err := listOfflineAssets(newDB().Where("status = ?", "offline").Order("updated_at DESC").Limit(10))
 	if err != nil {
 		return nil, err
 	}
