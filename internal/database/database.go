@@ -89,6 +89,9 @@ func AutoMigrate() error {
 	if err := ensureRoleWorkspaceSchema(); err != nil {
 		return fmt.Errorf("修正 role_workspaces 表结构失败: %w", err)
 	}
+	if err := ensureSystemWorkspaceSchema(); err != nil {
+		return fmt.Errorf("修正 system_workspaces 表结构失败: %w", err)
+	}
 	return nil
 }
 
@@ -156,6 +159,19 @@ func ensureRoleWorkspaceSchema() error {
 		`ALTER TABLE role_workspaces ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id)`,
 		`ALTER TABLE role_workspaces ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`,
 		`CREATE INDEX IF NOT EXISTS idx_role_workspaces_tenant_id ON role_workspaces(tenant_id)`,
+	}
+
+	for _, sql := range statements {
+		if err := DB.Exec(sql).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureSystemWorkspaceSchema() error {
+	statements := []string{
+		`ALTER TABLE system_workspaces ADD COLUMN IF NOT EXISTS is_readonly BOOLEAN NOT NULL DEFAULT FALSE`,
 	}
 
 	for _, sql := range statements {
