@@ -115,7 +115,7 @@ func buildRunListOptions(c *gin.Context, page, pageSize int) *automationrepo.Run
 		RunID:       c.Query("run_id"),
 		TaskName:    GetStringFilter(c, "task_name"),
 		Status:      c.Query("status"),
-		TriggeredBy: c.Query("triggered_by"),
+		TriggeredBy: execution.NormalizeTriggeredBy(c.Query("triggered_by")),
 		Page:        page,
 		PageSize:    pageSize,
 	}

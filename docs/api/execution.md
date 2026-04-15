@@ -303,7 +303,7 @@
     "task_id": "uuid",
     "task": {"id": "uuid", "name": "磁盘清理任务"},
     "status": "success",
-    "triggered_by": "manual:admin",
+    "triggered_by": "manual",
     "target_hosts": "prod-web-01",
     "extra_vars": {"target_path": "/tmp"},
     "exit_code": 0,

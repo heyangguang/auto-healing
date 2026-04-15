@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
@@ -87,11 +88,28 @@ func (s *Service) ExecuteTask(ctx context.Context, taskID uuid.UUID, opts *Execu
 	return run, nil
 }
 
-func defaultTriggeredBy(triggeredBy string) string {
-	if triggeredBy == "" {
+func NormalizeTriggeredBy(triggeredBy string) string {
+	normalized := strings.TrimSpace(strings.ToLower(triggeredBy))
+	if normalized == "" {
 		return "manual"
 	}
-	return triggeredBy
+	if strings.HasPrefix(normalized, "manual") {
+		return "manual"
+	}
+	if strings.HasPrefix(normalized, "scheduler:cron") {
+		return "scheduler:cron"
+	}
+	if strings.HasPrefix(normalized, "scheduler:once") {
+		return "scheduler:once"
+	}
+	if strings.HasPrefix(normalized, "healing") || strings.HasPrefix(normalized, "workflow") {
+		return "healing"
+	}
+	return normalized
+}
+
+func defaultTriggeredBy(triggeredBy string) string {
+	return NormalizeTriggeredBy(triggeredBy)
 }
 
 func resolveSecretsSourceIDs(task *model.ExecutionTask, opts *ExecuteOptions) ([]uuid.UUID, error) {
