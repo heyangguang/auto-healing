@@ -45,6 +45,45 @@
       background: #eef5ff;
       color: #174ea6;
     }
+    .scenario-tabs {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .scenario-tab {
+      background: #edf3fb;
+      color: var(--text);
+    }
+    .scenario-tab.active {
+      background: var(--brand);
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(15, 109, 255, 0.2);
+    }
+    .scenario-panel {
+      margin-bottom: 18px;
+      padding: 14px;
+      border: 1px solid #d7e7ff;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+    }
+    .scenario-panel h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+    }
+    .scenario-panel p {
+      margin: 0 0 8px;
+      color: #36537c;
+    }
+    .scenario-meta {
+      color: #174ea6;
+      font-weight: 600;
+    }
+    .scenario-checks {
+      margin: 0;
+      padding-left: 18px;
+      color: #36537c;
+    }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
     .field { display: flex; flex-direction: column; gap: 6px; }
     .field.full { grid-column: 1 / -1; }
@@ -104,7 +143,7 @@
   <div class="wrap">
     <div class="hero">
       <h1>iTop 告警故障工单模拟器</h1>
-      <p>这个页面直接运行在 iTop 里，并直接调用 iTop 自己的 REST `core/create` 创建告警型故障工单。目标是让 Auto-Healing 同步后能把关键告警值显示出来。</p>
+      <p>这个页面直接运行在 iTop 里，并直接调用 iTop 自己的 REST `core/create` 创建告警型故障工单。现在额外内置三个规则场景 Tab，可一键生成能命中本地自愈规则的工单。</p>
     </div>
 
     <div class="grid">
@@ -158,8 +197,26 @@
             <select id="functionalCiId">
               <option value="1" selected>1 - Server1</option>
               <option value="18">18 - ESX1</option>
+              <option value="39">39 - real-host-100</option>
+              <option value="40">40 - real-host-101</option>
+              <option value="41">41 - real-host-77</option>
             </select>
           </div>
+        </div>
+
+        <h2 class="section-title" style="margin-top:24px;">生成模式</h2>
+        <div class="tip">切换下面的 Tab 会自动回填匹配字段。规则场景会自动切到真实主机 `real-host-*`，用于直接触发当前环境里的自愈流程。</div>
+        <div class="scenario-tabs">
+          <button id="tabGeneric" type="button" class="scenario-tab active" data-scenario="generic">通用工单</button>
+          <button id="tabServiceRule" type="button" class="scenario-tab" data-scenario="service-recovery">服务故障自动恢复</button>
+          <button id="tabCpuRule" type="button" class="scenario-tab" data-scenario="cpu-auto">CPU 高负载自动恢复</button>
+          <button id="tabDiskRule" type="button" class="scenario-tab" data-scenario="disk-approval">磁盘告警审批恢复</button>
+        </div>
+        <div class="scenario-panel">
+          <h3 id="scenarioTitle">通用工单</h3>
+          <p id="scenarioDescription">自由组合告警字段，适合做普通同步验证。</p>
+          <div id="scenarioRule" class="scenario-meta">预期命中: 不强制匹配自愈规则</div>
+          <ul id="scenarioChecks" class="scenario-checks"></ul>
         </div>
 
         <h2 class="section-title" style="margin-top:24px;">告警上下文</h2>
@@ -168,6 +225,7 @@
             <label for="alertName">告警名称</label>
             <select id="alertName">
               <option value="cpu_usage_high">cpu_usage_high</option>
+              <option value="disk_usage_high">disk_usage_high</option>
               <option value="disk_space_low">disk_space_low</option>
               <option value="memory_usage_high">memory_usage_high</option>
               <option value="service_health_check_failed" selected>service_health_check_failed</option>
@@ -191,13 +249,18 @@
               <option value="db-01">db-01</option>
               <option value="db-02">db-02</option>
               <option value="cache-01">cache-01</option>
+              <option value="real-host-100">real-host-100</option>
+              <option value="real-host-101">real-host-101</option>
+              <option value="real-host-77">real-host-77</option>
             </select>
           </div>
           <div class="field">
             <label for="service">服务</label>
             <select id="service">
               <option value="api-gateway" selected>api-gateway</option>
+              <option value="auto-healing-lab-http">auto-healing-lab-http</option>
               <option value="nginx">nginx</option>
+              <option value="node-exporter">node-exporter</option>
               <option value="postgres">postgres</option>
               <option value="redis">redis</option>
               <option value="worker">worker</option>
@@ -207,6 +270,7 @@
             <label for="alertDomain">告警域</label>
             <select id="alertDomain">
               <option value="application" selected>应用</option>
+              <option value="infrastructure">基础设施</option>
               <option value="database">数据库</option>
               <option value="network">网络</option>
               <option value="hardware">硬件</option>
@@ -269,6 +333,10 @@
       <div class="card">
         <h2 class="section-title">预览</h2>
         <div class="field full">
+          <label>当前规则场景</label>
+          <div id="previewScenario" class="preview"></div>
+        </div>
+        <div class="field full">
           <label>建议标题</label>
           <div id="previewTitle" class="preview"></div>
         </div>
@@ -286,6 +354,109 @@
 
   <script>
     const el = (id) => document.getElementById(id);
+    const SCENARIOS = {
+      generic: {
+        label: '通用工单',
+        description: '自由组合告警字段，适合做普通同步验证。',
+        ruleName: '不强制匹配自愈规则',
+        checks: ['不会自动套用真实主机', '适合测试字段展示和同步链路'],
+        fields: {
+          functionalCiId: '1',
+          alertName: 'service_health_check_failed',
+          severity: 'high',
+          hostname: 'app-01',
+          service: 'api-gateway',
+          alertDomain: 'application',
+          environment: 'production',
+          metric: 'probe_success',
+          currentValue: '0',
+          threshold: '1',
+          duration: '8m',
+          sourceSystem: 'prometheus',
+          fingerprint: 'api-gateway:app-01:service_health_check_failed',
+          summary: 'api-gateway 健康检查连续失败'
+        }
+      },
+      'service-recovery': {
+        label: '服务故障自动恢复',
+        description: '一键生成可命中“iTop 服务故障自动恢复规则”的工单。',
+        ruleName: 'iTop 服务故障自动恢复规则',
+        checks: [
+          '标题会包含 service_health_check_failed',
+          '影响 CI 会切到 real-host-100',
+          '工单同步后可直接进入服务恢复流程'
+        ],
+        fields: {
+          functionalCiId: '39',
+          alertName: 'service_health_check_failed',
+          severity: 'high',
+          hostname: 'real-host-100',
+          service: 'auto-healing-lab-http',
+          alertDomain: 'application',
+          environment: 'production',
+          metric: 'probe_success',
+          currentValue: '0',
+          threshold: '1',
+          duration: '5m',
+          sourceSystem: 'prometheus',
+          fingerprint: 'auto-healing-lab-http:real-host-100:service_health_check_failed',
+          summary: 'auto-healing-lab-http 健康检查失败'
+        }
+      },
+      'cpu-auto': {
+        label: 'CPU 高负载自动恢复',
+        description: '一键生成可命中“iTop CPU 高负载自动恢复规则”的工单。',
+        ruleName: 'iTop CPU 高负载自动恢复规则',
+        checks: [
+          '标题会包含 cpu_usage_high',
+          '影响 CI 会切到 real-host-77',
+          '工单同步后会自动进入 CPU 恢复流程'
+        ],
+        fields: {
+          functionalCiId: '41',
+          alertName: 'cpu_usage_high',
+          severity: 'high',
+          hostname: 'real-host-77',
+          service: 'node-exporter',
+          alertDomain: 'infrastructure',
+          environment: 'production',
+          metric: 'node_cpu_usage',
+          currentValue: '96',
+          threshold: '85',
+          duration: '10m',
+          sourceSystem: 'prometheus',
+          fingerprint: 'node-exporter:real-host-77:cpu_usage_high',
+          summary: 'real-host-77 CPU 使用率持续过高'
+        }
+      },
+      'disk-approval': {
+        label: '磁盘告警审批恢复',
+        description: '一键生成可命中“iTop 磁盘告警审批恢复规则”的工单。',
+        ruleName: 'iTop 磁盘告警审批恢复规则',
+        checks: [
+          '描述里会包含 disk_usage_high',
+          '影响 CI 会切到 real-host-101',
+          '工单同步后会先进入审批，再执行磁盘恢复'
+        ],
+        fields: {
+          functionalCiId: '40',
+          alertName: 'disk_usage_high',
+          severity: 'high',
+          hostname: 'real-host-101',
+          service: 'node-exporter',
+          alertDomain: 'infrastructure',
+          environment: 'production',
+          metric: 'node_filesystem_usage',
+          currentValue: '92',
+          threshold: '85',
+          duration: '12m',
+          sourceSystem: 'prometheus',
+          fingerprint: 'node-exporter:real-host-101:disk_usage_high',
+          summary: 'real-host-101 根分区使用率持续过高'
+        }
+      }
+    };
+    let activeScenarioKey = 'generic';
 
     function severityImpact(severity) {
       return { critical: '1', high: '2', medium: '3', low: '3' }[severity] || '3';
@@ -295,6 +466,23 @@
       return { critical: '1', high: '2', medium: '3', low: '4' }[severity] || '3';
     }
 
+    function currentScenario() {
+      return SCENARIOS[activeScenarioKey] || SCENARIOS.generic;
+    }
+
+    function guidanceLines(alertName) {
+      if (alertName === 'cpu_usage_high') {
+        return ['请确认高负载进程、瞬时尖峰与系统平均负载，必要时执行 CPU 恢复动作。'];
+      }
+      if (alertName === 'disk_usage_high') {
+        return ['请确认磁盘使用情况、日志增长与临时文件占用。'];
+      }
+      if (alertName === 'service_health_check_failed') {
+        return ['请确认服务可用性、最近变更、实例健康状态以及上下游依赖。'];
+      }
+      return ['请确认告警来源、最近变更与上下游依赖。'];
+    }
+
     function buildSuggestedTitle() {
       return [`[${el('severity').value}]`, el('alertName').value, 'on', el('hostname').value, '|', el('summary').value || el('metric').value]
         .filter(Boolean)
@@ -302,6 +490,7 @@
     }
 
     function buildSuggestedDetails() {
+      const advice = guidanceLines(el('alertName').value);
       return [
         '告警故障工单',
         `告警名称: ${el('alertName').value}`,
@@ -320,13 +509,52 @@
         `告警摘要: ${el('summary').value || '-'}`,
         '',
         '处置建议:',
-        '请确认服务可用性、最近变更、实例健康状态以及上下游依赖。'
+        ...advice
       ].join('\n');
+    }
+
+    function renderScenarioPanel() {
+      const scenario = currentScenario();
+      el('scenarioTitle').textContent = scenario.label;
+      el('scenarioDescription').textContent = scenario.description;
+      el('scenarioRule').textContent = `预期命中: ${scenario.ruleName}`;
+      el('previewScenario').textContent = `${scenario.label}\n${scenario.description}\n${el('scenarioRule').textContent}`;
+      const list = el('scenarioChecks');
+      list.innerHTML = '';
+      scenario.checks.forEach((item) => {
+        const node = document.createElement('li');
+        node.textContent = item;
+        list.appendChild(node);
+      });
+    }
+
+    function updateScenarioTabs() {
+      document.querySelectorAll('[data-scenario]').forEach((button) => {
+        const active = button.dataset.scenario === activeScenarioKey;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+    }
+
+    function setFieldValue(id, value) {
+      const node = el(id);
+      if (node && value !== undefined) {
+        node.value = value;
+      }
+    }
+
+    function applyScenario(key) {
+      activeScenarioKey = SCENARIOS[key] ? key : 'generic';
+      const scenario = currentScenario();
+      Object.entries(scenario.fields).forEach(([id, value]) => setFieldValue(id, value));
+      updateScenarioTabs();
+      regenerate();
     }
 
     function refreshPreview() {
       const title = buildSuggestedTitle();
       const details = buildSuggestedDetails();
+      renderScenarioPanel();
       el('previewTitle').textContent = title || '-';
       el('previewDetails').textContent = details || '-';
       if (!el('title').value) el('title').value = title;
@@ -377,6 +605,7 @@
     async function createTicket() {
       const username = el('username').value.trim();
       const password = el('password').value;
+      const scenario = currentScenario();
       if (!username || !password) {
         setStatus('error', '请先输入 iTop REST 用户名和密码。');
         return;
@@ -386,7 +615,7 @@
         return;
       }
 
-      setStatus('info', '正在调用 iTop REST 创建告警故障工单...');
+      setStatus('info', `正在调用 iTop REST 创建告警故障工单（${scenario.label}）...`);
       const form = new URLSearchParams();
       form.set('json_data', JSON.stringify(buildPayload()));
 
@@ -420,6 +649,8 @@
 
       el('resultBox').classList.remove('empty');
       el('resultBox').textContent = [
+        `生成模式: ${scenario.label}`,
+        `预期规则: ${scenario.ruleName}`,
         `外部工单号: ${ref}`,
         `标题: ${title}`,
         `状态: ${status}`,
@@ -429,7 +660,7 @@
         `优先级: ${fields.priority || '-'}`,
         `来源: ${fields.origin || '-'}`,
         '',
-        '接下来回到 Auto-Healing 里执行插件同步，就能看到这条告警故障工单。'
+        '接下来回到 Auto-Healing 里执行插件同步，就能继续验证规则命中与后续流程。'
       ].join('\n');
       setStatus('success', `告警故障工单已在 iTop 中创建成功：${ref}`);
     }
@@ -438,10 +669,13 @@
       node.addEventListener('change', refreshPreview);
       node.addEventListener('input', refreshPreview);
     });
+    document.querySelectorAll('[data-scenario]').forEach((button) => {
+      button.addEventListener('click', () => applyScenario(button.dataset.scenario));
+    });
     el('regenerateBtn').addEventListener('click', regenerate);
     el('createBtn').addEventListener('click', () => createTicket().catch((error) => setStatus('error', error.message)));
 
-    regenerate();
+    applyScenario('generic');
   </script>
 </body>
 </html>
