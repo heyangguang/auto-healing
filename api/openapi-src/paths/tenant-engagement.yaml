@@ -307,6 +307,18 @@
                 x-dict-type: notification_format
                 x-dict-mode: exact
                 description: 未使用模板时的消息格式，默认 text
+              execution_run_id:
+                type: string
+                format: uuid
+                description: 可选，关联执行记录
+              workflow_instance_id:
+                type: string
+                format: uuid
+                description: 可选，关联流程实例
+              incident_id:
+                type: string
+                format: uuid
+                description: 可选，关联工单/事件
     responses:
       '200':
         description: 发送成功

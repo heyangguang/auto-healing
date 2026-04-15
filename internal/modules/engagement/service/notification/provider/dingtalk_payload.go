@@ -30,12 +30,16 @@ type DingTalkAt struct {
 }
 
 type weComMessage struct {
-	MsgType  string          `json:"msgtype"`
-	Markdown *weComMarkdown  `json:"markdown,omitempty"`
-	Text     *DingTalkText   `json:"text,omitempty"`
+	MsgType  string         `json:"msgtype"`
+	Markdown *weComMarkdown `json:"markdown,omitempty"`
+	Text     *weComText     `json:"text,omitempty"`
 }
 
 type weComMarkdown struct {
+	Content string `json:"content"`
+}
+
+type weComText struct {
 	Content string `json:"content"`
 }
 
@@ -53,7 +57,7 @@ func (p *DingTalkProvider) buildPayload(
 	config *DingTalkConfig,
 ) interface{} {
 	if isWeComWebhook(config.WebhookURL) {
-		return buildWeComPayload(req)
+		return buildWeComPayload(req, &WeComConfig{})
 	}
 	return p.buildMessage(req, config)
 }
@@ -86,7 +90,7 @@ func (p *DingTalkProvider) buildMessage(
 	return msg
 }
 
-func buildWeComPayload(req *SendRequest) *weComMessage {
+func buildWeComPayload(req *SendRequest, _ *WeComConfig) *weComMessage {
 	if req.Format == "markdown" {
 		return &weComMessage{
 			MsgType: "markdown",
@@ -97,7 +101,7 @@ func buildWeComPayload(req *SendRequest) *weComMessage {
 	}
 	return &weComMessage{
 		MsgType: "text",
-		Text: &DingTalkText{
+		Text: &weComText{
 			Content: textContent(req.Subject, req.Body),
 		},
 	}

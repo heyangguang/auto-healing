@@ -235,6 +235,12 @@ Notification:
     execution_run_id:
       type: string
       format: uuid
+    workflow_instance_id:
+      type: string
+      format: uuid
+    incident_id:
+      type: string
+      format: uuid
     template_id:
       type: string
       format: uuid
@@ -303,8 +309,11 @@ NotificationTypeCount:
       type: string
       enum:
       - webhook
-      - dingtalk
       - email
+      - dingtalk
+      - wecom
+      - slack
+      - teams
     count:
       type: integer
 NotificationStatusCount:

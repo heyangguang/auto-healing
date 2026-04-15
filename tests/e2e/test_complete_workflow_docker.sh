@@ -286,7 +286,7 @@ echo "  [4.5b] 创建通知模板 (包含 40 个变量)"
 echo "  请求: POST $API_BASE/api/v1/templates"
 echo "  参数:"
 echo "    name: E2E-Template-$TEST_ID"
-echo "    event_type: flow_execution"
+echo "    event_type: flow_result"
 echo "    format: markdown"
 echo "    supported_channels: [webhook, dingtalk, email]"
 echo ""
@@ -297,7 +297,7 @@ TEMPLATE_RESP=$(curl -s -X POST "$API_BASE/api/v1/templates" \
   -d '{
     "name": "E2E-Template-'$TEST_ID'",
     "description": "E2E 测试通知模板 - 包含所有变量",
-    "event_type": "flow_execution",
+    "event_type": "flow_result",
     "subject_template": "[Auto-Healing] {{execution_status_emoji}} 流程 #{{flow_instance_id}} - {{execution_status}}",
     "body_template": "# 自愈流程执行结果\n\n## 基本信息\n- 时间: {{timestamp}}\n- 日期: {{date}}\n- 时间: {{time}}\n\n## 流程信息\n- 实例ID: {{flow_instance_id}}\n- 状态: {{flow_status}}\n\n## 系统信息\n- 系统名称: {{system_name}}\n- 版本: {{system_version}}\n- 环境: {{system_env}}\n\n## 工单信息\n- 工单ID: {{incident_id}}\n- 标题: {{incident_title}}\n- 严重程度: {{incident_severity}}\n- 来源: {{incident_source}}\n- 外部ID: {{incident_external_id}}\n- 状态: {{incident_status}}\n\n## 执行结果\n- 状态: {{execution_status}} {{execution_status_emoji}}\n- 消息: {{execution_message}}\n- 退出码: {{execution_exit_code}}\n- 耗时: {{execution_duration_ms}} ms\n- Playbook: {{execution_playbook_path}}\n\n## 统计信息\n| OK | Changed | Failed | Unreachable | Skipped | Total | 成功率 |\n|----|---------|--------|-------------|---------|-------|---------|\n| {{stats.ok}} | {{stats.changed}} | {{stats.failed}} | {{stats.unreachable}} | {{stats.skipped}} | {{stats.total}} | {{stats.success_rate}} |\n\n## 验证摘要\n- 总数: {{validation.total}}\n- 匹配: {{validation.matched}}\n- 不匹配: {{validation.unmatched}}\n\n## 主机信息\n- 目标主机: {{target_hosts}}\n- 主机数量: {{host_count}}\n\n## Ansible 输出\n```\n{{execution_stdout}}\n```\n\n## 错误输出\n```\n{{execution_stderr}}\n```",
     "format": "markdown",

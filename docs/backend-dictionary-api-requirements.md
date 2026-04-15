@@ -273,6 +273,9 @@ GET /api/v1/dictionaries/types
 | `webhook` | Webhook | `#722ed1` | `ApiOutlined` | `#f9f0ff` | `{"label_upper": "WEBHOOK"}` |
 | `email` | 邮件 | `#1890ff` | `MailOutlined` | `#e6f7ff` | `{"label_upper": "EMAIL"}` |
 | `dingtalk` | 钉钉 | `#0079f2` | `DingdingOutlined` | `#f0f5ff` | `{"label_upper": "DINGTALK"}` |
+| `wecom` | 企业微信 | `#07c160` | `WechatWorkOutlined` | `#f6ffed` | `{"label_upper": "WECOM"}` |
+| `slack` | Slack | `#4a154b` | `SlackOutlined` | `#fff0f6` | `{"label_upper": "SLACK"}` |
+| `teams` | Teams | `#6264a7` | `WindowsOutlined` | `#f0f5ff` | `{"label_upper": "TEAMS"}` |
 
 ### 4.9 CMDB 资产类型 (`cmdb_type`)
 
@@ -423,7 +426,7 @@ GET /api/v1/dictionaries/types
 | `set_variable` | 变量设置 | `#eb2f96` | `FunctionOutlined` | `{"full_label": "设置变量"}` |
 | `compute` | 计算 | `#2f54eb` | `CalculatorOutlined` | `{"full_label": "计算节点"}` |
 | `trigger` | 触发器 | `#722ed1` | `ThunderboltOutlined` | |
-| `custom` | 自定义 | `#8c8c8c` | | |
+| `manual_notification` | 手动通知 | `#8c8c8c` | | |
 
 ---
 
@@ -436,12 +439,25 @@ GET /api/v1/dictionaries/types
 **前端映射示例**（已有约 30 个图标）：
 
 ```typescript
-import { DesktopOutlined, MailOutlined, ApiOutlined, ... } from '@ant-design/icons';
+import {
+    DesktopOutlined,
+    MailOutlined,
+    ApiOutlined,
+    DingdingOutlined,
+    WechatWorkOutlined,
+    SlackOutlined,
+    WindowsOutlined,
+    ...
+} from '@ant-design/icons';
 
 const ICON_REGISTRY: Record<string, React.ReactNode> = {
     DesktopOutlined: <DesktopOutlined />,
     MailOutlined: <MailOutlined />,
     ApiOutlined: <ApiOutlined />,
+    DingdingOutlined: <DingdingOutlined />,
+    WechatWorkOutlined: <WechatWorkOutlined />,
+    SlackOutlined: <SlackOutlined />,
+    WindowsOutlined: <WindowsOutlined />,
     // ... 按需扩展
 };
 

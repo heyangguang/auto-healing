@@ -45,7 +45,7 @@ tags:
 - name: 执行任务
   description: Ansible Playbook 执行任务管理
 - name: 通知渠道
-  description: 通知渠道管理 (Webhook, 钉钉, 邮件)
+  description: 通知渠道管理 (Webhook, 钉钉, 企业微信, Slack, Teams, 邮件)
 - name: 通知模板
   description: 通知模板管理 (支持 40+ 变量)
 - name: 通知记录

@@ -33,9 +33,10 @@ INCIDENT_HEALING_ENUM = "pending, processing, healed, failed, skipped, dismissed
 INCIDENT_HEALING_MD = "`pending` / `processing` / `healed` / `failed` / `skipped` / `dismissed`"
 FLOW_INSTANCE_ENUM = "pending, running, waiting_approval, completed, failed, cancelled"
 FLOW_INSTANCE_MD = "`pending` / `running` / `waiting_approval` / `completed` / `failed` / `cancelled`"
-NOTIFICATION_EVENT_TYPES = "incident_created, incident_resolved, approval_required, execution_result, custom"
-NOTIFICATION_EVENT_TYPES_MD = "`incident_created` / `incident_resolved` / `approval_required` / `execution_result` / `custom`"
+NOTIFICATION_EVENT_TYPES = "execution_started, execution_result, flow_result, approval_required, manual_notification"
+NOTIFICATION_EVENT_TYPES_MD = "`execution_started` / `execution_result` / `flow_result` / `approval_required` / `manual_notification`"
 NOTIFICATION_LOG_STATUSES_MD = "`pending` / `sent` / `delivered` / `failed` / `bounced`"
+NOTIFICATION_CHANNEL_TYPES_MD = "`email` / `dingtalk` / `wecom` / `slack` / `teams` / `webhook`"
 
 
 def read_text(path: Path) -> str:
@@ -552,12 +553,12 @@ def validate_common_docs(errors: List[str]) -> None:
     require(errors, '"data": [' in notifications_doc, "docs/api/notifications.md 的列表响应仍是旧的 data.items 结构")
     require(errors, '"is_active": true' in notifications_doc, "docs/api/notifications.md 的渠道示例仍未对齐 is_active")
     require(errors, "default_recipients" not in notifications_doc, "docs/api/notifications.md 仍使用 default_recipients 旧字段")
-    require(errors, "| `supported_channels` | []string | ❌ | 支持的渠道类型列表：`email` / `dingtalk` / `webhook` |" in notifications_doc, "docs/api/notifications.md 的模板字段仍未对齐 supported_channels")
+    require(errors, f"| `supported_channels` | []string | ❌ | 支持的渠道类型列表：{NOTIFICATION_CHANNEL_TYPES_MD} |" in notifications_doc, "docs/api/notifications.md 的模板字段仍未对齐 supported_channels")
     require(errors, "| `event_type` | string | ❌ | 事件类型（见下方枚举） |" in notifications_doc, "docs/api/notifications.md 的模板 event_type 仍错误标为必填")
-    for event_type in ["incident_created", "incident_resolved", "approval_required", "execution_result", "custom"]:
+    for event_type in ["execution_started", "execution_result", "flow_result", "approval_required", "manual_notification"]:
         require(errors, f"| `{event_type}` |" in notifications_doc, f"docs/api/notifications.md 缺少通知事件类型 `{event_type}`")
     require(errors, NOTIFICATION_LOG_STATUSES_MD in notifications_doc, "docs/api/notifications.md 的通知日志状态枚举仍未对齐 sent/delivered/bounced")
-    require(errors, "| `supported_channel` | string | ❌ | 支持的渠道类型：`email` / `dingtalk` / `webhook` |" in notifications_doc, "docs/api/notifications.md 缺少 supported_channel 筛选参数")
+    require(errors, f"| `supported_channel` | string | ❌ | 支持的渠道类型：{NOTIFICATION_CHANNEL_TYPES_MD} |" in notifications_doc, "docs/api/notifications.md 缺少 supported_channel 筛选参数")
     require(errors, "| `execution_run_id` | uuid | ❌ | 按执行记录筛选 |" in notifications_doc, "docs/api/notifications.md 仍未对齐 execution_run_id 筛选参数")
     require(errors, "| `subject` | string | ❌ | 按通知标题模糊搜索 |" in notifications_doc, "docs/api/notifications.md 仍未对齐 subject 筛选参数")
     require(errors, "**权限**: `channel:update`" in notifications_doc.split("### 6. 测试渠道", 1)[1].split("## 通知模板（Templates）", 1)[0], "docs/api/notifications.md 的测试渠道权限仍未对齐 channel:update")

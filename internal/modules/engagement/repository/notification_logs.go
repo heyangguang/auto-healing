@@ -189,5 +189,7 @@ func (r *NotificationRepository) preloadNotificationLogs(ctx context.Context, db
 		Preload("Template", "tenant_id = ?", tenantID).
 		Preload("Channel", "tenant_id = ?", tenantID).
 		Preload("ExecutionRun", "tenant_id = ?", tenantID).
-		Preload("ExecutionRun.Task", "tenant_id = ?", tenantID)
+		Preload("ExecutionRun.Task", "tenant_id = ?", tenantID).
+		Preload("WorkflowInstance", "tenant_id = ?", tenantID).
+		Preload("Incident", "tenant_id = ?", tenantID)
 }

@@ -16,7 +16,7 @@ type NotificationChannel struct {
 	ID                 uuid.UUID    `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	TenantID           *uuid.UUID   `json:"tenant_id,omitempty" gorm:"type:uuid;uniqueIndex:idx_channel_tenant_name"`
 	Name               string       `json:"name" gorm:"type:varchar(200);not null;uniqueIndex:idx_channel_tenant_name"`
-	Type               string       `json:"type" gorm:"type:varchar(50);not null"` // email, dingtalk, webhook
+	Type               string       `json:"type" gorm:"type:varchar(50);not null"` // webhook, email, dingtalk, wecom, slack, teams
 	Description        string       `json:"description,omitempty" gorm:"type:text"`
 	Config             JSON         `json:"-" gorm:"type:jsonb;not null"`              // 加密存储敏感信息
 	RetryConfig        *RetryConfig `json:"retry_config,omitempty" gorm:"type:jsonb"`  // 重试配置
@@ -65,7 +65,7 @@ type NotificationTemplate struct {
 	TenantID           *uuid.UUID  `json:"tenant_id,omitempty" gorm:"type:uuid;index"`
 	Name               string      `json:"name" gorm:"type:varchar(200);not null"`
 	Description        string      `json:"description,omitempty" gorm:"type:text"`
-	EventType          string      `json:"event_type,omitempty" gorm:"type:varchar(50)"` // incident_created, incident_resolved, approval_required, execution_result, custom
+	EventType          string      `json:"event_type,omitempty" gorm:"type:varchar(50)"` // execution_started, execution_result, flow_result, approval_required, manual_notification
 	SupportedChannels  StringArray `json:"supported_channels" gorm:"type:jsonb;default:'[]'"`
 	SubjectTemplate    string      `json:"subject_template,omitempty" gorm:"type:text"`
 	BodyTemplate       string      `json:"body_template" gorm:"type:text;not null"`

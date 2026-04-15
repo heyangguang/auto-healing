@@ -140,13 +140,19 @@ var AllDictionarySeeds = []model.Dictionary{
 	d("notification_channel_type", "webhook", "Webhook", "Webhook", "#722ed1", "purple", "", "ApiOutlined", "#f9f0ff", 0),
 	d("notification_channel_type", "email", "邮件", "Email", "#1890ff", "blue", "", "MailOutlined", "#e6f7ff", 1),
 	d("notification_channel_type", "dingtalk", "钉钉", "DingTalk", "#1677ff", "blue", "", "DingdingOutlined", "#e6f7ff", 2),
+	d("notification_channel_type", "wecom", "企业微信", "WeCom", "#07c160", "green", "", "WechatWorkOutlined", "#f6ffed", 3),
+	d("notification_channel_type", "slack", "Slack", "Slack", "#4a154b", "purple", "", "SlackOutlined", "#fff0f6", 4),
+	d("notification_channel_type", "teams", "Teams", "Microsoft Teams", "#6264a7", "geekblue", "", "WindowsOutlined", "#f0f5ff", 5),
 
 	// ==================== 20. notification_event_type ====================
-	d("notification_event_type", "incident_created", "事件创建", "Incident Created", "#f5222d", "red", "", "", "", 0),
-	d("notification_event_type", "incident_resolved", "事件解决", "Incident Resolved", "#52c41a", "green", "", "", "", 1),
-	d("notification_event_type", "approval_required", "需要审批", "Approval Required", "#fa8c16", "orange", "", "", "", 2),
-	d("notification_event_type", "execution_result", "执行结果", "Execution Result", "#1890ff", "blue", "", "", "", 3),
-	d("notification_event_type", "custom", "自定义", "Custom", "#8c8c8c", "default", "", "", "", 4),
+	d("notification_event_type", "execution_started", "执行开始", "Execution Started", "#13c2c2", "cyan", "", "", "", 0),
+	d("notification_event_type", "execution_result", "执行结果", "Execution Result", "#1890ff", "blue", "", "", "", 1),
+	d("notification_event_type", "flow_result", "流程结果", "Flow Result", "#722ed1", "purple", "", "", "", 2),
+	d("notification_event_type", "approval_required", "等待审批", "Approval Required", "#fa8c16", "orange", "", "", "", 3),
+	d("notification_event_type", "manual_notification", "手动通知", "Manual Notification", "#8c8c8c", "default", "", "", "", 4),
+	dInactive("notification_event_type", "custom", "自定义", "Custom", "#8c8c8c", "default", "", "", "", 89),
+	dInactive("notification_event_type", "incident_created", "事件创建", "Incident Created", "#f5222d", "red", "", "", "", 90),
+	dInactive("notification_event_type", "incident_resolved", "事件解决", "Incident Resolved", "#52c41a", "green", "", "", "", 91),
 
 	// ==================== 21. notification_format ====================
 	d("notification_format", "text", "纯文本", "Text", "#8c8c8c", "default", "", "", "", 0),

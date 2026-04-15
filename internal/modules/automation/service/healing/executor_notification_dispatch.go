@@ -130,7 +130,7 @@ func (e *FlowExecutor) sendConfiguredNotifications(ctx context.Context, instance
 	var lastErr error
 
 	for _, cfg := range configs {
-		logs, err := e.sendNotificationToChannel(ctx, cfg, variables, subject, body)
+		logs, err := e.sendNotificationToChannel(ctx, instance, cfg, variables, subject, body)
 		if err != nil {
 			logger.Exec("NODE").Error("通知服务发送失败 (渠道=%s): %v", cfg.ChannelID, err)
 			lastErr = err
@@ -157,7 +157,7 @@ func (e *FlowExecutor) sendConfiguredNotifications(ctx context.Context, instance
 	logger.Exec("NODE").Info("[%s] 通知发送完成, 共发送 %d 条通知", shortID(instance), len(allLogs))
 }
 
-func (e *FlowExecutor) sendNotificationToChannel(ctx context.Context, cfg channelTemplateConfig, variables map[string]interface{}, subject, body string) ([]*engagementmodel.NotificationLog, error) {
+func (e *FlowExecutor) sendNotificationToChannel(ctx context.Context, instance *model.FlowInstance, cfg channelTemplateConfig, variables map[string]interface{}, subject, body string) ([]*engagementmodel.NotificationLog, error) {
 	channelUUID, err := uuid.Parse(cfg.ChannelID)
 	if err != nil {
 		return nil, err
@@ -171,12 +171,14 @@ func (e *FlowExecutor) sendNotificationToChannel(ctx context.Context, cfg channe
 	}
 
 	return e.notificationSvc.Send(ctx, notificationSvc.SendNotificationRequest{
-		TemplateID: templateUUID,
-		ChannelIDs: []uuid.UUID{channelUUID},
-		Variables:  variables,
-		Subject:    subject,
-		Body:       body,
-		Format:     "markdown",
+		TemplateID:         templateUUID,
+		ChannelIDs:         []uuid.UUID{channelUUID},
+		Variables:          variables,
+		Subject:            subject,
+		Body:               body,
+		Format:             "markdown",
+		WorkflowInstanceID: &instance.ID,
+		IncidentID:         instance.IncidentID,
 	})
 }
 

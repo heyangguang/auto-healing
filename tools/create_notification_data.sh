@@ -156,7 +156,7 @@ for i in {1..3}; do
 {
   "name": "钉钉-告警通知-${i}",
   "description": "钉钉机器人告警通知模板",
-  "event_type": "custom",
+  "event_type": "flow_result",
   "supported_channels": ["dingtalk"],
   "subject_template": "告警通知",
   "body_template": "### 告警通知\n- 状态: {{execution_status}}\n- 时间: {{timestamp}}",
@@ -172,7 +172,7 @@ for i in {1..3}; do
 {
   "name": "全渠道-通用通知-${i}",
   "description": "支持所有渠道类型的通用通知模板",
-  "event_type": "custom",
+  "event_type": "flow_result",
   "supported_channels": ["webhook", "email", "dingtalk"],
   "subject_template": "通用通知-${i}",
   "body_template": "{{execution_status}} | {{timestamp}} | {{target_hosts}}",

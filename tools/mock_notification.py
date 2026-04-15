@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Mock 通知服务
-用于测试通知模块的 Webhook 和钉钉发送功能
+用于测试通知模块的 Webhook / 钉钉 / 企业微信 / Slack / Teams 发送功能
 """
 
 from flask import Flask, request, jsonify
@@ -45,6 +45,48 @@ def dingtalk_receiver():
         "errmsg": "ok"
     })
 
+@app.route('/wecom', methods=['POST'])
+def wecom_receiver():
+    """模拟企业微信机器人 Webhook"""
+    data = request.get_json()
+    notification = {
+        'type': 'wecom',
+        'timestamp': datetime.now().isoformat(),
+        'body': data
+    }
+    received_notifications.append(notification)
+    print(f"[WeCom] 收到通知: {json.dumps(data, ensure_ascii=False, indent=2)}")
+    return jsonify({
+        "errcode": 0,
+        "errmsg": "ok"
+    })
+
+@app.route('/slack', methods=['POST'])
+def slack_receiver():
+    """模拟 Slack Incoming Webhook"""
+    data = request.get_json()
+    notification = {
+        'type': 'slack',
+        'timestamp': datetime.now().isoformat(),
+        'body': data
+    }
+    received_notifications.append(notification)
+    print(f"[Slack] 收到通知: {json.dumps(data, ensure_ascii=False, indent=2)}")
+    return "ok", 200
+
+@app.route('/teams', methods=['POST'])
+def teams_receiver():
+    """模拟 Teams Incoming Webhook"""
+    data = request.get_json()
+    notification = {
+        'type': 'teams',
+        'timestamp': datetime.now().isoformat(),
+        'body': data
+    }
+    received_notifications.append(notification)
+    print(f"[Teams] 收到通知: {json.dumps(data, ensure_ascii=False, indent=2)}")
+    return "1", 200
+
 @app.route('/fail', methods=['POST'])
 def fail_receiver():
     """模拟失败的 Webhook（用于测试重试）"""
@@ -76,6 +118,9 @@ if __name__ == '__main__':
     print("=" * 50)
     print("Webhook 地址: http://localhost:9999/webhook")
     print("钉钉地址:     http://localhost:9999/dingtalk")
+    print("企业微信地址: http://localhost:9999/wecom")
+    print("Slack 地址:   http://localhost:9999/slack")
+    print("Teams 地址:   http://localhost:9999/teams")
     print("失败测试:     http://localhost:9999/fail")
     print("查看记录:     http://localhost:9999/notifications")
     print("=" * 50)

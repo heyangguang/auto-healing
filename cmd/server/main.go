@@ -145,6 +145,7 @@ func startupSeedJobs() []startupJob {
 		{name: "站内信种子数据插入失败", required: false, run: database.SeedSiteMessages},
 		{name: "高危指令黑名单种子数据同步失败", required: true, run: database.SeedCommandBlacklist},
 		{name: "平台设置默认值初始化失败", required: true, run: database.SeedPlatformSettings},
+		{name: "通知历史数据对齐失败", required: true, run: database.AlignNotificationData},
 	}
 }
 

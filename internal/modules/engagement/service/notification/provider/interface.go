@@ -46,6 +46,9 @@ func NewRegistry() *Registry {
 	// 注册默认提供者
 	r.Register(NewWebhookProvider())
 	r.Register(NewDingTalkProvider())
+	r.Register(NewWeComProvider())
+	r.Register(NewSlackProvider())
+	r.Register(NewTeamsProvider())
 	r.Register(NewEmailProvider())
 	return r
 }

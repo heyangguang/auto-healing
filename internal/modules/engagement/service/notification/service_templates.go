@@ -15,15 +15,20 @@ func (s *Service) CreateTemplate(ctx context.Context, req CreateTemplateRequest)
 	if format == "" {
 		format = "text"
 	}
+	eventType, err := validateNotificationEventType(req.EventType)
+	if err != nil {
+		return nil, err
+	}
 	isActive := true
 	if req.IsActive != nil {
 		isActive = *req.IsActive
 	}
 
 	template := &model.NotificationTemplate{
+		ID:                 uuid.New(),
 		Name:               req.Name,
 		Description:        req.Description,
-		EventType:          req.EventType,
+		EventType:          eventType,
 		SupportedChannels:  req.SupportedChannels,
 		SubjectTemplate:    req.SubjectTemplate,
 		BodyTemplate:       req.BodyTemplate,
@@ -60,7 +65,11 @@ func (s *Service) UpdateTemplate(ctx context.Context, id uuid.UUID, req UpdateTe
 		template.Description = *req.Description
 	}
 	if req.EventType != nil {
-		template.EventType = *req.EventType
+		eventType, err := validateNotificationEventType(*req.EventType)
+		if err != nil {
+			return nil, err
+		}
+		template.EventType = eventType
 	}
 	if req.SupportedChannels != nil {
 		template.SupportedChannels = req.SupportedChannels

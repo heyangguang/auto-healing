@@ -20,15 +20,15 @@ func (s stubProvider) Test(context.Context, map[string]interface{}) error { retu
 func TestNewRegistryRegistersDefaults(t *testing.T) {
 	registry := NewRegistry()
 
-	for _, want := range []string{"webhook", "dingtalk", "email"} {
+	for _, want := range []string{"webhook", "dingtalk", "wecom", "slack", "teams", "email"} {
 		if _, ok := registry.Get(want); !ok {
 			t.Fatalf("registry missing default provider %q", want)
 		}
 	}
 
 	types := registry.List()
-	if len(types) != 3 {
-		t.Fatalf("List() len = %d, want 3", len(types))
+	if len(types) != 6 {
+		t.Fatalf("List() len = %d, want 6", len(types))
 	}
 }
 

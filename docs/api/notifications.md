@@ -23,7 +23,7 @@
 | `page` | int | ❌ | 页码，默认 1 |
 | `page_size` | int | ❌ | 每页数量，默认 20 |
 | `search` | string | ❌ | 模糊搜索（名称） |
-| `type` | string | ❌ | 渠道类型：`email` / `dingtalk` / `webhook` |
+| `type` | string | ❌ | 渠道类型：`email` / `dingtalk` / `wecom` / `slack` / `teams` / `webhook` |
 
 #### 响应
 
@@ -34,9 +34,9 @@
   "data": [
     {
       "id": "uuid",
-      "name": "运维钉钉群",
+      "name": "运维企业微信群",
       "description": "运维团队告警通知",
-      "type": "dingtalk",
+      "type": "wecom",
       "retry_config": {
         "max_retries": 3,
         "retry_intervals": [1, 5, 15]
@@ -68,12 +68,23 @@
 |------|------|------|------|
 | `name` | string | ✅ | 渠道名称 |
 | `description` | string | ❌ | 描述 |
-| `type` | string | ✅ | 渠道类型：`email` / `dingtalk` / `webhook` |
+| `type` | string | ✅ | 渠道类型：`email` / `dingtalk` / `wecom` / `slack` / `teams` / `webhook` |
 | `config` | object | ✅ | 渠道配置（根据类型不同） |
 | `retry_config` | object | ❌ | 重试配置 |
 | `recipients` | []string | ❌ | 默认接收人列表 |
 | `is_default` | bool | ❌ | 是否默认渠道 |
 | `rate_limit_per_minute` | int | ❌ | 每分钟限流阈值 |
+
+**企业微信配置**:
+```json
+{
+  "name": "运维企业微信群",
+  "type": "wecom",
+  "config": {
+    "webhook_url": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
+  }
+}
+```
 
 **DingTalk 配置**:
 ```json
@@ -87,9 +98,36 @@
 }
 ```
 
-> 兼容说明：当 `webhook_url` 指向企业微信机器人地址
-> `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?...` 时，系统会自动按企业微信兼容格式发送消息。
-> `text` 与 `markdown` 两种模板格式都可直接使用，无需切换渠道类型。
+> 历史兼容说明：已经错误创建为 `type=dingtalk` 且 `webhook_url`
+> 指向 `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?...` 的旧渠道，
+> 系统仍会按企业微信机器人格式发送，避免存量配置立即失效。
+> 新建企业微信渠道请统一使用 `type=wecom`。
+
+**Slack 配置**:
+```json
+{
+  "name": "运维 Slack Channel",
+  "type": "slack",
+  "config": {
+    "webhook_url": "https://hooks.slack.com/services/xxx/yyy/zzz",
+    "channel": "#ops-alerts",
+    "username": "auto-healing",
+    "icon_emoji": ":robot_face:"
+  }
+}
+```
+
+**Teams 配置**:
+```json
+{
+  "name": "运维 Teams Channel",
+  "type": "teams",
+  "config": {
+    "webhook_url": "https://example.webhook.office.com/webhookb2/...",
+    "theme_color": "6264A7"
+  }
+}
+```
 
 **Email 配置**:
 ```json
@@ -178,7 +216,7 @@
 | `name` | string | ❌ | 按模板名称模糊搜索 |
 | `event_type` | string | ❌ | 事件类型筛选（见下方枚举） |
 | `format` | string | ❌ | 消息格式：`text` / `markdown` / `html` |
-| `supported_channel` | string | ❌ | 支持的渠道类型：`email` / `dingtalk` / `webhook` |
+| `supported_channel` | string | ❌ | 支持的渠道类型：`email` / `dingtalk` / `wecom` / `slack` / `teams` / `webhook` |
 | `is_active` | bool | ❌ | 是否启用：`true` / `false` |
 | `sort_by` | string | ❌ | 排序字段：`name` / `created_at` / `updated_at` |
 | `sort_order` | string | ❌ | 排序方向：`asc` / `desc` |
@@ -198,7 +236,7 @@
 | `name` | string | ✅ | 模板名称 |
 | `description` | string | ❌ | 描述 |
 | `event_type` | string | ❌ | 事件类型（见下方枚举） |
-| `supported_channels` | []string | ❌ | 支持的渠道类型列表：`email` / `dingtalk` / `webhook` |
+| `supported_channels` | []string | ❌ | 支持的渠道类型列表：`email` / `dingtalk` / `wecom` / `slack` / `teams` / `webhook` |
 | `subject_template` | string | ❌ | 主题模板（Email 类型） |
 | `body_template` | string | ✅ | 消息体模板（支持 Go 模板语法） |
 | `format` | string | ❌ | 消息格式：`text` / `markdown` / `html`，默认 `text` |
@@ -305,12 +343,12 @@
 
 ## 事件类型（event_type）枚举
 
-可选值：`incident_created` / `incident_resolved` / `approval_required` / `execution_result` / `custom`
+可选值：`execution_started` / `execution_result` / `flow_result` / `approval_required` / `manual_notification`
 
 | 值 | 说明 |
 |----|------|
-| `incident_created` | 工单创建 |
-| `incident_resolved` | 工单解决 |
+| `execution_started` | 执行任务开始 |
+| `execution_result` | 执行任务结果（成功/失败） |
+| `flow_result` | 自愈流程结果（完成/失败） |
 | `approval_required` | 自愈流程等待审批 |
-| `execution_result` | 任务执行结果 |
-| `custom` | 自定义通知事件 |
+| `manual_notification` | 手动发送或通用通知模板 |

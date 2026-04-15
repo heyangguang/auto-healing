@@ -1,18 +1,18 @@
 package provider
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
 )
+
+const dingTalkProviderLabel = "钉钉"
 
 // DingTalkProvider 钉钉通知提供者
 type DingTalkProvider struct {
@@ -48,12 +48,6 @@ func (p *DingTalkProvider) Send(ctx context.Context, req *SendRequest) (*SendRes
 		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
 	}
 
-	payload := p.buildPayload(req, config)
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
-	}
-
 	// 构建签名 URL
 	requestURL, err := p.buildSignedURL(config)
 	if err != nil {
@@ -61,34 +55,17 @@ func (p *DingTalkProvider) Send(ctx context.Context, req *SendRequest) (*SendRes
 	}
 
 	// 发送请求
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(jsonData))
+	httpReq, err := newJSONRequest(ctx, requestURL, p.buildPayload(req, config))
 	if err != nil {
 		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
 		return &SendResponse{Success: false, ErrorMessage: err.Error()}, err
 	}
 	defer resp.Body.Close()
-
-	// 解析响应
-	body, _ := io.ReadAll(resp.Body)
-	var result map[string]interface{}
-	json.Unmarshal(body, &result)
-
-	errcode, _ := result["errcode"].(float64)
-	if errcode == 0 {
-		return &SendResponse{
-			Success:      true,
-			ResponseData: result,
-		}, nil
-	}
-
-	errmsg, _ := result["errmsg"].(string)
-	errMsg := fmt.Sprintf("钉钉发送失败: %s (errcode: %.0f)", errmsg, errcode)
-	return &SendResponse{Success: false, ErrorMessage: errMsg}, fmt.Errorf("%s", errMsg)
+	return buildRobotSendResponse(resp, dingTalkProviderLabel)
 }
 
 // Test 测试连接
@@ -98,39 +75,26 @@ func (p *DingTalkProvider) Test(ctx context.Context, configMap map[string]interf
 		return err
 	}
 
-	jsonData, _ := json.Marshal(p.buildPayload(&SendRequest{
-		Body: "Auto-Healing 通知测试 - " + time.Now().Format("2006-01-02 15:04:05"),
-	}, config))
-
 	requestURL, err := p.buildSignedURL(config)
 	if err != nil {
 		return err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(jsonData))
+	httpReq, err := newJSONRequest(ctx, requestURL, p.buildPayload(&SendRequest{
+		Body: "Auto-Healing 通知测试 - " + time.Now().Format("2006-01-02 15:04:05"),
+	}, config))
 	if err != nil {
 		return err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("连接失败: %w", err)
 	}
 	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	var result map[string]interface{}
-	json.Unmarshal(body, &result)
-
-	errcode, _ := result["errcode"].(float64)
-	if errcode == 0 {
-		return nil
-	}
-
-	errmsg, _ := result["errmsg"].(string)
-	return fmt.Errorf("测试失败: %s (errcode: %.0f)", errmsg, errcode)
+	return validateRobotResponse(resp, dingTalkProviderLabel)
 }
+
 // buildSignedURL 构建签名 URL
 func (p *DingTalkProvider) buildSignedURL(config *DingTalkConfig) (string, error) {
 	if config.Secret == "" {

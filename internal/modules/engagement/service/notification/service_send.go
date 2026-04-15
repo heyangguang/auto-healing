@@ -28,7 +28,7 @@ func (s *Service) Send(ctx context.Context, req SendNotificationRequest) ([]*mod
 	logs := make([]*model.NotificationLog, 0, len(channels))
 	sendErrs := make([]error, 0)
 	for _, channel := range channels {
-		log, sendErr := s.sendToChannel(ctx, &channel, subject, body, format, req.TemplateID, req.ExecutionRunID)
+		log, sendErr := s.sendToChannel(ctx, &channel, subject, body, format, req)
 		if log != nil {
 			logs = append(logs, log)
 		}
@@ -101,16 +101,18 @@ func (s *Service) resolveNotificationContent(ctx context.Context, req SendNotifi
 }
 
 // sendToChannel 发送到单个渠道
-func (s *Service) sendToChannel(ctx context.Context, channel *model.NotificationChannel, subject, body, format string, templateID, executionRunID *uuid.UUID) (*model.NotificationLog, error) {
+func (s *Service) sendToChannel(ctx context.Context, channel *model.NotificationChannel, subject, body, format string, req SendNotificationRequest) (*model.NotificationLog, error) {
 	log := &model.NotificationLog{
-		TemplateID:     templateID,
-		ChannelID:      channel.ID,
-		ExecutionRunID: executionRunID,
-		Recipients:     channel.Recipients,
-		Subject:        subject,
-		Body:           body,
-		ResponseData:   notificationRequestMetadata(format),
-		Status:         "pending",
+		TemplateID:         req.TemplateID,
+		ChannelID:          channel.ID,
+		ExecutionRunID:     req.ExecutionRunID,
+		WorkflowInstanceID: req.WorkflowInstanceID,
+		IncidentID:         req.IncidentID,
+		Recipients:         channel.Recipients,
+		Subject:            subject,
+		Body:               body,
+		ResponseData:       notificationRequestMetadata(format),
+		Status:             "pending",
 	}
 	if err := s.repo.CreateLog(ctx, log); err != nil {
 		return nil, fmt.Errorf("%w: create log: %v", ErrNotificationLogPersistenceFailed, err)

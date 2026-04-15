@@ -104,13 +104,15 @@ type PreviewResult struct {
 
 // SendNotificationRequest 发送通知请求
 type SendNotificationRequest struct {
-	TemplateID     *uuid.UUID             `json:"template_id"`
-	ChannelIDs     []uuid.UUID            `json:"channel_ids"`
-	Variables      map[string]interface{} `json:"variables"`
-	Subject        string                 `json:"subject"`
-	Body           string                 `json:"body"`
-	Format         string                 `json:"format"`
-	ExecutionRunID *uuid.UUID             `json:"execution_run_id"`
+	TemplateID         *uuid.UUID             `json:"template_id"`
+	ChannelIDs         []uuid.UUID            `json:"channel_ids"`
+	Variables          map[string]interface{} `json:"variables"`
+	Subject            string                 `json:"subject"`
+	Body               string                 `json:"body"`
+	Format             string                 `json:"format"`
+	ExecutionRunID     *uuid.UUID             `json:"execution_run_id"`
+	WorkflowInstanceID *uuid.UUID             `json:"workflow_instance_id"`
+	IncidentID         *uuid.UUID             `json:"incident_id"`
 }
 
 func (s *Service) GetChannel(ctx context.Context, id uuid.UUID) (*model.NotificationChannel, error) {

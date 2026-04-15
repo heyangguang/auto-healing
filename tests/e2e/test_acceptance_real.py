@@ -4573,7 +4573,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                     {
                         "name": "acc-template-webhook",
                         "description": "acceptance template",
-                        "event_type": "acceptance.event",
+                        "event_type": "custom",
                         "supported_channels": ["webhook"],
                         "subject_template": "Execution {{task.name}} {{execution.status}}",
                         "body_template": "Body for {{task.name}} on {{date}}",
@@ -5517,7 +5517,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                     {
                         "name": "acc-template-vars-start",
                         "description": "start template variables",
-                        "event_type": "execution.start",
+                        "event_type": "execution_started",
                         "supported_channels": ["webhook"],
                         "subject_template": "Start {{task.name}} {{execution.status}}",
                         "body_template": "run={{execution.run_id}} status={{execution.status}} trigger={{execution.trigger_type}} started={{execution.started_at}} hosts={{task.host_count}} system={{system.name}}",
@@ -5537,7 +5537,7 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
                     {
                         "name": "acc-template-vars-success",
                         "description": "success template variables",
-                        "event_type": "execution.success",
+                        "event_type": "execution_result",
                         "supported_channels": ["webhook"],
                         "subject_template": "Done {{task.name}} {{execution.status}}",
                         "body_template": "run={{execution.run_id}} code={{execution.exit_code}} ok={{stats.ok}} failed={{stats.failed}} duration={{execution.duration}} repo={{repository.playbook}} executor={{task.executor_type}} system={{system.name}}",

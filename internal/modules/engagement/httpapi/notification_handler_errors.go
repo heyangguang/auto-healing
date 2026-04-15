@@ -27,6 +27,7 @@ func writeNotificationMutationError(c *gin.Context, err error, notFoundMsg, inte
 		errors.Is(err, notification.ErrNotificationTemplateNotFound):
 		response.NotFound(c, notFoundMsg)
 	case errors.Is(err, notification.ErrNotificationUnsupportedType),
+		errors.Is(err, notification.ErrNotificationUnsupportedEventType),
 		errors.Is(err, notification.ErrNotificationChannelInactive):
 		response.BadRequest(c, err.Error())
 	case errors.Is(err, notification.ErrNotificationChannelExists):

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"time"
 
+	automationexecution "github.com/company/auto-healing/internal/modules/automation/service/execution"
 	"github.com/company/auto-healing/internal/modules/engagement/model"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
@@ -57,7 +58,7 @@ func buildNotificationLogListOptions(c *gin.Context, page, pageSize int) *engage
 		PageSize:    pageSize,
 		Status:      c.Query("status"),
 		TaskName:    GetStringFilter(c, "task_name"),
-		TriggeredBy: c.Query("triggered_by"),
+		TriggeredBy: automationexecution.NormalizeTriggeredBy(c.Query("triggered_by")),
 		Subject:     GetStringFilter(c, "subject"),
 		SortBy:      c.Query("sort_by"),
 		SortOrder:   c.Query("sort_order"),
