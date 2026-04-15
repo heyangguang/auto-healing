@@ -58,13 +58,20 @@
 | **无审计追踪** | 操作凭经验，知识流失严重 | 不可篡改的法证级日志 |
 | **工具孤岛** | ITSM、CMDB、脚本各自为政 | 统一平台，插件化集成 |
 
+### 🆕 最近更新
+
+- **结构化工单回写** — Flow 自动关单现在支持绑定解决方案模板，并按 `问题说明 / 解决方案 / 执行步骤 / 验证结果 / 最终结论` 回写到外部 ITSM 工单。
+- **任务级执行步骤** — 工单回写里的执行步骤已支持从真实 Ansible 输出提取可读的 task 明细，不再只停留在流程摘要。
+- **通知引擎扩展** — 通知渠道已覆盖 **邮件、Webhook、钉钉、企业微信、Slack、Teams**，并支持关联执行记录、流程实例和工单。
+- **本地联调实验增强** — 新增 **iTop 适配器联调实验** 和 **高危指令黑名单拦截实验**，方便做真实链路验证。
+
 ---
 
 ## ✨ 核心功能
 
 ### 🔄 自愈引擎
 - **可视化 DAG 工作流编辑器** — 拖拽式构建复杂修复流程
-- **9 种节点类型** — 主机提取、CMDB 校验、条件分支、执行、审批、通知、变量设置、循环、计算
+- **10 种节点类型** — 开始、结束、主机提取、CMDB 校验、条件分支、执行、审批、通知、变量设置、计算
 - **双模触发** — 自动模式（零介入）和手动模式（审批把控）
 - **Dry-Run 沙箱** — 无副作用地模拟执行，投产前充分验证
 - **SSE 实时推送** — 节点状态变更延迟 < 200ms
@@ -74,12 +81,14 @@
 - **可视化字段映射** — 图形化配置外部到内部的字段映射
 - **智能过滤引擎** — AND/OR 逻辑组合，按条件筛选同步数据
 - **双向写回** — 自愈完成后自动回写工单状态
+- **结构化关单策略** — 支持在 Flow 级绑定解决方案模板，输出标准化关单内容
 
 ### ⚡ 执行中心
 - **三种触发模式** — 手动发射台、定时计划（Cron）、自愈流程触发
 - **Ansible 执行引擎** — Docker / Local 双模式执行器
 - **三态结果判定** — 防止主机不可达的"虚假成功"
 - **运行时参数覆盖** — 动态注入目标主机和变量
+- **任务级回写步骤** — 基于真实 Ansible 输出渲染执行步骤
 
 ### 🔐 安全与权限
 - **RBAC 权限模型** — 资源级 + 操作级精细控制
@@ -87,12 +96,13 @@
 - **JIT 自动开户** — SSO 首次登录自动创建平台账号
 - **集中式密钥管理** — SSH、API Key、Token 统一管理
 - **全量审计日志** — 每笔操作记录操作人归因
+- **高危指令执行前拦截** — 对破坏性命令做执行前安全扫描与显式拦截
 
 ### 📊 更多模块
 - **CMDB 资产管理** — 3 态生命周期，批量维护窗口管理
 - **Git 仓库管理** — 自动同步、分支锁定、漂移检测
 - **Playbook 模板** — 递归变量扫描、变更漂移追踪
-- **通知管理** — 多渠道（邮件、钉钉、Webhook），40+ 模板变量
+- **通知管理** — 多渠道（邮件、Webhook、钉钉、企业微信、Slack、Teams），40+ 模板变量
 - **待办决策中心** — 审批与手动触发的统一工作台
 - **分析仪表盘** — KPI 卡片、规则命中分布、趋势可视化
 
@@ -181,19 +191,19 @@ auto-healing/
 │   ├── server/                  # 应用入口
 │   └── init-admin/              # 管理员初始化工具
 ├── internal/
+│   ├── app/                     # HTTP 路由装配与运行时初始化
 │   ├── config/                  # 配置管理
-│   ├── database/                # 数据库连接与迁移
-│   ├── engine/                  # 执行引擎 (Ansible)
-│   ├── git/                     # Git 操作
-│   ├── handler/                 # HTTP 处理层 (DTO)
+│   ├── database/                # 数据库连接、迁移、种子数据
 │   ├── middleware/              # HTTP 中间件
-│   ├── model/                   # 数据模型
-│   ├── notification/            # 通知提供者
+│   ├── modules/                 # 业务模块
+│   │   ├── access/              # 认证、租户、RBAC
+│   │   ├── automation/          # 执行、调度、自愈流程
+│   │   ├── engagement/          # 通知、仪表盘
+│   │   ├── integrations/        # 插件、Git、解决方案模板
+│   │   ├── ops/                 # 字典、黑名单、平台运维能力
+│   │   └── secrets/             # 密钥源与密钥提供者
 │   ├── pkg/                     # 内部公共包
-│   ├── repository/              # 数据访问层
-│   ├── scheduler/               # 后台调度器
-│   ├── secrets/                 # 密钥提供者
-│   └── service/                 # 业务逻辑层
+│   └── platform/                # 跨模块平台模型与仓储
 ├── migrations/                  # SQL 迁移文件 (up/down)
 ├── configs/                     # 配置模板
 ├── deployments/
@@ -262,7 +272,7 @@ cd auto-healing
 ```bash
 # 健康检查
 curl http://localhost:8080/health
-# 预期响应: {"status":"ok"}
+# 预期响应: {"code":0,"message":"success","data":{"status":"ok"}}
 
 # 登录
 curl -s -X POST http://localhost:8080/api/v1/auth/login \
@@ -491,7 +501,7 @@ kubectl apply -f deployments/kubernetes/
 # 获取 Token
 TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123456"}' | jq -r '.access_token')
+  -d '{"username":"admin","password":"admin123456"}' | jq -r '.data.access_token')
 
 # 使用 Token 调用 API
 curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/plugins | jq
@@ -585,6 +595,8 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/plugins |
 | [API 规范](api/openapi.yaml) | 给前端/外部工具消费的 OpenAPI 3.0 bundle |
 | [API 测试指南](docs/api-testing-guide.md) | cURL 示例与测试流程 |
 | [项目全面介绍](docs/auto_healing_project_intro.md) | 产品深度介绍文档 |
+| [iTop 联调实验](docs/itop-ticket-lab.md) | 本地 iTop 工单 / CMDB 适配器联调说明 |
+| [黑名单拦截实验](docs/blacklist-demo-lab.md) | 真实破坏性 Playbook 的高危指令拦截演示 |
 | [内部架构说明](internal/README.md) | 内部目录结构详解 |
 
 ---
@@ -693,7 +705,7 @@ refactor: 抽取插件适配器接口
 - [ ] 🌐 多租户 SaaS 模式
 - [ ] 🔄 CMDB 双向同步
 - [ ] 📦 Kubernetes Helm Chart
-- [ ] 🤖 ChatOps 集成（Slack、Teams、飞书）
+- [ ] 🤖 交互式 ChatOps 工作流（飞书 / Slack / Teams）
 
 ---
 

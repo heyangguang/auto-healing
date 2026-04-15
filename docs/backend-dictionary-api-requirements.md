@@ -425,8 +425,6 @@ GET /api/v1/dictionaries/types
 | `cmdb_validator` | CMDB 校验 | `#13c2c2` | `SafetyCertificateOutlined` | `{"full_label": "CMDB验证"}` |
 | `set_variable` | 变量设置 | `#eb2f96` | `FunctionOutlined` | `{"full_label": "设置变量"}` |
 | `compute` | 计算 | `#2f54eb` | `CalculatorOutlined` | `{"full_label": "计算节点"}` |
-| `trigger` | 触发器 | `#722ed1` | `ThunderboltOutlined` | |
-| `manual_notification` | 手动通知 | `#8c8c8c` | | |
 
 ---
 

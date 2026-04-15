@@ -58,13 +58,20 @@
 | **No Audit Trail** | Operations depend on tribal knowledge | Immutable forensic-grade logs |
 | **Tool Silos** | ITSM, CMDB, scripts are disconnected | Unified platform with plugin integration |
 
+### 🆕 Recent Highlights
+
+- **Structured Incident Writeback** — Flow close policies can now bind solution templates and render `problem / solution / execution steps / verification / conclusion` back to external ITSM tickets.
+- **Task-Level Execution Steps** — Incident writeback can extract human-readable Ansible task results instead of only flow-level summaries.
+- **Expanded Notification Engine** — Notifications now support **Email, Webhook, DingTalk, WeCom, Slack, and Teams**, with runtime linkage to execution runs, workflow instances, and incidents.
+- **Safer Automation Demos** — Added local labs for **iTop adapter validation** and **command blacklist interception** against destructive playbooks.
+
 ---
 
 ## ✨ Features
 
 ### 🔄 Self-Healing Engine
 - **Visual DAG Workflow Editor** — Design complex remediation flows with drag-and-drop
-- **9 Node Types** — Host extraction, CMDB validation, conditional branching, execution, approval, notification, variable setting, loops, and compute
+- **10 Node Types** — Start, end, host extraction, CMDB validation, conditional branching, execution, approval, notification, variable setting, and compute
 - **Dual Trigger Modes** — Automatic (zero-touch) or manual (approval-gated)
 - **Dry-Run Sandbox** — Simulate workflow execution without side effects
 - **Real-time SSE Streaming** — Node status updates in < 200ms
@@ -74,12 +81,14 @@
 - **Field Mapping Engine** — Visual configuration of external-to-internal field mapping
 - **Smart Filtering** — AND/OR logic groups for selective data sync
 - **Bi-directional Writeback** — Update ticket status after remediation
+- **Structured Close Policies** — Bind flow-level solution templates for standardized incident closure content
 
 ### ⚡ Execution Center
 - **3 Trigger Modes** — Manual launch pad, scheduled (cron), and healing-flow triggered
 - **Ansible Engine** — Docker and Local dual-mode executors
 - **3-State Validation** — Prevents false success (reachability verification)
 - **Runtime Variable Override** — Dynamic host and variable injection per execution
+- **Task-Aware Writeback** — Render task-level remediation steps from real Ansible output
 
 ### 🔐 Security & Access
 - **RBAC** — Resource-level + operation-level permission control
@@ -87,12 +96,13 @@
 - **JIT Provisioning** — Auto-create user accounts on first SSO login
 - **Secrets Management** — Centralized credential vault (SSH, API keys, tokens)
 - **Audit Logging** — Every operation tracked with operator attribution
+- **Command Blacklist Interception** — Block destructive commands before execution with explicit security logs
 
 ### 📊 Additional Modules
 - **CMDB Asset Management** — 3-state lifecycle (active/offline/maintenance), bulk maintenance windows
 - **Git Repository Management** — Automated sync, branch locking, drift detection
 - **Playbook Templates** — Recursive variable scanning, change drift tracking
-- **Notification Engine** — Multi-channel (Email, DingTalk, Webhook) with 40+ template variables
+- **Notification Engine** — Multi-channel (Email, Webhook, DingTalk, WeCom, Slack, Teams) with 40+ template variables
 - **Pending Center** — Unified decision console for approvals and manual triggers
 - **Analytics Dashboard** — KPI cards, rule hit distribution, trend visualization
 
@@ -181,26 +191,19 @@ auto-healing/
 │   ├── server/                  # Main application entry
 │   └── init-admin/              # Admin initialization tool
 ├── internal/
+│   ├── app/                     # HTTP route assembly and runtime wiring
 │   ├── config/                  # Configuration management
-│   ├── database/                # Database connection & migration
-│   ├── engine/                  # Execution engine (Ansible)
-│   │   ├── interface.go
-│   │   └── provider/ansible/
-│   ├── git/                     # Git operations
-│   ├── handler/                 # HTTP handlers (DTO layer)
+│   ├── database/                # Database connection, migration, seeds
 │   ├── middleware/              # HTTP middleware (Auth, CORS, Logging)
-│   ├── model/                   # Data models
-│   ├── notification/            # Notification providers (Email, DingTalk, Webhook)
+│   ├── modules/                 # Domain modules
+│   │   ├── access/              # Auth, tenant, RBAC
+│   │   ├── automation/          # Execution, schedules, healing flows
+│   │   ├── engagement/          # Notifications, dashboards
+│   │   ├── integrations/        # Plugins, git clients, solution templates
+│   │   ├── ops/                 # Dictionaries, blacklist, platform ops
+│   │   └── secrets/             # Secret sources and providers
 │   ├── pkg/                     # Internal shared packages
-│   ├── repository/              # Data access layer
-│   ├── scheduler/               # Background job schedulers
-│   ├── secrets/                 # Secret providers (File, Vault, Webhook)
-│   └── service/                 # Business logic layer
-│       ├── execution/
-│       ├── git/
-│       ├── healing/
-│       ├── plugin/
-│       └── secrets/
+│   └── platform/                # Cross-module models and repositories
 ├── migrations/                  # SQL migration files (up/down)
 ├── configs/                     # Configuration templates
 ├── deployments/
@@ -269,7 +272,7 @@ cd auto-healing
 ```bash
 # Health check
 curl http://localhost:8080/health
-# Expected: {"status":"ok"}
+# Expected: {"code":0,"message":"success","data":{"status":"ok"}}
 
 # Login
 curl -s -X POST http://localhost:8080/api/v1/auth/login \
@@ -497,6 +500,8 @@ kubectl apply -f deployments/kubernetes/
 | [API Reference](api/openapi.yaml) | Bundled OpenAPI 3.0 specification |
 | [API Testing Guide](docs/api-testing-guide.md) | cURL examples and test workflows |
 | [Project Introduction](docs/auto_healing_project_intro.md) | Comprehensive product overview |
+| [iTop Adapter Lab](docs/itop-ticket-lab.md) | End-to-end local validation for iTop ticket / CMDB adapters |
+| [Blacklist Demo Lab](docs/blacklist-demo-lab.md) | Real destructive-playbook interception demo with command blacklist |
 | [Internal Architecture](internal/README.md) | Internal directory structure |
 
 ### API Quick Reference
@@ -626,7 +631,7 @@ refactor: extract plugin adapter interface
 - [ ] 🌐 Multi-tenant SaaS mode
 - [ ] 🔄 Bi-directional CMDB sync
 - [ ] 📦 Helm Chart for Kubernetes deployment
-- [ ] 🤖 ChatOps integration (Slack, Teams)
+- [ ] 🤖 Interactive ChatOps workflows (Feishu / Slack / Teams)
 
 ---
 
