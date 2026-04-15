@@ -140,7 +140,7 @@ var AllDictionarySeeds = []model.Dictionary{
 	d("notification_channel_type", "webhook", "Webhook", "Webhook", "#722ed1", "purple", "", "ApiOutlined", "#f9f0ff", 0),
 	d("notification_channel_type", "email", "邮件", "Email", "#1890ff", "blue", "", "MailOutlined", "#e6f7ff", 1),
 	d("notification_channel_type", "dingtalk", "钉钉", "DingTalk", "#1677ff", "blue", "", "DingdingOutlined", "#e6f7ff", 2),
-	d("notification_channel_type", "wecom", "企业微信", "WeCom", "#07c160", "green", "", "WechatWorkOutlined", "#f6ffed", 3),
+	d("notification_channel_type", "wecom", "企业微信", "WeCom", "#07c160", "green", "", "WecomOutlined", "#f6ffed", 3),
 	d("notification_channel_type", "slack", "Slack", "Slack", "#4a154b", "purple", "", "SlackOutlined", "#fff0f6", 4),
 	d("notification_channel_type", "teams", "Teams", "Microsoft Teams", "#6264a7", "geekblue", "", "WindowsOutlined", "#f0f5ff", 5),
 

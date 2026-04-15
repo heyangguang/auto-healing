@@ -273,7 +273,7 @@ GET /api/v1/dictionaries/types
 | `webhook` | Webhook | `#722ed1` | `ApiOutlined` | `#f9f0ff` | `{"label_upper": "WEBHOOK"}` |
 | `email` | 邮件 | `#1890ff` | `MailOutlined` | `#e6f7ff` | `{"label_upper": "EMAIL"}` |
 | `dingtalk` | 钉钉 | `#0079f2` | `DingdingOutlined` | `#f0f5ff` | `{"label_upper": "DINGTALK"}` |
-| `wecom` | 企业微信 | `#07c160` | `WechatWorkOutlined` | `#f6ffed` | `{"label_upper": "WECOM"}` |
+| `wecom` | 企业微信 | `#07c160` | `WecomOutlined` | `#f6ffed` | `{"label_upper": "WECOM"}` |
 | `slack` | Slack | `#4a154b` | `SlackOutlined` | `#fff0f6` | `{"label_upper": "SLACK"}` |
 | `teams` | Teams | `#6264a7` | `WindowsOutlined` | `#f0f5ff` | `{"label_upper": "TEAMS"}` |
 
@@ -453,7 +453,7 @@ const ICON_REGISTRY: Record<string, React.ReactNode> = {
     MailOutlined: <MailOutlined />,
     ApiOutlined: <ApiOutlined />,
     DingdingOutlined: <DingdingOutlined />,
-    WechatWorkOutlined: <WechatWorkOutlined />,
+    WecomOutlined: <WechatWorkOutlined />,
     SlackOutlined: <SlackOutlined />,
     WindowsOutlined: <WindowsOutlined />,
     // ... 按需扩展
