@@ -85,9 +85,9 @@ func TestValidateRefreshTokenRejectsBlacklistedToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateToken() error = %v", err)
 	}
-	isBlacklisted, blacklistErr := svc.IsBlacklisted(context.Background(), accessClaims.ID)
-	if blacklistErr != nil || !isBlacklisted {
-		t.Fatalf("IsBlacklisted() = (%v, %v), want (true, nil)", isBlacklisted, blacklistErr)
+	isRevoked, blacklistErr := svc.IsTokenRevoked(context.Background(), accessClaims.ID, accessClaims.SessionID)
+	if blacklistErr != nil || isRevoked {
+		t.Fatalf("IsTokenRevoked() = (%v, %v), want (false, nil)", isRevoked, blacklistErr)
 	}
 }
 
@@ -213,7 +213,7 @@ func TestNewServicePanicsWithoutBlacklistStore(t *testing.T) {
 	}, nil)
 }
 
-func TestGenerateTokenPairUsesSharedSessionJTI(t *testing.T) {
+func TestGenerateTokenPairSeparatesTokenIDAndSessionID(t *testing.T) {
 	svc := NewService(Config{
 		Secret:          "test-secret",
 		AccessTokenTTL:  time.Hour,
@@ -234,11 +234,43 @@ func TestGenerateTokenPairUsesSharedSessionJTI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateRefreshToken() error = %v", err)
 	}
-	if accessClaims.ID != refreshClaims.ID {
-		t.Fatalf("session jti mismatch: access=%q refresh=%q", accessClaims.ID, refreshClaims.ID)
+	if accessClaims.ID == refreshClaims.ID {
+		t.Fatalf("token ids should differ, got access=%q refresh=%q", accessClaims.ID, refreshClaims.ID)
+	}
+	if accessClaims.SessionID == "" || accessClaims.SessionID != refreshClaims.SessionID {
+		t.Fatalf("session id mismatch: access=%q refresh=%q", accessClaims.SessionID, refreshClaims.SessionID)
 	}
 	if accessClaims.SessionExpiresAt != refreshClaims.ExpiresAt.Time.Unix() {
 		t.Fatalf("session_expires_at = %d, want %d", accessClaims.SessionExpiresAt, refreshClaims.ExpiresAt.Time.Unix())
+	}
+}
+
+func TestIsTokenRevokedChecksSessionID(t *testing.T) {
+	store := &memoryBlacklist{}
+	svc := NewService(Config{
+		Secret:          "test-secret",
+		AccessTokenTTL:  time.Hour,
+		RefreshTokenTTL: time.Hour,
+		Issuer:          "unit-test",
+	}, store)
+
+	pair, err := svc.GenerateTokenPair("user-1", "tester", []string{"viewer"}, []string{"task:list"})
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error = %v", err)
+	}
+	accessClaims, err := svc.ValidateToken(pair.AccessToken)
+	if err != nil {
+		t.Fatalf("ValidateToken() error = %v", err)
+	}
+	if err := svc.Blacklist(context.Background(), accessClaims.SessionID, time.Unix(accessClaims.SessionExpiresAt, 0)); err != nil {
+		t.Fatalf("Blacklist() error = %v", err)
+	}
+	isRevoked, revokeErr := svc.IsTokenRevoked(context.Background(), accessClaims.ID, accessClaims.SessionID)
+	if revokeErr != nil || !isRevoked {
+		t.Fatalf("IsTokenRevoked() = (%v, %v), want (true, nil)", isRevoked, revokeErr)
+	}
+	if _, err := svc.ValidateRefreshToken(pair.RefreshToken); err != ErrInvalidToken {
+		t.Fatalf("ValidateRefreshToken() error = %v, want %v", err, ErrInvalidToken)
 	}
 }
 

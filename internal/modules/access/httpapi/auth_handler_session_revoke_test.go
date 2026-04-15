@@ -108,9 +108,9 @@ func TestRevokeRefreshTokenBlacklistsMatchingToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateToken() error = %v", err)
 	}
-	isBlacklisted, blacklistErr := jwtSvc.IsBlacklisted(context.Background(), accessClaims.ID)
-	if blacklistErr != nil || !isBlacklisted {
-		t.Fatalf("IsBlacklisted() = (%v, %v), want (true, nil)", isBlacklisted, blacklistErr)
+	isRevoked, blacklistErr := jwtSvc.IsTokenRevoked(context.Background(), accessClaims.ID, accessClaims.SessionID)
+	if blacklistErr != nil || isRevoked {
+		t.Fatalf("IsTokenRevoked() = (%v, %v), want (false, nil)", isRevoked, blacklistErr)
 	}
 }
 
@@ -217,6 +217,14 @@ func TestRevokeAuthTokensWithoutRefreshTokenBlacklistsSession(t *testing.T) {
 	}
 	if len(store.added) != 1 {
 		t.Fatalf("blacklist Add calls = %d, want 1", len(store.added))
+	}
+	accessClaims, err := jwtSvc.ValidateToken(pair.AccessToken)
+	if err != nil {
+		t.Fatalf("ValidateToken() error = %v", err)
+	}
+	isRevoked, blacklistErr := jwtSvc.IsTokenRevoked(context.Background(), accessClaims.ID, accessClaims.SessionID)
+	if blacklistErr != nil || !isRevoked {
+		t.Fatalf("IsTokenRevoked() = (%v, %v), want (true, nil)", isRevoked, blacklistErr)
 	}
 	if _, err := jwtSvc.ValidateRefreshToken(pair.RefreshToken); err != jwt.ErrInvalidToken {
 		t.Fatalf("ValidateRefreshToken() after logout error = %v, want %v", err, jwt.ErrInvalidToken)

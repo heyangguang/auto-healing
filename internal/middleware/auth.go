@@ -45,8 +45,8 @@ func JWTAuthWithDeps(jwtService *jwt.Service, deps RuntimeDeps) gin.HandlerFunc 
 			return
 		}
 
-		// 检查 Token 是否在黑名单中
-		isBlacklisted, blacklistErr := jwtService.IsBlacklisted(c.Request.Context(), claims.ID)
+		// 检查 Token 或所属会话是否已撤销
+		isBlacklisted, blacklistErr := jwtService.IsTokenRevoked(c.Request.Context(), claims.ID, claims.SessionID)
 		if blacklistErr != nil {
 			logger.Auth("TOKEN").Error("鉴权失败: token 黑名单校验失败 | user=%s ip=%s err=%v", claims.Subject, c.ClientIP(), blacklistErr)
 			abortInternalError(c, "令牌撤销状态校验失败", ErrorCodeTokenBlacklistLookup)

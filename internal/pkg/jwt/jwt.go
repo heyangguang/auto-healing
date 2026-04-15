@@ -30,7 +30,13 @@ type Claims struct {
 	IsPlatformAdmin  bool     `json:"is_platform_admin,omitempty"`
 	TenantIDs        []string `json:"tenant_ids,omitempty"`        // 用户所属的租户列表
 	DefaultTenantID  string   `json:"default_tenant_id,omitempty"` // 用户的默认租户（第一个）
+	SessionID        string   `json:"sid,omitempty"`
 	SessionExpiresAt int64    `json:"session_expires_at,omitempty"`
+}
+
+type RefreshClaims struct {
+	jwt.RegisteredClaims
+	SessionID string `json:"sid,omitempty"`
 }
 
 // Service JWT服务
@@ -83,22 +89,7 @@ func (s *Service) GenerateTokenPair(userID, username string, roles, permissions 
 	now := time.Now()
 	sessionID := uuid.New().String()
 	sessionExpiresAt := now.Add(s.refreshTokenTTL)
-
-	// 生成 Access Token
-	accessClaims := Claims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        sessionID,
-			Subject:   userID,
-			Issuer:    s.issuer,
-			Audience:  jwt.ClaimStrings{tokenAudienceAccess},
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(s.accessTokenTTL)),
-		},
-		Username:         username,
-		Roles:            roles,
-		Permissions:      permissions,
-		SessionExpiresAt: sessionExpiresAt.Unix(),
-	}
+	accessClaims := newAccessClaims(now, sessionID, sessionExpiresAt, userID, username, roles, permissions, s)
 
 	// 应用可选配置（如 IsPlatformAdmin）
 	for _, opt := range opts {
@@ -111,15 +102,7 @@ func (s *Service) GenerateTokenPair(userID, username string, roles, permissions 
 		return nil, err
 	}
 
-	// 生成 Refresh Token
-	refreshClaims := jwt.RegisteredClaims{
-		ID:        sessionID,
-		Subject:   userID,
-		Issuer:    s.issuer,
-		Audience:  jwt.ClaimStrings{tokenAudienceRefresh},
-		IssuedAt:  jwt.NewNumericDate(now),
-		ExpiresAt: jwt.NewNumericDate(sessionExpiresAt),
-	}
+	refreshClaims := newRefreshClaims(now, sessionID, sessionExpiresAt, userID, s)
 
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
 	refreshTokenString, err := refreshToken.SignedString(s.secret)
@@ -133,6 +116,38 @@ func (s *Service) GenerateTokenPair(userID, username string, roles, permissions 
 		TokenType:    "Bearer",
 		ExpiresIn:    int64(s.accessTokenTTL.Seconds()),
 	}, nil
+}
+
+func newAccessClaims(now time.Time, sessionID string, sessionExpiresAt time.Time, userID, username string, roles, permissions []string, svc *Service) Claims {
+	return Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.New().String(),
+			Subject:   userID,
+			Issuer:    svc.issuer,
+			Audience:  jwt.ClaimStrings{tokenAudienceAccess},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(svc.accessTokenTTL)),
+		},
+		Username:         username,
+		Roles:            roles,
+		Permissions:      permissions,
+		SessionID:        sessionID,
+		SessionExpiresAt: sessionExpiresAt.Unix(),
+	}
+}
+
+func newRefreshClaims(now time.Time, sessionID string, sessionExpiresAt time.Time, userID string, svc *Service) RefreshClaims {
+	return RefreshClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.New().String(),
+			Subject:   userID,
+			Issuer:    svc.issuer,
+			Audience:  jwt.ClaimStrings{tokenAudienceRefresh},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(sessionExpiresAt),
+		},
+		SessionID: sessionID,
+	}
 }
 
 // ValidateToken 验证Token
@@ -160,12 +175,12 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 }
 
 // ValidateRefreshToken 验证刷新Token
-func (s *Service) ValidateRefreshToken(tokenString string) (*jwt.RegisteredClaims, error) {
+func (s *Service) ValidateRefreshToken(tokenString string) (*RefreshClaims, error) {
 	return s.ValidateRefreshTokenContext(context.Background(), tokenString)
 }
 
-func (s *Service) ValidateRefreshTokenContext(ctx context.Context, tokenString string) (*jwt.RegisteredClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
+func (s *Service) ValidateRefreshTokenContext(ctx context.Context, tokenString string) (*RefreshClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &RefreshClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
 		}
@@ -179,11 +194,11 @@ func (s *Service) ValidateRefreshTokenContext(ctx context.Context, tokenString s
 		return nil, ErrInvalidToken
 	}
 
-	claims, ok := token.Claims.(*jwt.RegisteredClaims)
+	claims, ok := token.Claims.(*RefreshClaims)
 	if !ok || !token.Valid || !hasAudience(claims.Audience, tokenAudienceRefresh) || claims.Issuer != s.issuer {
 		return nil, ErrInvalidToken
 	}
-	isBlacklisted, blacklistErr := s.IsBlacklisted(ctx, claims.ID)
+	isBlacklisted, blacklistErr := s.IsTokenRevoked(ctx, claims.ID, claims.SessionID)
 	if blacklistErr != nil {
 		return nil, ErrBlacklistLookupFailed
 	}
@@ -192,6 +207,17 @@ func (s *Service) ValidateRefreshTokenContext(ctx context.Context, tokenString s
 	}
 
 	return claims, nil
+}
+
+func (s *Service) IsTokenRevoked(ctx context.Context, tokenID, sessionID string) (bool, error) {
+	isBlacklisted, err := s.IsBlacklisted(ctx, tokenID)
+	if err != nil || isBlacklisted {
+		return isBlacklisted, err
+	}
+	if sessionID == "" {
+		return false, nil
+	}
+	return s.IsBlacklisted(ctx, sessionID)
 }
 
 // Blacklist 将Token加入黑名单

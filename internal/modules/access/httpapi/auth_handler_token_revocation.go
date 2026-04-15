@@ -10,12 +10,11 @@ import (
 	"github.com/company/auto-healing/internal/middleware"
 	authjwt "github.com/company/auto-healing/internal/pkg/jwt"
 	"github.com/gin-gonic/gin"
-	golangjwt "github.com/golang-jwt/jwt/v5"
 )
 
 type logoutTokens struct {
 	access  *authjwt.Claims
-	refresh *golangjwt.RegisteredClaims
+	refresh *authjwt.RefreshClaims
 }
 
 func (h *AuthHandler) revokeAuthTokens(c *gin.Context, refreshToken, userID string) error {
@@ -42,7 +41,7 @@ func (h *AuthHandler) resolveLogoutTokens(c *gin.Context, refreshToken, userID s
 		if requiresLegacyTokenRevocation(accessClaims) {
 			return logoutTokens{}, errLogoutLegacyRefreshUnsupported
 		}
-		if refreshClaims.ID != accessClaims.ID {
+		if refreshClaims.SessionID == "" || refreshClaims.SessionID != accessClaims.SessionID {
 			return logoutTokens{}, errLogoutRefreshTokenSessionMismatch
 		}
 	}
@@ -62,7 +61,7 @@ func (h *AuthHandler) resolveAccessTokenClaims(c *gin.Context) (*authjwt.Claims,
 	return claims, nil
 }
 
-func (h *AuthHandler) resolveRefreshTokenClaims(ctx context.Context, refreshToken, userID string) (*golangjwt.RegisteredClaims, error) {
+func (h *AuthHandler) resolveRefreshTokenClaims(ctx context.Context, refreshToken, userID string) (*authjwt.RefreshClaims, error) {
 	if refreshToken == "" {
 		return nil, nil
 	}
@@ -96,7 +95,7 @@ func (h *AuthHandler) blacklistLegacyLogoutTokens(ctx context.Context, tokens lo
 	return nil
 }
 
-func (h *AuthHandler) blacklistSessionClaims(ctx context.Context, accessClaims *authjwt.Claims, refreshClaims *golangjwt.RegisteredClaims) error {
+func (h *AuthHandler) blacklistSessionClaims(ctx context.Context, accessClaims *authjwt.Claims, refreshClaims *authjwt.RefreshClaims) error {
 	if accessClaims == nil {
 		return nil
 	}
@@ -107,7 +106,11 @@ func (h *AuthHandler) blacklistSessionClaims(ctx context.Context, accessClaims *
 	if refreshClaims != nil && refreshClaims.ExpiresAt != nil && refreshClaims.ExpiresAt.Time.After(sessionExp) {
 		sessionExp = refreshClaims.ExpiresAt.Time
 	}
-	if err := h.authSvc.Logout(ctx, accessClaims.ID, sessionExp); err != nil {
+	sessionID, err := accessSessionID(accessClaims)
+	if err != nil {
+		return err
+	}
+	if err := h.authSvc.Logout(ctx, sessionID, sessionExp); err != nil {
 		return fmt.Errorf("撤销当前会话失败: %w", err)
 	}
 	return nil
@@ -127,7 +130,7 @@ func (h *AuthHandler) blacklistAccessClaims(ctx context.Context, claims *authjwt
 	return nil
 }
 
-func (h *AuthHandler) blacklistRefreshClaims(ctx context.Context, claims *golangjwt.RegisteredClaims) error {
+func (h *AuthHandler) blacklistRefreshClaims(ctx context.Context, claims *authjwt.RefreshClaims) error {
 	if claims == nil {
 		return nil
 	}
@@ -166,6 +169,13 @@ func accessSessionExpiry(claims *authjwt.Claims) (time.Time, error) {
 	return time.Time{}, errLogoutSessionMetadataMissing
 }
 
+func accessSessionID(claims *authjwt.Claims) (string, error) {
+	if claims == nil || claims.SessionID == "" {
+		return "", errLogoutSessionMetadataMissing
+	}
+	return claims.SessionID, nil
+}
+
 func accessTokenExpiry(claims *authjwt.Claims) (time.Time, error) {
 	if claims == nil || claims.ExpiresAt == nil {
 		return time.Time{}, errLogoutSessionMetadataMissing
@@ -174,5 +184,5 @@ func accessTokenExpiry(claims *authjwt.Claims) (time.Time, error) {
 }
 
 func requiresLegacyTokenRevocation(claims *authjwt.Claims) bool {
-	return claims != nil && claims.SessionExpiresAt == 0
+	return claims != nil && (claims.SessionExpiresAt == 0 || claims.SessionID == "")
 }
