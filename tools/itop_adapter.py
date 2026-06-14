@@ -224,20 +224,42 @@ class ITopClient:
         incident["fault_injection"] = fault_result
         return incident
 
+    def get_demo_fault_status(self) -> Dict[str, Any]:
+        raw = self.call_fault_lab("status")
+        output = str(raw.get("output") or "")
+        return {
+            "ok": bool(raw.get("ok")),
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+            "target": self.config.demo_ci_name,
+            "items": parse_fault_status(output),
+            "raw": raw,
+        }
+
     def inject_demo_fault(self, scenario: str) -> Dict[str, Any]:
-        request = Request(
-            f"{self.config.demo_fault_base_url}/fault-lab/inject/{quote(scenario)}",
-            data=b"{}",
-            method="POST",
-            headers={"Content-Type": "application/json", "Accept": "application/json"},
-        )
+        return self.call_fault_lab("inject", scenario)
+
+    def call_fault_lab(self, action: str, scenario: str = "") -> Dict[str, Any]:
+        if action == "status" and not scenario:
+            url = f"{self.config.demo_fault_base_url}/fault-lab/status"
+            request = Request(url, method="GET", headers={"Accept": "application/json"})
+        elif action in {"inject", "reset", "status"} and scenario:
+            url = f"{self.config.demo_fault_base_url}/fault-lab/{quote(action)}/{quote(scenario)}"
+            request = Request(
+                url,
+                data=b"{}",
+                method="POST",
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+            )
+        else:
+            raise ITopError(f"invalid fault lab action: {action}/{scenario}")
+
         try:
             with urlopen(request, timeout=30) as response:
                 raw = response.read().decode("utf-8")
                 return json.loads(raw) if raw else {"ok": True}
         except HTTPError as exc:
             raw = exc.read().decode("utf-8", "replace")
-            if exc.code == 409 and "already injected" in raw:
+            if exc.code == 409 and action == "inject" and ("已经处于注入状态" in raw or "already injected" in raw):
                 return {"ok": True, "message": "fault already injected", "raw": raw}
             raise ITopError(f"fault injection HTTP {exc.code}: {raw}") from exc
         except URLError as exc:
@@ -316,6 +338,79 @@ def demo_scenario_payload(config: AdapterConfig, scenario: str) -> Dict[str, Any
         "description": demo["description"],
     })
     return {"fields": fields, "fault_scenario": demo["fault_scenario"]}
+
+
+def parse_fault_status(output: str) -> List[Dict[str, Any]]:
+    specs = {
+        "clean_logs": {
+            "title": "日志大文件",
+            "ready": "大文件存在",
+            "cleared": "已清理",
+            "primary": "bytes",
+            "path": "dir",
+        },
+        "kill_process": {
+            "title": "异常进程",
+            "ready": "进程运行中",
+            "cleared": "已关闭",
+            "primary": "workers",
+            "path": "process",
+        },
+    }
+    parsed: Dict[str, Dict[str, str]] = {}
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if line.startswith("[fault-lab]"):
+            line = line[len("[fault-lab]"):].strip()
+        if not line or "=" not in line:
+            continue
+        tokens = line.split()
+        key, state = tokens[0].split("=", 1)
+        details: Dict[str, str] = {"state": state}
+        for token in tokens[1:]:
+            if "=" not in token:
+                continue
+            detail_key, detail_value = token.split("=", 1)
+            details[detail_key] = detail_value
+        parsed[key] = details
+
+    items: List[Dict[str, Any]] = []
+    for key, spec in specs.items():
+        details = parsed.get(key, {})
+        injected = details.get("state") == "injected"
+        primary_key = spec["primary"]
+        path_key = spec["path"]
+        primary_value = details.get(primary_key, "0")
+        if primary_key == "bytes":
+            primary_value = human_bytes(primary_value)
+        items.append({
+            "key": key,
+            "title": spec["title"],
+            "ready": injected,
+            "state": details.get("state", "unknown"),
+            "state_label": spec["ready"] if injected else spec["cleared"],
+            "metric_label": "大小" if primary_key == "bytes" else "数量",
+            "metric_value": primary_value,
+            "path_label": "目录" if path_key == "dir" else "进程名",
+            "path_value": details.get(path_key, ""),
+            "raw": details,
+        })
+    return items
+
+
+def human_bytes(value: str) -> str:
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return str(value or "0")
+    units = ["B", "KB", "MB", "GB", "TB"]
+    unit = 0
+    while size >= 1024 and unit < len(units) - 1:
+        size /= 1024
+        unit += 1
+    if unit == 0:
+        return f"{int(size)} {units[unit]}"
+    return f"{size:.1f} {units[unit]}"
 
 
 def iter_objects(response: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
@@ -474,6 +569,12 @@ class AdapterHandler(BaseHTTPRequestHandler):
                 {"key": "kill-process", "name": "杀死异常进程", "trigger_mode": "auto"},
                 {"key": "blacklist", "name": "黑名单指令防御", "trigger_mode": "manual"},
             ])
+            return
+        if parsed.path == "/api/demo/fault-status":
+            try:
+                self._json(200, self.client.get_demo_fault_status())
+            except ITopError as exc:
+                self._json(502, {"code": 502, "message": str(exc)})
             return
         self._json(404, {"code": 404, "message": f"unknown path: {parsed.path}"})
 

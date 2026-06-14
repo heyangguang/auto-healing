@@ -209,7 +209,13 @@ start_demo_process() {
 
 kill_process_inject() {
   local workers="${1:-$PROCESS_WORKERS_DEFAULT}"
-  [ ! -f "$PROCESS_STATE_FILE" ] || die "kill_process 已经处于注入状态"
+  local running
+  running="$(pgrep -fc "$PROCESS_NAME" || true)"
+  if [ "${running:-0}" -gt 0 ]; then
+    log "kill_process 已经处于注入状态 process=$PROCESS_NAME workers=$running"
+    return
+  fi
+  rm -f "$PROCESS_STATE_FILE"
   : >"$PROCESS_STATE_FILE"
   for _ in $(seq 1 "$workers"); do
     start_demo_process >>"$PROCESS_STATE_FILE"
