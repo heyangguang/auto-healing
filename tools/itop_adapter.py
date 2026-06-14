@@ -8,7 +8,9 @@ This process translates iTop REST/JSON into AHS-standard ITSM / CMDB JSON arrays
 import json
 import os
 import re
+import secrets
 from base64 import b64encode
+from datetime import datetime
 from html import unescape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, Iterable, List, Optional
@@ -60,6 +62,14 @@ class AdapterConfig:
         self.cmdb_classes = split_csv(optional_env("ITOP_CMDB_CLASSES", "Server,VirtualMachine,NetworkDevice,ApplicationSolution"))
         self.cmdb_oqls = parse_json_env("ITOP_CMDB_OQLS_JSON")
         self.cmdb_environment = optional_env("ITOP_CMDB_ENVIRONMENT", "production") or "production"
+        self.demo_org_id = optional_env("ITOP_DEMO_ORG_ID", "3") or "3"
+        self.demo_caller_id = optional_env("ITOP_DEMO_CALLER_ID", "9") or "9"
+        self.demo_service_id = optional_env("ITOP_DEMO_SERVICE_ID", "2") or "2"
+        self.demo_subcategory_id = optional_env("ITOP_DEMO_SUBCATEGORY_ID", "15") or "15"
+        self.demo_agent_id = optional_env("ITOP_DEMO_AGENT_ID", "33") or "33"
+        self.demo_ci_id = optional_env("ITOP_DEMO_CI_ID", "32") or "32"
+        self.demo_ci_name = optional_env("ITOP_DEMO_CI_NAME", "e2e-target-01") or "e2e-target-01"
+        self.demo_fault_base_url = optional_env("AHS_DEMO_FAULT_BASE_URL", "http://ssh-target-01:19081").rstrip("/")
 
 
 class ITopError(RuntimeError):
@@ -196,6 +206,43 @@ class ITopClient:
             incident = self.get_incident_by_ref(external_id)
         return incident
 
+    def create_demo_incident(self, scenario: str, inject_fault: bool = True) -> Dict[str, Any]:
+        demo = demo_scenario_payload(self.config, scenario)
+        fault_result = None
+        if inject_fault and demo.get("fault_scenario"):
+            fault_result = self.inject_demo_fault(demo["fault_scenario"])
+
+        response = self._call({
+            "operation": "core/create",
+            "class": self.config.ticket_class,
+            "comment": f"Created by Auto-Healing demo scenario: {scenario}",
+            "fields": demo["fields"],
+            "output_fields": "ref,title,status,friendlyname,functionalcis_list,start_date,last_update",
+        })
+        incident = normalize_incident(next(iter_objects(response)))
+        incident["scenario"] = scenario
+        incident["fault_injection"] = fault_result
+        return incident
+
+    def inject_demo_fault(self, scenario: str) -> Dict[str, Any]:
+        request = Request(
+            f"{self.config.demo_fault_base_url}/fault-lab/inject/{quote(scenario)}",
+            data=b"{}",
+            method="POST",
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+        try:
+            with urlopen(request, timeout=30) as response:
+                raw = response.read().decode("utf-8")
+                return json.loads(raw) if raw else {"ok": True}
+        except HTTPError as exc:
+            raw = exc.read().decode("utf-8", "replace")
+            if exc.code == 409 and "already injected" in raw:
+                return {"ok": True, "message": "fault already injected", "raw": raw}
+            raise ITopError(f"fault injection HTTP {exc.code}: {raw}") from exc
+        except URLError as exc:
+            raise ITopError(f"fault injection unavailable: {exc}") from exc
+
 
 def merge_solution_text(resolution: str, work_notes: str) -> str:
     resolution = resolution.strip()
@@ -212,6 +259,63 @@ def build_close_comment(resolution: str, work_notes: str) -> str:
     if len(comment) <= 240:
         return comment
     return comment[:237] + "..."
+
+
+def demo_scenario_payload(config: AdapterConfig, scenario: str) -> Dict[str, Any]:
+    scenario = (scenario or "").strip().lower().replace("_", "-")
+    suffix = datetime.now().strftime("%m%d%H%M%S") + "-" + secrets.token_hex(2)
+    base_fields = {
+        "org_id": config.demo_org_id,
+        "caller_id": config.demo_caller_id,
+        "service_id": config.demo_service_id,
+        "servicesubcategory_id": config.demo_subcategory_id,
+        "agent_id": config.demo_agent_id,
+        "impact": "2",
+        "urgency": "2",
+        "origin": "monitoring",
+        "functionalcis_list": [{"functionalci_id": config.demo_ci_id, "impact_code": "manual"}],
+    }
+    scenarios = {
+        "clean-logs": {
+            "title": f"[AHS-DEMO][clean_logs] 日志目录快速膨胀 on {config.demo_ci_name} #{suffix}",
+            "description": "\n".join([
+                "演示场景: 清理日志",
+                f"affected_ci={config.demo_ci_name}",
+                "fault_type=clean_logs",
+                "预期动作: 运维人员在 AHS 中手动执行 Demo Clean Logs Task，清理实验日志目录并回写工单。",
+            ]),
+            "fault_scenario": "clean_logs",
+        },
+        "kill-process": {
+            "title": f"[AHS-DEMO][kill_process] 异常进程 CPU 空转 on {config.demo_ci_name} #{suffix}",
+            "description": "\n".join([
+                "演示场景: 杀死异常进程",
+                f"affected_ci={config.demo_ci_name}",
+                "fault_type=kill_process",
+                "预期动作: AHS 同步工单后自动匹配自愈规则，执行 Demo Kill Process Task。",
+            ]),
+            "fault_scenario": "kill_process",
+        },
+        "blacklist": {
+            "title": f"[AHS-DEMO][blacklist] 高危指令拦截验证 on {config.demo_ci_name} #{suffix}",
+            "description": "\n".join([
+                "演示场景: 黑名单指令防御",
+                f"affected_ci={config.demo_ci_name}",
+                "fault_type=blacklist",
+                "预期动作: 手动执行 Demo Blacklist Interception Task，AHS 应在执行前拦截 rm -rf / 等高危指令。",
+            ]),
+            "fault_scenario": "",
+        },
+    }
+    if scenario not in scenarios:
+        raise ITopError(f"unknown demo scenario: {scenario}")
+    demo = scenarios[scenario]
+    fields = dict(base_fields)
+    fields.update({
+        "title": demo["title"],
+        "description": demo["description"],
+    })
+    return {"fields": fields, "fault_scenario": demo["fault_scenario"]}
 
 
 def iter_objects(response: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
@@ -364,10 +468,32 @@ class AdapterHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             classes = split_csv(",".join(query.get("class", [])))
             return self._handle_list(lambda: self.client.get_cmdb_items(classes or None))
+        if parsed.path == "/api/demo/scenarios":
+            self._json(200, [
+                {"key": "clean-logs", "name": "清理日志", "trigger_mode": "manual"},
+                {"key": "kill-process", "name": "杀死异常进程", "trigger_mode": "auto"},
+                {"key": "blacklist", "name": "黑名单指令防御", "trigger_mode": "manual"},
+            ])
+            return
         self._json(404, {"code": 404, "message": f"unknown path: {parsed.path}"})
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/api/demo/incidents":
+            try:
+                content_length = int(self.headers.get("Content-Length", "0") or "0")
+                request_body = {}
+                if content_length > 0:
+                    request_body = json.loads(self.rfile.read(content_length).decode("utf-8"))
+                scenario = str(request_body.get("scenario") or "").strip()
+                inject_fault = bool(request_body.get("inject_fault", True))
+                incident = self.client.create_demo_incident(scenario, inject_fault=inject_fault)
+                self._json(201, incident)
+            except ITopError as exc:
+                self._json(400, {"code": 400, "message": str(exc)})
+            except Exception as exc:
+                self._json(500, {"code": 500, "message": str(exc)})
+            return
         prefix = "/api/incidents/"
         suffix = "/close"
         if not (parsed.path.startswith(prefix) and parsed.path.endswith(suffix)):

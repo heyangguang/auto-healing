@@ -1,0 +1,60 @@
+---
+- name: Kill runaway demo process
+  hosts: all
+  become: true
+  gather_facts: false
+  vars:
+    lab_script_path: "{{ lab_script_path | default('/opt/auto-healing-fault-lab/auto_healing_fault_lab.sh') }}"
+    process_name: "{{ process_name | default('auto_healing_demo_worker') }}"
+    recovery_report_dir: "{{ recovery_report_dir | default('/opt/auto-healing-fault-lab/reports') }}"
+  tasks:
+    - name: Capture process status before recovery
+      ansible.builtin.command: "{{ lab_script_path }} status kill_process"
+      register: process_status_before
+      changed_when: false
+
+    - name: List matching processes before recovery
+      ansible.builtin.shell: "ps -eo pid,ppid,pcpu,pmem,args | grep {{ process_name | quote }} | grep -v grep || true"
+      register: process_list_before
+      changed_when: false
+
+    - name: Kill runaway process through lab control script
+      ansible.builtin.command: "{{ lab_script_path }} reset kill_process"
+      register: kill_process_reset
+      changed_when: true
+
+    - name: Capture process status after recovery
+      ansible.builtin.command: "{{ lab_script_path }} status kill_process"
+      register: process_status_after
+      changed_when: false
+
+    - name: List matching processes after recovery
+      ansible.builtin.shell: "ps -eo pid,ppid,pcpu,pmem,args | grep {{ process_name | quote }} | grep -v grep || true"
+      register: process_list_after
+      changed_when: false
+
+    - name: Verify process was killed
+      ansible.builtin.assert:
+        that:
+          - "'kill_process=healthy' in process_status_after.stdout"
+          - process_list_after.stdout | trim == ''
+        fail_msg: "异常进程仍然存在"
+
+    - name: Write process recovery report
+      ansible.builtin.copy:
+        dest: "{{ recovery_report_dir }}/latest-kill-process.txt"
+        mode: '0644'
+        content: |
+          [scenario]
+          kill_process
+
+          [before]
+          {{ process_status_before.stdout | trim }}
+          {{ process_list_before.stdout | trim }}
+
+          [action]
+          {{ kill_process_reset.stdout | trim }}
+
+          [after]
+          {{ process_status_after.stdout | trim }}
+          {{ process_list_after.stdout | trim }}

@@ -21,6 +21,8 @@ variables:
       - playbooks/service_down_recover.yml
       - playbooks/cpu_high_reset.yml
       - playbooks/disk_full_reset.yml
+      - playbooks/clean_logs.yml
+      - playbooks/kill_process.yml
   - name: lab_service_name
     type: string
     required: true
@@ -103,6 +105,29 @@ variables:
       - playbooks/service_down_recover.yml
       - playbooks/cpu_high_reset.yml
       - playbooks/disk_full_reset.yml
+      - playbooks/clean_logs.yml
+      - playbooks/kill_process.yml
+  - name: lab_log_dir
+    type: string
+    required: true
+    default: /opt/auto-healing-fault-lab/logs
+    description: 清理日志场景的日志目录
+    playbooks:
+      - playbooks/clean_logs.yml
+  - name: log_safe_bytes
+    type: integer
+    required: true
+    default: 1048576
+    description: 日志清理后的安全阈值
+    playbooks:
+      - playbooks/clean_logs.yml
+  - name: process_name
+    type: string
+    required: true
+    default: auto_healing_demo_worker
+    description: 杀进程场景的目标进程名
+    playbooks:
+      - playbooks/kill_process.yml
   - name: max_diagnose_log_lines
     type: integer
     required: true

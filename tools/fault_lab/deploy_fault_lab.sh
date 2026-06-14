@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REMOTE_ROOT="/opt/auto-healing-fault-lab"
 REMOTE_SCRIPT="$REMOTE_ROOT/auto_healing_fault_lab.sh"
+REMOTE_HTTP_SERVER="$REMOTE_ROOT/lab-http-server.py"
 REMOTE_SERVICE="/etc/systemd/system/auto-healing-lab-http.service"
 HOST_77_KEY="${HOST_77_KEY:-/etc/auto-healing/secrets/192.168.31.77/id_ed25519}"
 
@@ -31,16 +32,18 @@ deploy_password_host() {
   local password="$1" host="$2"
   run_password "$password" "$host" "mkdir -p $REMOTE_ROOT"
   copy_password "$password" "$SCRIPT_DIR/auto_healing_fault_lab.sh" "$host" "$REMOTE_SCRIPT"
+  copy_password "$password" "$SCRIPT_DIR/lab-http-server.py" "$host" "$REMOTE_HTTP_SERVER"
   copy_password "$password" "$SCRIPT_DIR/auto-healing-lab-http.service" "$host" "$REMOTE_SERVICE"
-  run_password "$password" "$host" "chmod +x $REMOTE_SCRIPT && $REMOTE_SCRIPT install-service && $REMOTE_SCRIPT status all"
+  run_password "$password" "$host" "chmod +x $REMOTE_SCRIPT $REMOTE_HTTP_SERVER && $REMOTE_SCRIPT install-service && $REMOTE_SCRIPT status all"
 }
 
 deploy_key_host() {
   local host="$1"
   run_key "$host" "mkdir -p $REMOTE_ROOT"
   copy_key "$SCRIPT_DIR/auto_healing_fault_lab.sh" "$host" "$REMOTE_SCRIPT"
+  copy_key "$SCRIPT_DIR/lab-http-server.py" "$host" "$REMOTE_HTTP_SERVER"
   copy_key "$SCRIPT_DIR/auto-healing-lab-http.service" "$host" "$REMOTE_SERVICE"
-  run_key "$host" "chmod +x $REMOTE_SCRIPT && $REMOTE_SCRIPT install-service && $REMOTE_SCRIPT status all"
+  run_key "$host" "chmod +x $REMOTE_SCRIPT $REMOTE_HTTP_SERVER && $REMOTE_SCRIPT install-service && $REMOTE_SCRIPT status all"
 }
 
 main() {

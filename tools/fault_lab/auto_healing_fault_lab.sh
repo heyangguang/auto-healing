@@ -11,6 +11,14 @@ DISK_TARGET_PERCENT_DEFAULT="92"
 DISK_MIN_FREE_BYTES="536870912"
 CPU_WORKERS_DEFAULT="2"
 CPU_STATE_FILE="$STATE_DIR/cpu_high.pids"
+LOG_DIR="$REMOTE_ROOT/logs"
+LOG_STATE_FILE="$STATE_DIR/clean_logs.bytes"
+LOG_FILE="$LOG_DIR/demo-app.log"
+LOG_ARCHIVE_FILE="$LOG_DIR/demo-app.1.log"
+LOG_BYTES_DEFAULT="8388608"
+PROCESS_STATE_FILE="$STATE_DIR/kill_process.pids"
+PROCESS_NAME="auto_healing_demo_worker"
+PROCESS_WORKERS_DEFAULT="2"
 
 log() {
   printf '[fault-lab] %s\n' "$*"
@@ -26,7 +34,7 @@ ensure_root() {
 }
 
 ensure_dirs() {
-  mkdir -p "$STATE_DIR" "$WWW_DIR"
+  mkdir -p "$STATE_DIR" "$WWW_DIR" "$REMOTE_ROOT/reports" "$LOG_DIR"
 }
 
 ensure_service_page() {
@@ -161,10 +169,85 @@ disk_full_status() {
   log "disk_full=healthy usage=$usage file=$DISK_FILL_FILE"
 }
 
+write_random_log() {
+  local file="$1"
+  local bytes="$2"
+  dd if=/dev/zero bs=1024 count=$((bytes / 1024)) status=none | tr '\0' 'L' >"$file"
+}
+
+clean_logs_inject() {
+  local bytes="${1:-$LOG_BYTES_DEFAULT}"
+  ensure_dirs
+  write_random_log "$LOG_FILE" "$bytes"
+  write_random_log "$LOG_ARCHIVE_FILE" $((bytes / 2))
+  printf '%s\n' "$bytes" >"$LOG_STATE_FILE"
+  log "已注入 clean_logs bytes=$bytes dir=$LOG_DIR"
+}
+
+clean_logs_reset() {
+  ensure_dirs
+  : >"$LOG_FILE"
+  rm -f "$LOG_ARCHIVE_FILE" "$LOG_STATE_FILE"
+  log "已恢复 clean_logs dir=$LOG_DIR"
+}
+
+clean_logs_status() {
+  ensure_dirs
+  local total
+  total="$(du -sb "$LOG_DIR" 2>/dev/null | awk '{print $1}')"
+  if [ -f "$LOG_STATE_FILE" ] && [ "${total:-0}" -gt 1048576 ]; then
+    log "clean_logs=injected bytes=$total dir=$LOG_DIR"
+    return
+  fi
+  log "clean_logs=healthy bytes=${total:-0} dir=$LOG_DIR"
+}
+
+start_demo_process() {
+  bash -c "exec -a $PROCESS_NAME bash -c 'while :; do :; done'" >/dev/null 2>&1 &
+  echo $!
+}
+
+kill_process_inject() {
+  local workers="${1:-$PROCESS_WORKERS_DEFAULT}"
+  [ ! -f "$PROCESS_STATE_FILE" ] || die "kill_process 已经处于注入状态"
+  : >"$PROCESS_STATE_FILE"
+  for _ in $(seq 1 "$workers"); do
+    start_demo_process >>"$PROCESS_STATE_FILE"
+  done
+  log "已注入 kill_process process=$PROCESS_NAME workers=$workers"
+}
+
+kill_process_reset() {
+  local killed=0
+  if [ -f "$PROCESS_STATE_FILE" ]; then
+    while read -r pid; do
+      [ -n "$pid" ] || continue
+      if kill "$pid" 2>/dev/null; then
+        killed=$((killed + 1))
+      fi
+    done <"$PROCESS_STATE_FILE"
+  fi
+  pkill -f "$PROCESS_NAME" 2>/dev/null || true
+  rm -f "$PROCESS_STATE_FILE"
+  log "已恢复 kill_process process=$PROCESS_NAME killed=$killed"
+}
+
+kill_process_status() {
+  local running
+  running="$(pgrep -fc "$PROCESS_NAME" || true)"
+  if [ "${running:-0}" -gt 0 ]; then
+    log "kill_process=injected process=$PROCESS_NAME workers=$running"
+    return
+  fi
+  log "kill_process=healthy process=$PROCESS_NAME workers=0"
+}
+
 status_all() {
   service_down_status
   cpu_high_status
   disk_full_status
+  clean_logs_status
+  kill_process_status
 }
 
 usage() {
@@ -174,8 +257,10 @@ usage() {
   auto_healing_fault_lab.sh inject service_down
   auto_healing_fault_lab.sh inject cpu_high [workers]
   auto_healing_fault_lab.sh inject disk_full [target_percent]
-  auto_healing_fault_lab.sh reset service_down|cpu_high|disk_full
-  auto_healing_fault_lab.sh status service_down|cpu_high|disk_full|all
+  auto_healing_fault_lab.sh inject clean_logs [bytes]
+  auto_healing_fault_lab.sh inject kill_process [workers]
+  auto_healing_fault_lab.sh reset service_down|cpu_high|disk_full|clean_logs|kill_process
+  auto_healing_fault_lab.sh status service_down|cpu_high|disk_full|clean_logs|kill_process|all
 EOF
 }
 
@@ -190,6 +275,8 @@ main() {
         service_down) service_down_inject ;;
         cpu_high) cpu_high_inject "${3:-}" ;;
         disk_full) disk_full_inject "${3:-}" ;;
+        clean_logs) clean_logs_inject "${3:-}" ;;
+        kill_process) kill_process_inject "${3:-}" ;;
         *) usage; die "未知场景: $scenario" ;;
       esac
       ;;
@@ -198,6 +285,8 @@ main() {
         service_down) service_down_reset ;;
         cpu_high) cpu_high_reset ;;
         disk_full) disk_full_reset ;;
+        clean_logs) clean_logs_reset ;;
+        kill_process) kill_process_reset ;;
         *) usage; die "未知场景: $scenario" ;;
       esac
       ;;
@@ -206,6 +295,8 @@ main() {
         service_down) service_down_status ;;
         cpu_high) cpu_high_status ;;
         disk_full) disk_full_status ;;
+        clean_logs) clean_logs_status ;;
+        kill_process) kill_process_status ;;
         all) status_all ;;
         *) usage; die "未知场景: $scenario" ;;
       esac
