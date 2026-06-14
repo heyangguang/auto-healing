@@ -59,7 +59,7 @@ class AdapterConfig:
         self.final_close_stimulus = optional_env("ITOP_FINAL_CLOSE_STIMULUS", "ev_close") or "ev_close"
         self.close_fields = parse_json_env("ITOP_CLOSE_FIELDS_JSON")
         self.excluded_statuses = tuple(split_csv(optional_env("ITOP_LIST_EXCLUDE_STATUSES", "closed")))
-        self.cmdb_classes = split_csv(optional_env("ITOP_CMDB_CLASSES", "Server,VirtualMachine,NetworkDevice,ApplicationSolution"))
+        self.cmdb_classes = split_csv(optional_env("ITOP_CMDB_CLASSES", "Server,VirtualMachine"))
         self.cmdb_oqls = parse_json_env("ITOP_CMDB_OQLS_JSON")
         self.cmdb_environment = optional_env("ITOP_CMDB_ENVIRONMENT", "production") or "production"
         self.demo_org_id = optional_env("ITOP_DEMO_ORG_ID", "3") or "3"

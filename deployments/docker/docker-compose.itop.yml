@@ -47,7 +47,7 @@ services:
       ITOP_CLOSE_STIMULUS: ${ITOP_CLOSE_STIMULUS:-ev_resolve}
       ITOP_CLOSE_FIELDS_JSON: ${ITOP_CLOSE_FIELDS_JSON:-{}}
       ITOP_LIST_EXCLUDE_STATUSES: ${ITOP_LIST_EXCLUDE_STATUSES:-closed}
-      ITOP_CMDB_CLASSES: ${ITOP_CMDB_CLASSES:-Server,VirtualMachine,NetworkDevice,ApplicationSolution}
+      ITOP_CMDB_CLASSES: ${ITOP_CMDB_CLASSES:-Server,VirtualMachine}
       ITOP_CMDB_OQLS_JSON: ${ITOP_CMDB_OQLS_JSON:-{}}
       ITOP_CMDB_ENVIRONMENT: ${ITOP_CMDB_ENVIRONMENT:-production}
     ports:
