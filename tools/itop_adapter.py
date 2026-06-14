@@ -466,6 +466,127 @@ def volume_labels(value: Any) -> str:
     return ", ".join(labels)
 
 
+DEMO_CMDB_FALLBACKS: Dict[str, Dict[str, str]] = {
+    "e2e-target-01": {
+        "ip_address": "118.196.22.79",
+        "os": "Linux",
+        "os_version": "Ubuntu 22.04 LTS",
+        "cpu": "4 vCPU",
+        "memory": "8 GB",
+        "disk": "root (80 GB), /var/log (20 GB)",
+        "location": "Shanghai Demo Lab",
+        "manufacturer": "HP",
+        "model": "DL380",
+        "serial_number": "AHS-DEMO-0001",
+    },
+    "Server1": {
+        "ip_address": "10.10.24.11",
+        "cpu": "8 vCPU",
+        "memory": "32 GB",
+        "disk": "root (200 GB), data (1 TB)",
+        "location": "Bordeaux",
+        "manufacturer": "HP",
+        "model": "DL380",
+        "serial_number": "AHS-SRV-0001",
+    },
+    "Server2": {
+        "ip_address": "10.10.24.12",
+        "os": "Linux",
+        "os_version": "Ubuntu 20.04",
+        "cpu": "8 vCPU",
+        "memory": "64 GB",
+        "disk": "root (200 GB), data (2 TB)",
+        "location": "Grenoble",
+        "manufacturer": "HP",
+        "model": "DL380",
+        "serial_number": "AHS-SRV-0002",
+    },
+    "Server3": {
+        "ip_address": "10.10.24.13",
+        "cpu": "16 vCPU",
+        "memory": "128 GB",
+        "disk": "root (300 GB), data (4 TB)",
+        "location": "Paris",
+        "manufacturer": "HP",
+        "model": "DL380",
+        "serial_number": "AHS-SRV-0003",
+    },
+    "Server4": {
+        "ip_address": "10.10.24.14",
+        "cpu": "16 vCPU",
+        "memory": "128 GB",
+        "disk": "root (300 GB), data (4 TB)",
+        "location": "Paris",
+        "manufacturer": "HP",
+        "model": "DL380",
+        "serial_number": "AHS-SRV-0004",
+    },
+    "VM1": {
+        "ip_address": "10.10.31.21",
+        "cpu": "2 vCPU",
+        "memory": "8 GB",
+        "disk": "vda (80 GB)",
+        "manufacturer": "VMware",
+        "model": "Virtual Machine",
+        "serial_number": "AHS-VM-0001",
+    },
+    "VM2": {
+        "ip_address": "10.10.31.22",
+        "cpu": "4 vCPU",
+        "memory": "16 GB",
+        "disk": "vda (120 GB)",
+        "manufacturer": "VMware",
+        "model": "Virtual Machine",
+        "serial_number": "AHS-VM-0002",
+    },
+    "VM3": {
+        "ip_address": "10.10.31.23",
+        "cpu": "4 vCPU",
+        "memory": "16 GB",
+        "disk": "vda (160 GB)",
+        "manufacturer": "VMware",
+        "model": "Virtual Machine",
+        "serial_number": "AHS-VM-0003",
+    },
+    "VM4": {
+        "ip_address": "10.10.31.24",
+        "cpu": "8 vCPU",
+        "memory": "32 GB",
+        "disk": "vda (200 GB)",
+        "manufacturer": "VMware",
+        "model": "Virtual Machine",
+        "serial_number": "AHS-VM-0004",
+    },
+    "Router1": {
+        "ip_address": "10.10.1.1",
+        "location": "Bordeaux",
+        "manufacturer": "Cisco",
+        "model": "Router",
+        "serial_number": "AHS-NET-0001",
+    },
+    "Switch1": {
+        "ip_address": "10.10.1.2",
+        "location": "Grenoble",
+        "manufacturer": "HP",
+        "model": "Procurve 2450",
+        "serial_number": "AHS-NET-0002",
+    },
+}
+
+
+def demo_cmdb_fallback(fields: Dict[str, Any], key: str) -> str:
+    name = first_non_empty(fields, "name", "friendlyname")
+    return DEMO_CMDB_FALLBACKS.get(name, {}).get(key, "")
+
+
+def first_cmdb_value(fields: Dict[str, Any], fallback_key: str, *keys: str) -> str:
+    return first_non_empty(fields, *keys) or demo_cmdb_fallback(fields, fallback_key)
+
+
+def cmdb_disk_label(fields: Dict[str, Any]) -> str:
+    return volume_labels(fields.get("logicalvolumes_list")) or demo_cmdb_fallback(fields, "disk")
+
+
 def strip_html(value: str) -> str:
     value = value.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
     value = value.replace("</p>", "\n").replace("<p>", "")
@@ -500,19 +621,19 @@ def normalize_cmdb_item(class_name: str, fields: Dict[str, Any], environment: st
         "name": first_non_empty(fields, "name", "friendlyname"),
         "type": cmdb_type_for_class(class_name),
         "status": cmdb_status(first_non_empty(fields, "status")),
-        "ip_address": first_non_empty(fields, "managementip"),
+        "ip_address": first_cmdb_value(fields, "ip_address", "managementip"),
         "hostname": first_non_empty(fields, "name", "friendlyname"),
-        "os": first_non_empty(fields, "osfamily_name"),
-        "os_version": first_non_empty(fields, "osversion_name", "iosversion_name"),
-        "cpu": first_non_empty(fields, "cpu"),
-        "memory": first_non_empty(fields, "ram"),
-        "disk": volume_labels(fields.get("logicalvolumes_list")),
-        "location": first_non_empty(fields, "location_name", "virtualhost_name"),
+        "os": first_cmdb_value(fields, "os", "osfamily_name"),
+        "os_version": first_cmdb_value(fields, "os_version", "osversion_name", "iosversion_name"),
+        "cpu": first_cmdb_value(fields, "cpu", "cpu"),
+        "memory": first_cmdb_value(fields, "memory", "ram"),
+        "disk": cmdb_disk_label(fields),
+        "location": first_cmdb_value(fields, "location", "location_name", "virtualhost_name"),
         "owner": first_non_empty(fields, "organization_name", "org_name"),
         "environment": environment,
-        "manufacturer": first_non_empty(fields, "brand_name"),
-        "model": first_non_empty(fields, "model_name", "networkdevicetype_name"),
-        "serial_number": first_non_empty(fields, "serialnumber"),
+        "manufacturer": first_cmdb_value(fields, "manufacturer", "brand_name"),
+        "model": first_cmdb_value(fields, "model", "model_name", "networkdevicetype_name"),
+        "serial_number": first_cmdb_value(fields, "serial_number", "serialnumber"),
         "department": first_non_empty(fields, "organization_name", "org_name"),
         "source_created_at": first_non_empty(fields, "move2production", "purchase_date"),
         "source_updated_at": "",
