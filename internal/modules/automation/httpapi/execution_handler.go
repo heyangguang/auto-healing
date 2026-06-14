@@ -115,7 +115,7 @@ func buildRunListOptions(c *gin.Context, page, pageSize int) *automationrepo.Run
 		RunID:       c.Query("run_id"),
 		TaskName:    GetStringFilter(c, "task_name"),
 		Status:      c.Query("status"),
-		TriggeredBy: execution.NormalizeTriggeredBy(c.Query("triggered_by")),
+		TriggeredBy: normalizeTriggeredByFilter(c.Query("triggered_by")),
 		Page:        page,
 		PageSize:    pageSize,
 	}
@@ -127,6 +127,13 @@ func buildRunListOptions(c *gin.Context, page, pageSize int) *automationrepo.Run
 	applyRFC3339Range(c, "started_after", &opts.StartedAfter)
 	applyRFC3339Range(c, "started_before", &opts.StartedBefore)
 	return opts
+}
+
+func normalizeTriggeredByFilter(triggeredBy string) string {
+	if triggeredBy == "" {
+		return ""
+	}
+	return execution.NormalizeTriggeredBy(triggeredBy)
 }
 
 func parseUUIDParam(raw string) (*uuid.UUID, error) {
