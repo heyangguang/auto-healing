@@ -18,7 +18,7 @@ LOG_ARCHIVE_FILE="$LOG_DIR/demo-app.1.log"
 LOG_BYTES_DEFAULT="8388608"
 PROCESS_STATE_FILE="$STATE_DIR/kill_process.pids"
 PROCESS_NAME="auto_healing_demo_worker"
-PROCESS_WORKERS_DEFAULT="2"
+PROCESS_WORKERS_DEFAULT="1"
 
 log() {
   printf '[fault-lab] %s\n' "$*"
@@ -178,8 +178,8 @@ write_random_log() {
 clean_logs_inject() {
   local bytes="${1:-$LOG_BYTES_DEFAULT}"
   ensure_dirs
+  rm -f "$LOG_ARCHIVE_FILE"
   write_random_log "$LOG_FILE" "$bytes"
-  write_random_log "$LOG_ARCHIVE_FILE" $((bytes / 2))
   printf '%s\n' "$bytes" >"$LOG_STATE_FILE"
   log "已注入 clean_logs bytes=$bytes dir=$LOG_DIR"
 }

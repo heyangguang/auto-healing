@@ -210,7 +210,7 @@ class ITopClient:
         demo = demo_scenario_payload(self.config, scenario)
         fault_result = None
         if inject_fault and demo.get("fault_scenario"):
-            fault_result = self.inject_demo_fault(demo["fault_scenario"])
+            fault_result = self.prepare_demo_fault(demo["fault_scenario"])
 
         response = self._call({
             "operation": "core/create",
@@ -238,6 +238,18 @@ class ITopClient:
     def inject_demo_fault(self, scenario: str) -> Dict[str, Any]:
         return self.call_fault_lab("inject", scenario)
 
+    def reset_demo_fault(self, scenario: str) -> Dict[str, Any]:
+        return self.call_fault_lab("reset", scenario)
+
+    def prepare_demo_fault(self, scenario: str) -> Dict[str, Any]:
+        reset_result = self.reset_demo_fault(scenario)
+        inject_result = self.inject_demo_fault(scenario)
+        return {
+            "ok": bool(inject_result.get("ok", True)),
+            "reset": reset_result,
+            "inject": inject_result,
+        }
+
     def call_fault_lab(self, action: str, scenario: str = "") -> Dict[str, Any]:
         if action == "status" and not scenario:
             url = f"{self.config.demo_fault_base_url}/fault-lab/status"
@@ -259,8 +271,11 @@ class ITopClient:
                 return json.loads(raw) if raw else {"ok": True}
         except HTTPError as exc:
             raw = exc.read().decode("utf-8", "replace")
-            if exc.code == 409 and action == "inject" and ("已经处于注入状态" in raw or "already injected" in raw):
-                return {"ok": True, "message": "fault already injected", "raw": raw}
+            if exc.code == 409:
+                if action == "inject" and ("已经处于注入状态" in raw or "already injected" in raw):
+                    return {"ok": True, "message": "fault already injected", "raw": raw}
+                if action == "reset" and ("当前未注入" in raw or "not injected" in raw):
+                    return {"ok": True, "message": "fault already reset", "raw": raw}
             raise ITopError(f"fault injection HTTP {exc.code}: {raw}") from exc
         except URLError as exc:
             raise ITopError(f"fault injection unavailable: {exc}") from exc
