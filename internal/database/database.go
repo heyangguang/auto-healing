@@ -106,6 +106,7 @@ func autoMigrateModels() []interface{} {
 		&engagementmodel.DashboardConfig{}, &engagementmodel.SystemWorkspace{}, &engagementmodel.RoleWorkspace{},
 		&engagementmodel.UserPreference{}, &engagementmodel.UserFavorite{}, &engagementmodel.UserRecent{},
 		&automodel.HealingFlow{}, &automodel.HealingRule{}, &automodel.FlowInstance{}, &automodel.ApprovalTask{}, &automodel.FlowExecutionLog{},
+		&automodel.FlowRecoveryAttempt{}, &platformmodel.IncidentWritebackLog{}, &integrationsmodel.IncidentSolutionTemplate{},
 		&engagementmodel.SiteMessage{}, &engagementmodel.SiteMessageRead{}, &opsmodel.PlatformSetting{},
 		&accessmodel.Tenant{}, &accessmodel.UserTenantRole{}, &opsmodel.Dictionary{}, &accessmodel.TenantInvitation{},
 		&opsmodel.CommandBlacklist{}, &opsmodel.BlacklistExemption{}, &opsmodel.TenantBlacklistOverride{},
