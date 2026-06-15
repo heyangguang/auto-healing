@@ -52,6 +52,7 @@ func (r *CreateFlowRequest) ToModel() *model.HealingFlow {
 			flow.ClosePolicy = policy
 		}
 	}
+	reconcileClosePolicyState(flow, r.AutoCloseSourceIncident != nil, r.ClosePolicy != nil)
 	return flow
 }
 
@@ -98,6 +99,38 @@ func (r *UpdateFlowRequest) ApplyTo(flow *model.HealingFlow) {
 			flow.ClosePolicy = policy
 		}
 	}
+	reconcileClosePolicyState(flow, r.AutoCloseSourceIncident != nil, r.ClosePolicy != nil)
+}
+
+func reconcileClosePolicyState(flow *model.HealingFlow, autoCloseProvided, closePolicyProvided bool) {
+	if flow == nil {
+		return
+	}
+	if autoCloseProvided && !flow.AutoCloseSourceIncident && !closePolicyProvided {
+		flow.ClosePolicy = withClosePolicyEnabled(flow.ClosePolicy, false)
+		return
+	}
+	if closePolicyEnabled(flow.ClosePolicy) {
+		flow.AutoCloseSourceIncident = true
+		return
+	}
+}
+
+func closePolicyEnabled(policy model.JSON) bool {
+	if policy == nil {
+		return false
+	}
+	enabled, _ := policy["enabled"].(bool)
+	return enabled
+}
+
+func withClosePolicyEnabled(policy model.JSON, enabled bool) model.JSON {
+	next := model.JSON{}
+	for key, value := range policy {
+		next[key] = value
+	}
+	next["enabled"] = enabled
+	return next
 }
 
 // DryRunFlowRequest Dry-Run 自愈流程请求
