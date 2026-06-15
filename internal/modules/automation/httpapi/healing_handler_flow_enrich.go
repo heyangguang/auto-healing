@@ -41,8 +41,33 @@ func collectNotificationNodeReferences(flows []model.HealingFlow) (map[uuid.UUID
 }
 
 func notificationChannelIDs(config map[string]interface{}) []uuid.UUID {
+	ids := make([]uuid.UUID, 0)
+	if rawConfigs, ok := config["notification_configs"].([]interface{}); ok {
+		for _, rawConfig := range rawConfigs {
+			cfg, ok := rawConfig.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if text, ok := cfg["channel_id"].(string); ok {
+				if parsed, err := uuid.Parse(text); err == nil {
+					ids = append(ids, parsed)
+				}
+			}
+			if rawIDs, ok := cfg["channel_ids"].([]interface{}); ok {
+				ids = appendNotificationChannelIDs(ids, rawIDs)
+			}
+		}
+	}
+	if text, ok := config["channel_id"].(string); ok {
+		if parsed, err := uuid.Parse(text); err == nil {
+			ids = append(ids, parsed)
+		}
+	}
 	rawIDs, _ := config["channel_ids"].([]interface{})
-	ids := make([]uuid.UUID, 0, len(rawIDs))
+	return appendNotificationChannelIDs(ids, rawIDs)
+}
+
+func appendNotificationChannelIDs(ids []uuid.UUID, rawIDs []interface{}) []uuid.UUID {
 	for _, rawID := range rawIDs {
 		if text, ok := rawID.(string); ok {
 			if parsed, err := uuid.Parse(text); err == nil {
@@ -54,7 +79,22 @@ func notificationChannelIDs(config map[string]interface{}) []uuid.UUID {
 }
 
 func notificationTemplateID(config map[string]interface{}) (uuid.UUID, bool) {
-	rawTemplateID, _ := config["template_id"].(string)
+	if rawConfigs, ok := config["notification_configs"].([]interface{}); ok {
+		for _, rawConfig := range rawConfigs {
+			cfg, ok := rawConfig.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if templateID, ok := parseNotificationTemplateID(cfg["template_id"]); ok {
+				return templateID, true
+			}
+		}
+	}
+	return parseNotificationTemplateID(config["template_id"])
+}
+
+func parseNotificationTemplateID(raw interface{}) (uuid.UUID, bool) {
+	rawTemplateID, _ := raw.(string)
 	if rawTemplateID == "" {
 		return uuid.Nil, false
 	}
@@ -117,13 +157,37 @@ func applyNotificationNodeNames(flows []model.HealingFlow, channelNameMap, templ
 }
 
 func applyNotificationChannelNames(config map[string]interface{}, channelNameMap map[string]string) {
-	rawIDs, _ := config["channel_ids"].([]interface{})
 	channelNames := make(map[string]string)
+	addName := func(text string) {
+		if name, exists := channelNameMap[text]; exists {
+			channelNames[text] = name
+		}
+	}
+	if rawConfigs, ok := config["notification_configs"].([]interface{}); ok {
+		for _, rawConfig := range rawConfigs {
+			cfg, ok := rawConfig.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if text, ok := cfg["channel_id"].(string); ok {
+				addName(text)
+			}
+			if rawIDs, ok := cfg["channel_ids"].([]interface{}); ok {
+				for _, rawID := range rawIDs {
+					if text, ok := rawID.(string); ok {
+						addName(text)
+					}
+				}
+			}
+		}
+	}
+	if text, ok := config["channel_id"].(string); ok {
+		addName(text)
+	}
+	rawIDs, _ := config["channel_ids"].([]interface{})
 	for _, rawID := range rawIDs {
 		if text, ok := rawID.(string); ok {
-			if name, exists := channelNameMap[text]; exists {
-				channelNames[text] = name
-			}
+			addName(text)
 		}
 	}
 	if len(channelNames) > 0 {
@@ -132,8 +196,24 @@ func applyNotificationChannelNames(config map[string]interface{}, channelNameMap
 }
 
 func applyNotificationTemplateName(config map[string]interface{}, templateNameMap map[string]string) {
-	templateID, _ := config["template_id"].(string)
+	templateID := firstNotificationTemplateID(config)
 	if name, exists := templateNameMap[templateID]; exists {
 		config["template_name"] = name
 	}
+}
+
+func firstNotificationTemplateID(config map[string]interface{}) string {
+	if rawConfigs, ok := config["notification_configs"].([]interface{}); ok {
+		for _, rawConfig := range rawConfigs {
+			cfg, ok := rawConfig.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if templateID, ok := cfg["template_id"].(string); ok && templateID != "" {
+				return templateID
+			}
+		}
+	}
+	templateID, _ := config["template_id"].(string)
+	return templateID
 }
