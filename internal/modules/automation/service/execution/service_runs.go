@@ -75,6 +75,9 @@ func (s *Service) ExecuteTask(ctx context.Context, taskID uuid.UUID, opts *Execu
 	if err := s.validateRuntimeSecrets(ctx, secretsSourceIDs); err != nil {
 		return nil, err
 	}
+	if err := validateRuntimeCredentialExtraVars(secretsSourceIDs, task.ExtraVars, opts.ExtraVars); err != nil {
+		return nil, err
+	}
 	run := &model.ExecutionRun{
 		TaskID:                  taskID,
 		Status:                  "pending",

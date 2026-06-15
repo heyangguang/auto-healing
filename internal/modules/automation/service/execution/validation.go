@@ -3,6 +3,8 @@ package execution
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	"github.com/company/auto-healing/internal/modules/automation/service/secretsources"
@@ -12,6 +14,20 @@ import (
 var allowedExecutorTypes = map[string]struct{}{
 	"local":  {},
 	"docker": {},
+}
+
+var reservedCredentialExtraVars = map[string]struct{}{
+	"ansible_become_pass":          {},
+	"ansible_become_password":      {},
+	"ansible_password":             {},
+	"ansible_pass":                 {},
+	"ansible_private_key_file":     {},
+	"ansible_ssh_pass":             {},
+	"ansible_ssh_private_key_file": {},
+	"ansible_sudo_pass":            {},
+	"ansible_sudo_password":        {},
+	"ansible_connection_password":  {},
+	"ansible_winrm_password":       {},
 }
 
 func (s *Service) validateTaskForSave(ctx context.Context, task *model.ExecutionTask) error {
@@ -24,11 +40,44 @@ func (s *Service) validateTaskForSave(ctx context.Context, task *model.Execution
 	if err := secretsources.ValidateStringArray(ctx, s.secretsRepo, task.SecretsSourceIDs, "secrets_source_ids"); err != nil {
 		return err
 	}
+	if len(task.SecretsSourceIDs) > 0 {
+		if err := validateNoCredentialExtraVars(task.ExtraVars, "extra_vars"); err != nil {
+			return err
+		}
+	}
 	return s.validateNotificationConfig(ctx, task.NotificationConfig)
 }
 
 func (s *Service) validateRuntimeSecrets(ctx context.Context, ids []uuid.UUID) error {
 	return secretsources.ValidateActive(ctx, s.secretsRepo, ids)
+}
+
+func validateRuntimeCredentialExtraVars(ids []uuid.UUID, taskVars model.JSON, runtimeVars map[string]any) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := validateNoCredentialExtraVars(taskVars, "任务模板 extra_vars"); err != nil {
+		return err
+	}
+	return validateNoCredentialExtraVars(runtimeVars, "运行时 extra_vars")
+}
+
+func validateNoCredentialExtraVars(vars map[string]any, label string) error {
+	if len(vars) == 0 {
+		return nil
+	}
+	conflicts := make([]string, 0)
+	for key := range vars {
+		normalized := strings.ToLower(strings.TrimSpace(key))
+		if _, ok := reservedCredentialExtraVars[normalized]; ok {
+			conflicts = append(conflicts, key)
+		}
+	}
+	if len(conflicts) == 0 {
+		return nil
+	}
+	sort.Strings(conflicts)
+	return fmt.Errorf("%s 不能包含 Ansible 认证变量 %s；已绑定密钥源时认证信息必须来自密钥源", label, strings.Join(conflicts, ", "))
 }
 
 func (s *Service) validateNotificationConfig(ctx context.Context, cfg *model.TaskNotificationConfig) error {

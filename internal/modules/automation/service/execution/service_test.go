@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -254,6 +255,48 @@ func TestCreateTaskRejectsInactiveSecretsSource(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("CreateTask() error = nil, want inactive secrets source rejection")
+	}
+}
+
+func TestCreateTaskRejectsCredentialExtraVarsWithSecretsSource(t *testing.T) {
+	db := openExecutionServiceValidationDB(t)
+	tenantID := uuid.New()
+	playbookID := insertExecutionServicePlaybook(t, db, tenantID)
+	secretID := insertExecutionServiceSecretsSource(t, db, tenantID, "demo-secret", "active")
+	insertExecutionServiceCMDBItem(t, db, tenantID, "e2e-target-01", "118.196.22.79", "active")
+	svc := NewServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+
+	_, err := svc.CreateTask(ctx, &model.ExecutionTask{
+		ID:               uuid.New(),
+		Name:             "credential conflict",
+		PlaybookID:       playbookID,
+		TargetHosts:      "e2e-target-01",
+		ExecutorType:     "docker",
+		SecretsSourceIDs: model.StringArray{secretID.String()},
+		ExtraVars: model.JSON{
+			"ansible_password": "should-not-be-here",
+		},
+	})
+	if err == nil {
+		t.Fatal("CreateTask() error = nil, want credential extra var rejection")
+	}
+	if !strings.Contains(err.Error(), "认证变量") {
+		t.Fatalf("CreateTask() error = %v, want credential extra var rejection", err)
+	}
+}
+
+func TestValidateRuntimeCredentialExtraVarsRejectsOverridesWithSecretsSource(t *testing.T) {
+	err := validateRuntimeCredentialExtraVars(
+		[]uuid.UUID{uuid.New()},
+		model.JSON{"safe_var": "ok"},
+		map[string]any{"ansible_ssh_pass": "should-not-be-here"},
+	)
+	if err == nil {
+		t.Fatal("validateRuntimeCredentialExtraVars() error = nil, want runtime credential override rejection")
+	}
+	if !strings.Contains(err.Error(), "运行时 extra_vars") {
+		t.Fatalf("validateRuntimeCredentialExtraVars() error = %v, want runtime context", err)
 	}
 }
 
