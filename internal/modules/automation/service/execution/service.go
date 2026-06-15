@@ -116,6 +116,9 @@ func (s *Service) CreateTask(ctx context.Context, task *model.ExecutionTask) (*m
 	if task.ExecutorType == "" {
 		task.ExecutorType = "local"
 	}
+	if err := s.validateTaskForSave(ctx, task); err != nil {
+		return nil, err
+	}
 	if err := targethosts.ValidateActiveCMDBHosts(ctx, s.cmdbRepo, task.TargetHosts); err != nil {
 		return nil, err
 	}
@@ -191,6 +194,9 @@ func (s *Service) UpdateTask(ctx context.Context, id uuid.UUID, req *model.Execu
 		return nil, err
 	}
 	if err := targethosts.ValidateActiveCMDBHosts(ctx, s.cmdbRepo, task.TargetHosts); err != nil {
+		return nil, err
+	}
+	if err := s.validateTaskForSave(ctx, task); err != nil {
 		return nil, err
 	}
 

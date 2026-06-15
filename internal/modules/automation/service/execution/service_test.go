@@ -175,6 +175,78 @@ func TestCreateTaskAcceptsActiveCMDBTargetHost(t *testing.T) {
 	}
 }
 
+func TestCreateTaskRejectsUnsupportedExecutorType(t *testing.T) {
+	db := openExecutionServiceValidationDB(t)
+	tenantID := uuid.New()
+	playbookID := insertExecutionServicePlaybook(t, db, tenantID)
+	insertExecutionServiceCMDBItem(t, db, tenantID, "e2e-target-01", "118.196.22.79", "active")
+	svc := NewServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+
+	_, err := svc.CreateTask(ctx, &model.ExecutionTask{
+		ID:           uuid.New(),
+		Name:         "bad executor",
+		PlaybookID:   playbookID,
+		TargetHosts:  "118.196.22.79",
+		ExecutorType: "shell",
+	})
+	if err == nil {
+		t.Fatal("CreateTask() error = nil, want unsupported executor rejection")
+	}
+}
+
+func TestCreateTaskRejectsInactiveSecretsSource(t *testing.T) {
+	db := openExecutionServiceValidationDB(t)
+	tenantID := uuid.New()
+	playbookID := insertExecutionServicePlaybook(t, db, tenantID)
+	secretID := insertExecutionServiceSecretsSource(t, db, tenantID, "demo-secret", "inactive")
+	insertExecutionServiceCMDBItem(t, db, tenantID, "e2e-target-01", "118.196.22.79", "active")
+	svc := NewServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+
+	_, err := svc.CreateTask(ctx, &model.ExecutionTask{
+		ID:               uuid.New(),
+		Name:             "bad secret",
+		PlaybookID:       playbookID,
+		TargetHosts:      "118.196.22.79",
+		ExecutorType:     "docker",
+		SecretsSourceIDs: model.StringArray{secretID.String()},
+	})
+	if err == nil {
+		t.Fatal("CreateTask() error = nil, want inactive secrets source rejection")
+	}
+}
+
+func TestCreateTaskRejectsMissingNotificationTemplate(t *testing.T) {
+	db := openExecutionServiceValidationDB(t)
+	tenantID := uuid.New()
+	playbookID := insertExecutionServicePlaybook(t, db, tenantID)
+	channelID := insertExecutionServiceNotificationChannel(t, db, tenantID, "webhook", true)
+	insertExecutionServiceCMDBItem(t, db, tenantID, "e2e-target-01", "118.196.22.79", "active")
+	svc := NewServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+	missingTemplateID := uuid.New()
+
+	_, err := svc.CreateTask(ctx, &model.ExecutionTask{
+		ID:           uuid.New(),
+		Name:         "bad notification",
+		PlaybookID:   playbookID,
+		TargetHosts:  "118.196.22.79",
+		ExecutorType: "docker",
+		NotificationConfig: &model.TaskNotificationConfig{
+			Enabled: true,
+			OnSuccess: &model.NotificationTriggerConfig{
+				Enabled:    true,
+				TemplateID: &missingTemplateID,
+				ChannelIDs: []uuid.UUID{channelID},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("CreateTask() error = nil, want missing notification template rejection")
+	}
+}
+
 func openExecutionServiceValidationDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "execution-service-validation.db")), &gorm.Config{})
@@ -238,6 +310,55 @@ func openExecutionServiceValidationDB(t *testing.T) *gorm.DB {
 			updated_at DATETIME
 		)
 	`)
+	mustExecExecutionServiceValidationSQL(t, db, `
+		CREATE TABLE secrets_sources (
+			id TEXT PRIMARY KEY NOT NULL,
+			tenant_id TEXT,
+			name TEXT,
+			type TEXT,
+			auth_type TEXT,
+			config TEXT,
+			is_default BOOLEAN,
+			priority INTEGER,
+			status TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
+		)
+	`)
+	mustExecExecutionServiceValidationSQL(t, db, `
+		CREATE TABLE notification_templates (
+			id TEXT PRIMARY KEY NOT NULL,
+			tenant_id TEXT,
+			name TEXT,
+			description TEXT,
+			event_type TEXT,
+			supported_channels TEXT,
+			subject_template TEXT,
+			body_template TEXT,
+			format TEXT,
+			available_variables TEXT,
+			is_active BOOLEAN,
+			created_at DATETIME,
+			updated_at DATETIME
+		)
+	`)
+	mustExecExecutionServiceValidationSQL(t, db, `
+		CREATE TABLE notification_channels (
+			id TEXT PRIMARY KEY NOT NULL,
+			tenant_id TEXT,
+			name TEXT,
+			type TEXT,
+			description TEXT,
+			config TEXT,
+			retry_config TEXT,
+			recipients TEXT,
+			is_active BOOLEAN,
+			is_default BOOLEAN,
+			rate_limit_per_minute INTEGER,
+			created_at DATETIME,
+			updated_at DATETIME
+		)
+	`)
 	return db
 }
 
@@ -262,6 +383,26 @@ func insertExecutionServiceCMDBItem(t *testing.T, db *gorm.DB, tenantID uuid.UUI
 		INSERT INTO cmdb_items (id, tenant_id, external_id, name, type, status, ip_address, hostname, raw_data)
 		VALUES (?, ?, ?, ?, 'server', ?, ?, ?, '{}')
 	`, uuid.NewString(), tenantID.String(), name, name, status, ipAddress, name)
+}
+
+func insertExecutionServiceSecretsSource(t *testing.T, db *gorm.DB, tenantID uuid.UUID, name, status string) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	mustExecExecutionServiceValidationSQL(t, db, `
+		INSERT INTO secrets_sources (id, tenant_id, name, type, auth_type, config, is_default, priority, status)
+		VALUES (?, ?, ?, 'file', 'ssh_key', '{}', false, 0, ?)
+	`, id.String(), tenantID.String(), name, status)
+	return id
+}
+
+func insertExecutionServiceNotificationChannel(t *testing.T, db *gorm.DB, tenantID uuid.UUID, name string, active bool) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	mustExecExecutionServiceValidationSQL(t, db, `
+		INSERT INTO notification_channels (id, tenant_id, name, type, config, recipients, is_active, is_default)
+		VALUES (?, ?, ?, 'webhook', '{}', '[]', ?, false)
+	`, id.String(), tenantID.String(), name, active)
+	return id
 }
 
 func mustExecExecutionServiceValidationSQL(t *testing.T, db *gorm.DB, sql string, args ...any) {
