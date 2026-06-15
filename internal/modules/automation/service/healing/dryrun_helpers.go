@@ -43,8 +43,8 @@ func (e *DryRunExecutor) findNodeByID(nodes []model.FlowNode, id string) *model.
 
 func (e *DryRunExecutor) findNextNode(nodes []model.FlowNode, edges []model.FlowEdge, currentID string) *model.FlowNode {
 	for _, edge := range edges {
-		if edge.GetFrom() == currentID {
-			return e.findNodeByID(nodes, edge.GetTo())
+		if edge.Source == currentID {
+			return e.findNodeByID(nodes, edge.Target)
 		}
 	}
 	return nil
@@ -54,14 +54,14 @@ func (e *DryRunExecutor) findNextNode(nodes []model.FlowNode, edges []model.Flow
 func (e *DryRunExecutor) findNextNodeByHandle(nodes []model.FlowNode, edges []model.FlowEdge, currentID string, handle string) *model.FlowNode {
 	// 优先精确匹配
 	for _, edge := range edges {
-		if edge.GetFrom() == currentID && edge.GetSourceHandle() == handle {
-			return e.findNodeByID(nodes, edge.GetTo())
+		if edge.Source == currentID && edge.GetSourceHandle() == handle {
+			return e.findNodeByID(nodes, edge.Target)
 		}
 	}
 	// 回退到无 handle 的边
 	for _, edge := range edges {
-		if edge.GetFrom() == currentID && edge.SourceHandle == "" {
-			return e.findNodeByID(nodes, edge.GetTo())
+		if edge.Source == currentID && edge.SourceHandle == "" {
+			return e.findNodeByID(nodes, edge.Target)
 		}
 	}
 	return nil
@@ -77,17 +77,17 @@ func (e *DryRunExecutor) getSkippedBranchNodes(nodes []model.FlowNode, edges []m
 	// 首先，收集选中分支会经过的所有节点（执行路径）
 	executionPathNodes := make(map[string]bool)
 	for _, edge := range edges {
-		if edge.GetFrom() == sourceID && edge.GetSourceHandle() == chosenHandle {
+		if edge.Source == sourceID && edge.GetSourceHandle() == chosenHandle {
 			// 从选中分支开始，收集所有下游节点
-			e.collectAllDownstreamNodes(nodes, edges, edge.GetTo(), executionPathNodes)
+			e.collectAllDownstreamNodes(nodes, edges, edge.Target, executionPathNodes)
 		}
 	}
 
 	// 找出所有从 sourceID 出发但不是 chosenHandle 的边
 	for _, edge := range edges {
-		if edge.GetFrom() == sourceID && edge.GetSourceHandle() != chosenHandle && edge.SourceHandle != "" {
+		if edge.Source == sourceID && edge.GetSourceHandle() != chosenHandle && edge.SourceHandle != "" {
 			// 递归收集这个分支的所有下游节点（排除执行路径节点）
-			e.collectSkippedNodes(nodes, edges, edge.GetTo(), executedNodeIDs, executionPathNodes, &skippedNodeIDs)
+			e.collectSkippedNodes(nodes, edges, edge.Target, executedNodeIDs, executionPathNodes, &skippedNodeIDs)
 		}
 	}
 
@@ -102,8 +102,8 @@ func (e *DryRunExecutor) collectAllDownstreamNodes(nodes []model.FlowNode, edges
 	result[startNodeID] = true
 
 	for _, edge := range edges {
-		if edge.GetFrom() == startNodeID {
-			e.collectAllDownstreamNodes(nodes, edges, edge.GetTo(), result)
+		if edge.Source == startNodeID {
+			e.collectAllDownstreamNodes(nodes, edges, edge.Target, result)
 		}
 	}
 }
@@ -130,8 +130,8 @@ func (e *DryRunExecutor) collectSkippedNodes(nodes []model.FlowNode, edges []mod
 
 	// 递归收集下游节点
 	for _, edge := range edges {
-		if edge.GetFrom() == startNodeID {
-			e.collectSkippedNodes(nodes, edges, edge.GetTo(), executedNodeIDs, executionPathNodes, result)
+		if edge.Source == startNodeID {
+			e.collectSkippedNodes(nodes, edges, edge.Target, executedNodeIDs, executionPathNodes, result)
 		}
 	}
 }

@@ -52,22 +52,15 @@ func (r *CreateTaskRequest) ToModel() *model.ExecutionTask {
 // ExecuteTaskRequest 执行任务请求
 type ExecuteTaskRequest struct {
 	TriggeredBy      string         `json:"triggered_by"`
-	SecretsSourceID  *uuid.UUID     `json:"secrets_source_id"`
 	SecretsSourceIDs []uuid.UUID    `json:"secrets_source_ids"`
 	ExtraVars        map[string]any `json:"extra_vars"`
 	TargetHosts      string         `json:"target_hosts"`      // 覆盖目标主机
 	SkipNotification bool           `json:"skip_notification"` // 跳过本次通知（全局）
 }
 
-// GetSecretsSourceIDs 获取密钥源ID列表（兼容处理）
+// GetSecretsSourceIDs 获取运行时覆盖密钥源ID列表
 func (r *ExecuteTaskRequest) GetSecretsSourceIDs() []uuid.UUID {
-	if len(r.SecretsSourceIDs) > 0 {
-		return r.SecretsSourceIDs
-	}
-	if r.SecretsSourceID != nil {
-		return []uuid.UUID{*r.SecretsSourceID}
-	}
-	return nil
+	return r.SecretsSourceIDs
 }
 
 // GetTriggeredBy 获取触发者

@@ -285,16 +285,12 @@
                 x-dict-type: execution_triggered_by
                 x-dict-mode: exact
                 description: 触发者
-              secrets_source_id:
-                type: string
-                format: uuid
-                description: 密钥源ID（可选，向后兼容）
               secrets_source_ids:
                 type: array
                 items:
                   type: string
                   format: uuid
-                description: 多密钥源ID（可选，优先使用，用于混合认证场景）
+                description: 运行时覆盖密钥源 ID 列表
               extra_vars:
                 type: object
                 description: 运行时覆盖变量

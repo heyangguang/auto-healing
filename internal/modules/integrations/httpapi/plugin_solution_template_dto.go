@@ -5,8 +5,6 @@ import integrationmodel "github.com/company/auto-healing/internal/modules/integr
 type CreateSolutionTemplateRequest struct {
 	Name                 string `json:"name" binding:"required"`
 	Description          string `json:"description"`
-	ResolutionTemplate   string `json:"resolution_template"`
-	WorkNotesTemplate    string `json:"work_notes_template"`
 	ProblemTemplate      string `json:"problem_template"`
 	SolutionTemplate     string `json:"solution_template"`
 	VerificationTemplate string `json:"verification_template"`
@@ -22,8 +20,6 @@ func (r *CreateSolutionTemplateRequest) ToModel() *integrationmodel.IncidentSolu
 	return &integrationmodel.IncidentSolutionTemplate{
 		Name:                 r.Name,
 		Description:          r.Description,
-		ResolutionTemplate:   r.ResolutionTemplate,
-		WorkNotesTemplate:    r.WorkNotesTemplate,
 		ProblemTemplate:      r.ProblemTemplate,
 		SolutionTemplate:     r.SolutionTemplate,
 		VerificationTemplate: r.VerificationTemplate,
@@ -39,8 +35,6 @@ func (r *CreateSolutionTemplateRequest) ToModel() *integrationmodel.IncidentSolu
 type UpdateSolutionTemplateRequest struct {
 	Name                 *string `json:"name"`
 	Description          *string `json:"description"`
-	ResolutionTemplate   *string `json:"resolution_template"`
-	WorkNotesTemplate    *string `json:"work_notes_template"`
 	ProblemTemplate      *string `json:"problem_template"`
 	SolutionTemplate     *string `json:"solution_template"`
 	VerificationTemplate *string `json:"verification_template"`
@@ -58,12 +52,6 @@ func (r *UpdateSolutionTemplateRequest) ApplyTo(template *integrationmodel.Incid
 	}
 	if r.Description != nil {
 		template.Description = *r.Description
-	}
-	if r.ResolutionTemplate != nil {
-		template.ResolutionTemplate = *r.ResolutionTemplate
-	}
-	if r.WorkNotesTemplate != nil {
-		template.WorkNotesTemplate = *r.WorkNotesTemplate
 	}
 	if r.ProblemTemplate != nil {
 		template.ProblemTemplate = *r.ProblemTemplate

@@ -102,8 +102,6 @@ CREATE TABLE incident_solution_templates (
 	steps_render_mode TEXT,
 	steps_max_count INTEGER,
 	step_output_max_length INTEGER,
-	resolution_template TEXT,
-	work_notes_template TEXT,
 	default_close_code TEXT,
 	default_close_status TEXT,
 	created_at DATETIME,
@@ -226,10 +224,10 @@ func TestCloseIncidentWithSolutionTemplateRendersRequestPayload(t *testing.T) {
 	if err := db.Exec(`
 		INSERT INTO incident_solution_templates (
 			id, tenant_id, name, description, problem_template, solution_template, verification_template, conclusion_template,
-			steps_render_mode, steps_max_count, step_output_max_length, resolution_template, work_notes_template,
+			steps_render_mode, steps_max_count, step_output_max_length,
 			default_close_code, default_close_status, created_at, updated_at
-		) VALUES (?, ?, 'tmpl', 'demo', '', '', '', '', 'summary', 6, 240, ?, ?, 'auto_healed', 'resolved', ?, ?)
-	`, templateID.String(), tenantID.String(), `处理完成：{{ incident.title }}`, `run={{ execution.run_id }}`, now, now).Error; err != nil {
+		) VALUES (?, ?, 'tmpl', 'demo', '', ?, '', ?, 'summary', 6, 240, 'auto_healed', 'resolved', ?, ?)
+	`, templateID.String(), tenantID.String(), `run={{ execution.run_id }}`, `处理完成：{{ incident.title }}`, now, now).Error; err != nil {
 		t.Fatalf("insert template: %v", err)
 	}
 
@@ -248,7 +246,7 @@ func TestCloseIncidentWithSolutionTemplateRendersRequestPayload(t *testing.T) {
 	if gotPayload["resolution"] != "处理完成：incident-title" {
 		t.Fatalf("resolution = %#v", gotPayload["resolution"])
 	}
-	if gotPayload["work_notes"] != "run=run-201" {
+	if gotPayload["work_notes"] != "解决方案：\nrun=run-201" {
 		t.Fatalf("work_notes = %#v", gotPayload["work_notes"])
 	}
 }

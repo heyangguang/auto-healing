@@ -12,8 +12,6 @@ type IncidentSolutionTemplate struct {
 	TenantID             *uuid.UUID `json:"tenant_id,omitempty" gorm:"type:uuid;uniqueIndex:idx_incident_solution_template_tenant_name"`
 	Name                 string     `json:"name" gorm:"type:varchar(200);not null;uniqueIndex:idx_incident_solution_template_tenant_name"`
 	Description          string     `json:"description,omitempty" gorm:"type:text"`
-	ResolutionTemplate   string     `json:"resolution_template" gorm:"type:text;not null;default:''"`
-	WorkNotesTemplate    string     `json:"work_notes_template" gorm:"type:text;not null;default:''"`
 	ProblemTemplate      string     `json:"problem_template,omitempty" gorm:"type:text;not null;default:''"`
 	SolutionTemplate     string     `json:"solution_template,omitempty" gorm:"type:text;not null;default:''"`
 	VerificationTemplate string     `json:"verification_template,omitempty" gorm:"type:text;not null;default:''"`
@@ -29,11 +27,4 @@ type IncidentSolutionTemplate struct {
 
 func (IncidentSolutionTemplate) TableName() string {
 	return "incident_solution_templates"
-}
-
-func (t IncidentSolutionTemplate) UsesStructuredSections() bool {
-	return t.ProblemTemplate != "" ||
-		t.SolutionTemplate != "" ||
-		t.VerificationTemplate != "" ||
-		t.ConclusionTemplate != ""
 }

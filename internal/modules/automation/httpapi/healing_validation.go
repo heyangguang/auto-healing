@@ -258,6 +258,18 @@ func decodeFlowEdges(raw model.JSONArray) ([]model.FlowEdge, error) {
 	if err != nil {
 		return nil, fmt.Errorf("edges 序列化失败: %w", err)
 	}
+	var rawEdges []map[string]json.RawMessage
+	if err := json.Unmarshal(data, &rawEdges); err != nil {
+		return nil, fmt.Errorf("edges 结构不合法: %w", err)
+	}
+	for i, edge := range rawEdges {
+		if _, exists := edge["from"]; exists {
+			return nil, fmt.Errorf("edges[%d].from 已废弃，请使用 source", i)
+		}
+		if _, exists := edge["to"]; exists {
+			return nil, fmt.Errorf("edges[%d].to 已废弃，请使用 target", i)
+		}
+	}
 	var edges []model.FlowEdge
 	if err := json.Unmarshal(data, &edges); err != nil {
 		return nil, fmt.Errorf("edges 结构不合法: %w", err)
@@ -283,16 +295,14 @@ func (h *HealingHandler) validateFlowGraph(ctx context.Context, nodes []model.Fl
 		}
 	}
 	for i, edge := range edges {
-		from := edge.GetFrom()
-		to := edge.GetTo()
-		if from == "" || to == "" {
+		if edge.Source == "" || edge.Target == "" {
 			return fmt.Errorf("edges[%d] 必须配置 source/target", i)
 		}
-		if _, ok := nodeIDs[from]; !ok {
-			return fmt.Errorf("edges[%d].source 引用了不存在的节点: %s", i, from)
+		if _, ok := nodeIDs[edge.Source]; !ok {
+			return fmt.Errorf("edges[%d].source 引用了不存在的节点: %s", i, edge.Source)
 		}
-		if _, ok := nodeIDs[to]; !ok {
-			return fmt.Errorf("edges[%d].target 引用了不存在的节点: %s", i, to)
+		if _, ok := nodeIDs[edge.Target]; !ok {
+			return fmt.Errorf("edges[%d].target 引用了不存在的节点: %s", i, edge.Target)
 		}
 	}
 	return nil

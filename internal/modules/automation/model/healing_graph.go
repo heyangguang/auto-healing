@@ -48,26 +48,11 @@ type FlowNodePosition struct {
 }
 
 type FlowEdge struct {
-	From         string `json:"from"`
-	To           string `json:"to"`
 	Source       string `json:"source"`
 	Target       string `json:"target"`
 	SourceHandle string `json:"sourceHandle"`
+	TargetHandle string `json:"targetHandle,omitempty"`
 	Condition    string `json:"condition,omitempty"`
-}
-
-func (e *FlowEdge) GetFrom() string {
-	if e.Source != "" {
-		return e.Source
-	}
-	return e.From
-}
-
-func (e *FlowEdge) GetTo() string {
-	if e.Target != "" {
-		return e.Target
-	}
-	return e.To
 }
 
 func (e *FlowEdge) GetSourceHandle() string {

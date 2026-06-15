@@ -1,6 +1,9 @@
 package httpapi
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/company/auto-healing/internal/modules/automation/service/execution"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -108,9 +111,11 @@ func (h *ExecutionHandler) ExecuteTask(c *gin.Context) {
 	}
 
 	var req ExecuteTaskRequest
-	if err := c.ShouldBindJSON(&req); err != nil && c.Request.ContentLength > 0 {
-		response.BadRequest(c, "请求参数错误: "+err.Error())
-		return
+	if c.Request.ContentLength > 0 {
+		if err := decodeExecuteTaskRequest(c, &req); err != nil {
+			response.BadRequest(c, "请求参数错误: "+err.Error())
+			return
+		}
 	}
 	run, err := h.service.ExecuteTask(c.Request.Context(), id, &execution.ExecuteOptions{
 		TriggeredBy:      req.GetTriggeredBy(),
@@ -124,6 +129,21 @@ func (h *ExecutionHandler) ExecuteTask(c *gin.Context) {
 		return
 	}
 	response.Success(c, run)
+}
+
+func decodeExecuteTaskRequest(c *gin.Context, req *ExecuteTaskRequest) error {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(c.Request.Body).Decode(&raw); err != nil {
+		return err
+	}
+	if _, exists := raw["secrets_source_id"]; exists {
+		return fmt.Errorf("secrets_source_id 已废弃，请使用 secrets_source_ids")
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, req)
 }
 
 // ListRuns 列出任务的执行历史

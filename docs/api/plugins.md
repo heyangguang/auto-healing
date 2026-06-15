@@ -161,11 +161,6 @@
 - `conclusion_template`：最终结论
 - `steps_render_mode`：执行步骤渲染模式，由系统根据真实运行过程自动生成
 
-兼容说明：
-
-- `resolution_template` / `work_notes_template` 仍保留，用于兼容旧模板
-- 若配置了新版分段字段，系统会优先使用新版字段渲染
-
 ### 获取模板列表
 
 **GET** `/api/v1/incident-solution-templates`
@@ -191,8 +186,6 @@
 | `steps_render_mode` | string | ❌ | 步骤渲染模式：`summary` / `detailed` |
 | `steps_max_count` | int | ❌ | 最多展示的步骤数量 |
 | `step_output_max_length` | int | ❌ | 单步输出摘要最大长度 |
-| `resolution_template` | string | ❌ | 兼容旧模型的结论模板 |
-| `work_notes_template` | string | ❌ | 兼容旧模型的过程模板 |
 | `default_close_code` | string | ❌ | 默认关闭原因码 |
 | `default_close_status` | string | ❌ | 默认关闭状态，默认 `resolved` |
 

@@ -36,9 +36,9 @@ func (e *FlowExecutor) findStartNode(nodes []model.FlowNode) *model.FlowNode {
 // findNextNode 找到下一个节点
 func (e *FlowExecutor) findNextNode(nodes []model.FlowNode, edges []model.FlowEdge, currentNodeID string) *model.FlowNode {
 	for _, edge := range edges {
-		if edge.GetFrom() == currentNodeID {
+		if edge.Source == currentNodeID {
 			for i := range nodes {
-				if nodes[i].ID == edge.GetTo() {
+				if nodes[i].ID == edge.Target {
 					return &nodes[i]
 				}
 			}
@@ -60,9 +60,9 @@ func (e *FlowExecutor) findNextNodeByHandle(nodes []model.FlowNode, edges []mode
 
 func matchNodeByHandle(nodes []model.FlowNode, edges []model.FlowEdge, currentNodeID string, handle string) *model.FlowNode {
 	for _, edge := range edges {
-		if edge.GetFrom() == currentNodeID && edge.GetSourceHandle() == handle {
+		if edge.Source == currentNodeID && edge.GetSourceHandle() == handle {
 			for i := range nodes {
-				if nodes[i].ID == edge.GetTo() {
+				if nodes[i].ID == edge.Target {
 					logger.Exec("FLOW").Debug("找到分支 %s -> %s (handle=%s)", currentNodeID, nodes[i].ID, handle)
 					return &nodes[i]
 				}
@@ -77,9 +77,9 @@ func matchDefaultNodeByHandle(nodes []model.FlowNode, edges []model.FlowEdge, cu
 		return nil
 	}
 	for _, edge := range edges {
-		if edge.GetFrom() == currentNodeID && edge.GetSourceHandle() == "default" {
+		if edge.Source == currentNodeID && edge.GetSourceHandle() == "default" {
 			for i := range nodes {
-				if nodes[i].ID == edge.GetTo() {
+				if nodes[i].ID == edge.Target {
 					logger.Exec("FLOW").Debug("回退到 default 分支 %s -> %s", currentNodeID, nodes[i].ID)
 					return &nodes[i]
 				}
@@ -94,9 +94,9 @@ func matchUnnamedNodeByHandle(nodes []model.FlowNode, edges []model.FlowEdge, cu
 		return nil
 	}
 	for _, edge := range edges {
-		if edge.GetFrom() == currentNodeID && edge.SourceHandle == "" {
+		if edge.Source == currentNodeID && edge.SourceHandle == "" {
 			for i := range nodes {
-				if nodes[i].ID == edge.GetTo() {
+				if nodes[i].ID == edge.Target {
 					logger.Exec("FLOW").Debug("使用无 handle 的边 %s -> %s", currentNodeID, nodes[i].ID)
 					return &nodes[i]
 				}

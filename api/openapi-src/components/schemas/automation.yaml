@@ -453,7 +453,7 @@ FlowNode:
 
         - **approval**: `{title, description, approvers, approver_roles, timeout_hours}`
 
-        - **execution**: `{git_repo_id, executor_type, hosts_key, secrets_source_id, extra_vars, keep_credentials}`
+        - **execution**: `{task_template_id, task_template_name, hosts_key, extra_vars, variable_mappings}`
 
         - **notification**: `{channel_ids, template_id}`
 
@@ -466,9 +466,15 @@ FlowEdge:
   type: object
   description: 流程边
   properties:
-    from:
+    id:
       type: string
-    to:
+    source:
+      type: string
+    target:
+      type: string
+    sourceHandle:
+      type: string
+    targetHandle:
       type: string
     condition:
       type: string

@@ -59,23 +59,7 @@ func renderSolutionTemplate(template *integrationmodel.IncidentSolutionTemplate,
 	if template == nil {
 		return nil, fmt.Errorf("解决方案模板不能为空")
 	}
-	if template.UsesStructuredSections() {
-		return renderStructuredSolutionTemplate(template, context)
-	}
-	resolution, err := renderTemplate(template.ResolutionTemplate, context)
-	if err != nil {
-		return nil, fmt.Errorf("渲染 resolution_template 失败: %w", err)
-	}
-	workNotes, err := renderTemplate(template.WorkNotesTemplate, context)
-	if err != nil {
-		return nil, fmt.Errorf("渲染 work_notes_template 失败: %w", err)
-	}
-	return &renderedSolution{
-		Resolution:  resolution,
-		WorkNotes:   workNotes,
-		CloseCode:   strings.TrimSpace(template.DefaultCloseCode),
-		CloseStatus: defaultCloseStatus(template.DefaultCloseStatus),
-	}, nil
+	return renderStructuredSolutionTemplate(template, context)
 }
 
 func buildSolutionTemplateContext(incident *platformmodel.Incident, params CloseIncidentParams) map[string]any {

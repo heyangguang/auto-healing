@@ -2174,16 +2174,12 @@ paths:
                   x-dict-type: execution_triggered_by
                   x-dict-mode: exact
                   description: 触发者
-                secrets_source_id:
-                  type: string
-                  format: uuid
-                  description: 密钥源ID（可选，向后兼容）
                 secrets_source_ids:
                   type: array
                   items:
                     type: string
                     format: uuid
-                  description: 多密钥源ID（可选，优先使用，用于混合认证场景）
+                  description: 运行时覆盖密钥源 ID 列表
                 extra_vars:
                   type: object
                   description: 运行时覆盖变量
@@ -8048,7 +8044,7 @@ components:
 
             - **approval**: `{title, description, approvers, approver_roles, timeout_hours}`
 
-            - **execution**: `{git_repo_id, executor_type, hosts_key, secrets_source_id, extra_vars, keep_credentials}`
+            - **execution**: `{task_template_id, task_template_name, hosts_key, extra_vars, variable_mappings}`
 
             - **notification**: `{channel_ids, template_id}`
 
@@ -8061,9 +8057,15 @@ components:
       type: object
       description: 流程边
       properties:
-        from:
+        id:
           type: string
-        to:
+        source:
+          type: string
+        target:
+          type: string
+        sourceHandle:
+          type: string
+        targetHandle:
           type: string
         condition:
           type: string
@@ -9881,12 +9883,6 @@ components:
         step_output_max_length:
           type: integer
           description: 单步输出摘要最大长度
-        resolution_template:
-          type: string
-          description: 兼容旧模型的结论模板
-        work_notes_template:
-          type: string
-          description: 兼容旧模型的过程模板
         default_close_code:
           type: string
         default_close_status:
@@ -9923,10 +9919,6 @@ components:
           type: integer
         step_output_max_length:
           type: integer
-        resolution_template:
-          type: string
-        work_notes_template:
-          type: string
         default_close_code:
           type: string
         default_close_status:
@@ -9955,10 +9947,6 @@ components:
           type: integer
         step_output_max_length:
           type: integer
-        resolution_template:
-          type: string
-        work_notes_template:
-          type: string
         default_close_code:
           type: string
         default_close_status:

@@ -458,12 +458,6 @@ IncidentSolutionTemplate:
     step_output_max_length:
       type: integer
       description: 单步输出摘要最大长度
-    resolution_template:
-      type: string
-      description: 兼容旧模型的结论模板
-    work_notes_template:
-      type: string
-      description: 兼容旧模型的过程模板
     default_close_code:
       type: string
     default_close_status:
@@ -500,10 +494,6 @@ IncidentSolutionTemplateCreate:
       type: integer
     step_output_max_length:
       type: integer
-    resolution_template:
-      type: string
-    work_notes_template:
-      type: string
     default_close_code:
       type: string
     default_close_status:
@@ -532,10 +522,6 @@ IncidentSolutionTemplateUpdate:
       type: integer
     step_output_max_length:
       type: integer
-    resolution_template:
-      type: string
-    work_notes_template:
-      type: string
     default_close_code:
       type: string
     default_close_status:

@@ -107,8 +107,6 @@ var incidentServiceSchemaStatements = []string{
 		steps_render_mode TEXT,
 		steps_max_count INTEGER,
 		step_output_max_length INTEGER,
-		resolution_template TEXT,
-		work_notes_template TEXT,
 		default_close_code TEXT,
 		default_close_status TEXT,
 		created_at DATETIME,
@@ -275,7 +273,7 @@ func TestCloseIncidentIntegrationRendersSolutionTemplate(t *testing.T) {
 	if req["resolution"] != "AHS 已完成处理：service integration" {
 		t.Fatalf("resolution = %#v", req["resolution"])
 	}
-	if req["work_notes"] != "流程=服务恢复流程；run=run-1；结果=执行完成" {
+	if req["work_notes"] != "解决方案：\n流程=服务恢复流程；run=run-1；结果=执行完成" {
 		t.Fatalf("work_notes = %#v", req["work_notes"])
 	}
 	if req["close_code"] != "auto_healed" {
@@ -488,14 +486,14 @@ func insertIncidentSolutionTemplate(t *testing.T, db *gorm.DB, tenantID, templat
 	mustExecIncidentServiceSQL(t, db, `
 		INSERT INTO incident_solution_templates (
 			id, tenant_id, name, description, problem_template, solution_template, verification_template, conclusion_template,
-			steps_render_mode, steps_max_count, step_output_max_length, resolution_template, work_notes_template,
+			steps_render_mode, steps_max_count, step_output_max_length,
 			default_close_code, default_close_status, created_at, updated_at
-		) VALUES (?, ?, 'tmpl', 'demo', '', '', '', '', 'summary', 6, 240, ?, ?, 'auto_healed', 'resolved', ?, ?)
+		) VALUES (?, ?, 'tmpl', 'demo', '', ?, '', ?, 'summary', 6, 240, 'auto_healed', 'resolved', ?, ?)
 	`,
 		templateID.String(),
 		tenantID.String(),
-		`AHS 已完成处理：{{ incident.title }}`,
 		`流程={{ flow.name }}；run={{ execution.run_id }}；结果={{ execution.message }}`,
+		`AHS 已完成处理：{{ incident.title }}`,
 		now,
 		now,
 	)
@@ -508,9 +506,9 @@ func insertStructuredIncidentSolutionTemplate(t *testing.T, db *gorm.DB, tenantI
 	mustExecIncidentServiceSQL(t, db, `
 		INSERT INTO incident_solution_templates (
 			id, tenant_id, name, description, problem_template, solution_template, verification_template, conclusion_template,
-			steps_render_mode, steps_max_count, step_output_max_length, resolution_template, work_notes_template,
+			steps_render_mode, steps_max_count, step_output_max_length,
 			default_close_code, default_close_status, created_at, updated_at
-		) VALUES (?, ?, 'structured-tmpl', 'demo', ?, ?, ?, ?, 'summary', 6, 240, '', '', 'auto_healed', 'resolved', ?, ?)
+		) VALUES (?, ?, 'structured-tmpl', 'demo', ?, ?, ?, ?, 'summary', 6, 240, 'auto_healed', 'resolved', ?, ?)
 	`,
 		templateID.String(),
 		tenantID.String(),

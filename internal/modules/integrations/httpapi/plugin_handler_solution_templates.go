@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
@@ -20,7 +22,7 @@ func (h *PluginHandler) ListSolutionTemplates(c *gin.Context) {
 
 func (h *PluginHandler) CreateSolutionTemplate(c *gin.Context) {
 	var req CreateSolutionTemplateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := decodeSolutionTemplateRequest(c, &req); err != nil {
 		response.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
@@ -58,7 +60,7 @@ func (h *PluginHandler) UpdateSolutionTemplate(c *gin.Context) {
 		return
 	}
 	var req UpdateSolutionTemplateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := decodeSolutionTemplateRequest(c, &req); err != nil {
 		response.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
@@ -81,6 +83,23 @@ func (h *PluginHandler) DeleteSolutionTemplate(c *gin.Context) {
 		return
 	}
 	response.Message(c, "删除成功")
+}
+
+func decodeSolutionTemplateRequest(c *gin.Context, req interface{}) error {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(c.Request.Body).Decode(&raw); err != nil {
+		return err
+	}
+	for _, field := range []string{"resolution_template", "work_notes_template"} {
+		if _, exists := raw[field]; exists {
+			return fmt.Errorf("%s 已废弃，请使用分段模板字段", field)
+		}
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, req)
 }
 
 func respondSolutionTemplateError(c *gin.Context, err error) {
