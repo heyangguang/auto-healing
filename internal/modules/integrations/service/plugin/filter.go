@@ -50,11 +50,21 @@ func ParseSyncFilter(syncFilter model.JSON) (*FilterCondition, error) {
 	if err := json.Unmarshal(data, &condition); err != nil {
 		return nil, err
 	}
+	if isEmptyFilterCondition(&condition) {
+		return nil, nil
+	}
 	if err := validateFilterCondition(&condition); err != nil {
 		return nil, err
 	}
 
 	return &condition, nil
+}
+
+func isEmptyFilterCondition(cond *FilterCondition) bool {
+	if cond == nil {
+		return true
+	}
+	return cond.Field == "" && cond.Operator == "" && cond.Value == nil && len(cond.Rules) == 0
 }
 
 // ApplyFilter 应用过滤器到数据

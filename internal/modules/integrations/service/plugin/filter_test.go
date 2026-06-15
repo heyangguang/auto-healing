@@ -45,6 +45,28 @@ func TestApplyFilterWithReasonSupportsNumericEquals(t *testing.T) {
 	}
 }
 
+func TestParseSyncFilterTreatsEmptyRulesAsNoFilter(t *testing.T) {
+	tests := []struct {
+		name  string
+		input model.JSON
+	}{
+		{name: "empty object", input: model.JSON{}},
+		{name: "empty logical group", input: model.JSON{"logic": "and", "rules": []any{}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter, err := ParseSyncFilter(tt.input)
+			if err != nil {
+				t.Fatalf("ParseSyncFilter() error = %v", err)
+			}
+			if filter != nil {
+				t.Fatalf("ParseSyncFilter() = %#v, want nil", filter)
+			}
+		})
+	}
+}
+
 func TestParseSyncFilterRejectsUnknownOperator(t *testing.T) {
 	_, err := ParseSyncFilter(model.JSON{
 		"field":    "status",
