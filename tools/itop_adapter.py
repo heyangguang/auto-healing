@@ -540,13 +540,23 @@ def demo_scenario_payload(config: AdapterConfig, scenario: str) -> Dict[str, Any
         "functionalcis_list": [{"functionalci_id": config.demo_ci_id, "impact_code": "manual"}],
     }
     scenarios = {
+        "trigger-approval": {
+            "title": f"[AHS-DEMO][trigger_approval] 自愈触发审批等待 on {config.demo_ci_name} #{suffix}",
+            "description": "\n".join([
+                "演示场景: 自愈触发审批等待",
+                f"affected_ci={config.demo_ci_name}",
+                "fault_type=trigger_approval",
+                "预期动作: AHS 同步工单后进入待触发工单池，人工确认后执行 Demo Clean Logs Task。",
+            ]),
+            "fault_scenario": "clean_logs",
+        },
         "clean-logs": {
             "title": f"[AHS-DEMO][clean_logs] 日志目录快速膨胀 on {config.demo_ci_name} #{suffix}",
             "description": "\n".join([
                 "演示场景: 清理日志",
                 f"affected_ci={config.demo_ci_name}",
                 "fault_type=clean_logs",
-                "预期动作: 运维人员在 AHS 中手动执行 Demo Clean Logs Task，清理实验日志目录并回写工单。",
+                "预期动作: AHS 同步工单后自动匹配自愈规则，执行 Demo Clean Logs Task 并回写工单。",
             ]),
             "fault_scenario": "clean_logs",
         },
@@ -938,10 +948,11 @@ class AdapterHandler(BaseHTTPRequestHandler):
             return self._handle_list(lambda: self.client.get_cmdb_items(classes or None))
         if parsed.path == "/api/demo/scenarios":
             self._json(200, [
-                {"key": "clean-logs", "name": "清理日志", "trigger_mode": "manual"},
+                {"key": "trigger-approval", "name": "自愈触发审批等待", "trigger_mode": "manual"},
+                {"key": "clean-logs", "name": "清理日志", "trigger_mode": "auto"},
                 {"key": "kill-process", "name": "杀死异常进程", "trigger_mode": "auto"},
                 {"key": "blacklist", "name": "黑名单指令防御", "trigger_mode": "auto"},
-                {"key": "approval", "name": "自愈审批", "trigger_mode": "approval"},
+                {"key": "approval", "name": "自动自愈节点审批", "trigger_mode": "approval"},
             ])
             return
         if parsed.path == "/api/demo/fault-status":
