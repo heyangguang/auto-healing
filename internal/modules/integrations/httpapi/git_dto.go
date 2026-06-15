@@ -77,6 +77,7 @@ func (r *UpdateRepoRequest) ApplyTo(repo *model.GitRepository) {
 		if *r.SyncEnabled && !repo.SyncEnabled {
 			repo.ConsecutiveFailures = 0
 			repo.PauseReason = ""
+			repo.ErrorMessage = ""
 		}
 		repo.SyncEnabled = *r.SyncEnabled
 	}

@@ -94,6 +94,79 @@ func TestGitRepositoryUpdateSyncStateAndSyncLogs(t *testing.T) {
 	}
 }
 
+func TestGitRepositoryUpdateSyncStateClearsFailureStateOnSuccess(t *testing.T) {
+	db := openRepositoryLookupTestDB(t)
+	createIntegrationsRepositorySchema(t, db)
+
+	tenantID := uuid.New()
+	repoID := uuid.New()
+	now := time.Now().UTC().Truncate(time.Second)
+	nextSync := now.Add(time.Hour)
+
+	mustExecRepositorySQL(t, db, `
+		INSERT INTO git_repositories (
+			id, tenant_id, name, url, status, auth_type, sync_enabled, sync_interval,
+			max_failures, consecutive_failures, pause_reason, error_message, created_at, updated_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, repoID.String(), tenantID.String(), "repo-a", "https://example.com/a.git", "error", "token", true, "1h", 5, 3, "paused", "old error", now, now)
+
+	repo := NewGitRepositoryRepositoryWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+	if err := repo.UpdateSyncState(ctx, repoID, "ready", "", "commit-1", &now, &nextSync); err != nil {
+		t.Fatalf("UpdateSyncState() error = %v", err)
+	}
+
+	var stored model.GitRepository
+	if err := db.First(&stored, "id = ?", repoID.String()).Error; err != nil {
+		t.Fatalf("load repo after UpdateSyncState: %v", err)
+	}
+	if stored.ConsecutiveFailures != 0 || stored.PauseReason != "" || stored.ErrorMessage != "" {
+		t.Fatalf("stored repo failure state = failures %d pause %q error %q, want cleared", stored.ConsecutiveFailures, stored.PauseReason, stored.ErrorMessage)
+	}
+}
+
+func TestGitRepositoryUpdateConfigClearsPausedStateWhenEnablingSync(t *testing.T) {
+	db := openRepositoryLookupTestDB(t)
+	createIntegrationsRepositorySchema(t, db)
+
+	tenantID := uuid.New()
+	repoID := uuid.New()
+	now := time.Now().UTC().Truncate(time.Second)
+	nextSync := now.Add(time.Hour)
+
+	mustExecRepositorySQL(t, db, `
+		INSERT INTO git_repositories (
+			id, tenant_id, name, url, default_branch, status, auth_type, auth_config,
+			sync_enabled, sync_interval, next_sync_at, max_failures, consecutive_failures,
+			pause_reason, error_message, created_at, updated_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, repoID.String(), tenantID.String(), "repo-a", "https://example.com/a.git", "main", "error", "token", "{}", false, "1h", nil, 5, 5, "paused", "old error", now, now)
+
+	repo := NewGitRepositoryRepositoryWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+	if err := repo.UpdateConfig(ctx, repoID, GitRepositoryConfigUpdate{
+		DefaultBranch: "main",
+		AuthType:      "token",
+		AuthConfig:    model.JSON{"token": "new-token"},
+		SyncEnabled:   true,
+		SyncInterval:  "1h",
+		NextSyncAt:    &nextSync,
+		MaxFailures:   5,
+	}); err != nil {
+		t.Fatalf("UpdateConfig() error = %v", err)
+	}
+
+	var stored model.GitRepository
+	if err := db.First(&stored, "id = ?", repoID.String()).Error; err != nil {
+		t.Fatalf("load repo after UpdateConfig: %v", err)
+	}
+	if !stored.SyncEnabled || stored.ConsecutiveFailures != 0 || stored.PauseReason != "" || stored.ErrorMessage != "" {
+		t.Fatalf("stored repo = sync_enabled %v failures %d pause %q error %q, want enabled and cleared", stored.SyncEnabled, stored.ConsecutiveFailures, stored.PauseReason, stored.ErrorMessage)
+	}
+}
+
 func TestPlaybookRepositoryListWithOptionsAndScanLogs(t *testing.T) {
 	db := openRepositoryLookupTestDB(t)
 	createIntegrationsRepositorySchema(t, db)
