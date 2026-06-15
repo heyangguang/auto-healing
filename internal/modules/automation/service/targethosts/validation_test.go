@@ -25,6 +25,22 @@ func TestValidateActiveCMDBHostsAcceptsKnownActiveHosts(t *testing.T) {
 	}
 }
 
+func TestNormalizeActiveCMDBHostsDeduplicatesAliasesByCMDBItem(t *testing.T) {
+	db := openValidationTestDB(t)
+	tenantID := uuid.New()
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+	repo := cmdbrepo.NewCMDBItemRepositoryWithDB(db)
+	insertValidationCMDBItem(t, db, tenantID, "e2e-target-01", "118.196.22.79", "active")
+
+	normalized, err := NormalizeActiveCMDBHosts(ctx, repo, "e2e-target-01,118.196.22.79,e2e-target-01")
+	if err != nil {
+		t.Fatalf("NormalizeActiveCMDBHosts() error = %v", err)
+	}
+	if normalized != "e2e-target-01" {
+		t.Fatalf("normalized = %q, want e2e-target-01", normalized)
+	}
+}
+
 func TestValidateActiveCMDBHostsRejectsMissingOrInactiveHosts(t *testing.T) {
 	db := openValidationTestDB(t)
 	tenantID := uuid.New()

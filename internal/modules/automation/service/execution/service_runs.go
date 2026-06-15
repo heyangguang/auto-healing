@@ -49,9 +49,11 @@ func (s *Service) ExecuteTask(ctx context.Context, taskID uuid.UUID, opts *Execu
 		targetHosts = opts.TargetHosts
 		logger.Exec("TASK").Info("使用运行时目标主机: %s", targetHosts)
 	}
-	if err := targethosts.ValidateActiveCMDBHosts(ctx, s.cmdbRepo, targetHosts); err != nil {
+	normalizedHosts, err := targethosts.NormalizeActiveCMDBHosts(ctx, s.cmdbRepo, targetHosts)
+	if err != nil {
 		return nil, err
 	}
+	targetHosts = normalizedHosts
 
 	playbook, err := s.repo.GetPlaybookByID(ctx, task.PlaybookID)
 	if err != nil {

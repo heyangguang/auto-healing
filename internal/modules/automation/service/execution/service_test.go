@@ -175,6 +175,46 @@ func TestCreateTaskAcceptsActiveCMDBTargetHost(t *testing.T) {
 	}
 }
 
+func TestCreateTaskDeduplicatesCMDBHostAliases(t *testing.T) {
+	db := openExecutionServiceValidationDB(t)
+	tenantID := uuid.New()
+	playbookID := insertExecutionServicePlaybook(t, db, tenantID)
+	insertExecutionServiceCMDBItem(t, db, tenantID, "e2e-target-01", "118.196.22.79", "active")
+	svc := NewServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+
+	task, err := svc.CreateTask(ctx, &model.ExecutionTask{
+		ID:           uuid.New(),
+		Name:         "alias target",
+		PlaybookID:   playbookID,
+		TargetHosts:  "e2e-target-01,118.196.22.79,e2e-target-01",
+		ExecutorType: "docker",
+	})
+	if err != nil {
+		t.Fatalf("CreateTask() error = %v", err)
+	}
+	if task.TargetHosts != "e2e-target-01" {
+		t.Fatalf("TargetHosts = %q, want e2e-target-01", task.TargetHosts)
+	}
+}
+
+func TestBuildSecretQueryResolvesCMDBHostIdentity(t *testing.T) {
+	db := openExecutionServiceValidationDB(t)
+	tenantID := uuid.New()
+	insertExecutionServiceCMDBItem(t, db, tenantID, "e2e-target-01", "118.196.22.79", "active")
+	svc := NewServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+
+	byHostname := svc.buildSecretQuery(ctx, "e2e-target-01", "password")
+	if byHostname.Hostname != "e2e-target-01" || byHostname.IPAddress != "118.196.22.79" {
+		t.Fatalf("hostname query = %#v, want hostname e2e-target-01 and ip 118.196.22.79", byHostname)
+	}
+	byIP := svc.buildSecretQuery(ctx, "118.196.22.79", "password")
+	if byIP.Hostname != "e2e-target-01" || byIP.IPAddress != "118.196.22.79" {
+		t.Fatalf("ip query = %#v, want hostname e2e-target-01 and ip 118.196.22.79", byIP)
+	}
+}
+
 func TestCreateTaskRejectsUnsupportedExecutorType(t *testing.T) {
 	db := openExecutionServiceValidationDB(t)
 	tenantID := uuid.New()

@@ -37,6 +37,7 @@ python3 tools/seed_openbao_lab.py
 - `Server3`
 - `Server4`
 - `cmdb-page-232605`
+- `e2e-target-01`
 
 返回结构是：
 
@@ -89,5 +90,5 @@ curl -sS http://127.0.0.1:18200/v1/sys/health | jq
 ```bash
 curl -sS \
   -H 'X-Vault-Token: root' \
-  http://127.0.0.1:18200/v1/secret/data/hosts/Server4 | jq
+  http://127.0.0.1:18200/v1/secret/data/hosts/e2e-target-01 | jq
 ```

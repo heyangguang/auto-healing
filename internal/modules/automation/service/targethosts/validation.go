@@ -12,28 +12,47 @@ import (
 
 // ValidateActiveCMDBHosts ensures every execution target exists as an active CMDB item.
 func ValidateActiveCMDBHosts(ctx context.Context, repo *cmdbrepo.CMDBItemRepository, targetHosts string) error {
+	_, err := NormalizeActiveCMDBHosts(ctx, repo, targetHosts)
+	return err
+}
+
+// NormalizeActiveCMDBHosts parses target hosts, verifies that every host exists
+// as an active CMDB item, and deduplicates aliases that point to the same item.
+func NormalizeActiveCMDBHosts(ctx context.Context, repo *cmdbrepo.CMDBItemRepository, targetHosts string) (string, error) {
 	hosts := Parse(targetHosts)
 	if len(hosts) == 0 {
-		return fmt.Errorf("目标主机不能为空")
+		return "", fmt.Errorf("目标主机不能为空")
 	}
 	if repo == nil {
-		return nil
+		return strings.Join(hosts, ","), nil
 	}
 
 	missing := make([]string, 0)
+	seenItems := make(map[string]bool, len(hosts))
+	normalizedHosts := make([]string, 0, len(hosts))
 	for _, host := range hosts {
-		if _, err := repo.FindActiveByNameOrIP(ctx, host); err != nil {
+		item, err := repo.FindActiveByNameOrIP(ctx, host)
+		if err != nil {
 			if errors.Is(err, cmdbrepo.ErrCMDBItemNotFound) {
 				missing = append(missing, host)
 				continue
 			}
-			return fmt.Errorf("校验目标主机 %s 失败: %w", host, err)
+			return "", fmt.Errorf("校验目标主机 %s 失败: %w", host, err)
 		}
+		itemKey := item.ID.String()
+		if itemKey == "" {
+			itemKey = strings.ToLower(host)
+		}
+		if seenItems[itemKey] {
+			continue
+		}
+		seenItems[itemKey] = true
+		normalizedHosts = append(normalizedHosts, host)
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("目标主机未在 CMDB 中登记或不是 active 状态: %s", strings.Join(missing, ", "))
+		return "", fmt.Errorf("目标主机未在 CMDB 中登记或不是 active 状态: %s", strings.Join(missing, ", "))
 	}
-	return nil
+	return strings.Join(normalizedHosts, ","), nil
 }
 
 func Parse(targetHosts string) []string {

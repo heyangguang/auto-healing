@@ -119,9 +119,11 @@ func (s *Service) CreateTask(ctx context.Context, task *model.ExecutionTask) (*m
 	if err := s.validateTaskForSave(ctx, task); err != nil {
 		return nil, err
 	}
-	if err := targethosts.ValidateActiveCMDBHosts(ctx, s.cmdbRepo, task.TargetHosts); err != nil {
+	normalizedHosts, err := targethosts.NormalizeActiveCMDBHosts(ctx, s.cmdbRepo, task.TargetHosts)
+	if err != nil {
 		return nil, err
 	}
+	task.TargetHosts = normalizedHosts
 
 	// 保存 Playbook 当前变量快照
 	task.PlaybookVariablesSnapshot = playbook.Variables
@@ -193,9 +195,11 @@ func (s *Service) UpdateTask(ctx context.Context, id uuid.UUID, req *model.Execu
 	if err := s.refreshTaskSnapshotOnPlaybookChange(ctx, task, playbookChanged); err != nil {
 		return nil, err
 	}
-	if err := targethosts.ValidateActiveCMDBHosts(ctx, s.cmdbRepo, task.TargetHosts); err != nil {
+	normalizedHosts, err := targethosts.NormalizeActiveCMDBHosts(ctx, s.cmdbRepo, task.TargetHosts)
+	if err != nil {
 		return nil, err
 	}
+	task.TargetHosts = normalizedHosts
 	if err := s.validateTaskForSave(ctx, task); err != nil {
 		return nil, err
 	}

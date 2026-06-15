@@ -7,6 +7,7 @@ import (
 
 	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/modules/automation/model"
+	"github.com/company/auto-healing/internal/modules/automation/service/targethosts"
 	secretsmodel "github.com/company/auto-healing/internal/modules/secrets/model"
 	secretsapi "github.com/company/auto-healing/internal/modules/secrets/providerapi"
 	"github.com/google/uuid"
@@ -75,14 +76,9 @@ func (s *Service) prepareAuthenticatedInventory(ctx context.Context, runID uuid.
 }
 
 func (s *Service) buildHostCredentials(ctx context.Context, runID uuid.UUID, task *model.ExecutionTask, workDir, targetHosts string, providers []sourceProvider) ([]ansible.HostCredential, error) {
-	hosts := strings.Split(targetHosts, ",")
+	hosts := targethosts.Parse(targetHosts)
 	credentials := make([]ansible.HostCredential, 0, len(hosts))
 	for _, host := range hosts {
-		host = strings.TrimSpace(host)
-		if host == "" {
-			continue
-		}
-
 		credential, err := s.resolveHostCredential(ctx, runID, task, workDir, host, providers)
 		if err != nil {
 			return nil, err
@@ -161,7 +157,8 @@ func (s *Service) buildCredentialFromSecret(task *model.ExecutionTask, workDir, 
 }
 
 func (s *Service) prepareBasicInventory(ctx context.Context, runID uuid.UUID, workDir, targetHosts string) (string, error) {
-	inventoryPath, err := ansible.WriteInventoryFile(workDir, ansible.GenerateInventory(targetHosts, "targets", nil))
+	normalizedHosts := strings.Join(targethosts.Parse(targetHosts), ",")
+	inventoryPath, err := ansible.WriteInventoryFile(workDir, ansible.GenerateInventory(normalizedHosts, "targets", nil))
 	if err != nil {
 		s.finalizeRunFailure(ctx, runID, err.Error(), nil)
 		s.appendDetachedLog(ctx, runID, "error", "prepare", fmt.Sprintf("生成 inventory 失败: %v", err), nil)

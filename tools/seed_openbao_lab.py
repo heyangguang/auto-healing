@@ -13,6 +13,7 @@ HOSTS = {
     "Server3": {"username": "ops", "password": "Server3Pass!2026"},
     "Server4": {"username": "ops", "password": "Server4Pass!2026"},
     "cmdb-page-232605": {"username": "ops", "password": "CMDBPagePass!2026"},
+    "e2e-target-01": {"username": "ops", "password": "OpsLab123!"},
 }
 
 
