@@ -9,18 +9,17 @@ import (
 	"github.com/google/uuid"
 )
 
-const autoCloseSuccessStatus = "resolved"
 const autoCloseOperatorName = "system:auto-close"
 
-func (e *FlowExecutor) tryAutoCloseSourceIncident(ctx context.Context, instance *model.FlowInstance) {
-	flow, policy, useLegacy, err := e.resolveAutoCloseFlow(ctx, instance)
+func (e *FlowExecutor) tryCloseSourceIncident(ctx context.Context, instance *model.FlowInstance) {
+	flow, policy, err := e.resolveAutoCloseFlow(ctx, instance)
 	if err != nil {
 		e.logNode(ctx, instance.ID, "", "system", model.LogLevelWarn, "自动关单配置读取失败", map[string]interface{}{
 			"error": err.Error(),
 		})
 		return
 	}
-	if instance.IncidentID == nil || (!useLegacy && !policy.Enabled) {
+	if instance.IncidentID == nil || !policy.Enabled {
 		return
 	}
 	if !autoCloseAllowedByExecutionResult(instance) {
@@ -30,7 +29,7 @@ func (e *FlowExecutor) tryAutoCloseSourceIncident(ctx context.Context, instance 
 		})
 		return
 	}
-	params, closeErr := e.buildAutoCloseIncidentParams(ctx, instance, flow, policy, useLegacy)
+	params, closeErr := e.buildAutoCloseIncidentParams(ctx, instance, flow, policy)
 	if closeErr != nil {
 		e.logNode(ctx, instance.ID, "", "system", model.LogLevelWarn, "自动关单配置无效", map[string]interface{}{
 			"incident_id": instance.IncidentID.String(),
@@ -72,20 +71,13 @@ func autoCloseAllowedByExecutionResult(instance *model.FlowInstance) bool {
 	}
 }
 
-func (e *FlowExecutor) buildAutoCloseIncidentParams(ctx context.Context, instance *model.FlowInstance, flow *model.HealingFlow, policy flowClosePolicy, useLegacy bool) (IncidentCloseParams, error) {
+func (e *FlowExecutor) buildAutoCloseIncidentParams(ctx context.Context, instance *model.FlowInstance, flow *model.HealingFlow, policy flowClosePolicy) (IncidentCloseParams, error) {
 	params := IncidentCloseParams{
 		IncidentID:     *instance.IncidentID,
 		TriggerSource:  platformmodel.IncidentWritebackTriggerFlowAutoClose,
 		OperatorName:   autoCloseOperatorName,
 		FlowInstanceID: &instance.ID,
 		ExecutionRunID: autoCloseExecutionRunID(instance),
-	}
-	if useLegacy {
-		params.CloseStatus = autoCloseSuccessStatus
-		params.Resolution = fmt.Sprintf("自愈流程「%s」执行成功", flow.Name)
-		params.WorkNotes = fmt.Sprintf("自愈流程实例 %s 执行完成，系统自动关闭源工单。", instance.ID)
-		params.CloseCode = "auto_healed"
-		return params, nil
 	}
 	if !policy.isFlowSuccessTrigger() {
 		return params, fmt.Errorf("close_policy.trigger_on 仅支持 %s", flowClosePolicyTriggerOnSuccess)
@@ -100,22 +92,19 @@ func (e *FlowExecutor) buildAutoCloseIncidentParams(ctx context.Context, instanc
 	return params, nil
 }
 
-func (e *FlowExecutor) resolveAutoCloseFlow(ctx context.Context, instance *model.FlowInstance) (*model.HealingFlow, flowClosePolicy, bool, error) {
+func (e *FlowExecutor) resolveAutoCloseFlow(ctx context.Context, instance *model.FlowInstance) (*model.HealingFlow, flowClosePolicy, error) {
 	flow, err := e.flowRepo.GetByID(ctx, instance.FlowID)
 	if err != nil {
-		return nil, flowClosePolicy{}, false, err
+		return nil, flowClosePolicy{}, err
 	}
 	if flow == nil {
-		return nil, flowClosePolicy{}, false, nil
+		return nil, flowClosePolicy{}, nil
 	}
 	policy, err := resolveFlowClosePolicy(flow)
 	if err != nil {
-		return nil, flowClosePolicy{}, false, err
+		return nil, flowClosePolicy{}, err
 	}
-	if policy.Enabled {
-		return flow, policy, false, nil
-	}
-	return flow, flowClosePolicy{}, flow.AutoCloseSourceIncident, nil
+	return flow, policy, nil
 }
 
 func buildAutoCloseExecutionContext(instance *model.FlowInstance) map[string]any {

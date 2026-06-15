@@ -145,7 +145,6 @@ func createHealingValidationSchema(t *testing.T, db *gorm.DB) {
 			nodes TEXT,
 			edges TEXT,
 			is_active BOOLEAN,
-			auto_close_source_incident BOOLEAN,
 			close_policy TEXT,
 			created_by TEXT,
 			created_at DATETIME,

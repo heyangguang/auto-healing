@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestCompleteAutoClosesSourceIncidentWhenFlowEnablesIt(t *testing.T) {
+func TestCompleteSkipsAutoCloseWhenClosePolicyIsDisabled(t *testing.T) {
 	db := newHealingTestDB(t)
 	mustExecHealing(t, db, `
 		CREATE TABLE healing_flows (
@@ -21,7 +21,6 @@ func TestCompleteAutoClosesSourceIncidentWhenFlowEnablesIt(t *testing.T) {
 			nodes TEXT,
 			edges TEXT,
 			is_active BOOLEAN,
-			auto_close_source_incident BOOLEAN,
 			close_policy TEXT,
 			created_at DATETIME,
 			updated_at DATETIME
@@ -70,8 +69,8 @@ func TestCompleteAutoClosesSourceIncidentWhenFlowEnablesIt(t *testing.T) {
 	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 
 	mustExecHealing(t, db, `
-		INSERT INTO healing_flows (id, tenant_id, name, nodes, edges, is_active, auto_close_source_incident)
-		VALUES (?, ?, 'service flow', '[]', '[]', 1, 1)
+		INSERT INTO healing_flows (id, tenant_id, name, nodes, edges, is_active)
+		VALUES (?, ?, 'service flow', '[]', '[]', 1)
 	`, flowID.String(), tenantID.String())
 	mustExecHealing(t, db, `
 		INSERT INTO flow_instances (id, tenant_id, flow_id, incident_id, status, node_states)
@@ -106,20 +105,8 @@ func TestCompleteAutoClosesSourceIncidentWhenFlowEnablesIt(t *testing.T) {
 	if err := executor.complete(ctx, instance); err != nil {
 		t.Fatalf("complete(): %v", err)
 	}
-	if closer.callCount != 1 {
-		t.Fatalf("callCount = %d, want 1", closer.callCount)
-	}
-	if closer.lastParams.IncidentID != incidentID {
-		t.Fatalf("incident_id = %s, want %s", closer.lastParams.IncidentID, incidentID)
-	}
-	if closer.lastParams.TriggerSource != "flow_auto_close" {
-		t.Fatalf("trigger_source = %q, want flow_auto_close", closer.lastParams.TriggerSource)
-	}
-	if closer.lastParams.FlowInstanceID == nil || *closer.lastParams.FlowInstanceID != instanceID {
-		t.Fatalf("flow_instance_id = %v, want %s", closer.lastParams.FlowInstanceID, instanceID)
-	}
-	if closer.lastParams.ExecutionRunID == nil {
-		t.Fatal("execution_run_id = nil, want value")
+	if closer.callCount != 0 {
+		t.Fatalf("callCount = %d, want 0", closer.callCount)
 	}
 }
 
@@ -134,7 +121,6 @@ func TestCompleteAutoClosesSourceIncidentUsesClosePolicyTemplate(t *testing.T) {
 			nodes TEXT,
 			edges TEXT,
 			is_active BOOLEAN,
-			auto_close_source_incident BOOLEAN,
 			close_policy TEXT,
 			created_at DATETIME,
 			updated_at DATETIME
@@ -184,8 +170,8 @@ func TestCompleteAutoClosesSourceIncidentUsesClosePolicyTemplate(t *testing.T) {
 	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 
 	mustExecHealing(t, db, `
-		INSERT INTO healing_flows (id, tenant_id, name, nodes, edges, is_active, auto_close_source_incident, close_policy)
-		VALUES (?, ?, 'service flow', '[]', '[]', 1, 0, ?)
+		INSERT INTO healing_flows (id, tenant_id, name, nodes, edges, is_active, close_policy)
+		VALUES (?, ?, 'service flow', '[]', '[]', 1, ?)
 	`, flowID.String(), tenantID.String(), `{"enabled":true,"solution_template_id":"`+templateID.String()+`","default_close_status":"closed","default_close_code":"auto_healed"}`)
 	mustExecHealing(t, db, `
 		INSERT INTO flow_instances (id, tenant_id, flow_id, incident_id, status, node_states)
@@ -248,7 +234,6 @@ func TestCompleteSkipsAutoCloseWhenExecutionResultFailed(t *testing.T) {
 			nodes TEXT,
 			edges TEXT,
 			is_active BOOLEAN,
-			auto_close_source_incident BOOLEAN,
 			close_policy TEXT,
 			created_at DATETIME,
 			updated_at DATETIME
@@ -298,8 +283,8 @@ func TestCompleteSkipsAutoCloseWhenExecutionResultFailed(t *testing.T) {
 	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
 
 	mustExecHealing(t, db, `
-		INSERT INTO healing_flows (id, tenant_id, name, nodes, edges, is_active, auto_close_source_incident, close_policy)
-		VALUES (?, ?, 'service flow', '[]', '[]', 1, 0, ?)
+		INSERT INTO healing_flows (id, tenant_id, name, nodes, edges, is_active, close_policy)
+		VALUES (?, ?, 'service flow', '[]', '[]', 1, ?)
 	`, flowID.String(), tenantID.String(), `{"enabled":true,"solution_template_id":"`+templateID.String()+`","default_close_status":"resolved","default_close_code":"auto_healed"}`)
 	mustExecHealing(t, db, `
 		INSERT INTO flow_instances (id, tenant_id, flow_id, incident_id, status, node_states)

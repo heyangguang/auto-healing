@@ -11,7 +11,7 @@ INSERT INTO healing_flows (
   created_by,
   created_at,
   updated_at,
-  auto_close_source_incident
+  close_policy
 ) VALUES (
   '7e44389b-3db8-4db2-a0e2-3e6c8d6d2053',
   'd9dffb0d-1c74-46f6-90a5-3bc05fc0af43',
@@ -40,7 +40,7 @@ INSERT INTO healing_flows (
   'b56c9caa-8218-4d7f-be39-f15009052e66',
   now(),
   now(),
-  true
+  '{"enabled":false}'::jsonb
 )
 ON CONFLICT (id) DO UPDATE SET
   tenant_id = EXCLUDED.tenant_id,
@@ -50,7 +50,7 @@ ON CONFLICT (id) DO UPDATE SET
   edges = EXCLUDED.edges,
   is_active = EXCLUDED.is_active,
   updated_at = now(),
-  auto_close_source_incident = EXCLUDED.auto_close_source_incident;
+  close_policy = EXCLUDED.close_policy;
 
 INSERT INTO healing_rules (
   id,

@@ -48,7 +48,6 @@ func (r *CreateFlowRequest) ToModel() *model.HealingFlow {
 			flow.ClosePolicy = policy
 		}
 	}
-	syncLegacyAutoCloseFromClosePolicy(flow, r.ClosePolicy != nil)
 	return flow
 }
 
@@ -91,15 +90,6 @@ func (r *UpdateFlowRequest) ApplyTo(flow *model.HealingFlow) {
 			flow.ClosePolicy = policy
 		}
 	}
-	syncLegacyAutoCloseFromClosePolicy(flow, r.ClosePolicy != nil)
-}
-
-func syncLegacyAutoCloseFromClosePolicy(flow *model.HealingFlow, closePolicyProvided bool) {
-	if flow == nil || !closePolicyProvided {
-		return
-	}
-	enabled, _ := flow.ClosePolicy["enabled"].(bool)
-	flow.AutoCloseSourceIncident = enabled
 }
 
 // DryRunFlowRequest Dry-Run 自愈流程请求

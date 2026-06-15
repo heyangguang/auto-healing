@@ -21,7 +21,6 @@ func TestRecoverInstanceResumesCompletedExecutionNode(t *testing.T) {
 			nodes TEXT,
 			edges TEXT,
 			is_active BOOLEAN,
-			auto_close_source_incident BOOLEAN,
 			close_policy TEXT,
 			created_at DATETIME,
 			updated_at DATETIME
@@ -90,8 +89,8 @@ func TestRecoverInstanceResumesCompletedExecutionNode(t *testing.T) {
 	contextJSON := `{"execution_result":{"status":"completed","message":"执行成功","run":{"run_id":"` + uuid.NewString() + `","status":"success","exit_code":0,"stats":{"ok":1}}}}`
 	nodeStates := `{"execute_node":{"status":"completed","message":"执行成功","run":{"run_id":"` + uuid.NewString() + `","status":"success","exit_code":0,"stats":{"ok":1}}}}`
 	mustExecHealing(t, db, `
-		INSERT INTO healing_flows (id, tenant_id, name, nodes, edges, is_active, auto_close_source_incident)
-		VALUES (?, ?, 'flow', ?, ?, 1, 0)
+		INSERT INTO healing_flows (id, tenant_id, name, nodes, edges, is_active)
+		VALUES (?, ?, 'flow', ?, ?, 1)
 	`, flowID.String(), tenantID.String(), nodes, edges)
 	mustExecHealing(t, db, `
 		INSERT INTO flow_instances (id, tenant_id, flow_id, status, current_node_id, context, node_states, flow_name, flow_nodes, flow_edges)
@@ -141,7 +140,6 @@ func TestRecoverInstanceResumesApprovedApprovalNode(t *testing.T) {
 			nodes TEXT,
 			edges TEXT,
 			is_active BOOLEAN,
-			auto_close_source_incident BOOLEAN,
 			close_policy TEXT,
 			created_at DATETIME,
 			updated_at DATETIME
@@ -219,8 +217,8 @@ func TestRecoverInstanceResumesApprovedApprovalNode(t *testing.T) {
 	nodes := `[{"id":"approval_node","type":"approval","name":"审批","config":{}},{"id":"end_node","type":"end","name":"结束","config":{}}]`
 	edges := `[{"source":"approval_node","sourceHandle":"approved","target":"end_node"}]`
 	mustExecHealing(t, db, `
-		INSERT INTO healing_flows (id, tenant_id, name, nodes, edges, is_active, auto_close_source_incident)
-		VALUES (?, ?, 'flow', ?, ?, 1, 0)
+		INSERT INTO healing_flows (id, tenant_id, name, nodes, edges, is_active)
+		VALUES (?, ?, 'flow', ?, ?, 1)
 	`, flowID.String(), tenantID.String(), nodes, edges)
 	mustExecHealing(t, db, `
 		INSERT INTO flow_instances (id, tenant_id, flow_id, status, current_node_id, context, node_states, flow_name, flow_nodes, flow_edges)
