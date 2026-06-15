@@ -262,8 +262,6 @@ class ITopClient:
         incident = normalize_incident(next(iter_objects(response)))
         incident["scenario"] = scenario
         incident["fault_injection"] = fault_result
-        if normalize_scenario(scenario) == "task-approval":
-            incident["task_review_preparation"] = self.prepare_task_approval_demo()
         return incident
 
     def get_demo_fault_status(self) -> Dict[str, Any]:
@@ -581,16 +579,6 @@ def demo_scenario_payload(config: AdapterConfig, scenario: str) -> Dict[str, Any
                 "预期动作: AHS 同步工单后自动匹配自愈审批流程，先通知并等待人工审批，审批通过后执行异常进程处置。",
             ]),
             "fault_scenario": "kill_process",
-        },
-        "task-approval": {
-            "title": f"[AHS-DEMO][task_approval] 任务模板变更审核 on {config.demo_ci_name} #{suffix}",
-            "description": "\n".join([
-                "演示场景: 任务审批",
-                f"affected_ci={config.demo_ci_name}",
-                "fault_type=task_approval",
-                "预期动作: 演示入口会向 Gitea 仓库注入 Playbook 变量变更，AHS 同步扫描后将 Demo Task Approval Clean Logs Task 标记为待审核。",
-            ]),
-            "fault_scenario": "clean_logs",
         },
     }
     if scenario not in scenarios:
@@ -954,7 +942,6 @@ class AdapterHandler(BaseHTTPRequestHandler):
                 {"key": "kill-process", "name": "杀死异常进程", "trigger_mode": "auto"},
                 {"key": "blacklist", "name": "黑名单指令防御", "trigger_mode": "auto"},
                 {"key": "approval", "name": "自愈审批", "trigger_mode": "approval"},
-                {"key": "task-approval", "name": "任务审批", "trigger_mode": "review"},
             ])
             return
         if parsed.path == "/api/demo/fault-status":
