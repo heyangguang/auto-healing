@@ -78,6 +78,9 @@ func (s *Service) CreatePlugin(ctx context.Context, plugin *model.Plugin) (*mode
 	if err := validatePluginMutation(plugin.Type, plugin.SyncEnabled, plugin.SyncIntervalMinutes, plugin.MaxFailures); err != nil {
 		return nil, err
 	}
+	if err := validatePluginConfiguration(plugin.Type, plugin.Config, plugin.FieldMapping, plugin.SyncFilter); err != nil {
+		return nil, err
+	}
 
 	plugin.NextSyncAt = calculateNextSyncAt(plugin.SyncEnabled, plugin.SyncIntervalMinutes)
 	if err := s.pluginRepo.Create(ctx, plugin); err != nil {
@@ -100,6 +103,9 @@ func (s *Service) UpdatePlugin(ctx context.Context, id uuid.UUID, description, v
 
 	applyPluginUpdates(plugin, description, version, config, fieldMapping, syncFilter, syncEnabled, syncIntervalMinutes, maxFailures)
 	if err := validatePluginMutation(plugin.Type, plugin.SyncEnabled, plugin.SyncIntervalMinutes, plugin.MaxFailures); err != nil {
+		return nil, err
+	}
+	if err := validatePluginConfiguration(plugin.Type, plugin.Config, plugin.FieldMapping, plugin.SyncFilter); err != nil {
 		return nil, err
 	}
 	plugin.NextSyncAt = calculateNextSyncAt(plugin.SyncEnabled, plugin.SyncIntervalMinutes)

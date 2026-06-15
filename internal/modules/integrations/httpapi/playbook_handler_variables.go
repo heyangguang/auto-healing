@@ -1,7 +1,10 @@
 package httpapi
 
 import (
+	"errors"
+
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
+	playbooksvc "github.com/company/auto-healing/internal/modules/integrations/service/playbook"
 	"github.com/company/auto-healing/internal/pkg/response"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -54,6 +57,10 @@ func (h *PlaybookHandler) UpdateVariables(c *gin.Context) {
 	}
 
 	if err := h.svc.UpdateUserVariables(c.Request.Context(), id, req.Variables); err != nil {
+		if errors.Is(err, playbooksvc.ErrInvalidInput) {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		respondResourceError(c, "PLAYBOOK", "更新变量失败", "Playbook不存在", integrationrepo.ErrPlaybookNotFound, resourceErrorModeInternal, err)
 		return
 	}

@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var ErrInvalidInput = errors.New("Playbook 参数无效")
+
 // Service Playbook 服务
 type Service struct {
 	repo          *integrationrepo.PlaybookRepository
@@ -114,7 +116,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, input *UpdateInput) 
 		return err
 	}
 	if err := validatePlaybookUpdateInput(input); err != nil {
-		return err
+		return fmt.Errorf("%w: %v", ErrInvalidInput, err)
 	}
 
 	applyPlaybookUpdate(&playbook.Name, &playbook.Description, input)

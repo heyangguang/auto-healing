@@ -208,6 +208,9 @@ func (s *Service) UpdateUserVariables(ctx context.Context, playbookID uuid.UUID,
 	if err != nil {
 		return err
 	}
+	if err := validatePlaybookVariables(variables); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
 
 	playbook.Variables = variables
 	if err := s.repo.UpdateConfirmedVariables(ctx, playbook.ID, playbook.Variables); err != nil {
