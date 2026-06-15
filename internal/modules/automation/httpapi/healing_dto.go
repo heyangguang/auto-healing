@@ -12,13 +12,12 @@ import (
 
 // CreateFlowRequest 创建自愈流程请求
 type CreateFlowRequest struct {
-	Name                    string          `json:"name" binding:"required"`
-	Description             string          `json:"description"`
-	Nodes                   json.RawMessage `json:"nodes"`
-	Edges                   json.RawMessage `json:"edges"`
-	IsActive                *bool           `json:"is_active"`
-	AutoCloseSourceIncident *bool           `json:"auto_close_source_incident"`
-	ClosePolicy             json.RawMessage `json:"close_policy"`
+	Name        string          `json:"name" binding:"required"`
+	Description string          `json:"description"`
+	Nodes       json.RawMessage `json:"nodes"`
+	Edges       json.RawMessage `json:"edges"`
+	IsActive    *bool           `json:"is_active"`
+	ClosePolicy json.RawMessage `json:"close_policy"`
 }
 
 // ToModel 转换为模型
@@ -43,28 +42,24 @@ func (r *CreateFlowRequest) ToModel() *model.HealingFlow {
 	if r.IsActive != nil {
 		flow.IsActive = *r.IsActive
 	}
-	if r.AutoCloseSourceIncident != nil {
-		flow.AutoCloseSourceIncident = *r.AutoCloseSourceIncident
-	}
 	if r.ClosePolicy != nil {
 		var policy model.JSON
 		if err := json.Unmarshal(r.ClosePolicy, &policy); err == nil {
 			flow.ClosePolicy = policy
 		}
 	}
-	reconcileClosePolicyState(flow, r.AutoCloseSourceIncident != nil, r.ClosePolicy != nil)
+	syncLegacyAutoCloseFromClosePolicy(flow, r.ClosePolicy != nil)
 	return flow
 }
 
 // UpdateFlowRequest 更新自愈流程请求
 type UpdateFlowRequest struct {
-	Name                    *string         `json:"name"`
-	Description             *string         `json:"description"`
-	Nodes                   json.RawMessage `json:"nodes"`
-	Edges                   json.RawMessage `json:"edges"`
-	IsActive                *bool           `json:"is_active"`
-	AutoCloseSourceIncident *bool           `json:"auto_close_source_incident"`
-	ClosePolicy             json.RawMessage `json:"close_policy"`
+	Name        *string         `json:"name"`
+	Description *string         `json:"description"`
+	Nodes       json.RawMessage `json:"nodes"`
+	Edges       json.RawMessage `json:"edges"`
+	IsActive    *bool           `json:"is_active"`
+	ClosePolicy json.RawMessage `json:"close_policy"`
 }
 
 // ApplyTo 应用更新到模型
@@ -90,47 +85,21 @@ func (r *UpdateFlowRequest) ApplyTo(flow *model.HealingFlow) {
 	if r.IsActive != nil {
 		flow.IsActive = *r.IsActive
 	}
-	if r.AutoCloseSourceIncident != nil {
-		flow.AutoCloseSourceIncident = *r.AutoCloseSourceIncident
-	}
 	if r.ClosePolicy != nil {
 		var policy model.JSON
 		if err := json.Unmarshal(r.ClosePolicy, &policy); err == nil {
 			flow.ClosePolicy = policy
 		}
 	}
-	reconcileClosePolicyState(flow, r.AutoCloseSourceIncident != nil, r.ClosePolicy != nil)
+	syncLegacyAutoCloseFromClosePolicy(flow, r.ClosePolicy != nil)
 }
 
-func reconcileClosePolicyState(flow *model.HealingFlow, autoCloseProvided, closePolicyProvided bool) {
-	if flow == nil {
+func syncLegacyAutoCloseFromClosePolicy(flow *model.HealingFlow, closePolicyProvided bool) {
+	if flow == nil || !closePolicyProvided {
 		return
 	}
-	if autoCloseProvided && !flow.AutoCloseSourceIncident && !closePolicyProvided {
-		flow.ClosePolicy = withClosePolicyEnabled(flow.ClosePolicy, false)
-		return
-	}
-	if closePolicyEnabled(flow.ClosePolicy) {
-		flow.AutoCloseSourceIncident = true
-		return
-	}
-}
-
-func closePolicyEnabled(policy model.JSON) bool {
-	if policy == nil {
-		return false
-	}
-	enabled, _ := policy["enabled"].(bool)
-	return enabled
-}
-
-func withClosePolicyEnabled(policy model.JSON, enabled bool) model.JSON {
-	next := model.JSON{}
-	for key, value := range policy {
-		next[key] = value
-	}
-	next["enabled"] = enabled
-	return next
+	enabled, _ := flow.ClosePolicy["enabled"].(bool)
+	flow.AutoCloseSourceIncident = enabled
 }
 
 // DryRunFlowRequest Dry-Run 自愈流程请求

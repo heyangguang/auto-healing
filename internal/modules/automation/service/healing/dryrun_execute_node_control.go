@@ -64,6 +64,11 @@ func (e *DryRunExecutor) executeConditionNodeDryRun(result *DryRunNodeResult, co
 }
 
 func (e *DryRunExecutor) executeSetVariableNodeDryRun(result *DryRunNodeResult, flowContext map[string]interface{}, config map[string]interface{}) {
+	if variables, ok := config["variables"].(map[string]interface{}); ok {
+		e.executeSetVariablesNodeDryRun(result, flowContext, variables)
+		return
+	}
+
 	key, _ := config["key"].(string)
 	value := config["value"]
 	result.Process = append(result.Process, fmt.Sprintf("读取配置 key: %s", key))
@@ -75,6 +80,40 @@ func (e *DryRunExecutor) executeSetVariableNodeDryRun(result *DryRunNodeResult, 
 	}
 	result.Output["key"] = key
 	result.Output["value"] = value
+}
+
+func (e *DryRunExecutor) executeSetVariablesNodeDryRun(result *DryRunNodeResult, flowContext map[string]interface{}, variables map[string]interface{}) {
+	result.Process = append(result.Process, fmt.Sprintf("读取批量变量配置: %d 个", len(variables)))
+	if len(variables) == 0 {
+		result.Message = "变量配置为空"
+		result.Output["variables"] = map[string]interface{}{}
+		return
+	}
+
+	setVars := make(map[string]interface{}, len(variables))
+	for key, rawValue := range variables {
+		value := resolveDryRunVariableValue(flowContext, rawValue)
+		flowContext[key] = value
+		setVars[key] = value
+		result.Process = append(result.Process, fmt.Sprintf("写入上下文 %s = %v", key, value))
+	}
+	result.Message = fmt.Sprintf("设置变量完成: %d 个", len(setVars))
+	result.Output["variables"] = setVars
+}
+
+func resolveDryRunVariableValue(flowContext map[string]interface{}, raw interface{}) interface{} {
+	value, ok := raw.(string)
+	if !ok || !looksLikeExpression(value) {
+		return raw
+	}
+	if resolved := resolveFlowContextSourceValue(flowContext, value); resolved != nil {
+		return resolved
+	}
+	result, err := NewExpressionEvaluator().Evaluate(value, flowContext)
+	if err == nil {
+		return result
+	}
+	return raw
 }
 
 func (e *DryRunExecutor) executeComputeNodeDryRun(result *DryRunNodeResult, flowContext map[string]interface{}, config map[string]interface{}) {

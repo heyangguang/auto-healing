@@ -16,7 +16,7 @@ type HealingFlow struct {
 	Nodes                   JSONArray  `json:"nodes" gorm:"type:jsonb;not null;default:'[]'"`
 	Edges                   JSONArray  `json:"edges" gorm:"type:jsonb;not null;default:'[]'"`
 	IsActive                bool       `json:"is_active" gorm:"default:true"`
-	AutoCloseSourceIncident bool       `json:"auto_close_source_incident" gorm:"default:false"`
+	AutoCloseSourceIncident bool       `json:"-" gorm:"default:false"`
 	ClosePolicy             JSON       `json:"close_policy" gorm:"type:jsonb;default:'{}'"`
 	CreatedBy               *uuid.UUID `json:"created_by,omitempty" gorm:"type:uuid"`
 	CreatedAt               time.Time  `json:"created_at" gorm:"default:now()"`

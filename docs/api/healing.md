@@ -61,8 +61,7 @@
 | `nodes` | array | ❌ | 节点定义（JSON） |
 | `edges` | array | ❌ | 边定义（JSON） |
 | `is_active` | bool | ❌ | 是否激活，默认 true |
-| `auto_close_source_incident` | bool | ❌ | 兼容旧配置：流程成功完成后自动关闭源工单，默认 false |
-| `close_policy` | object | ❌ | 新版自动关单策略；启用后会在流程完成时使用指定解决方案模板渲染关闭内容，再调用插件配置的 `close_incident_url` |
+| `close_policy` | object | ❌ | 自动关单策略；启用后会在流程完成时使用指定解决方案模板渲染关闭内容，再调用插件配置的 `close_incident_url` |
 
 `close_policy` 字段示例：
 
@@ -113,7 +112,6 @@
 - `nodes`
 - `edges`
 - `is_active`
-- `auto_close_source_incident`
 - `close_policy`
 
 ---

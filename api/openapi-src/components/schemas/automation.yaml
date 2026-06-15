@@ -339,9 +339,6 @@ HealingFlow:
         $ref: '#/components/schemas/FlowEdge'
     is_active:
       type: boolean
-    auto_close_source_incident:
-      type: boolean
-      description: 流程成功完成后自动关闭源工单
     close_policy:
       $ref: '#/components/schemas/FlowClosePolicy'
     created_by:
@@ -369,8 +366,6 @@ HealingFlowCreate:
         $ref: '#/components/schemas/FlowEdge'
     is_active:
       type: boolean
-    auto_close_source_incident:
-      type: boolean
     close_policy:
       $ref: '#/components/schemas/FlowClosePolicy'
 HealingFlowUpdate:
@@ -389,8 +384,6 @@ HealingFlowUpdate:
       items:
         $ref: '#/components/schemas/FlowEdge'
     is_active:
-      type: boolean
-    auto_close_source_incident:
       type: boolean
     close_policy:
       $ref: '#/components/schemas/FlowClosePolicy'
