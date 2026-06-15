@@ -65,8 +65,16 @@ func (h *HealingHandler) CreateRule(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
+	if err := req.ValidatePayload(); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
 	rule := req.ToModel()
+	if err := h.validateHealingRule(c.Request.Context(), rule); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	if err := h.ruleRepo.Create(c.Request.Context(), rule); err != nil {
 		response.InternalError(c, "创建自愈规则失败")
 		return
@@ -111,8 +119,16 @@ func (h *HealingHandler) UpdateRule(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
+	if err := req.ValidatePayload(); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
 	req.ApplyTo(rule)
+	if err := h.validateHealingRule(c.Request.Context(), rule); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	if err := h.ruleRepo.Update(c.Request.Context(), rule); err != nil {
 		response.InternalError(c, "更新自愈规则失败")
 		return
@@ -160,6 +176,10 @@ func (h *HealingHandler) ActivateRule(c *gin.Context) {
 	}
 	if rule.FlowID == nil {
 		response.BadRequest(c, "规则必须关联自愈流程才能激活")
+		return
+	}
+	if err := h.validateHealingRule(c.Request.Context(), rule); err != nil {
+		response.BadRequest(c, err.Error())
 		return
 	}
 

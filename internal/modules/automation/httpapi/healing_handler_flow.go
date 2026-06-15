@@ -64,8 +64,16 @@ func (h *HealingHandler) CreateFlow(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
+	if err := req.ValidatePayload(); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
 	flow := req.ToModel()
+	if err := h.validateHealingFlow(c.Request.Context(), flow); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	if err := h.flowRepo.Create(c.Request.Context(), flow); err != nil {
 		response.InternalError(c, "创建自愈流程失败")
 		return
@@ -114,8 +122,16 @@ func (h *HealingHandler) UpdateFlow(c *gin.Context) {
 		response.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
+	if err := req.ValidatePayload(); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
 	req.ApplyTo(flow)
+	if err := h.validateHealingFlow(c.Request.Context(), flow); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	if err := h.flowRepo.Update(c.Request.Context(), flow); err != nil {
 		response.InternalError(c, "更新自愈流程失败")
 		return

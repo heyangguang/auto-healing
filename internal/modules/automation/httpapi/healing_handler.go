@@ -4,6 +4,7 @@ import (
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	healing "github.com/company/auto-healing/internal/modules/automation/service/healing"
 	engagementrepo "github.com/company/auto-healing/internal/modules/engagement/repository"
+	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	"github.com/company/auto-healing/internal/pkg/response"
 	incidentrepo "github.com/company/auto-healing/internal/platform/repository/incident"
 	"github.com/gin-gonic/gin"
@@ -11,14 +12,16 @@ import (
 
 // HealingHandler 自愈引擎处理器
 type HealingHandler struct {
-	flowRepo     *automationrepo.HealingFlowRepository
-	ruleRepo     *automationrepo.HealingRuleRepository
-	instanceRepo *automationrepo.FlowInstanceRepository
-	approvalRepo *automationrepo.ApprovalTaskRepository
-	incidentRepo *incidentrepo.IncidentRepository
-	notifRepo    *engagementrepo.NotificationRepository
-	executor     *healing.FlowExecutor
-	scheduler    *healing.Scheduler
+	flowRepo      *automationrepo.HealingFlowRepository
+	ruleRepo      *automationrepo.HealingRuleRepository
+	instanceRepo  *automationrepo.FlowInstanceRepository
+	approvalRepo  *automationrepo.ApprovalTaskRepository
+	incidentRepo  *incidentrepo.IncidentRepository
+	notifRepo     *engagementrepo.NotificationRepository
+	executionRepo *automationrepo.ExecutionRepository
+	solutionRepo  *integrationrepo.IncidentSolutionTemplateRepository
+	executor      *healing.FlowExecutor
+	scheduler     *healing.Scheduler
 }
 
 type HealingHandlerDeps struct {
@@ -28,6 +31,8 @@ type HealingHandlerDeps struct {
 	ApprovalRepo     *automationrepo.ApprovalTaskRepository
 	IncidentRepo     *incidentrepo.IncidentRepository
 	NotificationRepo *engagementrepo.NotificationRepository
+	ExecutionRepo    *automationrepo.ExecutionRepository
+	SolutionRepo     *integrationrepo.IncidentSolutionTemplateRepository
 	Executor         *healing.FlowExecutor
 	Scheduler        *healing.Scheduler
 }
@@ -46,20 +51,26 @@ func NewHealingHandlerWithDeps(deps HealingHandlerDeps) *HealingHandler {
 		panic("automation healing handler requires incident repo")
 	case deps.NotificationRepo == nil:
 		panic("automation healing handler requires notification repo")
+	case deps.ExecutionRepo == nil:
+		panic("automation healing handler requires execution repo")
+	case deps.SolutionRepo == nil:
+		panic("automation healing handler requires incident solution template repo")
 	case deps.Executor == nil:
 		panic("automation healing handler requires executor")
 	case deps.Scheduler == nil:
 		panic("automation healing handler requires scheduler")
 	}
 	return &HealingHandler{
-		flowRepo:     deps.FlowRepo,
-		ruleRepo:     deps.RuleRepo,
-		instanceRepo: deps.InstanceRepo,
-		approvalRepo: deps.ApprovalRepo,
-		incidentRepo: deps.IncidentRepo,
-		notifRepo:    deps.NotificationRepo,
-		executor:     deps.Executor,
-		scheduler:    deps.Scheduler,
+		flowRepo:      deps.FlowRepo,
+		ruleRepo:      deps.RuleRepo,
+		instanceRepo:  deps.InstanceRepo,
+		approvalRepo:  deps.ApprovalRepo,
+		incidentRepo:  deps.IncidentRepo,
+		notifRepo:     deps.NotificationRepo,
+		executionRepo: deps.ExecutionRepo,
+		solutionRepo:  deps.SolutionRepo,
+		executor:      deps.Executor,
+		scheduler:     deps.Scheduler,
 	}
 }
 

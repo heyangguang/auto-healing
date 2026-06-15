@@ -36,6 +36,7 @@ type ModuleDeps struct {
 	ScheduleRepo     *automationrepo.ScheduleRepository
 	IncidentRepo     *incidentrepo.IncidentRepository
 	NotificationRepo *engagementrepo.NotificationRepository
+	SolutionRepo     *integrationrepo.IncidentSolutionTemplateRepository
 	ExecutionService *executionSvc.Service
 	ScheduleService  *scheduleSvc.Service
 	FlowExecutor     *healingSvc.FlowExecutor
@@ -52,6 +53,7 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 	scheduleRepo := automationrepo.NewScheduleRepositoryWithDB(db)
 	incidentRepo := incidentrepo.NewIncidentRepositoryWithDB(db)
 	notificationRepo := engagementrepo.NewNotificationRepository(db)
+	solutionRepo := integrationrepo.NewIncidentSolutionTemplateRepositoryWithDB(db)
 	notificationService := notification.NewConfiguredService(db)
 	executionService := executionSvc.NewServiceWithDeps(executionSvc.ServiceDeps{
 		Repo:             executionRepo,
@@ -86,6 +88,7 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 		ScheduleRepo:     scheduleRepo,
 		IncidentRepo:     incidentRepo,
 		NotificationRepo: notificationRepo,
+		SolutionRepo:     solutionRepo,
 		ExecutionService: executionService,
 		ScheduleService:  scheduleService,
 		FlowExecutor:     flowExecutor,
@@ -109,6 +112,8 @@ func NewWithDeps(deps ModuleDeps) *Module {
 			ApprovalRepo:     deps.ApprovalRepo,
 			IncidentRepo:     deps.IncidentRepo,
 			NotificationRepo: deps.NotificationRepo,
+			ExecutionRepo:    deps.ExecutionRepo,
+			SolutionRepo:     deps.SolutionRepo,
 			Executor:         deps.FlowExecutor,
 			Scheduler:        deps.HealingScheduler,
 		}),
