@@ -9,7 +9,8 @@ import json
 import os
 import re
 import secrets
-from base64 import b64encode
+import time
+from base64 import b64decode, b64encode
 from datetime import datetime
 from html import unescape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -42,6 +43,36 @@ def split_csv(raw: str) -> List[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def data_of(resp: Dict[str, Any]) -> Any:
+    return resp.get("data", resp)
+
+
+def list_items(resp: Dict[str, Any]) -> List[Dict[str, Any]]:
+    data = data_of(resp)
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ("items", "list", "records", "data"):
+            value = data.get(key)
+            if isinstance(value, list):
+                return value
+    return []
+
+
+def tenant_id_from_login(login_data: Dict[str, Any], code: str) -> Optional[str]:
+    for tenant in login_data.get("tenants") or []:
+        if tenant.get("code") == code:
+            return tenant.get("id")
+    current = login_data.get("current_tenant")
+    if isinstance(current, dict) and current.get("code") == code:
+        return current.get("id")
+    return login_data.get("current_tenant_id") if len(login_data.get("tenants") or []) == 1 else None
+
+
+def normalize_scenario(scenario: str) -> str:
+    return (scenario or "").strip().lower().replace("_", "-")
+
+
 class AdapterConfig:
     def __init__(self) -> None:
         base_url = env("ITOP_BASE_URL", "http://itop").rstrip("/")
@@ -70,6 +101,15 @@ class AdapterConfig:
         self.demo_ci_id = optional_env("ITOP_DEMO_CI_ID", "32") or "32"
         self.demo_ci_name = optional_env("ITOP_DEMO_CI_NAME", "e2e-target-01") or "e2e-target-01"
         self.demo_fault_base_url = optional_env("AHS_DEMO_FAULT_BASE_URL", "http://ssh-target-01:19081").rstrip("/")
+        self.ahs_base_url = optional_env("AHS_BASE_URL", "http://172.21.0.1:8080/api/v1").rstrip("/")
+        self.ahs_tenant_user = optional_env("AHS_LAB_TENANT_USER", "e2eadmin") or "e2eadmin"
+        self.ahs_tenant_password = optional_env("AHS_LAB_TENANT_PASSWORD", "Tenant123456!") or "Tenant123456!"
+        self.ahs_tenant_code = optional_env("AHS_LAB_TENANT_CODE", "e2e-lab") or "e2e-lab"
+        self.gitea_base_url = optional_env("GITEA_BASE_URL", "http://gitea:3000").rstrip("/")
+        self.gitea_owner = optional_env("GITEA_OWNER", "gitadmin") or "gitadmin"
+        self.gitea_repo = optional_env("GITEA_REPO_NAME", "fault-playbooks") or "fault-playbooks"
+        self.gitea_user = optional_env("GITEA_USERNAME", "gitadmin") or "gitadmin"
+        self.gitea_password = optional_env("GITEA_PASSWORD", "GitAdmin123!") or "GitAdmin123!"
 
 
 class ITopError(RuntimeError):
@@ -222,6 +262,8 @@ class ITopClient:
         incident = normalize_incident(next(iter_objects(response)))
         incident["scenario"] = scenario
         incident["fault_injection"] = fault_result
+        if normalize_scenario(scenario) == "task-approval":
+            incident["task_review_preparation"] = self.prepare_task_approval_demo()
         return incident
 
     def get_demo_fault_status(self) -> Dict[str, Any]:
@@ -280,6 +322,193 @@ class ITopClient:
         except URLError as exc:
             raise ITopError(f"fault injection unavailable: {exc}") from exc
 
+    def prepare_task_approval_demo(self) -> Dict[str, Any]:
+        login = self.ahs_login()
+        token = login["access_token"]
+        tenant_id = tenant_id_from_login(login, self.config.ahs_tenant_code)
+        if not tenant_id:
+            raise ITopError("AHS tenant id not found for task approval demo")
+
+        repo = self.ahs_find_by_name(token, tenant_id, "/tenant/git-repos", "Gitea Fault Playbooks")
+        if not repo:
+            raise ITopError("AHS git repo not found: Gitea Fault Playbooks")
+        repo = self.ahs_sync_repo(token, tenant_id, repo["id"])
+
+        playbook = self.ahs_find_by_name(
+            token,
+            tenant_id,
+            "/tenant/playbooks",
+            "Demo Task Approval Clean Logs Playbook",
+            {"repository_id": repo["id"]},
+        )
+        if not playbook:
+            raise ITopError("AHS playbook not found: Demo Task Approval Clean Logs Playbook")
+        marker = "task_approval_review_token_" + datetime.now().strftime("%Y%m%d%H%M%S")
+        preparation_source = "gitea_contents_api"
+        try:
+            marker = self.update_task_approval_metadata(marker)
+            repo = self.ahs_sync_repo(token, tenant_id, repo["id"])
+            self.ahs_request("POST", f"/tenant/playbooks/{playbook['id']}/scan", token, tenant_id)
+        except ITopError as exc:
+            preparation_source = "ahs_playbook_variables_api"
+            self.inject_task_approval_variable(token, tenant_id, playbook, marker)
+
+        task = self.wait_task_needs_review(token, tenant_id, "Demo Task Approval Clean Logs Task")
+        self.send_task_review_notification(token, tenant_id, task, playbook, marker)
+        return {
+            "ok": True,
+            "gitea_marker": marker,
+            "preparation_source": preparation_source,
+            "repo_id": repo["id"],
+            "playbook_id": playbook["id"],
+            "task_id": task["id"],
+            "needs_review": task.get("needs_review"),
+            "changed_variables": task.get("changed_variables"),
+        }
+
+    def update_task_approval_metadata(self, marker: str) -> str:
+        content_url = (
+            f"{self.config.gitea_base_url}/api/v1/repos/"
+            f"{quote(self.config.gitea_owner)}/{quote(self.config.gitea_repo)}/contents/.auto-healing.yml?ref=main"
+        )
+        current = self.http_json("GET", content_url, auth=self.gitea_auth_header())
+        raw = b64decode(str(current.get("content", "")).encode("ascii")).decode("utf-8")
+        addition = "\n".join([
+            "",
+            f"  - name: {marker}",
+            "    type: string",
+            "    required: false",
+            f"    default: {marker}",
+            "    description: 任务审批演示自动注入的变量变更标记",
+            "    playbooks:",
+            "      - playbooks/task_approval_clean_logs.yml",
+            "",
+        ])
+        updated = raw.rstrip() + addition
+        payload = {
+            "branch": "main",
+            "message": f"demo: trigger task approval {marker}",
+            "content": b64encode(updated.encode("utf-8")).decode("ascii"),
+            "sha": current.get("sha"),
+        }
+        self.http_json("PUT", content_url.split("?", 1)[0], payload=payload, auth=self.gitea_auth_header())
+        return marker
+
+    def inject_task_approval_variable(self, token: str, tenant_id: str, playbook: Dict[str, Any], marker: str) -> None:
+        latest = data_of(self.ahs_request("GET", f"/tenant/playbooks/{playbook['id']}", token, tenant_id))
+        variables = latest.get("variables") if isinstance(latest.get("variables"), list) else []
+        next_variables = [item for item in variables if isinstance(item, dict) and item.get("name") != marker]
+        next_variables.append({
+            "name": marker,
+            "type": "string",
+            "required": False,
+            "default": marker,
+            "description": "任务审批演示自动注入的变量变更标记",
+        })
+        self.ahs_request("PUT", f"/tenant/playbooks/{playbook['id']}/variables", token, tenant_id, payload={
+            "variables": next_variables,
+        })
+
+    def ahs_login(self) -> Dict[str, Any]:
+        data = self.ahs_request("", "/auth/login", payload={
+            "username": self.config.ahs_tenant_user,
+            "password": self.config.ahs_tenant_password,
+        })
+        body = data_of(data)
+        if not body.get("access_token"):
+            raise ITopError("AHS login did not return access_token")
+        return body
+
+    def ahs_request(self, method: str, path: str, token: str = "", tenant_id: str = "",
+                    payload: Optional[Dict[str, Any]] = None,
+                    query: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        method = method or "POST"
+        query_string = ""
+        if query:
+            query_string = "?" + "&".join(f"{quote(str(k))}={quote(str(v))}" for k, v in query.items())
+        url = f"{self.config.ahs_base_url}{path}{query_string}"
+        headers = {"Accept": "application/json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        if tenant_id:
+            headers["X-Tenant-ID"] = tenant_id
+        return self.http_json(method, url, payload=payload, headers=headers)
+
+    def ahs_find_by_name(self, token: str, tenant_id: str, path: str, name: str,
+                         extra_query: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        query = {"page": 1, "page_size": 200}
+        if extra_query:
+            query.update(extra_query)
+        items = list_items(self.ahs_request("GET", path, token, tenant_id, query=query))
+        return next((item for item in items if item.get("name") == name), None)
+
+    def ahs_sync_repo(self, token: str, tenant_id: str, repo_id: str) -> Dict[str, Any]:
+        self.ahs_request("POST", f"/tenant/git-repos/{repo_id}/sync", token, tenant_id)
+        last: Dict[str, Any] = {}
+        for _ in range(40):
+            last = data_of(self.ahs_request("GET", f"/tenant/git-repos/{repo_id}", token, tenant_id))
+            if last.get("status") == "ready":
+                return last
+            if last.get("status") == "error":
+                raise ITopError(f"AHS repo sync failed: {json.dumps(last, ensure_ascii=False)}")
+            time.sleep(2)
+        raise ITopError(f"AHS repo sync timeout: {json.dumps(last, ensure_ascii=False)}")
+
+    def wait_task_needs_review(self, token: str, tenant_id: str, task_name: str) -> Dict[str, Any]:
+        last: Dict[str, Any] = {}
+        for _ in range(40):
+            task = self.ahs_find_by_name(token, tenant_id, "/tenant/execution-tasks", task_name)
+            if task:
+                last = task
+                if task.get("needs_review") is True:
+                    return task
+            time.sleep(2)
+        raise ITopError(f"task did not enter needs_review: {json.dumps(last, ensure_ascii=False)}")
+
+    def send_task_review_notification(self, token: str, tenant_id: str, task: Dict[str, Any],
+                                      playbook: Dict[str, Any], marker: str) -> None:
+        channel = self.ahs_find_by_name(token, tenant_id, "/tenant/channels", "Demo Enterprise WeChat Bot")
+        template = self.ahs_find_by_name(token, tenant_id, "/tenant/templates", "Demo Notify Task Review Required")
+        if not channel or not template:
+            raise ITopError("task review notification channel/template not found")
+        changed = task.get("changed_variables") or [marker]
+        self.ahs_request("POST", "/tenant/notifications/send", token, tenant_id, payload={
+            "template_id": template["id"],
+            "channel_ids": [channel["id"]],
+            "format": "markdown",
+            "variables": {
+                "task_name": task.get("name", "Demo Task Approval Clean Logs Task"),
+                "playbook_name": playbook.get("name", "Demo Task Approval Clean Logs Playbook"),
+                "changed_variables": ", ".join(str(item) for item in changed),
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        })
+
+    def gitea_auth_header(self) -> str:
+        token = b64encode(f"{self.config.gitea_user}:{self.config.gitea_password}".encode("utf-8")).decode("ascii")
+        return f"Basic {token}"
+
+    def http_json(self, method: str, url: str, payload: Optional[Dict[str, Any]] = None,
+                  headers: Optional[Dict[str, str]] = None, auth: str = "") -> Dict[str, Any]:
+        body = None
+        request_headers = dict(headers or {})
+        request_headers.setdefault("Accept", "application/json")
+        if auth:
+            request_headers["Authorization"] = auth
+        if payload is not None:
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            request_headers["Content-Type"] = "application/json"
+        request = Request(url, data=body, method=method, headers=request_headers)
+        try:
+            with urlopen(request, timeout=60) as response:
+                raw = response.read().decode("utf-8")
+                return json.loads(raw) if raw else {}
+        except HTTPError as exc:
+            raw = exc.read().decode("utf-8", "replace")
+            raise ITopError(f"{method} {url} -> HTTP {exc.code}: {raw}") from exc
+        except URLError as exc:
+            raise ITopError(f"{method} {url} unavailable: {exc}") from exc
+
 
 def merge_solution_text(resolution: str, work_notes: str) -> str:
     resolution = resolution.strip()
@@ -299,7 +528,7 @@ def build_close_comment(resolution: str, work_notes: str) -> str:
 
 
 def demo_scenario_payload(config: AdapterConfig, scenario: str) -> Dict[str, Any]:
-    scenario = (scenario or "").strip().lower().replace("_", "-")
+    scenario = normalize_scenario(scenario)
     suffix = datetime.now().strftime("%m%d%H%M%S") + "-" + secrets.token_hex(2)
     base_fields = {
         "org_id": config.demo_org_id,
@@ -342,6 +571,26 @@ def demo_scenario_payload(config: AdapterConfig, scenario: str) -> Dict[str, Any
                 "预期动作: AHS 同步工单后自动匹配自愈规则，执行 Demo Blacklist Interception Task，并在执行前拦截 rm -rf / 等高危指令。",
             ]),
             "fault_scenario": "",
+        },
+        "approval": {
+            "title": f"[AHS-DEMO][approval] 自愈执行审批 on {config.demo_ci_name} #{suffix}",
+            "description": "\n".join([
+                "演示场景: 自愈审批",
+                f"affected_ci={config.demo_ci_name}",
+                "fault_type=approval",
+                "预期动作: AHS 同步工单后自动匹配自愈审批流程，先通知并等待人工审批，审批通过后执行异常进程处置。",
+            ]),
+            "fault_scenario": "kill_process",
+        },
+        "task-approval": {
+            "title": f"[AHS-DEMO][task_approval] 任务模板变更审核 on {config.demo_ci_name} #{suffix}",
+            "description": "\n".join([
+                "演示场景: 任务审批",
+                f"affected_ci={config.demo_ci_name}",
+                "fault_type=task_approval",
+                "预期动作: 演示入口会向 Gitea 仓库注入 Playbook 变量变更，AHS 同步扫描后将 Demo Task Approval Clean Logs Task 标记为待审核。",
+            ]),
+            "fault_scenario": "clean_logs",
         },
     }
     if scenario not in scenarios:
@@ -704,6 +953,8 @@ class AdapterHandler(BaseHTTPRequestHandler):
                 {"key": "clean-logs", "name": "清理日志", "trigger_mode": "manual"},
                 {"key": "kill-process", "name": "杀死异常进程", "trigger_mode": "auto"},
                 {"key": "blacklist", "name": "黑名单指令防御", "trigger_mode": "auto"},
+                {"key": "approval", "name": "自愈审批", "trigger_mode": "approval"},
+                {"key": "task-approval", "name": "任务审批", "trigger_mode": "review"},
             ])
             return
         if parsed.path == "/api/demo/fault-status":

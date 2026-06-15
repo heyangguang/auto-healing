@@ -53,12 +53,16 @@ func (h *NotificationHandler) ListNotifications(c *gin.Context) {
 }
 
 func buildNotificationLogListOptions(c *gin.Context, page, pageSize int) *engagementrepo.NotificationLogListOptions {
+	triggeredBy := ""
+	if rawTriggeredBy := c.Query("triggered_by"); rawTriggeredBy != "" {
+		triggeredBy = automationexecution.NormalizeTriggeredBy(rawTriggeredBy)
+	}
 	opts := &engagementrepo.NotificationLogListOptions{
 		Page:        page,
 		PageSize:    pageSize,
 		Status:      c.Query("status"),
 		TaskName:    GetStringFilter(c, "task_name"),
-		TriggeredBy: automationexecution.NormalizeTriggeredBy(c.Query("triggered_by")),
+		TriggeredBy: triggeredBy,
 		Subject:     GetStringFilter(c, "subject"),
 		SortBy:      c.Query("sort_by"),
 		SortOrder:   c.Query("sort_order"),

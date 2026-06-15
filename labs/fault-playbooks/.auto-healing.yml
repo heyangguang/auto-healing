@@ -23,6 +23,7 @@ variables:
       - playbooks/disk_full_reset.yml
       - playbooks/clean_logs.yml
       - playbooks/kill_process.yml
+      - playbooks/task_approval_clean_logs.yml
   - name: lab_service_name
     type: string
     required: true
@@ -107,6 +108,7 @@ variables:
       - playbooks/disk_full_reset.yml
       - playbooks/clean_logs.yml
       - playbooks/kill_process.yml
+      - playbooks/task_approval_clean_logs.yml
   - name: lab_log_dir
     type: string
     required: true
@@ -114,6 +116,7 @@ variables:
     description: 清理日志场景的日志目录
     playbooks:
       - playbooks/clean_logs.yml
+      - playbooks/task_approval_clean_logs.yml
   - name: log_safe_bytes
     type: integer
     required: true
@@ -121,6 +124,14 @@ variables:
     description: 日志清理后的安全阈值
     playbooks:
       - playbooks/clean_logs.yml
+      - playbooks/task_approval_clean_logs.yml
+  - name: task_approval_reason
+    type: string
+    required: true
+    default: 演示审批通过后执行日志清理
+    description: 任务审批演示的审批原因
+    playbooks:
+      - playbooks/task_approval_clean_logs.yml
   - name: process_name
     type: string
     required: true

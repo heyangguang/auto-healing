@@ -1,0 +1,80 @@
+---
+- name: Clean logs after task review approval
+  hosts: all
+  become: true
+  gather_facts: false
+  vars:
+    lab_script_path: "{{ lab_script_path | default('/opt/auto-healing-fault-lab/auto_healing_fault_lab.sh') }}"
+    lab_log_dir: "{{ lab_log_dir | default('/opt/auto-healing-fault-lab/logs') }}"
+    recovery_report_dir: "{{ recovery_report_dir | default('/opt/auto-healing-fault-lab/reports') }}"
+    log_safe_bytes: "{{ log_safe_bytes | default(1048576) }}"
+    task_approval_reason: "{{ task_approval_reason | default('演示审批通过后执行日志清理') }}"
+  tasks:
+    - name: Capture log status before reviewed cleanup
+      ansible.builtin.command: "{{ lab_script_path }} status clean_logs"
+      register: log_status_before
+      changed_when: false
+
+    - name: Read log directory size before reviewed cleanup
+      ansible.builtin.command: "du -sb {{ lab_log_dir }}"
+      register: log_size_before
+      changed_when: false
+      failed_when: false
+
+    - name: Reset clean logs scenario after approval
+      ansible.builtin.command: "{{ lab_script_path }} reset clean_logs"
+      register: clean_logs_reset
+      changed_when: true
+
+    - name: Capture log status after reviewed cleanup
+      ansible.builtin.command: "{{ lab_script_path }} status clean_logs"
+      register: log_status_after
+      changed_when: false
+
+    - name: Read log directory size after reviewed cleanup
+      ansible.builtin.command: "du -sb {{ lab_log_dir }}"
+      register: log_size_after
+      changed_when: false
+
+    - name: Verify reviewed cleanup
+      ansible.builtin.assert:
+        that:
+          - "'clean_logs=healthy' in log_status_after.stdout"
+          - (log_size_after.stdout.split()[0] | int) < (log_safe_bytes | int)
+        fail_msg: "审批后日志清理未达到安全阈值"
+        success_msg: "任务审批通过后，日志大文件已清理"
+
+    - name: Show reviewed cleanup summary
+      ansible.builtin.debug:
+        msg:
+          - "演示场景：任务审批"
+          - "审批原因：{{ task_approval_reason }}"
+          - "日志目录：{{ lab_log_dir }}"
+          - "清理前状态：{{ log_status_before.stdout | trim }}"
+          - "清理前大小：{{ log_size_before.stdout | default('未知') | trim }}"
+          - "执行动作：{{ clean_logs_reset.stdout | trim }}"
+          - "清理后状态：{{ log_status_after.stdout | trim }}"
+          - "清理后大小：{{ log_size_after.stdout | trim }}"
+          - "处置结果：审批通过后已真实执行日志清理任务"
+
+    - name: Write reviewed cleanup report
+      ansible.builtin.copy:
+        dest: "{{ recovery_report_dir }}/latest-task-approval-clean-logs.txt"
+        mode: '0644'
+        content: |
+          [scenario]
+          task_approval
+
+          [approval]
+          {{ task_approval_reason }}
+
+          [before]
+          {{ log_status_before.stdout | trim }}
+          {{ log_size_before.stdout | default('') | trim }}
+
+          [action]
+          {{ clean_logs_reset.stdout | trim }}
+
+          [after]
+          {{ log_status_after.stdout | trim }}
+          {{ log_size_after.stdout | trim }}
