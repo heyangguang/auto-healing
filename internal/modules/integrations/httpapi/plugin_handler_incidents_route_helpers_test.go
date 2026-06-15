@@ -53,6 +53,8 @@ type stubIncidentHealingActions struct{}
 
 func (s *stubIncidentHealingActions) TriggerIncidentManually(c *gin.Context) {}
 func (s *stubIncidentHealingActions) DismissIncident(c *gin.Context)         {}
+func (s *stubIncidentHealingActions) RestorePendingTriggerIncident(c *gin.Context) {
+}
 
 func openIncidentRouteTestDB(t *testing.T) *gorm.DB {
 	t.Helper()

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func TestListTriggerRecordsIncludesTriggeredAndDismissedOnly(t *testing.T) {
@@ -99,9 +100,114 @@ func TestListTriggerRecordsIncludesTriggeredAndDismissedOnly(t *testing.T) {
 	}
 }
 
+func TestRestorePendingTriggerKeepsMatchedRuleAndReturnsToPendingPool(t *testing.T) {
+	db := newStateTestDB(t)
+	createTriggerRecordTestSchema(t, db)
+
+	repo := &IncidentRepository{db: db}
+	tenantID := uuid.New()
+	ruleID := uuid.New()
+	incidentID := uuid.New()
+	ctx := WithTenantID(context.Background(), tenantID)
+
+	insertTriggerRecordTestIncident(t, db, triggerRecordTestIncident{
+		id:            incidentID,
+		tenantID:      tenantID,
+		externalID:    "dismissed",
+		healingStatus: "dismissed",
+		scanned:       true,
+		matchedRuleID: &ruleID,
+		updatedAt:     time.Now().UTC(),
+	})
+
+	if err := repo.RestorePendingTrigger(ctx, incidentID); err != nil {
+		t.Fatalf("RestorePendingTrigger(): %v", err)
+	}
+
+	pending, total, err := repo.ListPendingTrigger(ctx, 1, 20, "", "", "", "")
+	if err != nil {
+		t.Fatalf("ListPendingTrigger(): %v", err)
+	}
+	if total != 1 || len(pending) != 1 {
+		t.Fatalf("pending total = %d len = %d, want 1", total, len(pending))
+	}
+	if pending[0].ID != incidentID {
+		t.Fatalf("pending[0].ID = %s, want %s", pending[0].ID, incidentID)
+	}
+	if pending[0].MatchedRuleID == nil || *pending[0].MatchedRuleID != ruleID {
+		t.Fatalf("matched_rule_id = %v, want %s", pending[0].MatchedRuleID, ruleID)
+	}
+}
+
 func nullableUUID(id *uuid.UUID) any {
 	if id == nil {
 		return nil
 	}
 	return id.String()
+}
+
+type triggerRecordTestIncident struct {
+	id                    uuid.UUID
+	tenantID              uuid.UUID
+	externalID            string
+	healingStatus         string
+	scanned               bool
+	matchedRuleID         *uuid.UUID
+	healingFlowInstanceID *uuid.UUID
+	updatedAt             time.Time
+}
+
+func createTriggerRecordTestSchema(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	mustExec(t, db, `
+		CREATE TABLE incidents (
+			id TEXT PRIMARY KEY NOT NULL,
+			tenant_id TEXT,
+			plugin_id TEXT,
+			source_plugin_name TEXT,
+			external_id TEXT NOT NULL,
+			title TEXT NOT NULL,
+			description TEXT,
+			severity TEXT,
+			priority TEXT,
+			status TEXT,
+			category TEXT,
+			affected_ci TEXT,
+			affected_service TEXT,
+			assignee TEXT,
+			reporter TEXT,
+			raw_data TEXT NOT NULL,
+			healing_status TEXT,
+			workflow_instance_id TEXT,
+			scanned BOOLEAN,
+			matched_rule_id TEXT,
+			healing_flow_instance_id TEXT,
+			source_created_at DATETIME,
+			source_updated_at DATETIME,
+			created_at DATETIME,
+			updated_at DATETIME
+		);
+	`)
+}
+
+func insertTriggerRecordTestIncident(t *testing.T, db *gorm.DB, incident triggerRecordTestIncident) {
+	t.Helper()
+	mustExec(t, db, `
+		INSERT INTO incidents (
+			id, tenant_id, external_id, title, raw_data, healing_status,
+			scanned, matched_rule_id, healing_flow_instance_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		incident.id.String(),
+		incident.tenantID.String(),
+		incident.externalID,
+		incident.externalID+" title",
+		`{}`,
+		incident.healingStatus,
+		incident.scanned,
+		nullableUUID(incident.matchedRuleID),
+		nullableUUID(incident.healingFlowInstanceID),
+		incident.updatedAt.Add(-time.Hour),
+		incident.updatedAt,
+	)
 }

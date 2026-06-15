@@ -98,6 +98,40 @@ func (h *HealingHandler) DismissIncident(c *gin.Context) {
 	response.Message(c, "工单已忽略")
 }
 
+// RestorePendingTriggerIncident 将已忽略的待触发工单恢复到待触发池
+func (h *HealingHandler) RestorePendingTriggerIncident(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "无效的工单ID")
+		return
+	}
+
+	incident, err := h.incidentRepo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		response.NotFound(c, "工单不存在")
+		return
+	}
+	if incident.HealingStatus != "dismissed" {
+		response.BadRequest(c, "只能恢复已忽略的待触发工单")
+		return
+	}
+	if incident.HealingFlowInstanceID != nil {
+		response.BadRequest(c, "已触发过自愈流程的工单不能恢复到待触发池")
+		return
+	}
+	if incident.MatchedRuleID == nil {
+		response.BadRequest(c, "工单没有匹配规则，不能恢复到待触发池")
+		return
+	}
+
+	if err := h.incidentRepo.RestorePendingTrigger(c.Request.Context(), incident.ID); err != nil {
+		response.InternalError(c, "恢复待触发工单失败")
+		return
+	}
+
+	response.Message(c, "工单已恢复到待触发池")
+}
+
 // ListTriggerRecordIncidents 获取已处理的待触发工单记录
 // 用于待办中心的"触发记录"标签页，包含已确认触发和已忽略的工单。
 func (h *HealingHandler) ListTriggerRecordIncidents(c *gin.Context) {

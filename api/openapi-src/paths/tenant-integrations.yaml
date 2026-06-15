@@ -642,6 +642,25 @@
                 message:
                   type: string
                   example: 工单已忽略
+/tenant/incidents/{id}/restore-trigger:
+  post:
+    tags:
+    - 工单管理
+    summary: 恢复待触发工单
+    description: 将已忽略且未触发过自愈流程的工单恢复到待触发池，保留已匹配规则并立即出现在待触发工单列表。
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    responses:
+      '200':
+        description: 恢复成功
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: 工单已恢复到待触发池
 /tenant/incidents/{id}/reset-scan:
   post:
     tags:

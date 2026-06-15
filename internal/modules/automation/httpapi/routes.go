@@ -9,6 +9,7 @@ func (r Registrar) RegisterTenantRoutes(tenant *gin.RouterGroup) {
 	incidents := tenant.Group("/incidents")
 	incidents.POST("/:id/trigger", middleware.RequirePermission("healing:trigger:execute"), r.deps.Healing.TriggerIncidentManually)
 	incidents.POST("/:id/dismiss", middleware.RequirePermission("healing:trigger:execute"), r.deps.Healing.DismissIncident)
+	incidents.POST("/:id/restore-trigger", middleware.RequirePermission("healing:trigger:execute"), r.deps.Healing.RestorePendingTriggerIncident)
 
 	tasks := tenant.Group("/execution-tasks")
 	tasks.GET("", middleware.RequirePermission("task:list"), r.deps.Execution.ListTasks)

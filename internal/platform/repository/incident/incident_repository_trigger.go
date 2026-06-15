@@ -95,6 +95,18 @@ func (r *IncidentRepository) ResetScan(ctx context.Context, id uuid.UUID) error 
 	return TenantDB(r.db, ctx).Model(&platformmodel.Incident{}).Where("id = ?", id).Updates(resetIncidentScanUpdates()).Error
 }
 
+// RestorePendingTrigger 将已忽略的手动触发工单恢复到待触发池。
+func (r *IncidentRepository) RestorePendingTrigger(ctx context.Context, id uuid.UUID) error {
+	return TenantDB(r.db, ctx).
+		Model(&platformmodel.Incident{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"healing_status":           "pending",
+			"scanned":                  true,
+			"healing_flow_instance_id": nil,
+		}).Error
+}
+
 // BatchResetScan 批量重置工单扫描状态
 func (r *IncidentRepository) BatchResetScan(ctx context.Context, ids []uuid.UUID, healingStatus string) (int64, error) {
 	query := TenantDB(r.db, ctx).Model(&platformmodel.Incident{})

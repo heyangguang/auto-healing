@@ -8,6 +8,7 @@ import (
 type incidentHealingActions interface {
 	TriggerIncidentManually(*gin.Context)
 	DismissIncident(*gin.Context)
+	RestorePendingTriggerIncident(*gin.Context)
 }
 
 func registerTenantIncidentRoutes(incidents *gin.RouterGroup, plugin *PluginHandler, healing incidentHealingActions) {
@@ -21,4 +22,5 @@ func registerTenantIncidentRoutes(incidents *gin.RouterGroup, plugin *PluginHand
 	incidents.POST("/:id/close", middleware.RequirePermission("plugin:sync"), plugin.CloseIncident)
 	incidents.POST("/:id/trigger", middleware.RequirePermission("healing:trigger:execute"), healing.TriggerIncidentManually)
 	incidents.POST("/:id/dismiss", middleware.RequirePermission("healing:trigger:execute"), healing.DismissIncident)
+	incidents.POST("/:id/restore-trigger", middleware.RequirePermission("healing:trigger:execute"), healing.RestorePendingTriggerIncident)
 }
