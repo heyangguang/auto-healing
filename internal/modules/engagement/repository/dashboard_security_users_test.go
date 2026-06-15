@@ -13,7 +13,7 @@ import (
 func TestRecentTenantLoginsQueryAvoidsDistinctForPostgres(t *testing.T) {
 	db, err := gorm.Open(
 		postgres.New(postgres.Config{DSN: "host=localhost user=postgres password=postgres dbname=auto_healing sslmode=disable"}),
-		&gorm.Config{DryRun: true},
+		&gorm.Config{DisableAutomaticPing: true, DryRun: true},
 	)
 	if err != nil {
 		t.Fatalf("open dry-run postgres db: %v", err)

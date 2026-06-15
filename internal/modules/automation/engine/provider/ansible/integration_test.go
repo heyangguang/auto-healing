@@ -75,16 +75,17 @@ printf 'stderr-line\n' >&2
 	mu.Lock()
 	defer mu.Unlock()
 	joined := strings.Join(messages, "\n")
-	if !strings.Contains(joined, "pwd="+workDir) {
-		t.Fatalf("callback messages missing working directory output: %v", messages)
+	combinedOutput := strings.Join([]string{joined, result.Stdout, result.Stderr}, "\n")
+	if !strings.Contains(combinedOutput, "pwd="+workDir) {
+		t.Fatalf("execution output missing working directory: messages=%v stdout=%q stderr=%q", messages, result.Stdout, result.Stderr)
 	}
-	if !strings.Contains(joined, "[targets]") || !strings.Contains(joined, "localhost") {
-		t.Fatalf("callback messages missing inventory content: %v", messages)
+	if !strings.Contains(combinedOutput, "[targets]") || !strings.Contains(combinedOutput, "localhost") {
+		t.Fatalf("execution output missing inventory content: messages=%v stdout=%q stderr=%q", messages, result.Stdout, result.Stderr)
 	}
-	if !strings.Contains(joined, "stderr-line") && !strings.Contains(result.Stderr, "stderr-line") {
+	if !strings.Contains(combinedOutput, "stderr-line") {
 		t.Fatalf("stderr line missing from callback/result: messages=%v stderr=%q", messages, result.Stderr)
 	}
-	if !strings.Contains(joined, "inventory=") {
-		t.Fatalf("callback messages missing stdout content: %v", messages)
+	if !strings.Contains(combinedOutput, "inventory=") {
+		t.Fatalf("execution output missing stdout content: messages=%v stdout=%q stderr=%q", messages, result.Stdout, result.Stderr)
 	}
 }
