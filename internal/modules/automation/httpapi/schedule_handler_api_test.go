@@ -11,6 +11,7 @@ import (
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
 	scheduleSvc "github.com/company/auto-healing/internal/modules/automation/service/schedule"
 	respPkg "github.com/company/auto-healing/internal/pkg/response"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	platformrepo "github.com/company/auto-healing/internal/platform/repositoryx"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -56,6 +57,7 @@ func TestScheduleHandlerStatsAndTimeline(t *testing.T) {
 	handler := &ScheduleHandler{service: scheduleSvc.NewServiceWithDeps(scheduleSvc.ServiceDeps{
 		Repo:     automationrepo.NewScheduleRepositoryWithDB(db),
 		ExecRepo: &automationrepo.ExecutionRepository{},
+		CMDBRepo: cmdbrepo.NewCMDBItemRepositoryWithDB(db),
 	})}
 	router := newScheduleHandlerTestRouter(tenantID)
 	router.GET("/stats", handler.GetStats)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	"github.com/company/auto-healing/internal/modules/automation/service/targethosts"
 	integrationsmodel "github.com/company/auto-healing/internal/modules/integrations/model"
 	"github.com/company/auto-healing/internal/pkg/logger"
 	"github.com/google/uuid"
@@ -47,6 +48,9 @@ func (s *Service) ExecuteTask(ctx context.Context, taskID uuid.UUID, opts *Execu
 	if opts.TargetHosts != "" {
 		targetHosts = opts.TargetHosts
 		logger.Exec("TASK").Info("使用运行时目标主机: %s", targetHosts)
+	}
+	if err := targethosts.ValidateActiveCMDBHosts(ctx, s.cmdbRepo, targetHosts); err != nil {
+		return nil, err
 	}
 
 	playbook, err := s.repo.GetPlaybookByID(ctx, task.PlaybookID)

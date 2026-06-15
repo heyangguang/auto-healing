@@ -132,3 +132,141 @@ func TestResolveSecretsSourceIDsRejectsInvalidTaskTemplateID(t *testing.T) {
 		t.Fatalf("ids = %v, want nil", ids)
 	}
 }
+
+func TestCreateTaskRejectsTargetHostsMissingFromCMDB(t *testing.T) {
+	db := openExecutionServiceValidationDB(t)
+	tenantID := uuid.New()
+	playbookID := insertExecutionServicePlaybook(t, db, tenantID)
+	svc := NewServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+
+	_, err := svc.CreateTask(ctx, &model.ExecutionTask{
+		ID:           uuid.New(),
+		Name:         "bad target",
+		PlaybookID:   playbookID,
+		TargetHosts:  "127.0.0.1",
+		ExecutorType: "docker",
+	})
+	if err == nil {
+		t.Fatal("CreateTask() error = nil, want missing CMDB host rejection")
+	}
+}
+
+func TestCreateTaskAcceptsActiveCMDBTargetHost(t *testing.T) {
+	db := openExecutionServiceValidationDB(t)
+	tenantID := uuid.New()
+	playbookID := insertExecutionServicePlaybook(t, db, tenantID)
+	insertExecutionServiceCMDBItem(t, db, tenantID, "e2e-target-01", "118.196.22.79", "active")
+	svc := NewServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+
+	task, err := svc.CreateTask(ctx, &model.ExecutionTask{
+		ID:           uuid.New(),
+		Name:         "good target",
+		PlaybookID:   playbookID,
+		TargetHosts:  "118.196.22.79",
+		ExecutorType: "docker",
+	})
+	if err != nil {
+		t.Fatalf("CreateTask() error = %v", err)
+	}
+	if task.TargetHosts != "118.196.22.79" {
+		t.Fatalf("TargetHosts = %q, want 118.196.22.79", task.TargetHosts)
+	}
+}
+
+func openExecutionServiceValidationDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "execution-service-validation.db")), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	mustExecExecutionServiceValidationSQL(t, db, `
+		CREATE TABLE git_repositories (
+			id TEXT PRIMARY KEY NOT NULL,
+			tenant_id TEXT,
+			name TEXT,
+			url TEXT,
+			default_branch TEXT,
+			status TEXT
+		)
+	`)
+	mustExecExecutionServiceValidationSQL(t, db, `
+		CREATE TABLE playbooks (
+			id TEXT PRIMARY KEY NOT NULL,
+			tenant_id TEXT,
+			repository_id TEXT,
+			name TEXT,
+			file_path TEXT,
+			variables TEXT,
+			status TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
+		)
+	`)
+	mustExecExecutionServiceValidationSQL(t, db, `
+		CREATE TABLE execution_tasks (
+			id TEXT PRIMARY KEY NOT NULL,
+			tenant_id TEXT,
+			name TEXT,
+			playbook_id TEXT,
+			target_hosts TEXT,
+			extra_vars TEXT,
+			executor_type TEXT,
+			description TEXT,
+			secrets_source_ids TEXT,
+			notification_config TEXT,
+			playbook_variables_snapshot TEXT,
+			needs_review BOOLEAN,
+			changed_variables TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
+		)
+	`)
+	mustExecExecutionServiceValidationSQL(t, db, `
+		CREATE TABLE cmdb_items (
+			id TEXT PRIMARY KEY NOT NULL,
+			tenant_id TEXT,
+			external_id TEXT,
+			name TEXT,
+			type TEXT,
+			status TEXT,
+			ip_address TEXT,
+			hostname TEXT,
+			raw_data TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
+		)
+	`)
+	return db
+}
+
+func insertExecutionServicePlaybook(t *testing.T, db *gorm.DB, tenantID uuid.UUID) uuid.UUID {
+	t.Helper()
+	repoID := uuid.New()
+	playbookID := uuid.New()
+	mustExecExecutionServiceValidationSQL(t, db, `
+		INSERT INTO git_repositories (id, tenant_id, name, url, default_branch, status)
+		VALUES (?, ?, 'repo', 'http://git/repo.git', 'main', 'ready')
+	`, repoID.String(), tenantID.String())
+	mustExecExecutionServiceValidationSQL(t, db, `
+		INSERT INTO playbooks (id, tenant_id, repository_id, name, file_path, variables, status)
+		VALUES (?, ?, ?, 'playbook', 'site.yml', '[]', 'ready')
+	`, playbookID.String(), tenantID.String(), repoID.String())
+	return playbookID
+}
+
+func insertExecutionServiceCMDBItem(t *testing.T, db *gorm.DB, tenantID uuid.UUID, name, ipAddress, status string) {
+	t.Helper()
+	mustExecExecutionServiceValidationSQL(t, db, `
+		INSERT INTO cmdb_items (id, tenant_id, external_id, name, type, status, ip_address, hostname, raw_data)
+		VALUES (?, ?, ?, ?, 'server', ?, ?, ?, '{}')
+	`, uuid.NewString(), tenantID.String(), name, name, status, ipAddress, name)
+}
+
+func mustExecExecutionServiceValidationSQL(t *testing.T, db *gorm.DB, sql string, args ...any) {
+	t.Helper()
+	if err := db.Exec(sql, args...).Error; err != nil {
+		t.Fatalf("exec sql: %v", err)
+	}
+}

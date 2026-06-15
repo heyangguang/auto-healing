@@ -73,6 +73,7 @@ func DefaultModuleDepsWithDB(db *gorm.DB) ModuleDeps {
 	scheduleService := scheduleSvc.NewServiceWithDeps(scheduleSvc.ServiceDeps{
 		Repo:     scheduleRepo,
 		ExecRepo: executionRepo,
+		CMDBRepo: cmdbrepo.NewCMDBItemRepositoryWithDB(db),
 	})
 	flowExecutor := healingSvc.NewFlowExecutorWithDeps(healingSvc.DefaultFlowExecutorDepsWithDB(db, executionService, notificationService))
 	return ModuleDeps{

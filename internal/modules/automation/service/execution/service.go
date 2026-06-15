@@ -8,6 +8,7 @@ import (
 	"github.com/company/auto-healing/internal/modules/automation/engine/provider/ansible"
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	"github.com/company/auto-healing/internal/modules/automation/service/targethosts"
 	notification "github.com/company/auto-healing/internal/modules/engagement/service/notification"
 	integrationrepo "github.com/company/auto-healing/internal/modules/integrations/repository"
 	opsservice "github.com/company/auto-healing/internal/modules/ops/service"
@@ -115,6 +116,9 @@ func (s *Service) CreateTask(ctx context.Context, task *model.ExecutionTask) (*m
 	if task.ExecutorType == "" {
 		task.ExecutorType = "local"
 	}
+	if err := targethosts.ValidateActiveCMDBHosts(ctx, s.cmdbRepo, task.TargetHosts); err != nil {
+		return nil, err
+	}
 
 	// 保存 Playbook 当前变量快照
 	task.PlaybookVariablesSnapshot = playbook.Variables
@@ -184,6 +188,9 @@ func (s *Service) UpdateTask(ctx context.Context, id uuid.UUID, req *model.Execu
 	logger.Exec("TASK").Info("更新请求: PlaybookID=%s", req.PlaybookID)
 	playbookChanged := applyTaskUpdates(task, req)
 	if err := s.refreshTaskSnapshotOnPlaybookChange(ctx, task, playbookChanged); err != nil {
+		return nil, err
+	}
+	if err := targethosts.ValidateActiveCMDBHosts(ctx, s.cmdbRepo, task.TargetHosts); err != nil {
 		return nil, err
 	}
 

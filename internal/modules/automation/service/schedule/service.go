@@ -3,11 +3,14 @@ package schedule
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/company/auto-healing/internal/modules/automation/model"
 	automationrepo "github.com/company/auto-healing/internal/modules/automation/repository"
+	"github.com/company/auto-healing/internal/modules/automation/service/targethosts"
 	"github.com/company/auto-healing/internal/pkg/logger"
+	cmdbrepo "github.com/company/auto-healing/internal/platform/repository/cmdb"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 )
@@ -16,11 +19,13 @@ import (
 type Service struct {
 	repo     *automationrepo.ScheduleRepository
 	execRepo *automationrepo.ExecutionRepository
+	cmdbRepo *cmdbrepo.CMDBItemRepository
 }
 
 type ServiceDeps struct {
 	Repo     *automationrepo.ScheduleRepository
 	ExecRepo *automationrepo.ExecutionRepository
+	CMDBRepo *cmdbrepo.CMDBItemRepository
 }
 
 func NewServiceWithDeps(deps ServiceDeps) *Service {
@@ -29,10 +34,13 @@ func NewServiceWithDeps(deps ServiceDeps) *Service {
 		panic("automation schedule service requires schedule repo")
 	case deps.ExecRepo == nil:
 		panic("automation schedule service requires execution repo")
+	case deps.CMDBRepo == nil:
+		panic("automation schedule service requires cmdb repo")
 	}
 	return &Service{
 		repo:     deps.Repo,
 		execRepo: deps.ExecRepo,
+		cmdbRepo: deps.CMDBRepo,
 	}
 }
 
@@ -49,6 +57,9 @@ func (s *Service) Create(ctx context.Context, schedule *model.ExecutionSchedule)
 
 	// 根据调度类型验证和准备 next_run_at
 	if err := s.prepareScheduleForSave(schedule); err != nil {
+		return nil, err
+	}
+	if err := s.validateTargetHostsOverride(ctx, schedule); err != nil {
 		return nil, err
 	}
 
@@ -110,6 +121,9 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, input *UpdateInput) 
 	if err := s.applyUpdate(schedule, input); err != nil {
 		return nil, err
 	}
+	if err := s.validateTargetHostsOverride(ctx, schedule); err != nil {
+		return nil, err
+	}
 
 	if err := s.repo.UpdateFields(ctx, schedule.ID, buildScheduleDefinitionUpdates(schedule)); err != nil {
 		return nil, err
@@ -148,6 +162,10 @@ func (s *Service) Enable(ctx context.Context, id uuid.UUID) error {
 
 	schedule.Enabled = true
 	if err := s.prepareScheduleForSave(schedule); err != nil {
+		schedule.Enabled = false
+		return err
+	}
+	if err := s.validateTargetHostsOverride(ctx, schedule); err != nil {
 		schedule.Enabled = false
 		return err
 	}
@@ -241,6 +259,16 @@ func (s *Service) nextRunFromExpr(scheduleExpr string) (*time.Time, error) {
 		return nil, fmt.Errorf("无效的 Cron 表达式")
 	}
 	return nextRun, nil
+}
+
+func (s *Service) validateTargetHostsOverride(ctx context.Context, schedule *model.ExecutionSchedule) error {
+	if strings.TrimSpace(schedule.TargetHostsOverride) == "" {
+		return nil
+	}
+	if err := targethosts.ValidateActiveCMDBHosts(ctx, s.cmdbRepo, schedule.TargetHostsOverride); err != nil {
+		return fmt.Errorf("调度覆盖目标主机无效: %w", err)
+	}
+	return nil
 }
 
 // ==================== 统计 ====================
