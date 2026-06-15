@@ -229,3 +229,79 @@ func TestPluginRepositoryAggregateStatsAndSyncInfo(t *testing.T) {
 		t.Fatalf("ListByPluginID() = total %d logs %+v, want one plugin sync log", total, logs)
 	}
 }
+
+func TestPluginRepositoryUpdateSyncInfoClearsFailureState(t *testing.T) {
+	db := openRepositoryLookupTestDB(t)
+	createIntegrationsRepositorySchema(t, db)
+
+	tenantID := uuid.New()
+	pluginID := uuid.New()
+	now := time.Now().UTC()
+	nextSync := now.Add(time.Minute)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+
+	mustExecRepositorySQL(t, db, `
+		INSERT INTO plugins (
+			id, tenant_id, name, type, version, config, field_mapping, sync_enabled,
+			sync_interval_minutes, max_failures, consecutive_failures, pause_reason,
+			status, error_message, created_at, updated_at
+		)
+		VALUES (?, ?, 'cmdb-a', 'cmdb', '1.0.0', '{}', '{}', true, 5, 5, 5, 'paused', 'active', 'old error', ?, ?)
+	`, pluginID.String(), tenantID.String(), now, now)
+
+	repo := NewPluginRepositoryWithDB(db)
+	if err := repo.UpdateSyncInfo(ctx, pluginID, &now, &nextSync); err != nil {
+		t.Fatalf("UpdateSyncInfo() error = %v", err)
+	}
+
+	var stored model.Plugin
+	if err := db.First(&stored, "id = ?", pluginID.String()).Error; err != nil {
+		t.Fatalf("load plugin: %v", err)
+	}
+	if stored.ConsecutiveFailures != 0 || stored.PauseReason != "" || stored.ErrorMessage != "" {
+		t.Fatalf("stored plugin failure state = failures %d pause %q error %q, want cleared", stored.ConsecutiveFailures, stored.PauseReason, stored.ErrorMessage)
+	}
+}
+
+func TestPluginRepositoryUpdateConfigClearsPausedStateWhenEnablingSync(t *testing.T) {
+	db := openRepositoryLookupTestDB(t)
+	createIntegrationsRepositorySchema(t, db)
+
+	tenantID := uuid.New()
+	pluginID := uuid.New()
+	now := time.Now().UTC()
+	nextSync := now.Add(time.Minute)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+
+	mustExecRepositorySQL(t, db, `
+		INSERT INTO plugins (
+			id, tenant_id, name, type, version, config, field_mapping, sync_filter,
+			sync_enabled, sync_interval_minutes, max_failures, consecutive_failures,
+			pause_reason, status, error_message, created_at, updated_at
+		)
+		VALUES (?, ?, 'cmdb-a', 'cmdb', '1.0.0', '{}', '{}', '{}', false, 5, 5, 5, 'paused', 'active', 'old error', ?, ?)
+	`, pluginID.String(), tenantID.String(), now, now)
+
+	repo := NewPluginRepositoryWithDB(db)
+	if err := repo.UpdateConfig(ctx, pluginID, PluginConfigUpdate{
+		Description:         "desc",
+		Version:             "1.0.1",
+		Config:              model.JSON{"url": "http://adapter/cmdb", "auth_type": "none"},
+		FieldMapping:        model.JSON{},
+		SyncFilter:          model.JSON{},
+		SyncEnabled:         true,
+		SyncIntervalMinutes: 1,
+		NextSyncAt:          &nextSync,
+		MaxFailures:         5,
+	}); err != nil {
+		t.Fatalf("UpdateConfig() error = %v", err)
+	}
+
+	var stored model.Plugin
+	if err := db.First(&stored, "id = ?", pluginID.String()).Error; err != nil {
+		t.Fatalf("load plugin: %v", err)
+	}
+	if !stored.SyncEnabled || stored.ConsecutiveFailures != 0 || stored.PauseReason != "" || stored.ErrorMessage != "" {
+		t.Fatalf("stored plugin = sync_enabled %v failures %d pause %q error %q, want enabled and cleared", stored.SyncEnabled, stored.ConsecutiveFailures, stored.PauseReason, stored.ErrorMessage)
+	}
+}

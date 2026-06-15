@@ -152,7 +152,11 @@ func (r *PluginRepository) UpdateStatus(ctx context.Context, id uuid.UUID, statu
 
 // UpdateSyncInfo 更新同步信息
 func (r *PluginRepository) UpdateSyncInfo(ctx context.Context, id uuid.UUID, lastSyncAt, nextSyncAt *time.Time) error {
-	updates := map[string]interface{}{}
+	updates := map[string]interface{}{
+		"consecutive_failures": 0,
+		"pause_reason":         "",
+		"error_message":        "",
+	}
 	if lastSyncAt != nil {
 		updates["last_sync_at"] = lastSyncAt
 	}
