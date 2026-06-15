@@ -98,9 +98,9 @@ func (h *HealingHandler) DismissIncident(c *gin.Context) {
 	response.Message(c, "工单已忽略")
 }
 
-// ListDismissedTriggerIncidents 获取已忽略的待触发工单列表
-// 用于待办中心的"已忽略"标签页
-func (h *HealingHandler) ListDismissedTriggerIncidents(c *gin.Context) {
+// ListTriggerRecordIncidents 获取已处理的待触发工单记录
+// 用于待办中心的"触发记录"标签页，包含已确认触发和已忽略的工单。
+func (h *HealingHandler) ListTriggerRecordIncidents(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
 	title := c.Query("title")
@@ -108,9 +108,9 @@ func (h *HealingHandler) ListDismissedTriggerIncidents(c *gin.Context) {
 	dateFrom := c.Query("date_from")
 	dateTo := c.Query("date_to")
 
-	incidents, total, err := h.incidentRepo.ListDismissedTrigger(c.Request.Context(), page, pageSize, title, severity, dateFrom, dateTo)
+	incidents, total, err := h.incidentRepo.ListTriggerRecords(c.Request.Context(), page, pageSize, title, severity, dateFrom, dateTo)
 	if err != nil {
-		response.InternalError(c, "获取已忽略工单列表失败")
+		response.InternalError(c, "获取触发记录失败")
 		return
 	}
 

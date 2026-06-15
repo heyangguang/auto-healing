@@ -281,7 +281,7 @@ def validate_openapi(content: str, document: Optional[Dict[str, Any]], errors: L
     require(errors, "/incidents/{id}/trigger:" in content, "openapi 缺少 /incidents/{id}/trigger")
     require(errors, "/healing/instances/stats:" in content, "openapi 缺少 /healing/instances/stats")
     require(errors, "/healing/pending/trigger:" in content, "openapi 缺少 /healing/pending/trigger")
-    require(errors, "/healing/pending/dismissed:" in content, "openapi 缺少 /healing/pending/dismissed")
+    require(errors, "/healing/pending/records:" in content, "openapi 缺少 /healing/pending/records")
     require(
         errors,
         has_regex(
@@ -441,7 +441,7 @@ def validate_healing_doc(content: str, errors: List[str]) -> None:
         "healing.md 的流程实例状态说明未同步为 waiting_approval/completed",
     )
     require(errors, '"by_status": [' in content, "healing.md 的实例统计示例未同步为 by_status")
-    require(errors, "**GET** `/api/v1/healing/pending/dismissed`" in content, "healing.md 缺少 dismissed 列表接口")
+    require(errors, "**GET** `/api/v1/healing/pending/records`" in content, "healing.md 缺少触发记录接口")
     require(errors, "**POST** `/api/v1/incidents/:id/dismiss`" in content, "healing.md 缺少 dismiss 接口")
     require(errors, "**POST** `/api/v1/healing/instances/:id/retry`" in content, "healing.md 缺少 retry 接口")
     require(errors, "**GET** `/api/v1/healing/instances/:id/events`" in content, "healing.md 缺少实例事件 SSE 接口")

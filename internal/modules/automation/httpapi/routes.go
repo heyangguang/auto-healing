@@ -90,5 +90,5 @@ func (r Registrar) RegisterTenantRoutes(tenant *gin.RouterGroup) {
 
 	pending := tenant.Group("/healing/pending")
 	pending.GET("/trigger", middleware.RequirePermission("healing:trigger:view"), r.deps.Healing.ListPendingTriggerIncidents)
-	pending.GET("/dismissed", middleware.RequirePermission("healing:trigger:view"), r.deps.Healing.ListDismissedTriggerIncidents)
+	pending.GET("/records", middleware.RequirePermission("healing:trigger:view"), r.deps.Healing.ListTriggerRecordIncidents)
 }

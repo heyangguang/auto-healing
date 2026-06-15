@@ -11,32 +11,39 @@ import (
 
 // ListPendingTrigger 获取待手动触发的工单列表
 func (r *IncidentRepository) ListPendingTrigger(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string) ([]platformmodel.Incident, int64, error) {
-	return r.listTriggerIncidents(ctx, page, pageSize, title, severity, dateFrom, dateTo, false)
-}
-
-// ListDismissedTrigger 获取已忽略的手动触发工单列表
-func (r *IncidentRepository) ListDismissedTrigger(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string) ([]platformmodel.Incident, int64, error) {
-	return r.listTriggerIncidents(ctx, page, pageSize, title, severity, dateFrom, dateTo, true)
-}
-
-func (r *IncidentRepository) listTriggerIncidents(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string, dismissed bool) ([]platformmodel.Incident, int64, error) {
 	var incidents []platformmodel.Incident
 	var total int64
-	query := TenantDB(r.db, ctx).Model(&platformmodel.Incident{}).Where("scanned = ?", true).Where("matched_rule_id IS NOT NULL")
-	if dismissed {
-		query = query.Where("healing_status = ?", "dismissed")
-	} else {
-		query = query.Where("healing_flow_instance_id IS NULL").Where("healing_status NOT IN ?", []string{"skipped", "dismissed"})
-	}
+	query := TenantDB(r.db, ctx).
+		Model(&platformmodel.Incident{}).
+		Where("scanned = ?", true).
+		Where("matched_rule_id IS NOT NULL").
+		Where("healing_flow_instance_id IS NULL").
+		Where("healing_status NOT IN ?", []string{"skipped", "dismissed"})
+
 	query = applyIncidentTriggerFilters(query, title, severity, dateFrom, dateTo)
 	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	orderField := "created_at DESC"
-	if dismissed {
-		orderField = "updated_at DESC"
+	err := query.Preload("Plugin").Offset((page - 1) * pageSize).Limit(pageSize).Order("created_at DESC").Find(&incidents).Error
+	return incidents, total, err
+}
+
+// ListTriggerRecords 获取已经处理过的手动触发工单记录。
+// 记录包含两类：人工忽略的工单，以及已经确认触发并生成自愈流程实例的工单。
+func (r *IncidentRepository) ListTriggerRecords(ctx context.Context, page, pageSize int, title, severity, dateFrom, dateTo string) ([]platformmodel.Incident, int64, error) {
+	var incidents []platformmodel.Incident
+	var total int64
+	query := TenantDB(r.db, ctx).
+		Model(&platformmodel.Incident{}).
+		Where("scanned = ?", true).
+		Where("matched_rule_id IS NOT NULL").
+		Where("(healing_status = ? OR healing_flow_instance_id IS NOT NULL)", "dismissed")
+
+	query = applyIncidentTriggerFilters(query, title, severity, dateFrom, dateTo)
+	if err := query.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
-	err := query.Preload("Plugin").Offset((page - 1) * pageSize).Limit(pageSize).Order(orderField).Find(&incidents).Error
+	err := query.Preload("Plugin").Offset((page - 1) * pageSize).Limit(pageSize).Order("updated_at DESC").Find(&incidents).Error
 	return incidents, total, err
 }
 

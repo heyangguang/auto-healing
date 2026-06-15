@@ -3945,11 +3945,11 @@ ThreadingSMTPServer(("127.0.0.1", {self.smtp_port}), SMTPHandler).serve_forever(
         if pending_items:
             dismissed_target = pending_items[0]
             curl_json(["-X", "POST", f"{self.api_base()}/tenant/incidents/{dismissed_target['id']}/dismiss", *view_headers])
-            dismissed = curl_json([f"{self.api_base()}/tenant/healing/pending/dismissed", *view_headers])
-            dismissed_items = self.list_items(dismissed)
+            records = curl_json([f"{self.api_base()}/tenant/healing/pending/records", *view_headers])
+            record_items = self.list_items(records)
             assert_true(
-                any(item["id"] == dismissed_target["id"] for item in dismissed_items),
-                "dismissed trigger incident should be queryable",
+                any(item["id"] == dismissed_target["id"] for item in record_items),
+                "dismissed trigger incident should be queryable in trigger records",
             )
 
         self.results["healing_queries"] = {"status": "passed"}

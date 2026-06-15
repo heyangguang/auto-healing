@@ -3468,11 +3468,12 @@ paths:
                       items:
                         $ref: '#/components/schemas/Incident'
       operationId: getTenantHealingPendingTrigger
-  /tenant/healing/pending/dismissed:
+  /tenant/healing/pending/records:
     get:
       tags:
       - 待触发工单
-      summary: 获取已忽略工单列表
+      summary: 获取触发记录列表
+      description: 返回已经人工确认触发或已经人工忽略的待触发工单记录。
       parameters:
       - $ref: '#/components/parameters/Page'
       - $ref: '#/components/parameters/PageSize'
@@ -3514,7 +3515,7 @@ paths:
                       type: array
                       items:
                         $ref: '#/components/schemas/Incident'
-      operationId: getTenantHealingPendingDismissed
+      operationId: getTenantHealingPendingRecords
   /tenant/healing/approvals/{id}:
     get:
       tags:

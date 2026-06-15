@@ -527,13 +527,13 @@
 
 ---
 
-### 30. 获取已忽略工单列表
+### 30. 获取触发记录列表
 
-**GET** `/api/v1/healing/pending/dismissed`
+**GET** `/api/v1/healing/pending/records`
 
 **权限**: `healing:trigger:view`
 
-返回已被人工忽略的待触发工单列表。
+返回已经处理过的待触发工单记录，包含已人工确认触发的工单和已人工忽略的工单。前者通过 `healing_flow_instance_id` 关联真实自愈流程实例，后者的 `healing_status` 为 `dismissed`。
 
 #### 查询参数
 
