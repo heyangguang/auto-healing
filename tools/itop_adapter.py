@@ -339,7 +339,7 @@ def demo_scenario_payload(config: AdapterConfig, scenario: str) -> Dict[str, Any
                 "演示场景: 黑名单指令防御",
                 f"affected_ci={config.demo_ci_name}",
                 "fault_type=blacklist",
-                "预期动作: 手动执行 Demo Blacklist Interception Task，AHS 应在执行前拦截 rm -rf / 等高危指令。",
+                "预期动作: AHS 同步工单后自动匹配自愈规则，执行 Demo Blacklist Interception Task，并在执行前拦截 rm -rf / 等高危指令。",
             ]),
             "fault_scenario": "",
         },
@@ -703,7 +703,7 @@ class AdapterHandler(BaseHTTPRequestHandler):
             self._json(200, [
                 {"key": "clean-logs", "name": "清理日志", "trigger_mode": "manual"},
                 {"key": "kill-process", "name": "杀死异常进程", "trigger_mode": "auto"},
-                {"key": "blacklist", "name": "黑名单指令防御", "trigger_mode": "manual"},
+                {"key": "blacklist", "name": "黑名单指令防御", "trigger_mode": "auto"},
             ])
             return
         if parsed.path == "/api/demo/fault-status":
