@@ -19,6 +19,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urlparse
 from urllib.request import Request, urlopen
 
+ITOP_STIMULUS_TEXT_LIMIT = 240
+
 
 def env(name: str, default: str = "") -> str:
     value = os.getenv(name, default).strip()
@@ -231,7 +233,7 @@ class ITopClient:
             if solution_text:
                 close_fields.setdefault("solution", solution_text)
             if work_notes:
-                close_fields.setdefault("public_log", work_notes)
+                close_fields.setdefault("public_log", build_public_log(work_notes))
             self.apply_incident_stimulus(
                 external_id,
                 self.config.close_stimulus,
@@ -520,9 +522,21 @@ def merge_solution_text(resolution: str, work_notes: str) -> str:
 
 def build_close_comment(resolution: str, work_notes: str) -> str:
     comment = resolution.strip() or work_notes.strip() or "Closed by Auto-Healing adapter"
-    if len(comment) <= 240:
-        return comment
-    return comment[:237] + "..."
+    return truncate_itop_stimulus_text(comment)
+
+
+def truncate_itop_stimulus_text(text: str) -> str:
+    text = text.strip()
+    encoded = text.encode("utf-8")
+    if len(encoded) <= ITOP_STIMULUS_TEXT_LIMIT:
+        return text
+    return encoded[:ITOP_STIMULUS_TEXT_LIMIT - 3].decode("utf-8", "ignore").rstrip() + "..."
+
+
+def build_public_log(work_notes: str) -> str:
+    if not work_notes.strip():
+        return ""
+    return truncate_itop_stimulus_text(work_notes)
 
 
 def demo_scenario_payload(config: AdapterConfig, scenario: str) -> Dict[str, Any]:
