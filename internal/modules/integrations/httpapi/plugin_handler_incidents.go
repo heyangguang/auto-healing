@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/company/auto-healing/internal/middleware"
 	"github.com/company/auto-healing/internal/modules/integrations/service/plugin"
@@ -164,6 +165,25 @@ func (h *PluginHandler) BatchResetIncidentScan(c *gin.Context) {
 func respondPluginIncidentError(c *gin.Context, publicMsg string, err error) {
 	if errors.Is(err, incidentrepo.ErrIncidentNotFound) {
 		response.NotFound(c, "工单不存在")
+		return
+	}
+	var closeWritebackErr *plugin.IncidentCloseWritebackError
+	if errors.As(err, &closeWritebackErr) {
+		details := gin.H{}
+		if closeWritebackErr.WritebackLogID != nil {
+			details["writeback_log_id"] = closeWritebackErr.WritebackLogID.String()
+		}
+		if closeWritebackErr.ResponseStatusCode != nil {
+			details["response_status_code"] = *closeWritebackErr.ResponseStatusCode
+		}
+		if closeWritebackErr.Detail != "" {
+			details["reason"] = closeWritebackErr.Detail
+		}
+		c.JSON(http.StatusBadGateway, response.Response{
+			Code:    response.CodeInternal,
+			Message: closeWritebackErr.UserMessage(),
+			Details: details,
+		})
 		return
 	}
 	respondInternalError(c, "PLUGIN", publicMsg, err)

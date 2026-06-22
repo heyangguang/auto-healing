@@ -197,7 +197,7 @@ func (s *IncidentService) executeIncidentCloseWriteback(
 ) (bool, error) {
 	if buildErr != nil {
 		logger.Sync_("PLUGIN").Warn("构建工单回写请求失败: incident_id=%s, external_id=%s, error=%s", incident.ID, incident.ExternalID, buildErr.Error())
-		return false, buildErr
+		return false, NewIncidentCloseWritebackError(buildErr, logEntry, nil)
 	}
 	if req == nil {
 		return false, nil
@@ -209,15 +209,17 @@ func (s *IncidentService) executeIncidentCloseWriteback(
 			finishedAt := time.Now().UTC()
 			logEntry.Status = platformmodel.IncidentWritebackStatusFailed
 			logEntry.ErrorMessage = err.Error()
-			logEntry.ResponseStatusCode = intPointer(result.StatusCode)
-			logEntry.ResponseBody = result.ResponseBody
+			if result != nil {
+				logEntry.ResponseStatusCode = intPointer(result.StatusCode)
+				logEntry.ResponseBody = result.ResponseBody
+			}
 			logEntry.FinishedAt = &finishedAt
 			if updateErr := s.writebackLogRepo.Update(ctx, logEntry); updateErr != nil {
 				logger.Sync_("PLUGIN").Warn("更新工单回写失败日志失败: log_id=%s, error=%s", logEntry.ID, updateErr.Error())
 			}
 		}
 		logger.Sync_("PLUGIN").Warn("回写工单到源系统失败: incident_id=%s, external_id=%s, error=%s", incident.ID, incident.ExternalID, err.Error())
-		return false, fmt.Errorf("回写工单到源系统失败: %w", err)
+		return false, NewIncidentCloseWritebackError(fmt.Errorf("回写工单到源系统失败: %w", err), logEntry, result)
 	}
 
 	if logEntry != nil {

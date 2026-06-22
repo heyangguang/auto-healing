@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -223,6 +224,83 @@ func TestCloseIncidentIntegrationKeepsLocalStateWhenPluginLookupFails(t *testing
 	}
 	if state.HealingStatus != "pending" {
 		t.Fatalf("healing_status = %q, want pending", state.HealingStatus)
+	}
+}
+
+func TestCloseIncidentIntegrationReturnsUserSafeWritebackError(t *testing.T) {
+	db := newIncidentServiceIntegrationDB(t)
+	createIncidentServiceIntegrationSchema(t, db)
+	bindIncidentServiceIntegrationDB(t, db)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"error":"Unexpected value for attribute 'misc. info' (userinfo) : String too long (found 318/321, limited to 255)"}`))
+	}))
+	defer server.Close()
+
+	tenantID := uuid.New()
+	pluginID := uuid.New()
+	incidentID := uuid.New()
+	insertIncidentServicePlugin(t, db, tenantID, pluginID, server.URL)
+	insertIncidentServiceIncident(t, db, incidentID, tenantID, pluginID)
+
+	svc := NewIncidentServiceWithDB(db)
+	ctx := platformrepo.WithTenantID(context.Background(), tenantID)
+	_, err := svc.CloseIncident(ctx, CloseIncidentParams{
+		IncidentID:    incidentID,
+		Resolution:    strings.Repeat("修复完成", 80),
+		WorkNotes:     strings.Repeat("验证通过", 80),
+		CloseCode:     "auto",
+		CloseStatus:   "closed",
+		TriggerSource: platformmodel.IncidentWritebackTriggerManualClose,
+		OperatorName:  "tester",
+	})
+	if err == nil {
+		t.Fatal("CloseIncident() expected writeback error")
+	}
+	var writebackErr *IncidentCloseWritebackError
+	if !errors.As(err, &writebackErr) {
+		t.Fatalf("CloseIncident() error type = %T, want IncidentCloseWritebackError", err)
+	}
+	if writebackErr.ResponseStatusCode == nil || *writebackErr.ResponseStatusCode != http.StatusBadGateway {
+		t.Fatalf("response status = %#v, want 502", writebackErr.ResponseStatusCode)
+	}
+	if writebackErr.WritebackLogID == nil {
+		t.Fatal("writeback log id should be exposed")
+	}
+	if !strings.Contains(writebackErr.UserMessage(), "String too long") {
+		t.Fatalf("user message = %q, want source detail", writebackErr.UserMessage())
+	}
+
+	state := loadIncidentServiceState(t, db, incidentID)
+	if state.Status != "open" {
+		t.Fatalf("status = %q, want open", state.Status)
+	}
+	if state.HealingStatus != "pending" {
+		t.Fatalf("healing_status = %q, want pending", state.HealingStatus)
+	}
+
+	var logRow struct {
+		Status             string
+		ResponseStatusCode int
+		ResponseBody       string
+		ErrorMessage       string
+	}
+	if err := db.Raw(`SELECT status, response_status_code, response_body, error_message FROM incident_writeback_logs WHERE incident_id = ?`, incidentID.String()).Scan(&logRow).Error; err != nil {
+		t.Fatalf("query writeback log: %v", err)
+	}
+	if logRow.Status != platformmodel.IncidentWritebackStatusFailed {
+		t.Fatalf("writeback status = %q, want failed", logRow.Status)
+	}
+	if logRow.ResponseStatusCode != http.StatusBadGateway {
+		t.Fatalf("response_status_code = %d, want 502", logRow.ResponseStatusCode)
+	}
+	if !strings.Contains(logRow.ResponseBody, "String too long") {
+		t.Fatalf("response_body = %q, want source body", logRow.ResponseBody)
+	}
+	if !strings.Contains(logRow.ErrorMessage, "关闭工单返回错误状态码 502") {
+		t.Fatalf("error_message = %q, want http status error", logRow.ErrorMessage)
 	}
 }
 
