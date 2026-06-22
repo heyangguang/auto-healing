@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/company/auto-healing/internal/database"
@@ -146,7 +147,7 @@ func TestResolveHostCredentialReturnsBackendErrors(t *testing.T) {
 	}
 }
 
-func TestResolveHostCredentialContinuesOnSecretNotFound(t *testing.T) {
+func TestResolveHostCredentialReturnsClearErrorWhenSecretNotFound(t *testing.T) {
 	db := newExecutionRunTestDB(t)
 	createExecutionCMDBSchema(t, db)
 	origDB := database.DB
@@ -161,15 +162,15 @@ func TestResolveHostCredentialContinuesOnSecretNotFound(t *testing.T) {
 	runID := uuid.New()
 	insertExecutionRun(t, db, runID, platformrepo.TenantIDFromContext(ctx), "running")
 
-	credential, err := svc.resolveHostCredential(ctx, runID, &model.ExecutionTask{}, t.TempDir(), "10.0.0.3", []sourceProvider{{
+	_, err := svc.resolveHostCredential(ctx, runID, &model.ExecutionTask{}, t.TempDir(), "10.0.0.3", []sourceProvider{{
 		source:   &secretsmodel.SecretsSource{Name: "provider-a", AuthType: "ssh_key"},
 		provider: fakeSecretsProvider{err: secretsapi.ErrSecretNotFound},
 	}})
-	if err != nil {
-		t.Fatalf("resolveHostCredential() error = %v", err)
+	if err == nil {
+		t.Fatal("resolveHostCredential() should fail when configured secrets do not contain the target host")
 	}
-	if credential.Host != "10.0.0.3" {
-		t.Fatalf("credential.Host = %s, want 10.0.0.3", credential.Host)
+	if !strings.Contains(err.Error(), "主机 10.0.0.3 在已配置的密钥源中都未找到凭据") {
+		t.Fatalf("resolveHostCredential() error = %v, want missing host credential message", err)
 	}
 }
 

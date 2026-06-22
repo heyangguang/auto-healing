@@ -107,8 +107,18 @@ func (s *Service) resolveHostCredential(ctx context.Context, runID uuid.UUID, ta
 		return credential, nil
 	}
 
-	s.appendLog(ctx, runID, "warn", "prepare", fmt.Sprintf("主机 %s 在所有密钥源中都未找到凭据，将使用默认认证", host), nil)
-	return ansible.HostCredential{Host: host}, nil
+	sourceNames := make([]string, 0, len(providers))
+	for _, sp := range providers {
+		if sp.source != nil && sp.source.Name != "" {
+			sourceNames = append(sourceNames, sp.source.Name)
+		}
+	}
+	message := fmt.Sprintf("主机 %s 在已配置的密钥源中都未找到凭据", host)
+	if len(sourceNames) > 0 {
+		message = fmt.Sprintf("%s（密钥源: %s）", message, strings.Join(sourceNames, ", "))
+	}
+	s.appendLog(ctx, runID, "error", "prepare", message, nil)
+	return ansible.HostCredential{}, fmt.Errorf("%s，请检查密钥源是否已写入该主机的 username/password 或 private_key", message)
 }
 
 func (s *Service) buildSecretQuery(ctx context.Context, host, authType string) secretsmodel.SecretQuery {
